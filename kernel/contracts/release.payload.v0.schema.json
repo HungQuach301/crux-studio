@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "crux://contracts/release.payload.v0.schema.json",
+  "title": "Xưởng Phát hành — payload v0",
+  "description": "Gợi ý lấy từ package.schema.json, publication.schema.json và metrics.schema.json của spec tham chiếu. Bất biến I5 được thực thi ngay trong contract: publication.visibility bị khoá ở \"private\". Máy không công khai video; chủ dự án tự chuyển trong YouTube Studio.",
+  "type": "object",
+  "required": ["package", "publication", "disclosure"],
+  "properties": {
+    "package": {
+      "type": "object",
+      "required": ["titles", "thumbnails", "description", "modelSheetUrl", "adBreaks"],
+      "properties": {
+        "titles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["text", "formula"],
+            "properties": {
+              "text": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "formula": {
+                "type": "string",
+                "description": "Khuôn tiêu đề. Validator đối chiếu packs/channels/<slug>/title-formulas.md."
+              }
+            }
+          }
+        },
+        "thumbnails": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["ref", "accentWord", "visualKind"],
+            "properties": {
+              "ref": { "type": "string", "minLength": 1 },
+              "accentWord": { "type": "string", "minLength": 1 },
+              "visualKind": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "description": { "type": "string", "minLength": 100 },
+        "sourceList": { "type": "array", "items": { "type": "string" } },
+        "modelSheetUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Bảng tính mô hình công bố công khai (D-16). Bắt buộc — đây là phần chứng minh mọi con số có nguồn hoặc có mô hình."
+        },
+        "adBreaks": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "required": ["visibility", "quotaUnitsUsed"],
+      "properties": {
+        "visibility": {
+          "type": "string",
+          "const": "private",
+          "description": "BẤT BIẾN I5. Máy chỉ được tải lên ở chế độ riêng tư. Nới ra cần đủ ba điều kiện ở CHARTER mục 3 và một quyết định irreversible — nghĩa là sửa chính dòng này bằng PR owner-merge."
+        },
+        "videoId": { "type": ["string", "null"] },
+        "publishedAt": { "type": ["string", "null"] },
+        "captionsUploaded": { "type": "boolean" },
+        "modelSheetPublished": { "type": "boolean" },
+        "quotaUnitsUsed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "disclosure": {
+      "type": "boolean",
+      "const": true,
+      "description": "Rủi ro A3: nội dung tổng hợp phải được gắn nhãn."
+    },
+    "metricsPlan": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["48h", "7d", "28d"] }
+    }
+  }
+}

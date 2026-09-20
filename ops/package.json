@@ -1,0 +1,15 @@
+{
+  "name": "@crux/ops",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@crux/kernel": "workspace:*",
+    "@crux/workshop-topic": "workspace:*",
+    "@crux/workshop-editorial": "workspace:*",
+    "@crux/workshop-visual": "workspace:*",
+    "@crux/workshop-audio": "workspace:*",
+    "@crux/workshop-assembly": "workspace:*",
+    "@crux/workshop-release": "workspace:*"
+  }
+}

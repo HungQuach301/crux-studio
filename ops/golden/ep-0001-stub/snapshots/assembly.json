@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "0",
+  "kind": "assembly.render",
+  "producer": {
+    "workshop": "assembly",
+    "version": "0.0.0-stub",
+    "impl": "stub"
+  },
+  "episodeId": "ep-0001-stub",
+  "channel": "us-personal-finance",
+  "genre": "data-explainer",
+  "locale": "en-US",
+  "inputsHash": "0834e716fd0019a4de9cb6a12bdd8be63ea2a7dcf10a56684cec7f952bc856e2",
+  "inputs": [
+    {
+      "kind": "editorial.script",
+      "path": "episodes/us-personal-finance/ep-0001-stub/editorial/artifact.json",
+      "hash": "de96df2e79179dd3e5cd30565cb5cd6c16bebca394dc79491dacc38a4b574d9c"
+    },
+    {
+      "kind": "visual.storyboard",
+      "path": "episodes/us-personal-finance/ep-0001-stub/visual/artifact.json",
+      "hash": "61631c80465c0866cb98b39a435adb9eb52569ba43c90c692da925cf0eab94e2"
+    },
+    {
+      "kind": "audio.timing",
+      "path": "episodes/us-personal-finance/ep-0001-stub/audio/artifact.json",
+      "hash": "9dc820e73a7cc43eaa121e5101439ead0a77db3a7d80cff110ba89707152a37c"
+    }
+  ],
+  "createdAt": "2026-09-20T00:00:00.000Z",
+  "costUsd": 0,
+  "status": "ok",
+  "payload": {
+    "preflight": {
+      "verdict": "pass",
+      "checks": [
+        {
+          "id": "scene-count",
+          "verdict": "pass",
+          "expected": "180–220",
+          "actual": 200,
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "scene-min-duration",
+          "verdict": "pass",
+          "expected": "≥ 1200ms",
+          "actual": 2577,
+          "sceneIds": [],
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "scene-duration-stddev",
+          "verdict": "pass",
+          "expected": "≥ 0.4",
+          "actual": 0.5038,
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "consecutive-short-scenes",
+          "verdict": "pass",
+          "expected": "≤ 3",
+          "actual": 0,
+          "sceneIds": [],
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "shot-size-mix",
+          "verdict": "pass",
+          "expected": "±0.08",
+          "actual": "trong dung sai",
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "layout-repetition",
+          "verdict": "pass",
+          "expected": "≤ 20 lần mỗi cặp layout+biến thể",
+          "actual": "trong ngưỡng",
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "claim-coverage",
+          "verdict": "pass",
+          "expected": "mọi scene hiển thị số đều có claimId",
+          "actual": 0,
+          "sceneIds": [],
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "on-screen-word-density",
+          "verdict": "pass",
+          "expected": "≤ 12 từ/scene",
+          "actual": 9,
+          "sceneIds": [],
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "total-duration",
+          "verdict": "pass",
+          "expected": "±5%",
+          "actual": 0,
+          "rootCauseStage": "visual"
+        },
+        {
+          "id": "caption-drift",
+          "verdict": "pass",
+          "expected": "≤ 200ms",
+          "actual": 0,
+          "rootCauseStage": "audio"
+        },
+        {
+          "id": "script-word-count",
+          "verdict": "warn",
+          "expected": "3200–3600",
+          "actual": 69,
+          "rootCauseStage": "editorial"
+        },
+        {
+          "id": "devices-used",
+          "verdict": "warn",
+          "expected": "≥ 5",
+          "actual": 2,
+          "rootCauseStage": "editorial"
+        }
+      ],
+      "selfCheckMismatch": []
+    },
+    "render": {
+      "fps": 30,
+      "resolution": "1920x1080",
+      "durationMs": 1260004,
+      "outputs": [
+        {
+          "kind": "proof",
+          "ref": "artifact://us-personal-finance/ep-0001-stub/assembly/proof.mp4"
+        },
+        {
+          "kind": "master",
+          "ref": "artifact://us-personal-finance/ep-0001-stub/assembly/master.mp4"
+        }
+      ]
+    },
+    "qa": {
+      "verdict": "pass",
+      "findings": [
+        {
+          "id": "script-word-count",
+          "severity": "warn",
+          "message": "Preflight script-word-count: mong đợi 3200–3600, nhận 69.",
+          "rootCauseStage": "editorial"
+        },
+        {
+          "id": "devices-used",
+          "severity": "warn",
+          "message": "Preflight devices-used: mong đợi ≥ 5, nhận 2.",
+          "rootCauseStage": "editorial"
+        },
+        {
+          "id": "audio-video-duration-delta",
+          "severity": "info",
+          "message": "Lời đọc 33036ms so với hình 1260004ms. Ở impl=stub, đây là hệ quả của kịch bản stub, không phải lỗi dựng.",
+          "rootCauseStage": "editorial"
+        }
+      ]
+    }
+  }
+}

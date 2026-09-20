@@ -1,0 +1,12 @@
+{
+  "$note": "🤖 Channel pack tối thiểu của Đợt 0. Bản đầy đủ (persona, lexicon, title formulas, thesis bank) nằm trong docs/spec/CRUX-REFERENCE-SPEC.md phần Channel Pack và được làn `topic` chuyển vào đây ở Đợt 1.",
+  "slug": "us-personal-finance",
+  "genre": "data-explainer",
+  "locale": "en-US",
+  "geoScope": "United States, federal tax filers",
+  "pillars": ["thresholds", "tradeoffs", "timing"],
+  "publish": {
+    "visibility": "private",
+    "note": "Bất biến I5: máy không công khai video. Chủ dự án tự chuyển trong YouTube Studio."
+  }
+}

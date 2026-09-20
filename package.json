@@ -1,0 +1,24 @@
+{
+  "name": "crux-studio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "contracts": "node ops/scripts/check-contracts.ts",
+    "lint:deps": "node ops/scripts/lint-deps.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\"",
+    "replay": "node ops/scripts/replay.ts",
+    "run:episode": "node ops/scripts/run-episode.ts",
+    "check": "pnpm contracts && pnpm lint:deps && pnpm typecheck && pnpm test && pnpm replay"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "5.9.3"
+  }
+}

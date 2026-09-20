@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "crux://contracts/envelope.schema.json",
+  "title": "Phong bì artifact",
+  "description": "CHARTER 5.2. Ranh giới bất biến, chốt ở Đợt 0. Đổi file này là quyết định irreversible. Phần payload do contract v0 của từng xưởng định nghĩa và được ghép vào lúc nạp (kernel/src/contracts.ts).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "producer",
+    "episodeId",
+    "channel",
+    "genre",
+    "locale",
+    "inputsHash",
+    "inputs",
+    "createdAt",
+    "costUsd",
+    "status",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "Phiên bản phong bì. Bên tiêu thụ phải hỗ trợ đồng thời N và N-1."
+    },
+    "kind": { "type": "string", "pattern": "^[a-z]+\\.[a-z-]+$" },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workshop", "version", "impl"],
+      "properties": {
+        "workshop": {
+          "type": "string",
+          "enum": ["topic", "editorial", "visual", "audio", "assembly", "release"]
+        },
+        "version": { "type": "string", "minLength": 1 },
+        "impl": { "type": "string", "enum": ["stub", "v1"] }
+      }
+    },
+    "episodeId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "channel": { "type": "string", "minLength": 1 },
+    "genre": { "type": "string", "minLength": 1 },
+    "locale": { "type": "string", "pattern": "^[a-z]{2}-[A-Z]{2}$" },
+    "inputsHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Cho phép chạy lại một xưởng độc lập: đầu vào không đổi thì dùng lại kết quả cũ."
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path", "hash"],
+        "properties": {
+          "kind": { "type": "string" },
+          "path": { "type": "string" },
+          "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "costUsd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Bất biến I8. Mọi lần chạy stage ghi một dòng log có trường này."
+    },
+    "status": { "type": "string", "enum": ["ok", "failed", "skipped"] },
+    "payload": { "type": "object" }
+  }
+}

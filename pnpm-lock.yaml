@@ -1,0 +1,101 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.4
+        version: 22.20.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  kernel: {}
+
+  ops:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@crux/workshop-assembly':
+        specifier: workspace:*
+        version: link:../workshops/assembly
+      '@crux/workshop-audio':
+        specifier: workspace:*
+        version: link:../workshops/audio
+      '@crux/workshop-editorial':
+        specifier: workspace:*
+        version: link:../workshops/editorial
+      '@crux/workshop-release':
+        specifier: workspace:*
+        version: link:../workshops/release
+      '@crux/workshop-topic':
+        specifier: workspace:*
+        version: link:../workshops/topic
+      '@crux/workshop-visual':
+        specifier: workspace:*
+        version: link:../workshops/visual
+
+  workshops/assembly:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  workshops/audio:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  workshops/editorial:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  workshops/release:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  workshops/topic:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  workshops/visual:
+    dependencies:
+      '@crux/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+packages:
+
+  '@types/node@22.20.4':
+    resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
+snapshots:
+
+  '@types/node@22.20.4':
+    dependencies:
+      undici-types: 6.21.0
+
+  typescript@5.9.3: {}
+
+  undici-types@6.21.0: {}

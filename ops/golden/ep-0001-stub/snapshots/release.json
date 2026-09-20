@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "0",
+  "kind": "release.package",
+  "producer": {
+    "workshop": "release",
+    "version": "0.0.0-stub",
+    "impl": "stub"
+  },
+  "episodeId": "ep-0001-stub",
+  "channel": "us-personal-finance",
+  "genre": "data-explainer",
+  "locale": "en-US",
+  "inputsHash": "40d53821e01a7a9af4350ed93473c792a9b005849d4e59dfb807eb66ee71c977",
+  "inputs": [
+    {
+      "kind": "topic.brief",
+      "path": "episodes/us-personal-finance/ep-0001-stub/topic/artifact.json",
+      "hash": "ca0660951fa8ddf2cccb8e94d6da5ba91c032abd860ce8a1d10fd8d3d14e542c"
+    },
+    {
+      "kind": "editorial.script",
+      "path": "episodes/us-personal-finance/ep-0001-stub/editorial/artifact.json",
+      "hash": "de96df2e79179dd3e5cd30565cb5cd6c16bebca394dc79491dacc38a4b574d9c"
+    },
+    {
+      "kind": "assembly.render",
+      "path": "episodes/us-personal-finance/ep-0001-stub/assembly/artifact.json",
+      "hash": "99943f98d92ce27e1086045a7164891253496f766995801dc4be5a44387f6b64"
+    }
+  ],
+  "createdAt": "2026-09-20T00:00:00.000Z",
+  "costUsd": 0,
+  "status": "ok",
+  "payload": {
+    "package": {
+      "titles": [
+        {
+          "text": "At what point does option 1 stop being the better answer for a US household?",
+          "formula": "question"
+        },
+        {
+          "text": "The point where the usual answer stops working",
+          "formula": "flip-point"
+        },
+        {
+          "text": "We ran the numbers across the whole range",
+          "formula": "method"
+        }
+      ],
+      "thumbnails": [
+        {
+          "ref": "artifact://us-personal-finance/ep-0001-stub/release/thumb-a.png",
+          "accentWord": "CROSSOVER",
+          "visualKind": "chart"
+        },
+        {
+          "ref": "artifact://us-personal-finance/ep-0001-stub/release/thumb-b.png",
+          "accentWord": "THRESHOLD",
+          "visualKind": "matrix"
+        }
+      ],
+      "description": "At what point does option 1 stop being the better answer for a US household?\n\nThis episode maps the answer across the full parameter range instead of giving one number.\nEvery figure on screen comes from a published source or from the model linked below, and the model sheet is public so you can change the inputs and check the result yourself.\n\nScope: United States, federal filers. State rules move the crossover point.\n\nThis video was produced with AI assistance.",
+      "sourceList": [
+        "C1: model=M-STUB-1",
+        "C2: model=M-STUB-2",
+        "C3: model=M-STUB-3"
+      ],
+      "modelSheetUrl": "https://github.com/HungQuach301/crux-models/blob/main/data-explainer/M-STUB-1.md",
+      "adBreaks": [
+        352800,
+        856800
+      ]
+    },
+    "publication": {
+      "visibility": "private",
+      "videoId": null,
+      "publishedAt": null,
+      "captionsUploaded": true,
+      "modelSheetPublished": false,
+      "quotaUnitsUsed": 0
+    },
+    "disclosure": true,
+    "metricsPlan": [
+      "48h",
+      "7d",
+      "28d"
+    ]
+  }
+}
