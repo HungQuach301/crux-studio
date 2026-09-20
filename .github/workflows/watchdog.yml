@@ -19,13 +19,16 @@ permissions:
   contents: read
   issues: write
   actions: read
+  # pull-requests: read cho `gh pr list` ở dấu hiệu số 2 (không PR nào merge
+  # trong 48 giờ). Đọc PR không nằm trong `contents: read`. Xem KF-003.
+  pull-requests: read
 
 jobs:
   watch:
     name: watch
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Soát ba dấu hiệu im lặng
         env:
