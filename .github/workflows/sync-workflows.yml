@@ -1,0 +1,35 @@
+name: sync-workflows
+on:
+  push:
+    branches: [main]
+    paths: ['ops/workflows/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sync-workflows
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_SYNC_TOKEN }}
+      - name: Copy staged workflows
+        run: |
+          mkdir -p .github/workflows
+          shopt -s nullglob
+          for f in ops/workflows/*.yml; do
+            name=$(basename "$f")
+            [ "$name" = "sync-workflows.yml" ] && continue
+            cp "$f" ".github/workflows/$name"
+          done
+      - name: Commit if changed
+        run: |
+          git config user.name "crux-sync"
+          git config user.email "crux-sync@users.noreply.github.com"
+          git add .github/workflows
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "chore: sync workflows from ops/workflows [skip ci]"
+          git push
