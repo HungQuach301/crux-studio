@@ -1,0 +1,105 @@
+# 🤖 Người canh (CHARTER 2.4, rủi ro B7 và B13).
+#
+# Chạy theo lịch cron trong Actions, ĐỘC LẬP với Claude. Đó là điểm mấu chốt:
+# nếu nhà máy đứng im vì Claude hỏng, hết hạn mức, hoặc routine bị tắt, thì
+# không có gì bên trong Claude báo được. Workflow này ở ngoài.
+name: watchdog
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: 'Bắn một cảnh báo thử để kiểm đường thông báo tới điện thoại'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  watch:
+    name: watch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Soát ba dấu hiệu im lặng
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TEST: ${{ inputs.test_alert }}
+        run: |
+          set -euo pipefail
+          NOW=$(date -u +%s)
+          PROBLEMS=""
+
+          add() { PROBLEMS="${PROBLEMS}- $1"$'\n'; }
+
+          # 1 · Quá 26 giờ không có bản tin mới.
+          LAST_DIGEST=$(gh issue list --repo "$REPO" --label digest --state all \
+            --limit 1 --json createdAt --jq '.[0].createdAt // empty')
+          if [ -z "$LAST_DIGEST" ]; then
+            add "Chưa có bản tin nào. Routine \`crux-digest\` đã được tạo chưa?"
+          else
+            AGE=$(( (NOW - $(date -u -d "$LAST_DIGEST" +%s)) / 3600 ))
+            [ "$AGE" -gt 26 ] && add "Bản tin gần nhất cách đây $AGE giờ (ngưỡng 26). Routine \`crux-digest\` có thể đã dừng."
+          fi
+
+          # 2 · Quá 48 giờ không merge PR nào, trong khi backlog vẫn còn mục ready.
+          LAST_MERGE=$(gh pr list --repo "$REPO" --state merged --limit 1 \
+            --json mergedAt --jq '.[0].mergedAt // empty')
+          READY=$(grep -rl 'status: ready' ops/lanes/*/backlog.md 2>/dev/null | wc -l)
+          if [ "$READY" -gt 0 ]; then
+            if [ -z "$LAST_MERGE" ]; then
+              add "Chưa có PR nào được merge, trong khi backlog còn mục \`ready\` ở $READY làn."
+            else
+              AGE=$(( (NOW - $(date -u -d "$LAST_MERGE" +%s)) / 3600 ))
+              [ "$AGE" -gt 48 ] && add "Không có PR nào merge trong $AGE giờ (ngưỡng 48), trong khi backlog còn mục \`ready\` ở $READY làn."
+            fi
+          fi
+
+          # 3 · Lần chạy gần nhất của sync-workflows thất bại.
+          #     Nguyên nhân thường gặp nhất: PAT WORKFLOW_SYNC_TOKEN đã hết
+          #     hạn (rủi ro B13). Khi đó mọi workflow agent viết vào
+          #     ops/workflows/ sẽ IM LẶNG không có hiệu lực — không có gì
+          #     đỏ, chỉ là không có gì xảy ra. Đây là lý do nó được canh riêng.
+          SYNC=$(gh run list --repo "$REPO" --workflow sync-workflows.yml \
+            --limit 1 --json conclusion,createdAt,url \
+            --jq '.[0] | select(.) | "\(.conclusion)\t\(.url)"' || true)
+          if [ -n "$SYNC" ]; then
+            CONCL=$(echo "$SYNC" | cut -f1)
+            URL=$(echo "$SYNC" | cut -f2)
+            case "$CONCL" in
+              success|"") ;;
+              *) add "Lần chạy gần nhất của \`sync-workflows\` kết thúc \`$CONCL\`: $URL — kiểm tra hạn của PAT \`WORKFLOW_SYNC_TOKEN\` trước tiên. Trong lúc nó hỏng, mọi workflow mới trong \`ops/workflows/\` KHÔNG có hiệu lực.";;
+            esac
+          fi
+
+          if [ "$TEST" = "true" ]; then
+            add "Đây là cảnh báo THỬ, do chủ dự án bấm tay. Nếu anh đọc được dòng này trên điện thoại thì đường thông báo đã thông (DoD Đợt 0)."
+          fi
+
+          if [ -z "$PROBLEMS" ]; then
+            echo "Nhà máy vẫn thở. Không mở issue."
+            exit 0
+          fi
+
+          TITLE="[CẢNH BÁO] Nhà máy im lặng"
+          EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
+            --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          BODY=$(printf '%s\n' \
+            "Người canh phát hiện:" \
+            "" \
+            "$PROBLEMS" \
+            "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
+            "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+          else
+            gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
+          fi

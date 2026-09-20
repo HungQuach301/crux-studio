@@ -1,0 +1,74 @@
+# 🤖 Kiểm tra main sau mỗi lần merge (CHARTER 6.5: main đỏ thì revert).
+#
+# Gọi tường minh bởi automerge.yml, vì merge bằng GITHUB_TOKEN không tự kích
+# hoạt workflow khác. Lịch mỗi giờ là PHƯƠNG ÁN DỰ PHÒNG của giả định G2:
+# nếu lời gọi tường minh không chạy được, main vẫn được kiểm trong vòng một giờ.
+name: main-ci
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: main-ci
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    outputs:
+      verdict: ${{ steps.run.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: run
+        run: pnpm check
+
+  alert:
+    name: alert
+    needs: check
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      # Main đỏ được revert ngay; việc sửa làm lại trên nhánh. Issue này là
+      # thứ routine crux-integrator đọc ở lần chạy kế tiếp.
+      - name: Mở issue main đỏ
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="[CẢNH BÁO] main đỏ tại ${SHA:0:7}"
+          EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
+            --search "main đỏ in:title" --json number --jq '.[0].number // empty')
+          BODY=$(printf '%s\n' \
+            "\`pnpm check\` đỏ trên \`main\` tại commit \`$SHA\`." \
+            "" \
+            "Nhật ký lần chạy: $RUN" \
+            "" \
+            "Việc tiếp theo, theo CHARTER 6.5 và phụ lục P3:" \
+            "1. Tìm commit gây đỏ trong các lần merge 24 giờ qua." \
+            "2. Mở PR revert trên nhánh \`claude/integration/revert-${SHA:0:7}\`, gắn nhãn \`automerge\`." \
+            "3. Ghi vào \`ops/known-failures.md\`, và thêm một mục \`fix\` vào backlog của làn gây lỗi." \
+            "" \
+            "Không sửa trực tiếp trên \`main\`. Việc sửa làm lại trên nhánh.")
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+          else
+            gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
+          fi
