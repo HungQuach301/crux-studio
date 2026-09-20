@@ -1,1 +1,1 @@
-{"at":"2026-09-20T00:00:00.000Z","lane":"visual","kind":"stage","ref":"ep-tmp/visual","status":"ok","durationMs":0,"costUsd":0}
+{"at":"2026-09-20T00:00:00.000Z","lane":"visual","kind":"lane","ref":"visual/V-000","status":"ok","durationMs":0,"costUsd":0,"note":"Đợt 0 T4 — khung tham chiếu gu hình, quy trình so sánh cặp, 4 chỉ số chống slide vào Preflight v0. Chạy bằng gói subscription, không gọi API runtime."}
