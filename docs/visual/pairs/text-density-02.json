@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "text-density-02",
+  "axis": "text-density",
+  "question": "Cả tập dày chữ hay thưa chữ hợp với anh hơn?",
+  "variantA": {
+    "label": "Khoảng 0,8 từ mỗi giây trên cả tập",
+    "params": {
+      "textWordsPerSecond": 0.8
+    }
+  },
+  "variantB": {
+    "label": "Khoảng 2,0 từ mỗi giây trên cả tập",
+    "params": {
+      "textWordsPerSecond": 2.0
+    }
+  },
+  "renderRef": null,
+  "note": "Mỗi cảnh đều dưới trần ở cả hai bản. Khác nhau là tổng lượng chữ cả tập."
+}

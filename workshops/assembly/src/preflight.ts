@@ -10,6 +10,14 @@
 
 export type Verdict = 'pass' | 'fail' | 'warn';
 
+export interface AntiSlide {
+  motionCoverage: number;
+  longestStaticRunMs: number;
+  textWordsPerSecond: number;
+  longestSceneMs: number;
+  staticSceneCount: number;
+}
+
 export interface Check {
   id: string;
   verdict: Verdict;
@@ -27,6 +35,10 @@ export interface PreflightLimits {
   onScreenWordsMaxPerScene?: number;
   totalDurationTolerancePct?: number;
   maxLayoutRepeatsPerVariant?: number;
+  motionCoverageMin?: number;
+  longestStaticRunMsMax?: number;
+  textWordsPerSecondMax?: number;
+  sceneMaxDurationMs?: number;
   scriptWordCount?: [number, number];
   devicesMin?: number;
   captionDriftMaxMs?: number;
@@ -47,6 +59,7 @@ export interface PreflightInput {
     variant?: string;
     claimIds: string[];
     onScreenWordCount: number;
+    hasMotion?: boolean;
   }[];
   declared: { sceneCount: number; totalMs: number };
   targetDurationMs: number;
@@ -75,10 +88,51 @@ function verdictOf(ok: boolean, softFail: boolean): Verdict {
   return ok ? 'pass' : softFail ? 'warn' : 'fail';
 }
 
+/**
+ * Đo các chỉ số chống "trông như slide" (CHARTER 6.8a).
+ *
+ * Bốn chỉ số, và ba trong số đó tính theo THỜI LƯỢNG chứ không theo số
+ * scene. Lý do: người xem cảm nhận thời gian, không đếm scene. Mười scene
+ * tĩnh dài bốn giây tệ hơn hai mươi scene tĩnh dài nửa giây, dù đếm theo
+ * scene thì cái sau "tệ gấp đôi".
+ *
+ * Rủi ro A2 nói chất lượng hình ảnh kém là lỗi đã lặp lại ở các dự án
+ * trước. Cách nó lặp lại không phải là một tập hỏng hẳn, mà là mỗi tập
+ * tĩnh hơn tập trước một chút. Vì vậy các giá trị dưới đây được ghi vào
+ * artifact KỂ CẢ KHI ĐẠT ngưỡng — chỉ có chuỗi số qua nhiều tập mới thấy
+ * được nó đang trôi (rủi ro B8).
+ */
+export function measureAntiSlide(scenes: PreflightInput['scenes']): AntiSlide {
+  const totalMs = scenes.reduce((a, s) => a + s.durationMs, 0);
+  const motionMs = scenes.filter((s) => s.hasMotion === true).reduce((a, s) => a + s.durationMs, 0);
+
+  let run = 0;
+  let longestStaticRunMs = 0;
+  for (const scene of scenes) {
+    if (scene.hasMotion === true) {
+      run = 0;
+    } else {
+      run += scene.durationMs;
+      if (run > longestStaticRunMs) longestStaticRunMs = run;
+    }
+  }
+
+  const words = scenes.reduce((a, s) => a + s.onScreenWordCount, 0);
+
+  return {
+    motionCoverage: totalMs === 0 ? 0 : Number((motionMs / totalMs).toFixed(4)),
+    longestStaticRunMs,
+    textWordsPerSecond: totalMs === 0 ? 0 : Number(((words * 1000) / totalMs).toFixed(4)),
+    longestSceneMs: scenes.reduce((a, s) => Math.max(a, s.durationMs), 0),
+    staticSceneCount: scenes.filter((s) => s.hasMotion !== true).length,
+  };
+}
+
 export function preflight(input: PreflightInput): {
   verdict: 'pass' | 'fail';
   checks: Check[];
   selfCheckMismatch: string[];
+  antiSlide: AntiSlide;
 } {
   const { scenes, limits, shotSizeMix } = input;
   const checks: Check[] = [];
@@ -244,6 +298,48 @@ export function preflight(input: PreflightInput): {
     rootCauseStage: 'editorial',
   });
 
+  // Chống "trông như slide" (CHARTER 6.8a). Ngưỡng nằm trong genre pack,
+  // không nằm ở đây — thể loại thứ hai có nhịp khác và ngưỡng khác.
+  const antiSlide = measureAntiSlide(scenes);
+
+  const motionMin = limits.motionCoverageMin ?? 0;
+  checks.push({
+    id: 'motion-coverage',
+    verdict: verdictOf(antiSlide.motionCoverage >= motionMin, false),
+    expected: `≥ ${motionMin}`,
+    actual: antiSlide.motionCoverage,
+    rootCauseStage: 'visual',
+  });
+
+  const staticRunMax = limits.longestStaticRunMsMax ?? Number.MAX_SAFE_INTEGER;
+  checks.push({
+    id: 'longest-static-run',
+    verdict: verdictOf(antiSlide.longestStaticRunMs <= staticRunMax, false),
+    expected: `≤ ${staticRunMax}ms`,
+    actual: antiSlide.longestStaticRunMs,
+    rootCauseStage: 'visual',
+  });
+
+  const wpsMax = limits.textWordsPerSecondMax ?? Number.MAX_SAFE_INTEGER;
+  checks.push({
+    id: 'text-words-per-second',
+    verdict: verdictOf(antiSlide.textWordsPerSecond <= wpsMax, false),
+    expected: `≤ ${wpsMax}`,
+    actual: antiSlide.textWordsPerSecond,
+    rootCauseStage: 'visual',
+  });
+
+  const sceneMax = limits.sceneMaxDurationMs ?? Number.MAX_SAFE_INTEGER;
+  const overlong = scenes.filter((s) => s.durationMs > sceneMax);
+  checks.push({
+    id: 'scene-max-duration',
+    verdict: verdictOf(overlong.length === 0, false),
+    expected: `≤ ${sceneMax}ms`,
+    actual: antiSlide.longestSceneMs,
+    sceneIds: overlong.slice(0, 10).map((s) => s.id),
+    rootCauseStage: 'visual',
+  });
+
   // Tự khai so với tính được. Lệch ở đây nghiêm trọng hơn một check fail
   // thường: nó nghĩa là xưởng trước đã báo cáo SAI về chính đầu ra của nó.
   const selfCheckMismatch: string[] = [];
@@ -259,5 +355,5 @@ export function preflight(input: PreflightInput): {
   const verdict: 'pass' | 'fail' =
     checks.some((c) => c.verdict === 'fail') || selfCheckMismatch.length > 0 ? 'fail' : 'pass';
 
-  return { verdict, checks, selfCheckMismatch };
+  return { verdict, checks, selfCheckMismatch, antiSlide };
 }

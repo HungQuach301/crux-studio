@@ -111,3 +111,117 @@ test('tổng thời lượng lệch quá dung sai thì chặn', () => {
   const report = preflight(input({ targetDurationMs: 60000 }));
   assert.equal(verdictOf('total-duration', report), 'fail');
 });
+
+// ── Chống "trông như slide" (CHARTER 6.8a) ───────────────────────────────
+
+function slideScenes(over: { motion: boolean[]; durations: number[]; words?: number[] }) {
+  return over.motion.map((hasMotion, i) =>
+    scene({
+      id: `S${String(i + 1).padStart(3, '0')}`,
+      durationMs: over.durations[i]!,
+      hasMotion,
+      onScreenWordCount: over.words?.[i] ?? 5,
+      layoutId: `L-${i % 4}`,
+    }),
+  );
+}
+
+function slideInput(scenes: PreflightInput['scenes']): PreflightInput {
+  const totalMs = scenes.reduce((a, s) => a + s.durationMs, 0);
+  return input({
+    scenes,
+    declared: { sceneCount: scenes.length, totalMs },
+    targetDurationMs: totalMs,
+    audio: { totalMs, captionDriftMaxMs: 0 },
+    limits: {
+      ...input().limits,
+      motionCoverageMin: 0.7,
+      longestStaticRunMsMax: 8000,
+      textWordsPerSecondMax: 1.5,
+      sceneMaxDurationMs: 12000,
+    },
+  });
+}
+
+test('chỉ số chống slide tính theo THỜI LƯỢNG, không theo số scene', () => {
+  // Hai scene tĩnh nhưng rất ngắn, một scene động rất dài.
+  // Đếm theo scene thì 2/3 là tĩnh; đếm theo thời lượng thì gần như toàn động.
+  const report = preflight(
+    slideInput(slideScenes({ motion: [false, false, true], durations: [200, 200, 9600] })),
+  );
+  assert.equal(report.antiSlide.staticSceneCount, 2);
+  assert.ok(report.antiSlide.motionCoverage > 0.95, `nhận ${report.antiSlide.motionCoverage}`);
+  assert.equal(verdictOf('motion-coverage', report), 'pass');
+});
+
+test('quãng tĩnh liên tục dài thì chặn, dù tỷ lệ tổng vẫn đẹp', () => {
+  // 90% thời lượng có chuyển động, nhưng 9 giây tĩnh nằm liền nhau.
+  const report = preflight(
+    slideInput(
+      slideScenes({
+        motion: [true, false, false, false, true],
+        durations: [40000, 3000, 3000, 3000, 41000],
+      }),
+    ),
+  );
+  assert.ok(report.antiSlide.motionCoverage > 0.89);
+  assert.equal(report.antiSlide.longestStaticRunMs, 9000);
+  assert.equal(verdictOf('longest-static-run', report), 'fail');
+  assert.equal(report.verdict, 'fail');
+});
+
+test('một cảnh tĩnh bị cắt bởi một cảnh động thì quãng tĩnh được tính lại từ đầu', () => {
+  const report = preflight(
+    slideInput(
+      slideScenes({
+        motion: [false, true, false, true, false],
+        durations: [5000, 5000, 5000, 5000, 5000],
+      }),
+    ),
+  );
+  assert.equal(report.antiSlide.longestStaticRunMs, 5000);
+  assert.equal(verdictOf('longest-static-run', report), 'pass');
+});
+
+test('mọi scene dưới trần chữ mà cả tập vẫn dày đặc thì vẫn bị chặn', () => {
+  // 10 từ mỗi scene — dưới trần 12. Nhưng scene chỉ dài 2 giây.
+  const report = preflight(
+    slideInput(
+      slideScenes({
+        motion: [true, true, true, true],
+        durations: [2000, 6000, 2000, 6000],
+        words: [10, 10, 10, 10],
+      }),
+    ),
+  );
+  assert.equal(verdictOf('on-screen-word-density', report), 'pass', 'mỗi scene vẫn dưới trần');
+  assert.ok(report.antiSlide.textWordsPerSecond > 1.5);
+  assert.equal(verdictOf('text-words-per-second', report), 'fail');
+});
+
+test('một cảnh đủ dài thì tự nó là một slide', () => {
+  const report = preflight(
+    slideInput(slideScenes({ motion: [true, true], durations: [4000, 16000] })),
+  );
+  assert.equal(report.antiSlide.longestSceneMs, 16000);
+  const check = report.checks.find((c) => c.id === 'scene-max-duration');
+  assert.equal(check?.verdict, 'fail');
+  assert.deepEqual(check?.sceneIds, ['S002']);
+});
+
+test('chỉ số được ghi lại KỂ CẢ khi đạt ngưỡng — chất lượng hình trôi dần, không hỏng đột ngột', () => {
+  const report = preflight(
+    slideInput(
+      slideScenes({ motion: [true, true, true, true], durations: [2000, 6000, 2000, 6000] }),
+    ),
+  );
+  assert.equal(report.verdict, 'pass');
+  for (const key of [
+    'motionCoverage',
+    'longestStaticRunMs',
+    'textWordsPerSecond',
+    'longestSceneMs',
+  ] as const) {
+    assert.equal(typeof report.antiSlide[key], 'number', `thiếu ${key} dù Preflight xanh`);
+  }
+});

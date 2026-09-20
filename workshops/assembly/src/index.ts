@@ -9,10 +9,21 @@
  */
 
 import type { WorkshopDefinition, WorkshopInput, RunContext, Envelope } from '@crux/kernel';
-import { preflight, type Check, type PreflightLimits, type ShotSizeMix } from './preflight.ts';
+import {
+  preflight,
+  type AntiSlide,
+  type Check,
+  type PreflightLimits,
+  type ShotSizeMix,
+} from './preflight.ts';
 
 export interface AssemblyPayload {
-  preflight: { verdict: 'pass' | 'fail'; checks: Check[]; selfCheckMismatch: string[] };
+  preflight: {
+    verdict: 'pass' | 'fail';
+    checks: Check[];
+    selfCheckMismatch: string[];
+    antiSlide: AntiSlide;
+  };
   render: {
     fps: number;
     resolution: string;
@@ -36,6 +47,7 @@ interface VisualShape {
     variant?: string;
     claimIds: string[];
     onScreenWordCount: number;
+    hasMotion: boolean;
   }[];
   selfCheck: { declaredSceneCount: number; declaredTotalMs: number };
 }

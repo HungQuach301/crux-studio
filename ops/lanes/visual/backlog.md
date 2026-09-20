@@ -41,13 +41,25 @@ Chạy một layout ra ảnh mà không cần chạy cả tập, để vòng l�
 ### V-004 · Vòng hiệu chuẩn gu hình chạy thật
 Bộ hiệu chuẩn đã dựng ở Đợt 0. Mục này chạy nó: sinh cặp, mở issue, thu lựa chọn, tính độ nhất quán.
 
-- deps: V-003, `docs/visual/calibration.md`
+- deps: V-003 · bộ công cụ đã có ở `docs/visual/calibration.md` và `ops/scripts/calibration.ts`
 - risk: low
 - status: ready
 - nguồn: CHARTER 6.8b, mặc định M2
 - tiêu chí xong:
   - ≥20 cặp đã được chủ dự án chọn, kết quả lưu trong repo dưới dạng máy đọc được.
   - Báo cáo nêu được các trục mà lựa chọn nhất quán, và các trục còn lẫn lộn.
+
+### V-004b · Thay ngưỡng chống slide tạm tính bằng ngưỡng có dữ liệu
+`motionCoverageMin`, `longestStaticRunMsMax`, `textWordsPerSecondMax` hiện đặt theo **suy luận**, và đang chặn thật. Mục này thay chúng bằng số rút ra từ lựa chọn của chủ dự án.
+
+- deps: V-004
+- risk: low
+- status: ready
+- nguồn: CHARTER 6.8a; `docs/visual/reference-frame.md` trục 2 và 3
+- tiêu chí xong:
+  - ≥20 cặp trên trục `motion` và ≥20 trên trục `text-density` đã có lựa chọn.
+  - Ngưỡng mới ghi vào `packs/genres/data-explainer/format-spec.json` bằng một PR riêng, kèm bảng số làm căn cứ.
+  - Dấu "tạm tính" trong `reference-frame.md` được gỡ.
 
 ### V-005 · Bộ chấm hình tự động
 Chỉ được dùng làm **cổng** khi nó trùng lựa chọn của chủ dự án ở mức ngưỡng khai trong cấu hình. Mặc định: ≥90% trên ≥20 cặp.

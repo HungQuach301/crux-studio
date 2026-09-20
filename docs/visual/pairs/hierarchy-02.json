@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "hierarchy-02",
+  "axis": "hierarchy",
+  "question": "Bao nhiêu thứ trong một khung là quá nhiều?",
+  "variantA": {
+    "label": "Hai phần tử trong khung",
+    "params": {
+      "elementsPerFrame": 2
+    }
+  },
+  "variantB": {
+    "label": "Năm phần tử trong khung",
+    "params": {
+      "elementsPerFrame": 5
+    }
+  },
+  "renderRef": null,
+  "note": "Cùng lượng thông tin, khác số phần tử chở nó."
+}

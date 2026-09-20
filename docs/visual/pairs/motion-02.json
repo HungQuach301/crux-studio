@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "motion-02",
+  "axis": "motion",
+  "question": "Quãng đứng yên dài bao nhiêu thì anh thấy nó thành một tấm slide?",
+  "variantA": {
+    "label": "Quãng tĩnh dài nhất khoảng 3 giây",
+    "params": {
+      "longestStaticRunMs": 3000
+    }
+  },
+  "variantB": {
+    "label": "Quãng tĩnh dài nhất khoảng 9 giây",
+    "params": {
+      "longestStaticRunMs": 9000
+    }
+  },
+  "renderRef": null,
+  "note": "Tổng tỷ lệ chuyển động giữ nguyên ở cả hai; chỉ khác chỗ các cảnh tĩnh nằm rải hay nằm dồn."
+}
