@@ -13,6 +13,13 @@ on:
   workflow_dispatch:
 
 permissions:
+  # contents: read LÀ BẮT BUỘC vì job này dùng actions/checkout. Khi một
+  # workflow khai khối `permissions`, mọi quyền KHÔNG liệt kê bị đặt thành
+  # `none` — kể cả `contents`. Với repo private, GITHUB_TOKEN không đọc được
+  # repo sẽ làm checkout báo "Repository not found" (404, không phải 403:
+  # GitHub trả 404 để không lộ việc repo có tồn tại hay không). Xem KF-003.
+  contents: read
+  # issues: write — nhãn của repo nằm dưới quyền Issues, không phải Pull requests.
   issues: write
 
 jobs:
@@ -20,7 +27,7 @@ jobs:
     name: sync
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tạo hoặc cập nhật từng nhãn
         env:
           GH_TOKEN: ${{ github.token }}

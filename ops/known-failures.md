@@ -38,6 +38,49 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-003 · Khối `permissions` thiếu một quyền, và lỗi hiện ra dưới dạng 404 "repo không tồn tại"
+
+- **Lần gặp:** 1 lỗi thật đã chạy, cộng **2 chỗ nữa cùng loại** tìm ra khi rà cả bộ. Ghi ngay từ lần đầu vì chữ ký lỗi của nó **nói dối**: nó trông như lỗi cấu hình repo, không giống lỗi quyền.
+- **Chữ ký:**
+  ```
+  remote: Repository not found.
+  fatal: repository 'https://github.com/<owner>/<repo>/' not found
+  The process '/usr/bin/git' failed with exit code 128
+  ```
+  ở bước `actions/checkout`, **mặc dù** log ngay phía trên đó cho thấy auth đã được cài (`git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***`).
+- **Nguyên nhân gốc:** khi một workflow khai khối `permissions`, mọi quyền **không** được liệt kê bị đặt thành `none` — kể cả `contents`. `labels.yml` chỉ khai `issues: write`, nên `GITHUB_TOKEN` của nó có `contents: none`. Với repo **private**, GitHub trả **404** thay vì 403 cho một token không có quyền đọc, để không lộ việc repo có tồn tại hay không. Vì vậy thông báo lỗi chỉ sai hướng: nó nói "không tìm thấy repo", còn sự thật là "không được phép đọc repo".
+
+  Trên repo **public** lỗi này không xảy ra, nên nó không lộ ra ở bất kỳ ví dụ nào chép từ mạng.
+- **Bằng chứng:** `labels` run #1, commit `32ba4cd`, ngày 2026-09-20. Ba lần thử lại của `actions/checkout` đều cho cùng một kết quả — không phải trục trặc mạng.
+- **Đã sửa ở đâu:** ba workflow, không phải một. Rà cả bộ tìm ra hai chỗ nữa **chưa từng chạy** nên chưa lộ:
+
+  | Workflow | Thiếu | Thao tác cần nó |
+  |---|---|---|
+  | `labels.yml` | `contents: read` | `actions/checkout` |
+  | `ci.yml` | `issues: write` | `gh label create` ở job `protected-area` |
+  | `watchdog.yml` | `pull-requests: read` | `gh pr list` ở dấu hiệu "48 giờ không merge" |
+
+  Hai chỗ sau đáng chú ý vì chúng **không** phải lỗi checkout:
+  - **Nhãn của repo nằm dưới quyền Issues**, không phải Pull requests. `pull-requests: write` chỉ đủ để **gắn** một nhãn đã tồn tại lên PR, không đủ để **tạo** nhãn. Nếu không sửa, job `protected-area` sẽ hỏng đúng vào lúc nó cần gắn `owner-merge` — tức là làm thủng **bất biến I4**.
+  - **Đọc pull request cần `pull-requests: read`**, và quyền đó **không** nằm trong `contents: read`. Nếu không sửa, người canh sẽ im lặng không bao giờ báo được dấu hiệu thứ hai — đúng kiểu hỏng mà rủi ro **B7** nói tới.
+- **Máy chặn từ nay:** `pnpm lint:workflows` có thêm bảng **thao tác → quyền tối thiểu** (`PERMISSION_RULES` trong `ops/scripts/check-workflows.ts`). Workflow nào khai `permissions` mà thiếu quyền cho một thao tác nó thật sự dùng thì linter đỏ, kèm lý do. `write` bao hàm `read`; workflow **không** khai `permissions` thì luật im lặng, vì đó là một lựa chọn khác chứ không phải lỗi.
+
+  Test ở `ops/test/check-workflows.test.ts` — năm test **âm** (ba trong số đó tái hiện đúng ba workflow đã sai, bằng đúng nội dung đã làm chúng sai) và năm test dương chống đỏ nhầm.
+
+### Vì sao lỗi này đặc biệt đắt ở dự án này
+
+Ba lớp cộng lại làm nó khó thấy:
+
+1. Workflow trong `ops/workflows/` **chỉ chạy sau khi merge vào `main`** và `sync-workflows` chép sang `.github/workflows/`. Không có cách nào thử nó trên nhánh PR.
+2. Chữ ký lỗi chỉ sai hướng — người đọc đi kiểm tên repo, quyền của PAT, và cấu hình sync, đều không phải nguyên nhân.
+3. Hai trong ba chỗ sai nằm trong workflow **chưa từng chạy lần nào**, nên chúng sẽ chỉ lộ ra đúng vào lúc cần chúng nhất: lúc CI phải gắn `owner-merge`, và lúc người canh phải báo động.
+
+### Luật rút ra
+
+**Mỗi workflow chỉ khai đúng quyền nó cần — nhưng "đúng" có hai phía.** Khai thừa thì mở rộng bề mặt tấn công; khai thiếu thì hỏng im lặng, và trên repo private nó hỏng kèm một thông báo lỗi dẫn sai hướng. Từ nay phía "thiếu" do máy chặn; phía "thừa" do người soát diff bắt.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
