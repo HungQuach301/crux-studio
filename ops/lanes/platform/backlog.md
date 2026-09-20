@@ -47,6 +47,20 @@ Routine `crux-digest` không nên tự tính số — nó nên đọc số đã 
   - Một lệnh in ra: PR merged 24h theo làn, PR đang mở và trạng thái CI, mục `parked`, issue `[QĐ]` đang mở tách theo `reversible`/`irreversible`, chi phí 24h và tích luỹ so với ngân sách.
   - Dòng đầu luôn là `Cần anh quyết: N việc`.
 
+### P-007 · Xung đột merge phải nhìn thấy được, và không được chặn hàng đợi
+Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với `main` nằm giữa hàng đợi chặn mọi PR sau nó, và hiện **không có gì báo** — CI vẫn xanh, nhãn `automerge` vẫn còn, PR chỉ đơn giản là không bao giờ được merge. Đây là rủi ro **B7** ở quy mô một PR.
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: `ops/known-failures.md` KF-002; CHARTER 3.3, mục 7, 2.5
+- tiêu chí xong:
+  - `automerge.yml` đọc `mergeable` và `mergeable_state` của PR trước khi thử merge. Đang xung đột thì **bỏ qua và ghi lý do vào log của lần chạy**, không thử merge rồi để API báo lỗi — một job đỏ vì lý do đó trông giống hệt một job đỏ vì lỗi thật.
+  - GitHub tính `mergeable` bất đồng bộ và trả `null` khi chưa tính xong. Workflow phải xử lý `null` bằng cách **chờ rồi hỏi lại** (vài lần, có giới hạn), không coi `null` là "merge được".
+  - Script gom số liệu bản tin (`P-005`) thêm một mục: **PR đang xung đột với `main`**, kèm số giờ đã xung đột. Bản tin có mục này thì một PR bị kẹt không thể nằm im quá một ngày.
+  - Routine `crux-integrator` gộp `main` vào các PR xung đột mà nó tự giải quyết được, và gắn `parked` cộng mở `🤖 [QĐ]` cho những PR cần người quyết (hai bên cùng sửa một logic).
+  - Có test cho phần quyết định của `automerge.yml`: `mergeable: false` → bỏ qua; `mergeable: null` → hỏi lại; `mergeable: true` cộng đủ bốn điều kiện → merge.
+
 ### P-006 · Bảo vệ nhánh bằng ruleset
 - deps: VF-G12
 - risk: low
