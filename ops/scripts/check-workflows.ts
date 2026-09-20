@@ -78,11 +78,20 @@ function runBlocks(source: string, file: string): RunBlock[] {
  * `need` ghi mức tối thiểu; `write` bao hàm `read`, nên khai `contents: write`
  * là đủ cho một luật đòi `contents: read`.
  */
+interface Grant {
+  scope: string;
+  need: 'read' | 'write';
+}
+
 interface PermissionRule {
   /** Dấu hiệu nhận ra thao tác trong nội dung workflow. */
   match: RegExp;
-  scope: string;
-  need: 'read' | 'write';
+  /**
+   * Các quyền chấp nhận được. Thoả **một** trong số đó là đủ — vài endpoint
+   * của GitHub nằm dưới nhiều scope cùng lúc, và ép chọn một scope sẽ buộc
+   * workflow khai thừa quyền.
+   */
+  accepts: readonly Grant[];
   /** Vì sao thao tác đó cần quyền này — in ra cùng lỗi, để người đọc không phải tra. */
   why: string;
 }
@@ -90,56 +99,53 @@ interface PermissionRule {
 const PERMISSION_RULES: readonly PermissionRule[] = [
   {
     match: /uses:\s*actions\/checkout@/,
-    scope: 'contents',
-    need: 'read',
+    accepts: [{ scope: 'contents', need: 'read' }],
     why: 'actions/checkout phải đọc được repo. Trên repo private, thiếu quyền này cho ra "Repository not found" (404) chứ không phải lỗi quyền.',
   },
   {
     match: /\bgh\s+label\s+(create|delete|edit|clone)\b/,
-    scope: 'issues',
-    need: 'write',
-    why: 'nhãn của repo nằm dưới quyền Issues. `pull-requests: write` chỉ đủ để GẮN nhãn đã tồn tại lên PR, không đủ để TẠO nhãn.',
+    // Nhãn của repo nằm dưới CẢ HAI scope Issues và Pull requests. Đã kiểm
+    // bằng chạy thật: ci run #1 tạo được nhãn `automerge` và `cross-lane`
+    // chỉ với `pull-requests: write`, không có quyền `issues` nào (KF-003).
+    accepts: [
+      { scope: 'issues', need: 'write' },
+      { scope: 'pull-requests', need: 'write' },
+    ],
+    why: 'tạo hoặc sửa nhãn của repo. Một trong hai quyền là đủ.',
   },
   {
     match: /\bgh\s+issue\s+(create|comment|edit|close|reopen|delete|lock|unlock|pin|unpin|transfer)\b/,
-    scope: 'issues',
-    need: 'write',
+    accepts: [{ scope: 'issues', need: 'write' }],
     why: 'mở hoặc sửa issue.',
   },
   {
     match: /\bgh\s+issue\s+(list|view|status)\b/,
-    scope: 'issues',
-    need: 'read',
+    accepts: [{ scope: 'issues', need: 'read' }],
     why: 'đọc issue.',
   },
   {
     match: /\bgh\s+pr\s+(create|edit|comment|close|reopen|ready|review|merge)\b/,
-    scope: 'pull-requests',
-    need: 'write',
+    accepts: [{ scope: 'pull-requests', need: 'write' }],
     why: 'sửa hoặc bình luận pull request.',
   },
   {
     match: /\bgh\s+pr\s+(list|view|status|diff|checks)\b/,
-    scope: 'pull-requests',
-    need: 'read',
+    accepts: [{ scope: 'pull-requests', need: 'read' }],
     why: 'đọc pull request. Quyền này KHÔNG nằm trong `contents: read`.',
   },
   {
     match: /\bgh\s+(workflow\s+run|run\s+rerun|run\s+cancel)\b/,
-    scope: 'actions',
-    need: 'write',
+    accepts: [{ scope: 'actions', need: 'write' }],
     why: 'kích hoạt hoặc huỷ một lần chạy workflow.',
   },
   {
     match: /\bgh\s+(run|workflow)\s+(list|view)\b/,
-    scope: 'actions',
-    need: 'read',
+    accepts: [{ scope: 'actions', need: 'read' }],
     why: 'đọc lịch sử chạy workflow.',
   },
   {
     match: /\bgh\s+api\s+-X\s+PUT[^\n]*\/pulls\/[^\n]*\/merge/,
-    scope: 'contents',
-    need: 'write',
+    accepts: [{ scope: 'contents', need: 'write' }],
     why: 'merge một pull request ghi vào nhánh đích.',
   },
 ];
@@ -184,11 +190,15 @@ export function missingPermissions(source: string): string[] {
   const missing: string[] = [];
   for (const rule of PERMISSION_RULES) {
     if (!rule.match.test(source)) continue;
-    const granted = declared.get(rule.scope) ?? declared.get('*');
-    if (satisfies(granted, rule.need)) continue;
-    missing.push(
-      `thiếu \`${rule.scope}: ${rule.need}\` (đang là \`${granted ?? 'không khai → none'}\`) — ${rule.why}`,
+    const ok = rule.accepts.some((grant) =>
+      satisfies(declared.get(grant.scope) ?? declared.get('*'), grant.need),
     );
+    if (ok) continue;
+    const wanted = rule.accepts.map((g) => `\`${g.scope}: ${g.need}\``).join(' hoặc ');
+    const actual = rule.accepts
+      .map((g) => `${g.scope}=${declared.get(g.scope) ?? declared.get('*') ?? 'none'}`)
+      .join(', ');
+    missing.push(`thiếu ${wanted} (đang là ${actual}) — ${rule.why}`);
   }
   return [...new Set(missing)];
 }

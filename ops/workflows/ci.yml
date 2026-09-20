@@ -14,11 +14,11 @@ on:
 
 permissions:
   contents: read
+  # pull-requests: write đủ cho CẢ hai việc của job protected-area: gắn nhãn
+  # lên PR, VÀ tạo nhãn của repo bằng `gh label create`. Đã kiểm bằng chạy
+  # thật — ci run #1 tạo được `automerge` và `cross-lane` mà không có quyền
+  # `issues` nào. Vì vậy KHÔNG thêm `issues: write` vào đây. Xem KF-003.
   pull-requests: write
-  # issues: write cho bước `gh label create` của job protected-area. TẠO một
-  # nhãn của repo nằm dưới quyền Issues; `pull-requests: write` chỉ đủ để
-  # GẮN một nhãn đã tồn tại lên PR. Xem KF-003.
-  issues: write
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}

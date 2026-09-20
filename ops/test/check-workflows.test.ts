@@ -2,8 +2,11 @@
  * Luật quyền của `pnpm lint:workflows` (KF-003).
  *
  * Test âm là phần quan trọng nhất ở đây: một luật chỉ có giá trị khi nó
- * **đỏ** đúng lúc phải đỏ. Ba trường hợp đầu tái hiện đúng ba workflow đã
- * sai thật, bằng đúng nội dung đã làm chúng sai.
+ * **đỏ** đúng lúc phải đỏ. Hai trong số đó tái hiện đúng hai workflow đã sai
+ * thật, bằng đúng nội dung đã làm chúng sai.
+ *
+ * Phần dương cũng không thừa: một luật đỏ nhầm sẽ ép workflow khai THỪA
+ * quyền, và đó là cái bẫy đã sập một lần ở `ci.yml` (KF-003).
  */
 
 import { test } from 'node:test';
@@ -12,7 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { missingPermissions } from '../scripts/check-workflows.ts';
 
-// ── Test âm: đúng ba lỗi đã xảy ra thật ──────────────────────────────────
+// ── Test âm ──────────────────────────────────────────────────────────────
 
 test('KF-003 · checkout mà thiếu contents: read thì đỏ', () => {
   const broken = `name: labels
@@ -34,24 +37,49 @@ jobs:
   assert.match(missing[0]!, /Repository not found/);
 });
 
-test('KF-003 · `gh label create` mà thiếu issues: write thì đỏ', () => {
-  const broken = `name: ci
-on:
-  pull_request:
+test('KF-003 · `gh label create` mà không có quyền ghi nào thì đỏ', () => {
+  const broken = `name: x
+on: [workflow_dispatch]
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  protected-area:
-    runs-on: ubuntu-latest
+  j:
     steps:
       - run: gh label create owner-merge --color B60205
 `;
   const missing = missingPermissions(broken);
   assert.equal(missing.length, 1, JSON.stringify(missing));
-  assert.match(missing[0]!, /issues: write/);
+  assert.match(missing[0]!, /issues: write.*hoặc.*pull-requests: write/);
+});
+
+test('nhãn của repo nằm dưới CẢ HAI scope — mỗi quyền một mình đều đủ', () => {
+  // Đã kiểm bằng chạy thật: ci run #1 tạo được nhãn `automerge` và
+  // `cross-lane` chỉ với `pull-requests: write`, không có quyền `issues`.
+  // Ép chọn một scope sẽ buộc ci.yml khai thừa quyền.
+  const viaPulls = `name: x
+on: [workflow_dispatch]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  j:
+    steps:
+      - run: gh label create a
+`;
+  const viaIssues = `name: x
+on: [workflow_dispatch]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  j:
+    steps:
+      - run: gh label create a
+`;
+  assert.deepEqual(missingPermissions(viaPulls), []);
+  assert.deepEqual(missingPermissions(viaIssues), []);
 });
 
 test('KF-003 · `gh pr list` mà thiếu pull-requests: read thì đỏ', () => {
@@ -94,6 +122,10 @@ jobs:
   assert.ok(missing.some((m) => m.includes('contents: read')));
   assert.ok(missing.some((m) => m.includes('issues: write')));
   assert.ok(missing.some((m) => m.includes('pull-requests: write')));
+  // `gh issue create` chỉ nhận issues: write — phần "thiếu …" không có lựa
+  // chọn thay thế. (Không dùng `!m.includes('hoặc')` để kiểm điều này: chữ
+  // "hoặc" còn xuất hiện trong phần lý do của luật khác.)
+  assert.ok(missing.some((m) => m.startsWith('thiếu `issues: write` (')));
 });
 
 test('`none` tường minh cũng là thiếu, không phải là đã khai', () => {
@@ -134,6 +166,20 @@ jobs:
       - run: gh label create a
 `;
   assert.deepEqual(missingPermissions(noBlock), []);
+});
+
+test('ci.yml thật không khai `issues` — pull-requests: write đã đủ để tạo nhãn', () => {
+  const ci = readFileSync(join(process.cwd(), 'ops', 'workflows', 'ci.yml'), 'utf8');
+  const block = /^permissions:\n((?:[ \t#].*\n|\n)*)/m.exec(ci)?.[1] ?? '';
+  const declared = block
+    .split('\n')
+    .filter((l) => l.trim() !== '' && !l.trimStart().startsWith('#'))
+    .map((l) => l.trim());
+  assert.ok(
+    !declared.some((l) => l.startsWith('issues:')),
+    `ci.yml khai thừa quyền: ${declared.join(' · ')}`,
+  );
+  assert.deepEqual(missingPermissions(ci), []);
 });
 
 test('write-all phủ mọi luật', () => {
