@@ -47,6 +47,19 @@ Routine `crux-digest` không nên tự tính số — nó nên đọc số đã 
   - Một lệnh in ra: PR merged 24h theo làn, PR đang mở và trạng thái CI, mục `parked`, issue `[QĐ]` đang mở tách theo `reversible`/`irreversible`, chi phí 24h và tích luỹ so với ngân sách.
   - Dòng đầu luôn là `Cần anh quyết: N việc`.
 
+### P-008 · Sửa quyền thiếu trong workflow, và đưa luật quyền vào linter
+Workflow `labels` chạy tay thất bại ở bước checkout với `Repository not found` (run #1, commit `32ba4cd`). Nguyên nhân là khối `permissions` thiếu `contents: read`. Rà cả bộ tìm ra một chỗ nữa cùng loại (`watchdog.yml`), và một nghi ngờ thứ ba đã bị chính lần chạy CI bác bỏ — xem KF-003.
+
+- deps: —
+- risk: low
+- status: review
+- nguồn: `ops/known-failures.md` KF-003; CHARTER 3.2, bất biến I4
+- tiêu chí xong:
+  - ✅ `labels.yml` thêm `contents: read`; `watchdog.yml` thêm `pull-requests: read`. `ci.yml` **không** đổi: `ci` run #1 chứng minh `pull-requests: write` đã đủ để tạo nhãn.
+  - ✅ `pnpm lint:workflows` có bảng thao tác → quyền tối thiểu, một luật nhận được nhiều quyền thay thế, kèm test âm tái hiện đúng các lỗi thật.
+  - ✅ Nâng action lên bản chạy Node 24: `actions/checkout@v7`, `actions/setup-node@v7`, `pnpm/action-setup@v6`. Phiên bản kiểm bằng `git ls-remote` cộng đọc `runs.using` trong `action.yml`, không lấy từ trí nhớ.
+  - Còn lại sau khi merge: chạy lại workflow `labels` một lần và xác nhận nó xanh. Đó mới là bằng chứng chạy thật; những dấu ✅ trên chỉ là bằng chứng ở chỗ rẻ.
+
 ### P-007 · Xung đột merge phải nhìn thấy được, và không được chặn hàng đợi
 Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với `main` nằm giữa hàng đợi chặn mọi PR sau nó, và hiện **không có gì báo** — CI vẫn xanh, nhãn `automerge` vẫn còn, PR chỉ đơn giản là không bao giờ được merge. Đây là rủi ro **B7** ở quy mô một PR.
 

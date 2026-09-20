@@ -14,6 +14,10 @@ on:
 
 permissions:
   contents: read
+  # pull-requests: write đủ cho CẢ hai việc của job protected-area: gắn nhãn
+  # lên PR, VÀ tạo nhãn của repo bằng `gh label create`. Đã kiểm bằng chạy
+  # thật — ci run #1 tạo được `automerge` và `cross-lane` mà không có quyền
+  # `issues` nào. Vì vậy KHÔNG thêm `issues: write` vào đây. Xem KF-003.
   pull-requests: write
 
 concurrency:
@@ -25,9 +29,9 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: pnpm
@@ -40,7 +44,7 @@ jobs:
     name: secret-scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # BẤT BIẾN I1. KHÔNG dựa vào secret scanning của GitHub: với repo
@@ -70,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # BẤT BIẾN I2, vế thứ hai: PR có nhãn `fix` phải kèm test tái hiện lỗi.
@@ -94,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # BẤT BIẾN I4: vùng bảo vệ chỉ chủ dự án merge. CI gắn nhãn
@@ -149,7 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # LUẬT MỀM (CHARTER mục 4): commit trên nhánh claude/ thiếu trailer
