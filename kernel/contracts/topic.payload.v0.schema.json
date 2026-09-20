@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "crux://contracts/topic.payload.v0.schema.json",
+  "title": "Xưởng Đề tài — payload v0",
+  "description": "Gợi ý lấy từ topics.schema.json, sources.schema.json và brief.schema.json của spec tham chiếu. v0 để LỎNG: chỉ trường bắt buộc tối thiểu, cho phép thêm trường (CHARTER 5.2).",
+  "type": "object",
+  "required": ["selected", "candidates", "claims", "targetDurationMs"],
+  "properties": {
+    "selected": {
+      "type": "object",
+      "required": ["id", "question", "pillar"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "question": { "type": "string", "minLength": 15 },
+        "pillar": { "type": "string", "minLength": 1 },
+        "matrixFeasible": {
+          "type": "boolean",
+          "description": "False thì đề tài bị loại bất kể điểm."
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "question", "totalScore"],
+        "properties": {
+          "id": { "type": "string" },
+          "question": { "type": "string", "minLength": 15 },
+          "totalScore": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Bất biến I6: mọi con số hiển thị về sau phải trỏ về một claimId ở đây.",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "evidence"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^C[0-9]+$" },
+          "statement": { "type": "string", "minLength": 1 },
+          "evidence": {
+            "type": "object",
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["source", "model"],
+                "description": "I6: có nguồn HOẶC có mô hình. Không có lựa chọn thứ ba."
+              },
+              "ref": { "type": "string", "minLength": 1 },
+              "publisher": { "type": "string" },
+              "retrievedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "targetDurationMs": { "type": "integer", "minimum": 60000 },
+    "modelRefs": { "type": "array", "items": { "type": "string" } }
+  }
+}

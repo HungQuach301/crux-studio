@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "crux://contracts/visual.payload.v0.schema.json",
+  "title": "Xưởng Hình — payload v0",
+  "description": "Gợi ý lấy từ storyboard.schema.json và canvas-map.schema.json của spec tham chiếu. Storyboard dọc cho Shorts là artifact RIÊNG, không phải bản ngang đổi khung nhìn.",
+  "type": "object",
+  "required": ["orientation", "canvasMapRef", "scenes", "selfCheck"],
+  "properties": {
+    "orientation": { "type": "string", "enum": ["landscape", "vertical"] },
+    "canvasMapRef": { "type": "string", "minLength": 1 },
+    "fps": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Validator đối chiếu format-spec.limits.fpsAllowed của genre pack."
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "beatIndex", "regionId", "durationMs", "layoutId", "shotSize", "kind"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "beatIndex": { "type": "integer", "minimum": 1 },
+          "regionId": { "type": "string", "minLength": 1 },
+          "durationMs": { "type": "integer", "minimum": 1 },
+          "layoutId": {
+            "type": "string",
+            "description": "Hằng số nội dung. Validator đối chiếu layouts.json của genre pack, không cố định trong contract."
+          },
+          "variant": { "type": "string" },
+          "shotSize": { "type": "string", "enum": ["wide", "medium", "close", "detail"] },
+          "kind": {
+            "type": "string",
+            "enum": ["chart", "diagram", "map", "footage", "image", "text-minimal"],
+            "description": "CHARTER 5.6: contract storyboard hỗ trợ sẵn các loại cảnh này để thể loại mới không phải đổi contract."
+          },
+          "claimIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Bất biến I6: con số nào trên màn hình cũng phải có claimId."
+          },
+          "onScreenWordCount": { "type": "integer", "minimum": 0 },
+          "hasMotion": {
+            "type": "boolean",
+            "description": "Nguồn cho chỉ số chống slide ở Preflight (CHARTER 6.8a)."
+          }
+        }
+      }
+    },
+    "selfCheck": {
+      "type": "object",
+      "description": "Giá trị xưởng TỰ KHAI. Preflight so với giá trị tính được.",
+      "required": ["declaredSceneCount", "declaredTotalMs", "declaredShotSizeMix"],
+      "properties": {
+        "declaredSceneCount": { "type": "integer", "minimum": 1 },
+        "declaredTotalMs": { "type": "integer", "minimum": 1 },
+        "declaredShotSizeMix": { "type": "object" }
+      }
+    }
+  }
+}

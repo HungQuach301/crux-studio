@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "crux://contracts/assembly.payload.v0.schema.json",
+  "title": "Xưởng Dựng — payload v0",
+  "description": "Gợi ý lấy từ preflight.schema.json, render-manifest.schema.json và qa-report.schema.json của spec tham chiếu.",
+  "type": "object",
+  "required": ["preflight", "render", "qa"],
+  "properties": {
+    "preflight": {
+      "type": "object",
+      "description": "Cơ chế 1 của spec tham chiếu: kiểm tĩnh trên storyboard TRƯỚC khi render — kiểm ở chỗ rẻ nhất.",
+      "required": ["verdict", "checks"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["pass", "fail"] },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "verdict"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "verdict": { "type": "string", "enum": ["pass", "fail", "warn"] },
+              "expected": { "type": ["string", "number"] },
+              "actual": { "type": ["string", "number"] },
+              "sceneIds": { "type": "array", "items": { "type": "string" } },
+              "rootCauseStage": { "type": "string" }
+            }
+          }
+        },
+        "selfCheckMismatch": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Trường mà xưởng trước tự khai khác với số tính được. Nghiêm trọng hơn một check fail thường."
+        }
+      }
+    },
+    "render": {
+      "type": "object",
+      "required": ["fps", "resolution", "outputs"],
+      "properties": {
+        "fps": { "type": "integer", "minimum": 1 },
+        "resolution": { "type": "string", "pattern": "^[0-9]+x[0-9]+$" },
+        "durationMs": { "type": "integer", "minimum": 1 },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["master", "proof", "still", "shorts"] },
+              "ref": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "required": ["verdict", "findings"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["pass", "fail"] },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "severity", "message"],
+            "properties": {
+              "id": { "type": "string" },
+              "severity": { "type": "string", "enum": ["info", "warn", "block"] },
+              "message": { "type": "string" },
+              "rootCauseStage": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

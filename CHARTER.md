@@ -1,8 +1,8 @@
 # CRUX STUDIO — HIẾN CHƯƠNG TRIỂN KHAI
 
 Phiên bản: C3.1 · 2026-09-20 (nhật ký thay đổi ở mục 14)
-Chủ dự án (GitHub): `<OWNER>`
-Repo: `<OWNER>/crux-studio`
+Chủ dự án (GitHub): `HungQuach301`
+Repo: `HungQuach301/crux-studio`
 Múi giờ vận hành: Asia/Ho_Chi_Minh
 
 ---
@@ -137,8 +137,8 @@ Sau khi xử lý xong một quyết định, agent ghi quyết định có tính
 
 GitHub không gửi thông báo cho chính người thực hiện hành động. Vì agent hành động bằng danh tính của chủ dự án, cần hai workflow chạy bằng `github-actions[bot]`:
 
-- **`notify.yml`:** comment `@<OWNER>` trên mọi issue mới có nhãn `decision`, `digest` hoặc `alert`. Nhờ đó GitHub Mobile đẩy thông báo về điện thoại.
-- **`watchdog.yml`:** chạy theo lịch cron trong Actions, độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@<OWNER>` khi xảy ra một trong hai trường hợp:
+- **`notify.yml`:** comment `@HungQuach301` trên mọi issue mới có nhãn `decision`, `digest` hoặc `alert`. Nhờ đó GitHub Mobile đẩy thông báo về điện thoại.
+- **`watchdog.yml`:** chạy theo lịch cron trong Actions, độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` khi xảy ra một trong hai trường hợp:
   - quá 26 giờ không có bản tin mới;
   - quá 48 giờ không có PR nào được merge trong khi backlog vẫn còn mục `ready`;
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn.

@@ -1,0 +1,7 @@
+{
+  "$note": "🤖 Tập vàng của Đợt 0 (CHARTER 6.1). Đông cứng cùng mốc thời gian và băng ghi, nên chạy lại phải cho ra byte giống hệt. Cập nhật snapshot phải đi trong một PR RIÊNG, có giải thích.",
+  "episodeId": "ep-0001-stub",
+  "channel": "us-personal-finance",
+  "at": "2026-09-20T00:00:00.000Z",
+  "impl": "stub"
+}

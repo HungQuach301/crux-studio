@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+.DS_Store
+
+# Nhị phân không commit (CHARTER 5.3): audio, video, ảnh render
+episodes/**/*.mp4
+episodes/**/*.mov
+episodes/**/*.wav
+episodes/**/*.mp3
+episodes/**/*.png
+episodes/**/*.jpg
+.tmp/

@@ -1,0 +1,4 @@
+packages:
+  - 'kernel'
+  - 'workshops/*'
+  - 'ops'

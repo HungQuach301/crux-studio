@@ -1,0 +1,1 @@
+{"at":"2026-09-20T00:00:00.000Z","lane":"kernel","kind":"lane","ref":"kernel/K-001","status":"ok","durationMs":0,"costUsd":0,"note":"Đợt 0 T1 — phong bì, contract v0, sáu stub, tập vàng, pnpm check. Chạy bằng gói subscription, không gọi API runtime."}

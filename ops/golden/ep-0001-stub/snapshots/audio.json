@@ -1,0 +1,383 @@
+{
+  "schemaVersion": "0",
+  "kind": "audio.timing",
+  "producer": {
+    "workshop": "audio",
+    "version": "0.0.0-stub",
+    "impl": "stub"
+  },
+  "episodeId": "ep-0001-stub",
+  "channel": "us-personal-finance",
+  "genre": "data-explainer",
+  "locale": "en-US",
+  "inputsHash": "9042edd2309f387e6e1d8395d3a52968835ff12c18f7658d907179b6b6df8735",
+  "inputs": [
+    {
+      "kind": "editorial.script",
+      "path": "episodes/us-personal-finance/ep-0001-stub/editorial/artifact.json",
+      "hash": "de96df2e79179dd3e5cd30565cb5cd6c16bebca394dc79491dacc38a4b574d9c"
+    }
+  ],
+  "createdAt": "2026-09-20T00:00:00.000Z",
+  "costUsd": 0,
+  "status": "ok",
+  "payload": {
+    "audioRef": "artifact://us-personal-finance/ep-0001-stub/audio/voice.wav",
+    "captionsRef": "artifact://us-personal-finance/ep-0001-stub/audio/captions.srt",
+    "totalMs": 33036,
+    "loudnessLufs": -14,
+    "captionDriftMaxMs": 0,
+    "words": [
+      {
+        "text": "In",
+        "startMs": 0,
+        "endMs": 404
+      },
+      {
+        "text": "the",
+        "startMs": 444,
+        "endMs": 860
+      },
+      {
+        "text": "United",
+        "startMs": 900,
+        "endMs": 1352
+      },
+      {
+        "text": "States,",
+        "startMs": 1392,
+        "endMs": 1856
+      },
+      {
+        "text": "At",
+        "startMs": 1896,
+        "endMs": 2300
+      },
+      {
+        "text": "what",
+        "startMs": 2340,
+        "endMs": 2768
+      },
+      {
+        "text": "point",
+        "startMs": 2808,
+        "endMs": 3248
+      },
+      {
+        "text": "does",
+        "startMs": 3288,
+        "endMs": 3716
+      },
+      {
+        "text": "option",
+        "startMs": 3756,
+        "endMs": 4208
+      },
+      {
+        "text": "1",
+        "startMs": 4248,
+        "endMs": 4640
+      },
+      {
+        "text": "stop",
+        "startMs": 4680,
+        "endMs": 5108
+      },
+      {
+        "text": "being",
+        "startMs": 5148,
+        "endMs": 5588
+      },
+      {
+        "text": "the",
+        "startMs": 5628,
+        "endMs": 6044
+      },
+      {
+        "text": "better",
+        "startMs": 6084,
+        "endMs": 6536
+      },
+      {
+        "text": "answer",
+        "startMs": 6576,
+        "endMs": 7028
+      },
+      {
+        "text": "for",
+        "startMs": 7068,
+        "endMs": 7484
+      },
+      {
+        "text": "a",
+        "startMs": 7524,
+        "endMs": 7916
+      },
+      {
+        "text": "US",
+        "startMs": 7956,
+        "endMs": 8360
+      },
+      {
+        "text": "household?",
+        "startMs": 8400,
+        "endMs": 8900
+      },
+      {
+        "text": "Stub",
+        "startMs": 8940,
+        "endMs": 9368
+      },
+      {
+        "text": "claim",
+        "startMs": 9408,
+        "endMs": 9848
+      },
+      {
+        "text": "1",
+        "startMs": 9888,
+        "endMs": 10280
+      },
+      {
+        "text": "for",
+        "startMs": 10320,
+        "endMs": 10736
+      },
+      {
+        "text": "ep-0001-stub:",
+        "startMs": 10776,
+        "endMs": 11300
+      },
+      {
+        "text": "the",
+        "startMs": 11340,
+        "endMs": 11756
+      },
+      {
+        "text": "crossover",
+        "startMs": 11796,
+        "endMs": 12284
+      },
+      {
+        "text": "point",
+        "startMs": 12324,
+        "endMs": 12764
+      },
+      {
+        "text": "moves",
+        "startMs": 12804,
+        "endMs": 13244
+      },
+      {
+        "text": "with",
+        "startMs": 13284,
+        "endMs": 13712
+      },
+      {
+        "text": "parameter",
+        "startMs": 13752,
+        "endMs": 14240
+      },
+      {
+        "text": "1.",
+        "startMs": 14280,
+        "endMs": 14684
+      },
+      {
+        "text": "Stub",
+        "startMs": 14724,
+        "endMs": 15152
+      },
+      {
+        "text": "claim",
+        "startMs": 15192,
+        "endMs": 15632
+      },
+      {
+        "text": "2",
+        "startMs": 15672,
+        "endMs": 16064
+      },
+      {
+        "text": "for",
+        "startMs": 16104,
+        "endMs": 16520
+      },
+      {
+        "text": "ep-0001-stub:",
+        "startMs": 16560,
+        "endMs": 17084
+      },
+      {
+        "text": "the",
+        "startMs": 17124,
+        "endMs": 17540
+      },
+      {
+        "text": "crossover",
+        "startMs": 17580,
+        "endMs": 18068
+      },
+      {
+        "text": "point",
+        "startMs": 18108,
+        "endMs": 18548
+      },
+      {
+        "text": "moves",
+        "startMs": 18588,
+        "endMs": 19028
+      },
+      {
+        "text": "with",
+        "startMs": 19068,
+        "endMs": 19496
+      },
+      {
+        "text": "parameter",
+        "startMs": 19536,
+        "endMs": 20024
+      },
+      {
+        "text": "2.",
+        "startMs": 20064,
+        "endMs": 20468
+      },
+      {
+        "text": "Stub",
+        "startMs": 20508,
+        "endMs": 20936
+      },
+      {
+        "text": "claim",
+        "startMs": 20976,
+        "endMs": 21416
+      },
+      {
+        "text": "3",
+        "startMs": 21456,
+        "endMs": 21848
+      },
+      {
+        "text": "for",
+        "startMs": 21888,
+        "endMs": 22304
+      },
+      {
+        "text": "ep-0001-stub:",
+        "startMs": 22344,
+        "endMs": 22868
+      },
+      {
+        "text": "the",
+        "startMs": 22908,
+        "endMs": 23324
+      },
+      {
+        "text": "crossover",
+        "startMs": 23364,
+        "endMs": 23852
+      },
+      {
+        "text": "point",
+        "startMs": 23892,
+        "endMs": 24332
+      },
+      {
+        "text": "moves",
+        "startMs": 24372,
+        "endMs": 24812
+      },
+      {
+        "text": "with",
+        "startMs": 24852,
+        "endMs": 25280
+      },
+      {
+        "text": "parameter",
+        "startMs": 25320,
+        "endMs": 25808
+      },
+      {
+        "text": "3.",
+        "startMs": 25848,
+        "endMs": 26252
+      },
+      {
+        "text": "This",
+        "startMs": 26292,
+        "endMs": 26720
+      },
+      {
+        "text": "conclusion",
+        "startMs": 26760,
+        "endMs": 27260
+      },
+      {
+        "text": "is",
+        "startMs": 27300,
+        "endMs": 27704
+      },
+      {
+        "text": "scoped",
+        "startMs": 27744,
+        "endMs": 28196
+      },
+      {
+        "text": "to",
+        "startMs": 28236,
+        "endMs": 28640
+      },
+      {
+        "text": "US",
+        "startMs": 28680,
+        "endMs": 29084
+      },
+      {
+        "text": "federal",
+        "startMs": 29124,
+        "endMs": 29588
+      },
+      {
+        "text": "filers;",
+        "startMs": 29628,
+        "endMs": 30092
+      },
+      {
+        "text": "state",
+        "startMs": 30132,
+        "endMs": 30572
+      },
+      {
+        "text": "rules",
+        "startMs": 30612,
+        "endMs": 31052
+      },
+      {
+        "text": "move",
+        "startMs": 31092,
+        "endMs": 31520
+      },
+      {
+        "text": "the",
+        "startMs": 31560,
+        "endMs": 31976
+      },
+      {
+        "text": "crossover",
+        "startMs": 32016,
+        "endMs": 32504
+      },
+      {
+        "text": "point.",
+        "startMs": 32544,
+        "endMs": 32996
+      }
+    ],
+    "voice": {
+      "provider": "stub",
+      "voiceId": "stub-neutral-us",
+      "commercialLicenseVerified": false
+    }
+  }
+}
