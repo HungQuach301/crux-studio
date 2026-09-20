@@ -1,0 +1,22 @@
+# 🤖 Cấu hình quét secret (bất biến I1).
+#
+# Dùng nguyên bộ luật mặc định của gitleaks rồi mở ngoại lệ hẹp cho những
+# chỗ chắc chắn không phải secret. Mỗi ngoại lệ phải nêu lý do; ngoại lệ
+# không có lý do là một ngoại lệ sẽ bị lạm dụng.
+title = "crux-studio"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Băm nội dung của phong bì artifact: inputsHash và ref của input đều là SHA-256 của dữ liệu công khai, không phải khoá."
+regexTarget = "line"
+regexes = ['"(inputsHash|hash|requestHash)"\s*:\s*"[0-9a-f]{64}"']
+
+[[allowlists]]
+description = "Spec tham chiếu mô tả TÊN các secret và cách đặt chúng, không chứa giá trị nào."
+paths = ['docs/spec/CRUX-REFERENCE-SPEC\.md']
+
+[[allowlists]]
+description = "pnpm lockfile chứa băm tính toàn vẹn của gói, không phải khoá."
+paths = ['pnpm-lock\.yaml']

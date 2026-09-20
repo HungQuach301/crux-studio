@@ -1,0 +1,55 @@
+{
+  "$note": "🤖 Nguồn sự thật của hệ thống nhãn GitHub (CHARTER mục 9). Workflow ops/workflows/labels.yml đồng bộ file này lên repo. Nhãn không có ở đây thì không tồn tại; thêm nhãn bằng PR, không bằng tay trên giao diện.",
+  "labels": [
+    {
+      "name": "decision",
+      "color": "5319E7",
+      "description": "Hộp quyết định. Issue 🤖 [QĐ]. Luôn đi kèm reversible hoặc irreversible."
+    },
+    {
+      "name": "reversible",
+      "color": "B4A7F5",
+      "description": "Agent làm theo khuyến nghị NGAY và ghi lại. Chủ dự án phủ quyết thì agent hoàn tác."
+    },
+    {
+      "name": "irreversible",
+      "color": "B60205",
+      "description": "Agent CHỜ trả lời. Chỉ nhánh việc liên quan chờ; các làn khác vẫn chạy."
+    },
+    {
+      "name": "digest",
+      "color": "0E8A16",
+      "description": "Bản tin ngày. Dòng đầu luôn là 'Cần anh quyết: N việc'."
+    },
+    {
+      "name": "alert",
+      "color": "D93F0B",
+      "description": "Cảnh báo của người canh hoặc của main-ci. Đẩy thông báo về điện thoại qua notify.yml."
+    },
+    {
+      "name": "automerge",
+      "color": "0052CC",
+      "description": "PR không chạm vùng bảo vệ. automerge.yml merge khi CI xanh và PR không còn nháp."
+    },
+    {
+      "name": "owner-merge",
+      "color": "B60205",
+      "description": "PR chạm vùng bảo vệ (I4). CI tự gắn. automerge.yml bỏ qua; chỉ chủ dự án merge."
+    },
+    {
+      "name": "fix",
+      "color": "D4C5F9",
+      "description": "PR sửa lỗi. BẮT BUỘC kèm test tái hiện lỗi — CI chặn nếu thiếu (I2)."
+    },
+    {
+      "name": "cross-lane",
+      "color": "FBCA04",
+      "description": "Luật mềm: PR chạm file ngoài thư mục của làn. Không chặn; reviewer soát kỹ hơn."
+    },
+    {
+      "name": "parked",
+      "color": "555555",
+      "description": "Mục gặp cùng một chữ ký lỗi 3 lần, hoặc đang chờ một quyết định. Làn không dừng vì nó."
+    }
+  ]
+}

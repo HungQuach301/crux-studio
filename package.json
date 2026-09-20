@@ -11,11 +11,12 @@
   "scripts": {
     "contracts": "node ops/scripts/check-contracts.ts",
     "lint:deps": "node ops/scripts/lint-deps.ts",
+    "lint:workflows": "node ops/scripts/check-workflows.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",
     "run:episode": "node ops/scripts/run-episode.ts",
-    "check": "pnpm contracts && pnpm lint:deps && pnpm typecheck && pnpm test && pnpm replay"
+    "check": "pnpm contracts && pnpm lint:deps && pnpm lint:workflows && pnpm typecheck && pnpm test && pnpm replay"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

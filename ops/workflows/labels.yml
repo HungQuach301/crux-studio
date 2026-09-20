@@ -1,0 +1,38 @@
+# 🤖 Đồng bộ hệ thống nhãn GitHub từ ops/labels.json (CHARTER mục 9).
+#
+# Nhãn được định nghĩa trong repo, không đặt tay trên giao diện. Lý do: CI
+# và automerge.yml dựa vào tên nhãn để quyết định merge hay không (bất biến
+# I2, I4). Một nhãn bị đổi tên bằng tay sẽ làm hai cơ chế đó im lặng ngừng
+# hoạt động — không có gì đỏ, chỉ là không có gì xảy ra.
+name: labels
+
+on:
+  push:
+    branches: [main]
+    paths: ['ops/labels.json']
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    name: sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tạo hoặc cập nhật từng nhãn
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          jq -c '.labels[]' ops/labels.json | while read -r row; do
+            NAME=$(echo "$row" | jq -r .name)
+            COLOR=$(echo "$row" | jq -r .color)
+            DESC=$(echo "$row" | jq -r .description)
+            gh label create "$NAME" --repo "$REPO" --color "$COLOR" --description "$DESC" --force
+            echo "đã đồng bộ: $NAME"
+          done
+          # Cố ý KHÔNG xoá nhãn lạ. Xoá nhãn làm mất nó khỏi mọi issue và PR
+          # đang mang nó, và việc đó không hoàn tác được.

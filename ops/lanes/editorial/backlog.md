@@ -1,0 +1,56 @@
+# 🤖 Backlog làn `editorial` — Đợt 1
+
+Xưởng Biên tập (S04–S08). Đợt 1: **nâng cấp stub, chưa gọi API tốn kém** (CHARTER mục 10).
+
+---
+
+### E-001 · Chuyển prompt pack vào xưởng
+`researcher`, `fact-checker`, `outliner`, `scriptwriter` đang nằm trong spec. Chuyển vào `workshops/editorial/` theo bảng chuyển đường dẫn.
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: spec `engine/library/prompts/`
+- tiêu chí xong:
+  - Mỗi prompt có phiên bản, và phiên bản đó xuất hiện trong artifact (`generation.promptVersion`).
+  - Prompt là file dữ liệu, không phải chuỗi ghép trong code.
+
+### E-002 · Fact & Risk Pass
+Bất biến I6 được thực thi ở đây: mọi con số hiển thị đều có nguồn hoặc có mô hình.
+
+- deps: E-001, T-003
+- risk: high
+- status: ready
+- nguồn: CHARTER bất biến I6; spec KHỐI B
+- tiêu chí xong:
+  - Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo.
+  - Phản biện tối thiểu theo genre pack (`counterClaimsMin`) được kiểm bằng máy.
+
+### E-003 · Bộ eval cho prompt
+PR đổi prompt không được auto-merge nếu eval không đạt ngưỡng khai trong cấu hình.
+
+- deps: E-001
+- risk: low
+- status: ready
+- nguồn: CHARTER 6.3
+- tiêu chí xong:
+  - Bộ mẫu chấm điểm chạy trong CI, ngưỡng nằm trong cấu hình.
+  - Quy tắc ba tập của spec giữ nguyên: đổi prompt phải chứng minh trên ba tập, không phải một.
+
+### E-004 · Nâng outline và kịch bản lên đúng khối lượng genre pack
+Stub hiện sinh 69 từ so với ngưỡng 3200–3600, và Preflight đang ghi `warn`. Mục này làm cho `warn` đó biến mất một cách thật.
+
+- deps: E-001, E-002
+- risk: low
+- status: ready
+- nguồn: genre pack `limits.scriptWordCount`, `limits.devicesMin`
+- tiêu chí xong:
+  - `script-word-count` và `devices-used` chuyển từ `warn` sang `pass` ở `impl: v1`.
+  - Số thiết bị và số mục từ điển đạt ngưỡng bằng nội dung thật, không bằng cách hạ ngưỡng.
+
+### E-005 · Xưởng `editorial` lên `impl: v1`
+- deps: E-003, E-004
+- risk: high
+- status: ready
+- nguồn: CHARTER 5.4
+- tiêu chí xong: tập vàng chạy lại xanh với `impl: v1`.
