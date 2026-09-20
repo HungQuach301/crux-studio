@@ -152,6 +152,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Giả định G14: commit của routine và thread mang trailer Claude-Session.
+      # Job này LÀ cách kiểm G14 — đọc kết quả của nó trên các PR do routine mở.
+      #
       # LUẬT MỀM (CHARTER mục 4): commit trên nhánh claude/ thiếu trailer
       # Claude-Session chỉ được CẢNH BÁO. Cố ý không chặn: nếu nền tảng đổi
       # cách ghi trailer thì một luật cứng ở đây sẽ chặn toàn bộ công việc.

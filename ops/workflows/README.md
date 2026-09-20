@@ -38,6 +38,8 @@ fix-has-test
 protected-area
 ```
 
+Nếu GitHub đòi gói trả phí mới bật được ruleset trên repo private (**giả định G12**): không bật, và ghi lại điều đó. `automerge.yml` cộng hook đã là lớp chặn chính; ruleset là lớp thứ hai.
+
 `trailer-warn` cố ý **không** vào danh sách: nó là luật mềm (CHARTER mục 4). Nếu nền tảng đổi cách ghi trailer `Claude-Session` thì một luật cứng ở đó sẽ chặn toàn bộ công việc.
 
 ## Hai chỗ workflow chạy theo định nghĩa trên `main`, không theo nhánh PR

@@ -16,6 +16,14 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - dự phòng nếu sai: Plan B — chỉ dùng routines.
 - tiêu chí xong: trạng thái G1 trong sổ chuyển sang `đã kiểm`, kèm ngày và kết quả. Nếu không có Projects thì phụ lục P1 chuyển sang cấu hình 2 worker chạy mỗi giờ.
 
+### VF-G2 · `automerge` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci`
+- deps: —
+- risk: low
+- status: ready
+- kiểm: **DoD Đợt 0** — để `automerge` merge thật một PR low-risk mà không cần người, rồi xem `main-ci` có chạy ngay sau đó không.
+- dự phòng: đã viết sẵn — `main-ci.yml` chạy thêm theo lịch mỗi giờ.
+- tiêu chí xong: một PR low-risk đã được merge tự động, và lần chạy `main-ci` tương ứng có trong tab Actions. Ghi kết quả vào sổ.
+
 ### VF-G3 · Trần số lần chạy routine mỗi ngày
 - deps: VF-G1
 - risk: low
@@ -37,6 +45,14 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - status: ready
 - kiểm: đo phút Actions của một lần render thử (dùng kết quả V-002 và A-001).
 - dự phòng nếu sai: đưa vào ngân sách, hoặc dùng runner khác.
+
+### VF-G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
+- deps: R-002
+- risk: low
+- status: ready
+- kiểm: lần tải lên đầu tiên ở mục `R-002`. Tốn quota, không tốn tiền.
+- dự phòng: **không đổi gì.** Giả định này đi cùng hướng với bất biến I5; contract đã khoá `visibility: "private"` bằng `const`, nên G6 sai cũng không nới được gì.
+- tiêu chí xong: trạng thái thực tế của video sau lần tải lên đầu tiên được ghi vào sổ.
 
 ### VF-G7 · Điều khoản TTS, stock, font, bản đồ
 - deps: —
