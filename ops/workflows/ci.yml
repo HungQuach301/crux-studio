@@ -1,0 +1,172 @@
+# 🤖 CI — cổng vào main (bất biến I1, I2, I3).
+#
+# File này được viết vào ops/workflows/. Workflow sync-workflows.yml (do chủ
+# dự án tạo một lần) chép nó sang .github/workflows/ sau khi PR merge vào
+# main. Agent không ghi .github/ (CHARTER 3.2, giả định G10).
+#
+# Tên các job dưới đây LÀ tên status check dùng để bật ruleset.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # contracts → lint:deps (I3) → typecheck → test → replay.
+      # Kiểm ở chỗ rẻ nhất: thứ tự này cố ý, cái rẻ chạy trước.
+      - run: pnpm check
+
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # BẤT BIẾN I1. KHÔNG dựa vào secret scanning của GitHub: với repo
+      # private, tính năng đó cần gói trả phí riêng.
+      #
+      # Phiên bản gitleaks được giải ở lúc chạy rồi ĐỐI CHIẾU CHECKSUM do
+      # chính bản phát hành công bố. Lý do không ghim cứng một số phiên bản:
+      # phiên soạn workflow này không ra được mạng để xác nhận số đó có thật,
+      # và một số phiên bản đoán mò sẽ làm CI đỏ im lặng ở lần chạy đầu.
+      - name: Quét secret bằng gitleaks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=$(gh api repos/gitleaks/gitleaks/releases/latest --jq .tag_name)
+          V="${TAG#v}"
+          BASE="https://github.com/gitleaks/gitleaks/releases/download/${TAG}"
+          curl -sSfL -o gitleaks.tar.gz "${BASE}/gitleaks_${V}_linux_x64.tar.gz"
+          curl -sSfL -o checksums.txt  "${BASE}/gitleaks_${V}_checksums.txt"
+          grep "gitleaks_${V}_linux_x64.tar.gz" checksums.txt \
+            | awk '{print $1"  gitleaks.tar.gz"}' | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks dir . --config .gitleaks.toml --redact --no-banner --exit-code 1
+
+  fix-has-test:
+    name: fix-has-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # BẤT BIẾN I2, vế thứ hai: PR có nhãn `fix` phải kèm test tái hiện lỗi.
+      # Sửa lỗi mà không có test là mời lỗi đó quay lại.
+      - name: PR fix phải có test
+        if: contains(github.event.pull_request.labels.*.name, 'fix')
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
+          CHANGED=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -Eq '(^|/)(test|tests)/|\.test\.ts$'; then
+            echo "Có thay đổi trong test."
+          else
+            echo "::error::PR gắn nhãn 'fix' nhưng không đụng file test nào. Bất biến I2 đòi một test TÁI HIỆN lỗi, viết trước khi sửa."
+            exit 1
+          fi
+
+  protected-area:
+    name: protected-area
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # BẤT BIẾN I4: vùng bảo vệ chỉ chủ dự án merge. CI gắn nhãn
+      # `owner-merge`; automerge.yml bỏ qua mọi PR mang nhãn đó.
+      #
+      # Cũng gắn nhãn mềm `cross-lane` khi PR chạm nhiều thư mục làn
+      # (CHARTER mục 4) — chỉ để reviewer soát kỹ hơn, không chặn.
+      # Nhãn phải tồn tại trước khi gắn. Nguồn sự thật là ops/labels.json;
+      # bước này chỉ bảo đảm bốn nhãn mà chính CI dùng đã có mặt, để job
+      # không đỏ vì một lý do không liên quan gì tới nội dung PR.
+      - name: Bảo đảm nhãn CI dùng đã tồn tại
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for NAME in owner-merge automerge cross-lane fix; do
+            ROW=$(jq -c --arg n "$NAME" '.labels[] | select(.name==$n)' ops/labels.json)
+            gh label create "$NAME" --repo "$REPO" \
+              --color "$(echo "$ROW" | jq -r .color)" \
+              --description "$(echo "$ROW" | jq -r .description)" --force
+          done
+
+      - name: Gắn nhãn owner-merge và cross-lane
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
+          CHANGED=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
+
+          PROTECTED='^(CHARTER\.md|CLAUDE\.md|docs/decisions/|docs/spec/|kernel/contracts/|\.claude/|ops/workflows/|\.github/|ops/invariants\.)'
+          if echo "$CHANGED" | grep -Eq "$PROTECTED"; then
+            echo "PR chạm vùng bảo vệ:"
+            echo "$CHANGED" | grep -E "$PROTECTED"
+            gh pr edit "$PR" --add-label owner-merge
+            gh pr edit "$PR" --remove-label automerge || true
+          else
+            gh pr edit "$PR" --remove-label owner-merge || true
+          fi
+
+          LANES=$(echo "$CHANGED" | grep -Eo '^(workshops|ops/lanes)/[a-z]+' | sort -u | wc -l)
+          if [ "$LANES" -gt 1 ]; then
+            gh pr edit "$PR" --add-label cross-lane
+          else
+            gh pr edit "$PR" --remove-label cross-lane || true
+          fi
+
+  trailer-warn:
+    name: trailer-warn
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # LUẬT MỀM (CHARTER mục 4): commit trên nhánh claude/ thiếu trailer
+      # Claude-Session chỉ được CẢNH BÁO. Cố ý không chặn: nếu nền tảng đổi
+      # cách ghi trailer thì một luật cứng ở đây sẽ chặn toàn bộ công việc.
+      - name: Cảnh báo commit thiếu trailer Claude-Session
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
+          RANGE="origin/${{ github.event.pull_request.base.ref }}..HEAD"
+          MISSING=0
+          while read -r sha; do
+            [ -z "$sha" ] && continue
+            if ! git log -1 --format='%B' "$sha" | grep -q '^Claude-Session:'; then
+              echo "::warning::commit $sha thiếu trailer Claude-Session"
+              MISSING=$((MISSING+1))
+            fi
+          done < <(git rev-list "$RANGE")
+          echo "Thiếu trailer: $MISSING commit. Đây là cảnh báo, không chặn."

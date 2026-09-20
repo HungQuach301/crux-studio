@@ -30,6 +30,7 @@ pnpm check                       # CỔNG CHÍNH: chạy tất cả mục dướ
 |---|---|
 | `pnpm contracts` | Tự kiểm bộ schema trong `kernel/contracts/` và validate toàn bộ fixture |
 | `pnpm lint:deps` | Lint phụ thuộc (bất biến I3): xưởng chỉ được import `kernel/` |
+| `pnpm lint:workflows` | Kiểm cú pháp YAML và bash của `ops/workflows/*.yml` trước khi chúng tới GitHub |
 | `pnpm typecheck` | `tsc --noEmit` trên toàn workspace |
 | `pnpm test` | `node --test` — unit test của kernel và của từng xưởng |
 | `pnpm replay` | Chạy lại tập vàng ở chế độ replay và so với snapshot |
