@@ -653,8 +653,16 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    Bước 0 rẻ: liệt kê PR xung đột, gọi ops/scripts/integrator-resolve.ts, chỉ chạy pnpm check khi có gộp thật.
    Không có PR nào xung đột thì in một dòng "không có PR xung đột" rồi đi tiếp — không bao giờ bỏ qua im lặng.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
-2. Ưu tiên: nếu có PR đang mở với CI đỏ hoặc có comment chưa xử lý và chưa có worker nào đang xử lý
-   (không có commit mới trong 2 giờ), xử lý đúng một PR đó rồi kết thúc.
+2. Ưu tiên (mục P-022, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó, đừng tự suy):
+   nếu có PR đang mở với CI đỏ, hoặc có comment chưa xử lý, HOẶC lượt bước 0 gần nhất của PR đó trả
+   `aborted-ineligible` (integrator đã bó tay, và "cần người" phải có người nhận — không rơi vào khoảng
+   trống giữa integrator và worker), và chưa có worker nào đang xử lý (không có commit mới trong 2 giờ):
+   xử lý đúng MỘT PR đó rồi kết thúc. Ba lý do xếp theo đúng thứ tự trên khi nhiều PR cùng đủ điều kiện.
+   Với ca thứ ba (aborted-ineligible), việc cần làm là gộp `main` vào nhánh đó bằng git bình thường,
+   giải xung đột thật bằng phán đoán (khác bước 0 của phụ lục P3 — bước đó CẤM sửa tay; ở đây PR đã có
+   chủ, worker đọc PR để biết nó định làm gì rồi mới giải, không phải giải mù), chạy `pnpm check` VÀ
+   `pnpm replay`, xanh thì push. Worker "nhận" không cần cùng làn với PR — biết đọc PR đó định làm gì là đủ;
+   làn suy từ tên nhánh (`laneFromBranch`) chỉ để ghi log cho đúng ngữ cảnh.
 3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
    mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
    coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.
@@ -688,7 +696,8 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Ghi lại những gì đọc được vào bản tin hôm nay, mục "Đã nhận câu trả lời", để worker xử lý ở lượt sau.
 
 2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang xung đột với main kèm
-   số giờ kẹt; PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
+   số giờ kẹt và số lượt `aborted-ineligible` liên tiếp (mục P-022, đọc `ops/logs/platform/P-016.jsonl`
+   bằng `readRunLogs`); PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3.
 
@@ -704,6 +713,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Đang chờ merge
      Mỗi PR automerge-delayed một dòng: link · còn mấy giờ · chạm gì trong vùng bảo vệ.
      Nói rõ: không làm gì thì nó tự vào main; muốn giữ lại thì comment "dừng" ngay trên PR đó.
+     PR nào đang xung đột (mục P-022): thay "còn mấy giờ" bằng "xung đột, kẹt <giờ> giờ" — đồng hồ 12
+     giờ không chạy khi đang xung đột. Từ lượt `aborted-ineligible` liên tiếp thứ 3 trở đi (đọc
+     `ops/logs/platform/P-016.jsonl` bằng `readRunLogs`, đừng tự `cat`), thêm "· N lượt liên tiếp không
+     tự giải được" ngay trên dòng đó, để nó không im lặng như đã từng xảy ra (nhóm Z). PR mang nhãn
+     `owner-merge` mà cũng vướng ca này thì thêm cùng dạng dòng ngay dưới các dòng `automerge-delayed`,
+     ghi rõ nhãn `owner-merge` để phân biệt — mục này không đợi cổng merge nào để đáng được thấy.
 
    Thước đo
      Các thước đo ở CHARTER 1.3. DÒNG CUỐI CÙNG luôn là:
@@ -744,8 +759,14 @@ Làn integration của Crux Studio.
         chạy `pnpm check` VÀ `pnpm replay`. Xanh thì `git push`. Đỏ thì `git reset --hard` về commit trước khi gộp
         (không push — đỏ sau khi gộp là tín hiệu thật, không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do.
       - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
-        `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt** và tên file gây
-        vướng (có sẵn trong `reason` của kết quả).
+        `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt**, tên file gây
+        vướng (có sẵn trong `reason` của kết quả), **làn sở hữu** (suy từ tên nhánh bằng `laneFromBranch`,
+        `ops/scripts/pr-triage.ts`), và **số lượt `aborted-ineligible` liên tiếp cùng chữ ký** tính cả lượt này
+        (mục `P-022` — "cần người" phải có người nhận, xem phụ lục P1 bước 2). Ba số này KHÔNG tuỳ chọn: thiếu
+        một trong ba thì lượt sau không biết PR này đã bỏ lại mấy lần và của làn nào. Quá
+        `ABORTED_INELIGIBLE_ALERT_THRESHOLD` (3) lượt liên tiếp: nếu PR mang nhãn `automerge-delayed`, bản tin
+        (phụ lục P2) phải nói rõ điều đó ngay trong dòng "Đang chờ merge" của PR — im lặng bốn lượt liên tiếp
+        từng xảy ra thật (nhóm Z, `ops/known-failures.md`).
       - `outcome: "aborted-error"`: lỗi ngoài dự tính (cây bẩn, v.v.). Đưa vào ghi chú, không thử lại trong cùng lần
         chạy.
    c. Không đụng PR có nhãn `owner-merge` **trừ** bước gộp `main` ở trên — gộp không đổi ý nghĩa PR, chỉ giữ cho nó
