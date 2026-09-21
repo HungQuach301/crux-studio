@@ -81,6 +81,15 @@ test('parseBacklog: tách đúng mã mục, status và ô còn treo', () => {
   );
 });
 
+test('parseBacklog: tên mục lấy từ tiêu đề, bỏ dấu `·` — bản tin ngày cần nó (P-005)', () => {
+  const items = parseBacklog(BACKLOG);
+  assert.equal(items[0]!.title, 'Mục đã xong hẳn');
+  assert.equal(items[4]!.title, 'Mục chặn bằng LỜI, không bằng ký hiệu');
+  // Tiêu đề chỉ có mã mục: chuỗi rỗng, không phải `undefined` — bên gọi in
+  // ra một dòng cụt còn hơn một dòng `undefined`.
+  assert.equal(parseBacklog('### D-100\n- status: ready\n')[0]!.title, '');
+});
+
 test('parseBacklog: mục không khai status thì statusLine là null, không đoán', () => {
   const items = parseBacklog('### D-009 · Không có status\n- deps: —\n');
   assert.equal(items.length, 1);
@@ -116,15 +125,18 @@ test('hasCompletionCommit: sai làn thì không khớp', () => {
 });
 
 test('classify: chưa merge thì luôn unmerged, kể cả khi thân mục sạch', () => {
-  assert.equal(classify({ id: 'D-003', status: 'review', hasHoldMarker: false, statusLine: 2 }, false), 'unmerged');
+  const item = { id: 'D-003', title: 'Mục chưa merge', status: 'review', hasHoldMarker: false, statusLine: 2 };
+  assert.equal(classify(item, false), 'unmerged');
 });
 
 test('classify: đã merge mà còn ô ⬜ thì held, không stale', () => {
-  assert.equal(classify({ id: 'D-002', status: 'review', hasHoldMarker: true, statusLine: 2 }, true), 'held');
+  const item = { id: 'D-002', title: 'Mục còn treo một phần', status: 'review', hasHoldMarker: true, statusLine: 2 };
+  assert.equal(classify(item, true), 'held');
 });
 
 test('classify: đã merge và thân mục sạch thì stale', () => {
-  assert.equal(classify({ id: 'D-001', status: 'review', hasHoldMarker: false, statusLine: 2 }, true), 'stale');
+  const item = { id: 'D-001', title: 'Mục đã xong hẳn', status: 'review', hasHoldMarker: false, statusLine: 2 };
+  assert.equal(classify(item, true), 'stale');
 });
 
 test('reviewFindings: chỉ soát mục đang review, và phân đúng các nhóm', () => {
@@ -171,7 +183,7 @@ test('hasRevertCommit: mục bị revert thì không còn tính là đã xong', 
 
 test('classify: mục không đọc được status ra unknown, không bị lọc đi im lặng', () => {
   assert.equal(
-    classify({ id: 'D-009', status: '', hasHoldMarker: false, statusLine: null }, true),
+    classify({ id: 'D-009', title: 'Không có status', status: '', hasHoldMarker: false, statusLine: null }, true),
     'unknown',
   );
   const findings = reviewFindings('demo', '### D-009 · Không có status\n- deps: —\n', []);
