@@ -147,13 +147,22 @@ là một cảnh báo không ai đọc.
 
 - deps: `I-005`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-005`; `ops/known-failures.md` nhóm Z (cách 3 — cấm im lặng)
 - tiêu chí xong:
   - `git ls-remote --heads origin 'refs/heads/claude/*'` rỗng → `◦ chưa quan sát được` (quan sát hợp lệ);
     `ls-remote` hoặc `fetch` hỏng → `broken`.
   - Test cho cả hai nhánh, dựng kho bare thật.
   - Ghi lại trong `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
+- **Đã làm** (PR `#53`): thêm `listRemoteClaudeBranches()` vào `ops/scripts/recheck-assumptions.ts`, hỏi
+  thẳng remote bằng `git ls-remote --heads origin 'refs/heads/claude/*'` — không phụ thuộc kết quả fetch
+  cục bộ. `collectCommits()` chỉ ném khi hàm này cũng không xác nhận được rỗng (remote lệch với fetch cục
+  bộ, hoặc chính `ls-remote` lỗi); remote xác nhận rỗng thì trả `[]` như một quan sát hợp lệ, đi qua đúng
+  nhánh `observedNothing` sẵn có của `judgeTrailerEvidence`. Test dựng hai kho bare thật trong
+  `ops/test/recheck-assumptions.test.ts`: một remote thật rỗng (khẳng định KHÔNG ném, in `◦`), một remote
+  hỏng (khẳng định `listRemoteClaudeBranches` vẫn ném). Test cũ của `I-005` dựng đúng kịch bản mục này
+  sửa nên viết lại thành khẳng định hành vi mới thay vì xoá, giữ nguyên bằng chứng hồi quy của bug gốc.
+  Cập nhật `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
 
 ### I-008 · Fixture của sáu xưởng còn nhúng bản sao Channel Pack của Đợt 0
 
