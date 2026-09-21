@@ -784,8 +784,10 @@ Làn integration của Crux Studio.
       liên tiếp** · số giờ kẹt (mục `P-022`). Thiếu mấy số đó thì lượt sau không biết việc này đã bỏ lại mấy lần,
       và một luật mà không ai đếm thì nó im lặng đúng lúc cần kêu — lần trước nó đã im lặng bốn lượt.
       Phần máy đọc dựng bằng `formatStuckNote` của `ops/scripts/pr-pickup.ts` và đi SAU phần văn xuôi trong cùng
-      `note`; người vẫn đọc được dòng log, máy vẫn đếm được. Số lượt liên tiếp lấy bằng `consecutiveAbortedTurns`
-      trên chính file log này, không đếm bằng mắt.
+      `note`; người vẫn đọc được dòng log, máy vẫn đếm được. Số lượt để GHI lấy bằng `nextTurnCount` — nó **cộng
+      dồn** số của lượt trước, không đếm lại từ đầu, vì log append-only nên các lượt cũ viết bằng văn xuôi thuần
+      không bao giờ đếm lại được, và đếm lại từ đầu mỗi lượt thì ngưỡng báo động không bao giờ tới.
+      `consecutiveAbortedTurns` là đối chứng độc lập, không phải nguồn của con số ghi vào.
 
 Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
 mỗi ngày, như trước khi đổi nhịp):

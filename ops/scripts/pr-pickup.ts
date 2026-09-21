@@ -235,6 +235,27 @@ export function consecutiveAbortedTurns(notes: Array<string | undefined>, prNumb
 }
 
 /**
+ * `turns` để GHI cho lượt đang chạy: lấy số của lượt ngay trước **cộng
+ * một**, chứ không đếm lại từ đầu.
+ *
+ * Vì sao không dùng thẳng `consecutiveAbortedTurns`: nó chỉ đếm được những
+ * lượt đã có khối `stuck=`. Dòng log là append-only nên các lượt trước khi
+ * có cơ chế này mãi mãi là văn xuôi thuần, và đếm lại từ đầu ở mỗi lượt sẽ
+ * **vĩnh viễn** bỏ chúng — một PR đã kẹt bốn lượt tụt về 1 rồi bò lên lại,
+ * và ngưỡng báo động không bao giờ tới. Cộng dồn thì một số đếm tay ghi vào
+ * `turns` một lần được mang tiếp mãi.
+ *
+ * `consecutiveAbortedTurns` vẫn có việc của nó: đối chứng độc lập, đếm bằng
+ * chính các dòng log thay vì tin con số dòng trước khai.
+ */
+export function nextTurnCount(notes: Array<string | undefined>, prNumber: number): number {
+  const previous = parseStuckEntries(notes[notes.length - 1]).find((e) => e.pr === prNumber);
+  if (previous?.outcome !== 'aborted-ineligible') return 1;
+  const carried = previous.turns;
+  return (Number.isFinite(carried) && carried > 0 ? Math.floor(carried) : 1) + 1;
+}
+
+/**
  * PR nào đã quá ngưỡng và phải nổi lên bản tin ngày. Trả về danh sách đã
  * xếp: nhiều lượt nhất trước.
  */

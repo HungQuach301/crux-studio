@@ -27,6 +27,7 @@ import {
   formatStuckNote,
   parseStuckEntries,
   consecutiveAbortedTurns,
+  nextTurnCount,
   selectEscalations,
   escalationLine,
   readStepZeroNotes,
@@ -240,6 +241,29 @@ test('consecutiveAbortedTurns: PR khác không lẫn vào chuỗi của PR này'
   ];
   assert.equal(consecutiveAbortedTurns(notes, 39), 1);
   assert.equal(consecutiveAbortedTurns(notes, 26), 2);
+});
+
+test('nextTurnCount: cộng dồn số của lượt trước, không đếm lại từ đầu', () => {
+  const notes = [
+    'Bước 0 lượt 1 — văn xuôi thuần, chưa có khối máy đọc',
+    'Bước 0 lượt 2 — văn xuôi thuần',
+    formatStuckNote('lượt 3, số đếm tay', [entry({ turns: 3 })]),
+  ];
+  // Đếm lại từ đầu chỉ thấy 1 dòng có khối máy đọc...
+  assert.equal(consecutiveAbortedTurns(notes, 39), 1);
+  // ...nhưng số ghi cho lượt sau phải là 4, không phải 2.
+  assert.equal(nextTurnCount(notes, 39), 4);
+});
+
+test('nextTurnCount: lượt trước gỡ được, hoặc không nhắc tới PR, thì đếm lại từ 1', () => {
+  assert.equal(nextTurnCount([formatStuckNote('x', [entry({ outcome: 'resolved', turns: 9 })])], 39), 1);
+  assert.equal(nextTurnCount([formatStuckNote('không có PR xung đột', [])], 39), 1);
+  assert.equal(nextTurnCount([], 39), 1);
+});
+
+test('nextTurnCount: số hỏng ở dòng trước không lan ra thành NaN', () => {
+  const broken = formatStuckNote('x', [entry({ turns: Number.NaN as unknown as number })]);
+  assert.equal(nextTurnCount([broken], 39), 2);
 });
 
 test('selectEscalations: quá ngưỡng thì nổi lên bản tin, dưới ngưỡng thì không', () => {
