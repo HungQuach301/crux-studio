@@ -161,6 +161,73 @@ Rà soát này thành mục `P-014` trong `ops/lanes/platform/backlog.md`. Thứ
 
 ---
 
+## KF-005 · File log dùng chung trong một làn vẫn xung đột khi nhiều PR chạy song song
+
+- **Lần gặp:** 2 trong cùng một ngày (PR #10 và PR #11, cả hai với `ops/logs/platform.jsonl`, sau khi PR #12 được squash vào `main`).
+- **Chữ ký:** `CONFLICT (content): Merge conflict in ops/logs/platform.jsonl`, với hai bên là **hai dòng khác nhau cùng được thêm vào cuối file**. Không bên nào sửa hay xoá gì của bên kia.
+- **Nguyên nhân gốc:** CHARTER 2.1 và bất biến **I8** phân vùng log **tới mức làn**: `ops/logs/<lane>.jsonl`. Phân vùng đó giải quyết đúng bài toán nó được đặt ra để giải — hai **làn** chạy song song không đụng nhau. Nhưng nó **không** giải bài toán hai **mục** trong *cùng một làn* chạy song song, mà đó lại là chế độ chạy bình thường: phụ lục P1 đặt mặc định 2–3 worker, và `platform` là làn nhận nhiều mục nhất.
+
+  Đơn vị tranh chấp là **dòng cuối file**, và mọi PR trong làn đều ghi vào đúng đó.
+
+### Nó khác KF-002 ở chỗ nào
+
+Hai mục trông giống nhau ở triệu chứng và **khác hẳn ở nguyên nhân**. Nhầm hai cái này thì sẽ chữa nhầm.
+
+| | KF-002 | KF-005 |
+|---|---|---|
+| **Nguyên nhân** | Merge **squash** cắt tổ tiên chung của một nhánh **xếp chồng** | **Nhiều PR cùng ghi vào một file dùng chung**, dù tất cả đều base `main` |
+| **Điều kiện cần** | PR xếp chồng **và** squash — thiếu một là không xảy ra | Chỉ cần hai PR song song trong cùng một làn. **Không** cần xếp chồng |
+| **File bị ảnh hưởng** | *Mọi* file hai PR cùng chạm, kể cả file không liên quan gì tới nhau | Đúng những file được thiết kế để nhiều PR cùng ghi: log, backlog, sổ |
+| **Cách chữa của KF-002 có cứu được không** | — | **Không.** PR #10 và #11 đều base `main`, đúng luật số 1 của KF-002, và vẫn xung đột |
+| **Đơn vị tranh chấp** | Nội dung file, ngữ cảnh ba chiều bị mất | Dòng cuối file |
+
+Nói gọn: KF-002 là lỗi của **hình dạng nhánh**, KF-005 là lỗi của **hình dạng file**. Squash chỉ làm KF-005 nặng thêm chứ không tạo ra nó.
+
+- **Đã sửa ở đâu:** `.gitattributes` ở gốc repo đặt `merge=union` cho `ops/logs/*.jsonl` và `docs/visual/calibration-log.jsonl`. `union` là trình merge **có sẵn của git**: hai bên cùng thêm dòng thì nó giữ cả hai, không báo xung đột. `.gitattributes` nằm trong repo nên không cần cấu hình gì ở máy người dùng.
+
+  **Bằng chứng chạy thật, 2026-09-21** — dựng hai repo thử trong scratchpad:
+
+  | Kịch bản | Kết quả |
+  |---|---|
+  | Hai nhánh cùng thêm một dòng vào cuối, merge thường | Giữ cả hai dòng, **0 dấu xung đột** |
+  | Đúng hình dạng đã sinh lỗi: `pr1` squash vào `main`, rồi gộp `main` vào `pr2` | Giữ cả hai dòng, **0 dấu xung đột** |
+
+  Hai giới hạn, **đã đo chứ không phải đoán**, vì chúng quyết định ai được dựa vào cái gì:
+
+  1. **Union không xếp theo thời gian.** Trong cả hai lần thử, dòng `at:03` của nhánh nằm **trước** dòng `at:02` của `main`. Vậy nên **mọi bên đọc log phải tự sắp theo `at`** — bản tin ngày, `ops/metrics.md`, và routine integrator. Tin vào thứ tự dòng là sai.
+  2. **Union không khử trùng lặp.** Hai nhánh ghi y hệt một dòng thì file có hai dòng giống nhau. Với log append-only mang `at` và `ref` riêng thì điều này không xảy ra trong thực tế, nhưng nó là lý do **không** được dùng union cho file mà dòng có thể trùng.
+
+  **Chưa kiểm:** GitHub có áp dụng `.gitattributes` khi nó tự tính "nhánh này có xung đột không" trên trang PR hay không. Nếu không, biểu ngữ xung đột vẫn hiện, nhưng lệnh `git merge` ở phía worker vẫn tự giải được — mà đó mới là chỗ tốn công. Kiểm bằng chạy thật ở lần PR song song kế tiếp.
+
+- **Máy chặn từ nay:** `ops/test/gitattributes.test.ts` khoá luật union cho từng file append-only đang có, và khoá luôn chiều ngược lại — **không** file Markdown nào được nhận `merge=union`. Union trên Markdown sẽ trộn hai mục thành một mục hỏng mà vẫn merge được: đó là nhóm Z, hỏng mà không gì đỏ.
+
+### Rà nốt: còn file dùng chung nào khác
+
+Union chỉ cứu được file mà **thứ tự dòng không mang nghĩa**. Với Markdown thì không — nên phần còn lại phải chữa bằng cách khác.
+
+| File | Xung đột khi nào | Union có cứu được không | Cách tránh |
+|---|---|---|---|
+| `ops/logs/<lane>.jsonl` | Hai PR cùng làn cùng thêm một dòng cuối. **Chế độ chạy bình thường** | ✅ Có — đã đặt | Đã xong. Bên đọc phải tự sắp theo `at` |
+| `docs/visual/calibration-log.jsonl` | Hai lần hiệu chuẩn song song | ✅ Có — đã đặt | Đã xong |
+| `ops/lanes/<lane>/backlog.md` | **Hai chỗ**: (a) hai PR cùng thêm mục mới ở đầu file — đã xảy ra ở PR #11; (b) hai PR cùng đổi `status` của hai mục nằm sát nhau | ❌ **Không.** Union sẽ lồng hai mục vào nhau, sinh một mục vô nghĩa mà git vẫn coi là merge thành công | Thêm mục mới ở **cuối file**, mỗi mục là một khối tự đủ cách nhau một dòng trống. Việc này không làm xung đột biến mất, nó làm xung đột **an toàn**: hai khối ở cuối, giải bằng cách giữ cả hai, không bao giờ mất chữ của ai. Số mục **nhận trước** ở dòng log để hai worker không cùng lấy một số |
+| `ops/known-failures.md` | Hai PR cùng thêm một mục `KF-00N` ngay trước phần "Cách thêm một mục" | ❌ Không | Chuyển phần "Cách thêm một mục" lên **đầu file**, để mục mới luôn nối vào cuối. Vẫn có thể xung đột, nhưng luôn là "hai khối ở cuối", giải được trong một phút |
+| `docs/assumptions.md` | **Hai chỗ cho mỗi lần thêm**: một dòng trong bảng tổng ở đầu, một mục đầy đủ ở dưới. Hai PR cùng thêm giả định là xung đột ở cả hai | ❌ Không | Mã `G<N>` **nhận trước** trong backlog làn `verify` trước khi viết, để hai worker không cùng lấy một mã. Mục đầy đủ luôn nối vào cuối, trước dấu `---` cuối. `pnpm assumptions` đã bắt được trường hợp bảng và mục lệch nhau, nên một lần giải sai sẽ đỏ chứ không im lặng |
+| `ops/metrics.md` | Hai làn cùng cập nhật số tổng | ❌ Không | **Đừng viết tay.** File này là số **dẫn xuất** từ `ops/logs/**`; mục `P-005` sinh nó bằng script. Số dẫn xuất mà chép tay thì ngoài xung đột còn sai lặng lẽ |
+| `pnpm-lock.yaml` | Hai PR cùng đổi phụ thuộc | ❌ Không | CHARTER mục 7 đã chốt: làn `integration` tạo lại lockfile. Không giải tay |
+| `ops/labels.json` | Hai PR cùng thêm nhãn | ❌ Không (JSON, không phải một-dòng-một-bản-ghi) | Hiếm, và diff nhỏ. Giải tay, giữ cả hai nhãn |
+
+**Điểm chung của cột phải:** không chỗ nào chữa được bằng "cẩn thận hơn". Hoặc đổi hình dạng file cho git tự giải được, hoặc **nhận trước một định danh** để hai worker không nhắm vào cùng một dòng. Cẩn thận không phải là một cơ chế.
+
+### Còn một tầng nữa, và nó cần chủ dự án
+
+Union làm xung đột log biến mất, nhưng nó không đổi **hình dạng** file: vẫn là một file cho cả làn, vẫn là mọi PR ghi vào cùng một chỗ. Cách sửa tận gốc là **một file cho mỗi mục** — `ops/logs/<lane>/<id>.jsonl` — lúc đó hai PR không bao giờ chạm cùng một file, không cần union, không cần luật nào.
+
+Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 viết thẳng đường dẫn `ops/logs/<lane>.jsonl`, và CHARTER mục 7 viết "backlog và log tách theo làn". Sửa CHARTER luôn là quyết định `irreversible` (CLAUDE.md mục 14), nên nó đi bằng một issue `🤖 [QĐ]` chứ không đi kèm mục này.
+
+Điểm đáng lưu ý về thời điểm: `kernel/src/log.ts` nhận đường dẫn làm tham số, và bên đọc **chưa tồn tại** (`P-005` còn `ready`). Nghĩa là đổi bây giờ gần như miễn phí, và mỗi tuần chờ thì đắt thêm.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown

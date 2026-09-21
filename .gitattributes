@@ -1,0 +1,21 @@
+# 🤖 Luật merge cho các file append-only — xem KF-005 trong ops/known-failures.md
+#
+# `merge=union` là trình merge có sẵn của git: khi hai nhánh cùng thêm dòng
+# vào cuối một file, nó giữ **cả hai bên** thay vì báo xung đột. Không cần
+# cấu hình gì thêm ở máy người dùng — `.gitattributes` trong repo là đủ.
+#
+# Chỉ dùng cho file mà **thứ tự dòng không mang ý nghĩa** và mỗi dòng độc
+# lập. Đã kiểm bằng chạy thật (2026-09-21): union giữ cả hai dòng, kể cả
+# trong đúng hình dạng squash-rồi-gộp đã sinh xung đột ở PR #10 và #11.
+#
+# ⚠️ Union **không** xếp lại theo thời gian: dòng của nhánh đứng trước dòng
+# của `main`, bất kể `at`. Mọi bên đọc log phải **tự sắp theo `at`**, không
+# được tin vào thứ tự dòng trong file.
+#
+# ⚠️ Union **không** khử trùng lặp. Hai nhánh ghi y hệt một dòng thì file
+# có hai dòng giống nhau.
+#
+# KHÔNG đặt luật này cho Markdown: union sẽ trộn lẫn hai mục thành một mục
+# hỏng mà vẫn merge được — đúng nhóm lỗi Z, hỏng mà không gì đỏ.
+ops/logs/*.jsonl              merge=union
+docs/visual/calibration-log.jsonl  merge=union
