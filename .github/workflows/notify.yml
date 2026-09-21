@@ -1,0 +1,57 @@
+# 🤖 Đẩy thông báo về điện thoại (CHARTER 2.4).
+#
+# GitHub không gửi thông báo cho chính người thực hiện hành động. Agent hành
+# động bằng danh tính của chủ dự án, nên issue do agent mở sẽ KHÔNG báo về
+# máy chủ dự án. Workflow này chạy bằng github-actions[bot] — một danh tính
+# khác — nên @nhắc của nó mới đẩy được thông báo qua GitHub Mobile.
+name: notify
+
+on:
+  issues:
+    types: [opened, labeled, reopened]
+
+permissions:
+  issues: write
+
+jobs:
+  mention:
+    name: mention
+    runs-on: ubuntu-latest
+    if: >-
+      contains(github.event.issue.labels.*.name, 'decision') ||
+      contains(github.event.issue.labels.*.name, 'digest') ||
+      contains(github.event.issue.labels.*.name, 'alert')
+    steps:
+      - name: Nhắc chủ dự án đúng một lần
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.issue.number }}
+          OWNER: HungQuach301
+          MARKER: '<!-- crux-notify -->'
+        run: |
+          set -euo pipefail
+          if gh issue view "$NUM" --repo "$REPO" --json comments \
+              --jq '.comments[].body' | grep -qF "$MARKER"; then
+            echo "Đã nhắc rồi. Không nhắc lại."
+            exit 0
+          fi
+
+          LABELS=$(gh issue view "$NUM" --repo "$REPO" --json labels --jq '[.labels[].name] | join(", ")')
+          case "$LABELS" in
+            *decision*) LEAD="Có việc cần anh quyết.";;
+            *alert*)    LEAD="Có cảnh báo cần anh xem.";;
+            *)          LEAD="Bản tin mới.";;
+          esac
+
+          # Comment này do github-actions[bot] viết, không phải agent. Nó
+          # KHÔNG bắt đầu bằng 🤖 — và cũng không được coi là câu trả lời của
+          # chủ dự án, vì agent chỉ đọc comment của chính chủ dự án (CHARTER 2.3).
+          BODY=$(printf '%s\n' \
+            "$MARKER" \
+            "@$OWNER $LEAD" \
+            "" \
+            "Nhãn: $LABELS" \
+            "" \
+            "Trả lời bằng một comment ngay trong issue này. Comment của anh không có 🤖, nên agent nhận ra đó là câu trả lời của anh.")
+          gh issue comment "$NUM" --repo "$REPO" --body "$BODY"
