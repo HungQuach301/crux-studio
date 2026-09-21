@@ -20,6 +20,7 @@ import {
   isToolCommit,
   judgeTrailerEvidence,
   judgeUnionRuns,
+  listRemoteClaudeBranches,
   parseLedger,
   runUnionExperiment,
   type CheckReport,
@@ -301,17 +302,22 @@ test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash 
 });
 
 /**
- * Test tái hiện lỗi của mục `I-005` (bất biến I2).
+ * Test tái hiện lỗi của mục `I-005` (bất biến I2), rồi khoá bản sửa của mục
+ * `I-007` đè lên trên.
  *
- * Trước bản sửa, `collectCommits` trả `[]` khi không có ref
+ * Trước bản sửa của `I-005`, `collectCommits` trả `[]` khi không có ref
  * `origin/claude/*` nào, và `judgeTrailerEvidence([])` in ra
  * `◦ chưa quan sát được` — giống hệt trường hợp "quét rồi không thấy gì".
- * Đây là chế độ chạy **mặc định** của cả ba routine (clone của phiên cloud
- * chỉ fetch `main`), nên bài kiểm G14 của thứ Hai im lặng ở hầu hết các
- * lượt: nhóm lỗi Z, hỏng mà mọi chỉ báo đều xanh.
+ * `I-005` sửa bằng cách NÉM vô điều kiện — đúng cho ca "chưa quét được",
+ * nhưng kịch bản dưới đây (remote thật, fetch chạy được, remote xác nhận
+ * đúng là không có nhánh `claude/*` nào) lại là một quan sát **hợp lệ**, và
+ * bản sửa của `I-005` biến nó thành `broken` giả — đúng nhóm lỗi Z, chỉ đổi
+ * mặt từ "im lặng sai" sang "kêu oan". `I-007` sửa: `collectCommits` hỏi
+ * thẳng remote bằng `listRemoteClaudeBranches` trước khi kết luận, và chỉ
+ * ném khi remote KHÔNG xác nhận được là rỗng.
  */
-test('I-005 · không có ref origin/claude/* thì collectCommits NÉM, không trả rỗng', () => {
-  const root = mkdtempSync(join(tmpdir(), 'recheck-khong-ref-'));
+test('I-007 · kho thật sự không có nhánh claude/* nào (remote xác nhận rỗng): collectCommits trả rỗng, KHÔNG ném', () => {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-khong-nhanh-'));
   const bare = join(root, 'origin.git');
   const repo = join(root, 'work');
   try {
@@ -329,11 +335,49 @@ test('I-005 · không có ref origin/claude/* thì collectCommits NÉM, không t
     git(['commit', '-q', '-m', 'goc']);
     git(['push', '-q', '-u', 'origin', 'main']);
 
-    // Kho có remote thật, fetch chạy được, nhưng KHÔNG nhánh claude/* nào.
+    // Kho có remote thật, fetch chạy được, và `ls-remote` xác nhận đúng là
+    // KHÔNG có nhánh claude/* nào — quan sát hợp lệ, không phải lỗi.
+    const commits = collectCommits(repo);
+    assert.deepEqual(commits, []);
+
+    const outcome = judgeTrailerEvidence(commits);
+    assert.equal(outcome.verdict, 'khớp');
+    assert.equal(outcome.observedNothing, true, 'phải in ◦ chưa quan sát được, không phải ⚠ broken');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Ca thứ hai của mục `I-007`, kiểm trực tiếp `listRemoteClaudeBranches`
+ * thay vì đi qua `collectCommits`: khi chính `ls-remote` lỗi (remote trỏ
+ * tới đường dẫn không tồn tại), hàm phải NÉM — đây mới là "chưa quét được"
+ * thật, không được nuốt thành quan sát hợp lệ (mảng rỗng).
+ *
+ * `collectCommits` đã có test riêng cho "fetch hỏng vì không có remote"
+ * (`I-005` phía dưới); test này nhắm đúng vào hàm mới của `I-007`, không
+ * lặp lại kịch bản đó.
+ */
+test('I-007 · listRemoteClaudeBranches ném khi ls-remote lỗi (remote không tồn tại)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-lsremote-hong-'));
+  const repo = join(root, 'work');
+  try {
+    mkdirSync(repo, { recursive: true });
+    const git = gitIn(repo);
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.invalid']);
+    git(['config', 'user.name', 'Test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'goc']);
+    // Remote trỏ tới một đường dẫn không tồn tại — cả fetch lẫn ls-remote đều lỗi.
+    git(['remote', 'add', 'origin', join(root, 'khong-ton-tai.git')]);
+
     assert.throws(
-      () => collectCommits(repo),
-      /CHƯA QUÉT ĐƯỢC/,
-      'rỗng không phải một quan sát — phải ném để main() xếp vào broken',
+      () => listRemoteClaudeBranches(repo),
+      /ls-remote/,
+      'remote hỏng thật sự phải ném, không được coi là quan sát hợp lệ',
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -122,12 +122,15 @@ Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ 
 
 - deps: I-004
 - risk: low
-- status: ready
+- status: review
 - nguồn: phát hiện khi làm `I-004`; CHARTER mục 7; KF-005
 - tiêu chí xong:
-  - **Kiểm trước, dựa vào sau (CHARTER 11.1):** trước khi viết gì, dựng bằng chạy thật một ca git gộp lockfile **sạch** mà kết quả lệch manifest. Không dựng được thì ghi lại là không tái hiện được và đóng mục — không xây cơ chế cho một lỗi chưa ai thấy.
-  - Nếu tái hiện được: sau mỗi lần gộp có chạm `pnpm-lock.yaml`, integrator chạy `pnpm install --frozen-lockfile`; đỏ thì tạo lại lockfile bằng `ops/scripts/integrator-lockfile.ts` (đã có sẵn) rồi kiểm lại, thay vì push một PR chắc chắn đỏ ở CI.
-  - Test tái hiện đi kèm, theo luật `fix` của bất biến I2.
+  - ✅ **Kiểm trước, dựa vào sau (CHARTER 11.1):** ca hỏng **tái hiện được**, dựng bằng git thật và `pnpm` thật trước khi viết một dòng cơ chế nào. Hình dạng: một bên bỏ phụ thuộc cuối cùng còn dùng một gói (khối `packages:` biến mất), bên kia thêm phụ thuộc vào đúng gói đó ở một gói khác trong workspace (chỉ `importers` đổi). Hai vùng cách nhau xa hơn ba dòng ngữ cảnh của git ⇒ **gộp sạch**, không một dấu xung đột, mà `pnpm install --frozen-lockfile` đỏ với `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`.
+  - ✅ Sau mỗi lần gộp có chạm `pnpm-lock.yaml`, integrator kiểm → tạo lại bằng `ops/scripts/integrator-lockfile.ts` → **kiểm lại**: `guardLockfileAfterMerge` trong `ops/scripts/integrator-resolve.ts`, chạy ở **cả** đường `clean` **lẫn** đường union (lockfile đổi được mà không hề nằm trong danh sách xung đột), và luôn chạy **trước** commit vì bản mồi nằm ở `MERGE_HEAD`. Còn đỏ sau khi tạo lại thì huỷ gộp, trả `aborted-ineligible`.
+  - ✅ Test tái hiện đi kèm (bất biến I2): `ops/test/integrator-clean-merge-lockfile.test.ts`, 4 bài, không gọi mạng — phụ thuộc là tarball dựng tại chỗ tham chiếu bằng `file:`, nên nó có khối `packages:` thật mà `workspace:*` không có. Kiểm bằng đột biến: bỏ cổng thì 2 bài đỏ.
+  - ⚠️ **Đo được và phải ghi lại, vì nó đổi cách sửa:** hai cổng KHÔNG bắt cùng một thứ. Trên đúng cây gộp hỏng đó, `pnpm install --lockfile-only --frozen-lockfile` **xanh** mã 0, chỉ `pnpm install --frozen-lockfile` mới đỏ. Cổng rẻ chỉ đối chiếu specifier của `importers`; nó không hỏi phép phân giải có thật trong `packages:` hay không. Cổng cuối của `regenerateLockfile` (`I-004`) chính là cổng rẻ đó — nên `I-006` không dùng lại nó mà thêm `verifyLockfileInstall` (cài thật). Giới hạn của cổng mới, ghi trước: nó **cài thật**, nên một lượt không ra được mạng cũng cho đỏ; hướng sai của nó là an toàn (huỷ gộp, giao người), và nguyên văn đầu ra của `pnpm` đi kèm trong `reason` để phân biệt hai ca.
+  - ✅ **Vòng soát chéo (subagent, ngữ cảnh sạch) tìm ra một hồi quy thật, đã sửa trong cùng PR:** cổng cài thật, mà `pnpm install` không thấy lockfile thì **tự sinh** một bản mới rồi thoát 0 — nên lần gộp mà một bên vừa **xoá** `pnpm-lock.yaml` bị cổng hồi sinh đúng file đó và để lại cây bẩn, trái hợp đồng "không bao giờ sửa `cwd` khi huỷ" của `resolveAdditiveMerge`. Nay guard bỏ qua khi lockfile không còn trong cây đã gộp. Cùng vòng soát: `maxBuffer` 64 MiB cho lệnh cổng (trần 1 MiB mặc định làm cổng đỏ vì `ENOBUFS`, không vì lockfile), tách `aborted-error` khỏi `aborted-ineligible` khi cổng **không chạy được** thay vì **chạy xong và đỏ**, và một bài kiểm cho **đường union** — đột biến cho thấy nửa union của cổng trước đó không có bài nào phủ.
+  - **Còn treo, có chủ đích:** một dạng lệch thứ hai đã đo được mà cổng này **không** bắt — gộp sạch để lại một khối `importers` cho một gói không còn là thành viên workspace (một bên thu hẹp `packages:` trong `pnpm-workspace.yaml`, bên kia thêm gói mới). `pnpm install --frozen-lockfile` xanh trên ca đó; `pnpm install --lockfile-only` dọn sạch nó. Không xây thêm cổng ở đây: chưa đo được hệ quả thật nào của nó, và `I-006` bắt kiểm trước rồi mới dựa vào. Ghi ở Z17 để lượt sau nhận.
 
 ### I-007 · Tách "kho thật sự không có nhánh `claude/*`" khỏi "chưa quét được"
 
@@ -147,13 +150,22 @@ là một cảnh báo không ai đọc.
 
 - deps: `I-005`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-005`; `ops/known-failures.md` nhóm Z (cách 3 — cấm im lặng)
 - tiêu chí xong:
   - `git ls-remote --heads origin 'refs/heads/claude/*'` rỗng → `◦ chưa quan sát được` (quan sát hợp lệ);
     `ls-remote` hoặc `fetch` hỏng → `broken`.
   - Test cho cả hai nhánh, dựng kho bare thật.
   - Ghi lại trong `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
+- **Đã làm** (PR `#53`): thêm `listRemoteClaudeBranches()` vào `ops/scripts/recheck-assumptions.ts`, hỏi
+  thẳng remote bằng `git ls-remote --heads origin 'refs/heads/claude/*'` — không phụ thuộc kết quả fetch
+  cục bộ. `collectCommits()` chỉ ném khi hàm này cũng không xác nhận được rỗng (remote lệch với fetch cục
+  bộ, hoặc chính `ls-remote` lỗi); remote xác nhận rỗng thì trả `[]` như một quan sát hợp lệ, đi qua đúng
+  nhánh `observedNothing` sẵn có của `judgeTrailerEvidence`. Test dựng hai kho bare thật trong
+  `ops/test/recheck-assumptions.test.ts`: một remote thật rỗng (khẳng định KHÔNG ném, in `◦`), một remote
+  hỏng (khẳng định `listRemoteClaudeBranches` vẫn ném). Test cũ của `I-005` dựng đúng kịch bản mục này
+  sửa nên viết lại thành khẳng định hành vi mới thay vì xoá, giữ nguyên bằng chứng hồi quy của bug gốc.
+  Cập nhật `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
 
 ### I-008 · Fixture của sáu xưởng còn nhúng bản sao Channel Pack của Đợt 0
 
