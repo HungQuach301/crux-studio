@@ -121,7 +121,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G12 · Ruleset bảo vệ nhánh trên repo private cần gói nào
 - deps: —
 - risk: low
-- status: ready
+- status: claimed
 - kiểm: thử bật ruleset trên repo này và xem GitHub đòi gì.
 - dự phòng nếu sai: không bật ruleset; dựa vào `automerge.yml` và hook.
 
