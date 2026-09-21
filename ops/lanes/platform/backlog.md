@@ -51,6 +51,15 @@ Lỗ hổng nằm ở chỗ **"cần người" không phải một trạng thái
   chờ merge" của CHARTER.md, cộng `ops/lanes/priority.md` mục "Ngoại lệ đứng trên bảng này" đã cập nhật
   theo đúng cơ chế trên.
 
+  **Một lựa chọn khác tiêu chí xong viết chữ nữa, có lý do (soát chéo ngữ cảnh sạch nêu ra, đã bổ sung
+  ngay trong PR):** bullet "Ai nhận" gốc muốn worker của **làn sở hữu PR** đi trước, chỉ rơi xuống "worker
+  bất kỳ" khi làn đó không có worker rảnh ở lượt kế tiếp. `pickPrToHandle` KHÔNG làm hai tầng đó — mọi
+  worker đủ điều kiện nhận PR ngay, làn chỉ để ghi log. Lý do: hệ thống này không có worker gắn với một
+  làn cụ thể (phụ lục P1 mở bằng "Bạn là worker `<N>`", mọi worker duyệt mọi làn qua cùng
+  `ops/lanes/priority.md`), nên không có cách nào để biết "làn X có worker rảnh ở lượt kế tiếp không" mà
+  nhường. Phần việc bullet đó THẬT SỰ cần — không giải mù, phải đọc PR để biết nó định làm gì — vẫn giữ
+  nguyên trong phụ lục P1 bước 2.
+
   **Một lựa chọn khác tiêu chí xong viết chữ, có lý do:** nhịp tim đặt trong mục **"Đang chờ merge"**
   của bản tin (không phải "Cần anh quyết") — mục đó dành cho quyết định `irreversible` cần chủ dự án trả
   lời trong một issue `[QĐ]` (CHARTER 2.5); một PR kẹt xung đột không phải một quyết định, chỉ là một

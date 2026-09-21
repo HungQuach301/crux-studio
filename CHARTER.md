@@ -663,6 +663,13 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    chủ, worker đọc PR để biết nó định làm gì rồi mới giải, không phải giải mù), chạy `pnpm check` VÀ
    `pnpm replay`, xanh thì push. Worker "nhận" không cần cùng làn với PR — biết đọc PR đó định làm gì là đủ;
    làn suy từ tên nhánh (`laneFromBranch`) chỉ để ghi log cho đúng ngữ cảnh.
+
+   **Vì sao không ưu tiên "worker của làn sở hữu" trước:** hệ thống này không có khái niệm worker gắn với
+   một làn — phụ lục này mở bằng "Bạn là worker `<N>`", không phải "worker của làn X", và MỌI worker duyệt
+   TẤT CẢ các làn theo cùng một `ops/lanes/priority.md` ở bước 3. Không có cơ chế nào để một worker biết
+   "có worker khác của đúng làn này rảnh ở lượt kế tiếp không" để mà nhường. Phần việc mà bullet gốc của
+   mục `P-022` thật sự cần — không giải mù, phải biết PR định làm gì — đã giữ nguyên trong câu ngay trên;
+   phần "làn sở hữu đi trước" bị bỏ vì không có gì để gắn nó vào.
 3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
    mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
    coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.

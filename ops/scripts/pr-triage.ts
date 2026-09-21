@@ -70,6 +70,12 @@ export function laneFromBranch(branch: string): LaneName | null {
  * worker nào đang xử lý PR đó (không có commit mới trong
  * `ANTI_COLLISION_HOURS` giờ) — cùng luật, không phải luật riêng cho ca
  * mới, để hai nguồn (CHARTER và `ops/lanes/priority.md`) không lệch nhau.
+ *
+ * Khi HAI PR trở lên cùng đủ điều kiện với CÙNG một lý do: thắng theo thứ
+ * tự xuất hiện trong `candidates` (không sắp lại theo giờ kẹt hay số PR).
+ * Bên gọi truyền mảng theo thứ tự nào thì đó là thứ tự ưu tiên trong nhóm
+ * đó — CHARTER chưa nói thêm gì về thứ tự này, nên đây là chỗ để ngỏ có
+ * chủ đích, không phải thiếu sót.
  */
 export function pickPrToHandle(candidates: readonly TriageCandidate[]): TriagePick | null {
   const eligible = candidates.filter((c) => c.hoursSinceLastCommit >= ANTI_COLLISION_HOURS);

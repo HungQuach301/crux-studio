@@ -94,6 +94,28 @@ test('pickPrToHandle: chống giẫm chân áp dụng như nhau cho ca aborted-i
   assert.equal(pickPrToHandle([c]), null);
 });
 
+test('pickPrToHandle: chống giẫm chân áp dụng cho ca comment chưa xử lý', () => {
+  const c = candidate({
+    number: 2,
+    branch: 'claude/editorial/E-001',
+    hasUnhandledComment: true,
+    hoursSinceLastCommit: 1,
+  });
+  assert.equal(pickPrToHandle([c]), null);
+});
+
+test('pickPrToHandle: một PR vừa CI đỏ vừa comment chưa xử lý vẫn ra đúng lý do ưu tiên cao nhất (CI đỏ)', () => {
+  const c = candidate({
+    number: 1,
+    branch: 'claude/topic/T-001',
+    ciRed: true,
+    hasUnhandledComment: true,
+    abortedIneligibleStreak: 2,
+  });
+  const result = pickPrToHandle([c]);
+  assert.equal(result?.reason, 'ci-red');
+});
+
 test('pickPrToHandle: nhiều PR đủ điều kiện — CI đỏ thắng comment và thắng aborted-ineligible', () => {
   const redPr = candidate({ number: 1, branch: 'claude/topic/T-001', ciRed: true });
   const commentPr = candidate({ number: 2, branch: 'claude/editorial/E-001', hasUnhandledComment: true });
