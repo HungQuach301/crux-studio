@@ -175,12 +175,13 @@ Ba cách duy nhất có tác dụng, xếp theo thứ tự nên chọn:
 | **Z12** | Bộ kiểm sổ giả định đọc mục **cuối** tới hết file | Phần kiểm "có nói về dự phòng không", cho mục cuối | Nội dung cuối file (phần "Cách thêm một giả định") trôi vào thân mục cuối và mang theo chữ khoá, làm mục đó xanh sai. **Đã xảy ra thật với G15** — chỉ lộ ra khi thêm G16 đẩy nó khỏi vị trí cuối | Cắt mục ở dấu `---` thay vì ở hết file, kèm một test âm: một sổ có mục cuối **thiếu** dự phòng phải đỏ |
 | **Z13** | `pnpm replay` so snapshot | Chính phép so, nếu snapshot được cập nhật trong cùng PR | Snapshot mới khớp output mới, đương nhiên xanh. Phép so mất hết giá trị mà không báo gì | CHARTER 6.1 đã đòi `--update` đi trong **PR riêng**. Chưa có máy nào ép: thêm một job đỏ khi một PR vừa chạm `ops/golden/**` vừa chạm thứ khác |
 | **Z14** | Dòng log `costUsd` (bất biến I8) | Bước ghi log, khi lần chạy chết trước đó | Thiếu một dòng log không làm gì đỏ. Chi phí thật cao hơn chi phí thấy được, và ngân sách học trôi | So số PR đã merge theo làn với số dòng trong `ops/logs/<lane>.jsonl` cùng khoảng thời gian. Lệch quá ngưỡng thì báo trong bản tin ngày |
+| **Z15** | Bài kiểm tự động của sổ giả định (`pnpm recheck:assumptions`) | Bài kiểm G14, khi clone chưa có ref `origin/claude/*` nào để quét | "Quét rồi không thấy gì" và "chưa quét được gì" in ra **cùng một dòng** `◦ chưa quan sát được`, và lệnh vẫn exit 0. Clone của phiên cloud chỉ fetch `main`, nên đó là chế độ chạy **mặc định** của cả ba routine: bài kiểm của thứ Hai im lặng ở hầu hết các lượt | ✅ **Đã có** — mục `I-005`: bài kiểm **tự fetch** đầu vào của mình, và ném khi vẫn không có ref nào. Thiếu đầu vào ra `⚠ … KHÔNG CHẠY ĐƯỢC` cộng exit khác 0, không bao giờ ra `◦`. Hình dạng chung: **cấm im lặng** (cách 3) — một bài kiểm không được tự khai "không có gì để xem" khi nó chưa nhìn |
 
 ### Cái giá của việc không làm
 
 Ba mục đã lộ ra (KF-001, KF-002, KF-004) đều **chỉ lộ ra vì có người bấm tay** — không mục nào được máy tìm thấy. Đó là con số đáng lo nhất trong sổ này: tỉ lệ tự phát hiện của nhóm Z hiện là **0/3**.
 
-Rà soát này thành mục `P-014` trong `ops/lanes/platform/backlog.md`. Thứ tự làm theo giá trên mỗi đồng: **Z10 → Z11 → Z3 → Z5 → Z9** trước (đều là luật máy kiểm rẻ, viết một lần chạy mãi), rồi tới Z2, Z8, Z13 (gắn vào CI), cuối cùng Z6, Z7, Z14 (cần nhịp tim và ngưỡng, phải chỉnh dần).
+Rà soát này thành mục `P-014` trong `ops/lanes/platform/backlog.md`. Thứ tự làm theo giá trên mỗi đồng: **Z10 → Z11 → Z3 → Z5 → Z9** trước (đều là luật máy kiểm rẻ, viết một lần chạy mãi), rồi tới Z2, Z8, Z13 (gắn vào CI), cuối cùng Z6, Z7, Z14 (cần nhịp tim và ngưỡng, phải chỉnh dần). **Z15 đã xong** ở mục `I-005`, và nó vào bảng này theo đường khác hẳn: không ai rà ra nó, nó lộ ra vì một lượt `crux-integrator` chạy thật rồi có người đọc bản in. Đáng ghi lại vì nó đúng chỗ nhóm Z đau nhất — bài kiểm **của chính sổ giả định** cũng nằm trong nhóm Z, và nó không tự nói được là nó chưa chạy.
 
 ---
 

@@ -211,6 +211,11 @@ export function isToolCommit(subject: string): boolean {
  * trailer cuối. Quét cả `main` thì mọi commit lịch sử hiện ra như "thiếu
  * trailer" và bài kiểm kêu `sai` vì một lý do chẳng liên quan gì tới G14.
  * Lần chạy đầu của chính bài kiểm này đã mắc đúng lỗi đó.
+ *
+ * Nhánh "không có gì để quan sát" ở đây nay chỉ còn nghĩa **hẹp**: đã có ref
+ * `origin/claude/*`, nhưng không commit nào của chúng nằm ngoài `main` trong
+ * cửa sổ ngày. Trường hợp "chưa có ref nào để quét" không còn đi qua đây —
+ * `collectCommits` ném, và `main()` xếp nó vào `broken` (mục `I-005`).
  */
 export function judgeTrailerEvidence(commits: CommitTrailerInfo[]): CheckOutcome {
   const byTool = commits.filter((c) => isToolCommit(c.subject));
@@ -231,6 +236,8 @@ export function judgeTrailerEvidence(commits: CommitTrailerInfo[]): CheckOutcome
       evidence: [
         'Không quan sát được gì KHÁC với quan sát được và thấy đúng. Thứ Hai không có PR nào đang mở là ' +
           'chuyện bình thường (nhánh merge xong thì bị xoá), nên trạng thái này sẽ xuất hiện thật.',
+        'Tới được đây nghĩa là ĐÃ có ref `origin/claude/*` để quét, chỉ là mọi commit của chúng đã vào ' +
+          '`main` hoặc đã quá cửa sổ ngày — `collectCommits` ném khi chưa quét được gì (mục `I-005`).',
       ],
     };
   }
@@ -278,17 +285,57 @@ const RECORD = '\u001e';
 const FIELD = '\u001f';
 
 /**
+ * Kéo về `refs/remotes/origin/claude/*` trước khi quét — mục `I-005`.
+ *
+ * Cả ba routine chạy trong một clone mới của phiên cloud, và clone đó chỉ
+ * `git fetch origin main`. Không có ref `origin/claude/*` nào, nên bài kiểm
+ * G14 quét một tập rỗng và kết luận "không có gì để quan sát" — trong khi
+ * thật ra nó **chưa quét được gì**. Đó là chế độ chạy mặc định, không phải
+ * trường hợp hiếm: bài kiểm của thứ Hai im lặng ở hầu hết các lượt.
+ *
+ * Phụ lục P3 bước 4 không ghi "phải fetch trước", nên chỗ sửa là ở đây —
+ * bài kiểm tự lo lấy đầu vào của mình, thay vì để một luật chỉ nằm trong
+ * tài liệu mà không ai chạy.
+ *
+ * Fetch hỏng thì **ném**, không nuốt: `main()` bắt lỗi và xếp bài kiểm vào
+ * nhánh `broken` (`⚠ … KHÔNG CHẠY ĐƯỢC`). "Chưa quét được" phải kêu, vì nó
+ * là nhóm lỗi Z — hỏng mà mọi chỉ báo đều xanh.
+ */
+function fetchClaudeRefs(root: string): void {
+  git(root, [
+    'fetch',
+    '--quiet',
+    '--prune',
+    'origin',
+    '+refs/heads/claude/*:refs/remotes/origin/claude/*',
+  ]);
+}
+
+/**
  * Commit trên các nhánh `origin/claude/*` mà **chưa vào `main`**, trong
  * `days` ngày gần nhất. Xem chú thích của `judgeTrailerEvidence` về lý do
  * loại `main` ra: squash làm mất trailer, không phải agent làm mất.
+ *
+ * Ném khi không có ref nào để quét (mục `I-005`). Rỗng ở đây **không** phải
+ * một quan sát: không phân biệt được "kho không có nhánh nào" với "clone
+ * chưa kéo nhánh nào về", và đoán bừa một trong hai chính là lỗi cũ. Bên
+ * gọi — `main()` — biến lỗi này thành dòng `broken`, thấy được và làm
+ * `process.exitCode = 1`.
  */
 export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
+  fetchClaudeRefs(root);
+
   const refs = git(root, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/claude/'])
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-  if (refs.length === 0) return [];
+  if (refs.length === 0) {
+    throw new Error(
+      'không có ref `refs/remotes/origin/claude/*` nào sau khi fetch — CHƯA QUÉT ĐƯỢC, ' +
+        'không phải "quét rồi không thấy gì". Kiểm remote `origin` và quyền đọc nhánh.',
+    );
+  }
 
   const format = ['%H', '%s', '%(trailers:key=Claude-Session,valueonly=true)'].join(FIELD);
   const raw = git(root, [
