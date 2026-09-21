@@ -108,26 +108,30 @@ test('parseRunLogs · dòng hỏng thì ném, không nuốt', () => {
   assert.throws(() => parseRunLogs(['{ không phải json }']));
 });
 
-test('readRunLogs · đọc cả file trong thư mục làn lẫn file phẳng còn sót', () => {
+test('readRunLogs · đọc cả file trong thư mục làn lẫn file phẳng còn sót, sắp theo `at`', () => {
   const root = mkdtempSync(join(tmpdir(), 'crux-log-'));
   const logsDir = join(root, 'ops', 'logs');
   mkdirSync(join(logsDir, 'platform'), { recursive: true });
 
+  // Tên file được chọn để thứ tự ĐỌC (theo tên) NGƯỢC với thứ tự thời
+  // gian. Nếu fixture nào cũng tình cờ đã đúng thứ tự thì bài kiểm này
+  // xanh cả khi `readRunLogs` quên sắp — xanh giả, đúng thứ nó phải bắt.
+  // Theo tên: kernel.jsonl (05:00) → platform/A-001 (09:00) → platform/Z-999 (01:00).
   writeFileSync(
-    join(logsDir, 'platform', 'P-018.jsonl'),
-    `${formatLogLine(line('2026-09-21T04:00:00.000Z', { ref: 'moi', costUsd: 1.5 }))}\n`,
+    join(logsDir, 'platform', 'A-001.jsonl'),
+    `${formatLogLine(line('2026-09-21T09:00:00.000Z', { ref: 'moi', costUsd: 1.5 }))}\n`,
     'utf8',
   );
   writeFileSync(
-    join(logsDir, 'platform', 'P-016.jsonl'),
-    `${formatLogLine(line('2026-09-21T02:00:00.000Z', { ref: 'giua' }))}\n`,
+    join(logsDir, 'platform', 'Z-999.jsonl'),
+    `${formatLogLine(line('2026-09-21T01:00:00.000Z', { ref: 'cu' }))}\n`,
     'utf8',
   );
   // Hình dạng cũ: nếu còn sót một file phẳng thì chi phí của nó KHÔNG
   // được biến mất khỏi tổng.
   writeFileSync(
     join(logsDir, 'kernel.jsonl'),
-    `${formatLogLine(line('2026-09-21T01:00:00.000Z', { lane: 'kernel', ref: 'cu', costUsd: 0.5 }))}\n`,
+    `${formatLogLine(line('2026-09-21T05:00:00.000Z', { lane: 'kernel', ref: 'giua', costUsd: 0.5 }))}\n`,
     'utf8',
   );
 
