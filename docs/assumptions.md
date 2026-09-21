@@ -273,7 +273,10 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
   > Lưu ý về cách kiểm: hook `guard.mjs` chặn chính agent ghi vào `.github/`, nên bài kiểm này **không thực hiện được từ một phiên agent bình thường** — và agent không được tự nới hook để kiểm. Bài kiểm cần chủ dự án chạy, hoặc cần một PR `owner-merge` mở một ngoại lệ hẹp cho đúng một file thử rồi đóng lại ngay.
 - **Dự phòng nếu giả định đúng:** giữ nguyên cơ chế sync và PAT — đang dùng.
 - **Nếu hoá ra ghi được ổn định:** có thể gỡ bỏ cơ chế sync và PAT, **thông qua một quyết định riêng**. Agent không tự gỡ: việc đó đổi cách toàn bộ workflow tới được GitHub.
-- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10`.
+- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10` — mục đó nay `parked` (2026-09-21, lượt `crux-worker-2`).
+- ⬜ **Vì sao `parked`:** cách kiểm ở trên là đúng thứ phụ lục P1 của CHARTER và `CLAUDE.md` mục 4 cấm tuyệt đối, và lớp chặn máy vẫn sống — đo lại trong lượt worker 2026-09-21 ~22:25Z, `guard.mjs` chặn cả một lệnh **đọc** `.github/workflows/ci.yml`. Đi vòng qua hook bằng công cụ khác là lách lớp chặn, không làm. Bài kiểm cần chủ dự án chạy, hoặc cần một ngoại lệ hẹp có thời hạn trong `guard.mjs` qua PR `owner-merge` — nới lớp chặn là CHARTER 2.3 nhóm 5. Issue **#88** nêu ba phương án; lời hứa "đề xuất riêng" về G10 có từ issue #5 (2026-09-20) và tới nay mới thực hiện.
+- ⬜ **Dữ liệu gián tiếp, đo kỹ rồi vẫn KHÔNG kết luận được:** `git log origin/main -- .github/` (tới `c7179c6`) trả **3** commit — `9b97cea` và `9928c75` của `crux-sync` (PAT `WORKFLOW_SYNC_TOKEN`) là ghi thật; `939ebb0` là commit **gốc** của lịch sử đang thấy (committer `GitHub <noreply@github.com>`, bản squash của PR #15), không có cha nên cả cây hiện ra dạng `A`, gồm 7 file `.github/workflows/*.yml` đã tồn tại từ trước — đầu nhánh thật của PR #15 (`c5a164a`) **không** chạm `.github/`. Cạm bẫy đo: `git diff-tree -r --name-status <sha>` trả rỗng cho commit gốc, phải có `--root`. Dữ liệu này không nói được gì về quyền của phiên agent — chưa phiên nào thử, vì hook chặn — nên độ tin cậy giữ nguyên `tài liệu nói vậy`.
+- **Không chặn làn nào:** dự phòng "giữ nguyên cơ chế sync và PAT" đang chạy thật; câu trả lời chỉ mở đường **gỡ** cơ chế đó, mà việc gỡ vốn đã cần một quyết định riêng.
 
 ## G11 · Hook và luật deny có hiệu lực trong routine và thread
 
