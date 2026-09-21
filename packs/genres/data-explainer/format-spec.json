@@ -44,7 +44,11 @@
     ],
     "noveltyVideosCheckedMin": 5,
     "targetDurationMs": 1260000,
-    "maxLayoutRepeatsPerVariant": 20
+    "maxLayoutRepeatsPerVariant": 20,
+    "motionCoverageMin": 0.7,
+    "longestStaticRunMsMax": 8000,
+    "textWordsPerSecondMax": 1.5,
+    "sceneMaxDurationMs": 12000
   },
   "sampledFromKinds": [
     "beat",

@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "text-density-01",
+  "axis": "text-density",
+  "question": "Bản nào dễ theo hơn khi anh vừa nghe vừa nhìn?",
+  "variantA": {
+    "label": "Trung bình 5 từ mỗi cảnh",
+    "params": {
+      "onScreenWordsPerScene": 5
+    }
+  },
+  "variantB": {
+    "label": "Trung bình 11 từ mỗi cảnh",
+    "params": {
+      "onScreenWordsPerScene": 11
+    }
+  },
+  "renderRef": null,
+  "note": "Cùng nội dung, khác lượng chữ hiển thị. Cả hai đều dưới trần 12 từ của genre pack."
+}

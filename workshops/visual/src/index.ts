@@ -101,6 +101,10 @@ async function produce(input: WorkshopInput, _ctx: RunContext): Promise<VisualPa
     for (let n = 0; n < count; n += 1) {
       const ordinal = scenes.length;
       const numeric = beat.claimIds.length > 0 && n % 3 === 0;
+      // Scene tĩnh CHỈ được rơi vào nhóm ngắn. Một scene tĩnh đủ dài thì tự
+      // nó là một slide, bất kể phần còn lại nhịp thế nào — Preflight đo
+      // điều đó bằng `longestStaticRunMs` (CHARTER 6.8a).
+      const isShort = n % 2 === 0;
       scenes.push({
         id: `S${String(ordinal + 1).padStart(3, '0')}`,
         beatIndex: beat.index,
@@ -114,8 +118,9 @@ async function produce(input: WorkshopInput, _ctx: RunContext): Promise<VisualPa
           : NARRATIVE_KINDS[ordinal % NARRATIVE_KINDS.length]!,
         claimIds: numeric ? beat.claimIds : [],
         onScreenWordCount: Math.min(maxWords, 4 + (ordinal % 6)),
-        // Khung tĩnh chỉ xuất hiện rải rác: "trông như slide" là lỗi đã lặp lại (A2).
-        hasMotion: ordinal % 7 !== 0,
+        // Khung tĩnh chỉ xuất hiện rải rác, và chỉ trên scene ngắn:
+        // "trông như slide" là lỗi đã lặp lại ở các dự án trước (rủi ro A2).
+        hasMotion: !(isShort && ordinal % 7 === 0),
       });
     }
   });

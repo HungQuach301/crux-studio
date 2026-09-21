@@ -10,7 +10,7 @@
   "channel": "us-personal-finance",
   "genre": "data-explainer",
   "locale": "en-US",
-  "inputsHash": "40d53821e01a7a9af4350ed93473c792a9b005849d4e59dfb807eb66ee71c977",
+  "inputsHash": "c4311d3039a57246820813f42fa7ca077ef980ab764c886d11aa39dd328e4a7d",
   "inputs": [
     {
       "kind": "topic.brief",
@@ -25,7 +25,7 @@
     {
       "kind": "assembly.render",
       "path": "episodes/us-personal-finance/ep-0001-stub/assembly/artifact.json",
-      "hash": "99943f98d92ce27e1086045a7164891253496f766995801dc4be5a44387f6b64"
+      "hash": "20316d90953d43643ae88678afed2f1e43f1efc1f5aaf40cc1b2f14e309b7efe"
     }
   ],
   "createdAt": "2026-09-20T00:00:00.000Z",

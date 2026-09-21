@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "hierarchy-01",
+  "axis": "hierarchy",
+  "question": "Ở bản nào mắt anh biết nhìn đâu trước?",
+  "variantA": {
+    "label": "Một phần tử chiếm khoảng 60% diện tích, phần còn lại phụ trợ",
+    "params": {
+      "primaryElementAreaShare": 0.6
+    }
+  },
+  "variantB": {
+    "label": "Ba phần tử ngang hàng, mỗi cái khoảng 30%",
+    "params": {
+      "primaryElementAreaShare": 0.3
+    }
+  },
+  "renderRef": null,
+  "note": "Cùng dữ liệu, khác cách phân bổ diện tích."
+}

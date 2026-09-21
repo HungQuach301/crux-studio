@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "identity-01",
+  "axis": "identity",
+  "question": "Nhìn một khung, bản nào làm anh nhận ra đây là kênh của mình?",
+  "variantA": {
+    "label": "Bảng màu và font riêng, dùng nhất quán khắp tập",
+    "params": {
+      "tokenAdherence": 1.0
+    }
+  },
+  "variantB": {
+    "label": "Bảng màu mặc định của công cụ dựng",
+    "params": {
+      "tokenAdherence": 0.0
+    }
+  },
+  "renderRef": null,
+  "note": "Cùng bố cục, khác việc có bám visual-tokens của kênh hay không."
+}

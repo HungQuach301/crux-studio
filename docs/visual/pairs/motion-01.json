@@ -1,0 +1,20 @@
+{
+  "$note": "🤖 Cặp so sánh của bộ hiệu chuẩn gu hình (docs/visual/calibration.md). renderRef là null cho tới khi có phòng thí nghiệm layout (mục V-003).",
+  "id": "motion-01",
+  "axis": "motion",
+  "question": "Khung hình nào giữ được mắt anh lâu hơn?",
+  "variantA": {
+    "label": "Gần như mọi cảnh đều có chuyển động nhẹ",
+    "params": {
+      "motionCoverage": 0.95
+    }
+  },
+  "variantB": {
+    "label": "Khoảng một nửa số cảnh đứng yên",
+    "params": {
+      "motionCoverage": 0.55
+    }
+  },
+  "renderRef": null,
+  "note": "Chỉ khác tỷ lệ thời lượng có chuyển động. Cùng layout, cùng nhịp, cùng chữ."
+}

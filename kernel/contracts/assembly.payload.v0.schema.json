@@ -4,53 +4,163 @@
   "title": "Xưởng Dựng — payload v0",
   "description": "Gợi ý lấy từ preflight.schema.json, render-manifest.schema.json và qa-report.schema.json của spec tham chiếu.",
   "type": "object",
-  "required": ["preflight", "render", "qa"],
+  "required": [
+    "preflight",
+    "render",
+    "qa"
+  ],
   "properties": {
     "preflight": {
       "type": "object",
       "description": "Cơ chế 1 của spec tham chiếu: kiểm tĩnh trên storyboard TRƯỚC khi render — kiểm ở chỗ rẻ nhất.",
-      "required": ["verdict", "checks"],
+      "required": [
+        "verdict",
+        "checks",
+        "antiSlide"
+      ],
       "properties": {
-        "verdict": { "type": "string", "enum": ["pass", "fail"] },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
         "checks": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["id", "verdict"],
+            "required": [
+              "id",
+              "verdict"
+            ],
             "properties": {
-              "id": { "type": "string", "minLength": 1 },
-              "verdict": { "type": "string", "enum": ["pass", "fail", "warn"] },
-              "expected": { "type": ["string", "number"] },
-              "actual": { "type": ["string", "number"] },
-              "sceneIds": { "type": "array", "items": { "type": "string" } },
-              "rootCauseStage": { "type": "string" }
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "pass",
+                  "fail",
+                  "warn"
+                ]
+              },
+              "expected": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "actual": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "sceneIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rootCauseStage": {
+                "type": "string"
+              }
             }
           }
         },
         "selfCheckMismatch": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Trường mà xưởng trước tự khai khác với số tính được. Nghiêm trọng hơn một check fail thường."
+        },
+        "antiSlide": {
+          "type": "object",
+          "description": "Chỉ số chống \"trông như slide\" (CHARTER 6.8a). Đây là các GIÁ TRỊ ĐO ĐƯỢC, ghi lại kể cả khi đạt ngưỡng — ngưỡng khai trong genre pack, không khai ở đây. Lý do ghi cả khi đạt: chất lượng hình trôi dần chứ không hỏng đột ngột (rủi ro A2, B8), và chỉ có chuỗi số qua nhiều tập mới thấy được nó trôi.",
+          "required": [
+            "motionCoverage",
+            "longestStaticRunMs",
+            "textWordsPerSecond",
+            "longestSceneMs"
+          ],
+          "properties": {
+            "motionCoverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Tỷ lệ THỜI LƯỢNG nằm trong các scene có chuyển động. Tính theo thời lượng chứ không theo số scene: mười scene tĩnh dài bốn giây tệ hơn hai mươi scene tĩnh dài nửa giây."
+            },
+            "longestStaticRunMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Quãng liên tục dài nhất không có chuyển động nào. Đây là thứ người xem cảm nhận thành \"slide\", chứ không phải tỷ lệ tổng."
+            },
+            "textWordsPerSecond": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Số từ hiển thị chia cho tổng thời lượng, tính trên cả tập. Trần mỗi scene đã có ở kiểm số 11; chỉ số này bắt trường hợp mọi scene đều dưới trần nhưng cả tập vẫn dày đặc chữ."
+            },
+            "longestSceneMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Một scene đủ dài thì tự nó là một slide, bất kể phần còn lại nhịp thế nào."
+            },
+            "staticSceneCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },
     "render": {
       "type": "object",
-      "required": ["fps", "resolution", "outputs"],
+      "required": [
+        "fps",
+        "resolution",
+        "outputs"
+      ],
       "properties": {
-        "fps": { "type": "integer", "minimum": 1 },
-        "resolution": { "type": "string", "pattern": "^[0-9]+x[0-9]+$" },
-        "durationMs": { "type": "integer", "minimum": 1 },
+        "fps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resolution": {
+          "type": "string",
+          "pattern": "^[0-9]+x[0-9]+$"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 1
+        },
         "outputs": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["kind", "ref"],
+            "required": [
+              "kind",
+              "ref"
+            ],
             "properties": {
-              "kind": { "type": "string", "enum": ["master", "proof", "still", "shorts"] },
-              "ref": { "type": "string", "minLength": 1 }
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "master",
+                  "proof",
+                  "still",
+                  "shorts"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         }
@@ -58,19 +168,45 @@
     },
     "qa": {
       "type": "object",
-      "required": ["verdict", "findings"],
+      "required": [
+        "verdict",
+        "findings"
+      ],
       "properties": {
-        "verdict": { "type": "string", "enum": ["pass", "fail"] },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
         "findings": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "severity", "message"],
+            "required": [
+              "id",
+              "severity",
+              "message"
+            ],
             "properties": {
-              "id": { "type": "string" },
-              "severity": { "type": "string", "enum": ["info", "warn", "block"] },
-              "message": { "type": "string" },
-              "rootCauseStage": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warn",
+                  "block"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "rootCauseStage": {
+                "type": "string"
+              }
             }
           }
         }
