@@ -193,7 +193,11 @@ jobs:
               ;;
           esac
 
-          LANES=$(grep -Eo '^(workshops|ops/lanes)/[a-z]+' "$RUNNER_TEMP/changed.txt" | sort -u | wc -l)
+          # `|| true` là chủ ý (rà soát Z9): `grep` trả 1 khi không khớp dòng
+          # nào, và dưới `set -o pipefail` điều đó giết cả job — một PR không
+          # chạm thư mục làn nào sẽ làm job gắn nhãn đỏ vì lý do không liên
+          # quan gì tới nội dung PR.
+          LANES=$( (grep -Eo '^(workshops|ops/lanes)/[a-z]+' "$RUNNER_TEMP/changed.txt" || true) | sort -u | wc -l)
           echo "số làn bị chạm: $LANES"
           if [ "$LANES" -gt 1 ]; then
             gh pr edit "$PR" --add-label cross-lane
