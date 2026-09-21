@@ -279,9 +279,17 @@ trước khi viết máy kiểm.
 - còn treo:
   - Luật máy của hàng **Z13** vẫn chưa ai dựng — mục này chỉ gỡ thứ chặn nó, không dựng nó. Nếu dựng thì
     là một mục riêng, và nó nằm trong `ops/workflows/` chứ không phải `pnpm check`.
-  - `upstreamFrom.workshops` khai tay, không suy từ `definition.consumes`. Cố ý: `readInputFile` nhận một
-    đường dẫn file chứ không nhận `definition`, và một fixture khai thừa/thiếu xưởng so với `consumes`
-    hiện chỉ lộ ra qua `inputsHash` của output. Đo được trước khi chữa thì hãy chữa.
+  - `upstreamFrom.workshops` khai tay, không suy từ `definition.consumes`. Cố ý ở PR này (`readInputFile`
+    nhận một đường dẫn file chứ không nhận `definition`), nhưng **vòng soát chéo đã đo và nó nặng hơn
+    câu trên**: đổi `consumes` của một xưởng rồi chạy `pnpm replay -- --update` thì `pnpm check` **xanh
+    hoàn toàn** trong khi fixture vẫn trỏ tới bộ xưởng cũ. Đo thật: `workshops/release/src/index.ts` để
+    `consumes: ['editorial','assembly']` còn fixture giữ `['topic','editorial','assembly']` → check xanh,
+    chạy độc lập exit 0, artifact mang thừa một đầu vào. Tức nó **không** chỉ lộ ra qua `inputsHash` như
+    ghi ban đầu — chỉ lộ tới lần `--update` hợp lệ kế tiếp, sau đó không gì thấy nữa. Thành mục `I-011`.
+  - `goldenSnapshotPath` giải đường dẫn bằng `resolve`, nên `upstreamFrom.golden` khai `../..` trỏ được
+    ra ngoài `ops/golden/`. Với fixture trong repo thì test `kernel/test/input.test.ts` #19 bắt được (nó
+    so từng artifact với snapshot thật), nhưng kernel tự nó không chặn. Không siết ở PR này vì đó là đổi
+    hành vi ngoài tiêu chí xong; ghi để lượt sau quyết.
 
 ### I-010 · Mục đã vào `main` mà vẫn nằm `status: review` — không có gì chuyển nó sang `done`
 
@@ -351,3 +359,31 @@ là làn chết đói nặng nhất.
     gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
   - ⬜ `I-001` ghi ngưỡng bỏ PR nháp là **72 giờ**, trong khi CHARTER phụ lục P1 bước 3 và CLAUDE.md
     mục 2 ghi **24 giờ**. Lệch này có từ trước mục `I-010`, không sửa ở đây để không trộn phạm vi.
+
+### I-011 · `consumes` của một xưởng nay có ba bản chép tay, và lệch nhau thì không gì đỏ
+
+Tìm ra trong vòng soát của `I-009`, đã đo bằng chạy thật.
+
+`I-009` bỏ được bản chép **artifact** trong fixture, nhưng nó đẩy Z16 lên một tầng: danh sách xưởng
+tiêu thụ nay viết tay ở **ba** chỗ, và không chỗ nào buộc vào chỗ nào —
+
+1. `definition.consumes` trong `workshops/<tên>/src/index.ts` — nguồn thật, đường chạy tập dùng nó;
+2. `upstreamFrom.workshops` trong `workshops/<tên>/fixtures/input.json`;
+3. danh sách viết cứng trong `kernel/test/input.test.ts` (bài "sáu fixture … khớp ĐÚNG snapshot").
+
+Đo được: đổi `consumes` của `release` thành `['editorial','assembly']` mà để fixture giữ
+`['topic','editorial','assembly']` thì `pnpm check` **xanh hoàn toàn** và lệnh chạy độc lập exit 0 với
+một artifact đầu vào thừa. `inputsHash` có đổi, nhưng điều đó chỉ lộ ra tới lần `pnpm replay -- --update`
+hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+
+- deps: `I-009`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
+- tiêu chí xong:
+  - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
+    (ví dụ `--input` không khai danh sách, CLI truyền `definition.consumes` xuống `readInputFile`). Không
+    làm được thì phải nói rõ vì sao, rồi mới dựng phép so.
+  - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
+    nó đang kiểm thì không kiểm gì.
+  - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
