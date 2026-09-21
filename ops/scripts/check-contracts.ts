@@ -3,12 +3,14 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Bốn việc:
+ * Sáu việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
  * 3. Phong bì giữ đủ các trường của CHARTER 5.2, không thừa không thiếu.
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
+ * 5. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
+ * 6. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -21,6 +23,10 @@ import {
   artifactSchemas,
   validateArtifact,
   unsupportedKeywords,
+  loadGenreLayouts,
+  loadChannelVisualTokens,
+  layoutsSchema,
+  visualTokensSchema,
   type WorkshopName,
 } from '@crux/kernel';
 
@@ -31,6 +37,8 @@ const problems: string[] = [];
 for (const [name, schema] of [
   ['envelope', envelopeSchema] as const,
   ...WORKSHOPS.map((w) => [`${w}.payload.v0`, payloadSchemas[w]] as const),
+  ['layouts.schema', layoutsSchema] as const,
+  ['visual-tokens.schema', visualTokensSchema] as const,
 ]) {
   const unknown = unsupportedKeywords(schema);
   if (unknown.length > 0) {
@@ -106,11 +114,43 @@ if (existsSync(goldenRoot)) {
   }
 }
 
+// 5 · layouts.json của mỗi genre pack đã tồn tại (mục V-001). Genre nào
+// chưa có layouts.json thì bỏ qua — chưa tới lượt genre đó, không phải lỗi.
+let genresChecked = 0;
+const genresDir = join(root, 'packs', 'genres');
+if (existsSync(genresDir)) {
+  for (const genre of readdirSync(genresDir)) {
+    if (!existsSync(join(genresDir, genre, 'layouts.json'))) continue;
+    genresChecked += 1;
+    try {
+      loadGenreLayouts(root, genre);
+    } catch (error) {
+      problems.push(`packs/genres/${genre}/layouts.json: ${(error as Error).message}`);
+    }
+  }
+}
+
+// 6 · visual-tokens.json của mỗi channel pack (mục V-001).
+let channelsChecked = 0;
+const channelsDir = join(root, 'packs', 'channels');
+if (existsSync(channelsDir)) {
+  for (const slug of readdirSync(channelsDir)) {
+    if (!existsSync(join(channelsDir, slug, 'visual-tokens.json'))) continue;
+    channelsChecked += 1;
+    try {
+      loadChannelVisualTokens(root, slug);
+    } catch (error) {
+      problems.push(`packs/channels/${slug}/visual-tokens.json: ${(error as Error).message}`);
+    }
+  }
+}
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
 }
 
 process.stdout.write(
-  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ.\n`,
+  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
+    `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json.\n`,
 );
