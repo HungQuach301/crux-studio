@@ -132,3 +132,15 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - kiểm: cần hai PR song song cùng làn mà **cả hai đã mang sẵn** `.gitattributes`, cùng ghi vào `ops/logs/<lane>.jsonl`. Merge một PR, rồi đọc **hai** thứ: trạng thái `mergeable` của PR kia trên GitHub, và kết quả `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau — ghi cả hai.
 - vì sao chưa trả lời được: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Xem G17.
 - dự phòng nếu sai: đã có sẵn — mục `P-016`, integrator tự gộp `main` vào PR xung đột. Không phụ thuộc câu trả lời này.
+
+### VF-G18 · `pnpm install --lockfile-only` có giữ phép phân giải cũ không
+- deps: —
+- risk: low
+- status: done
+- nguồn: `docs/assumptions.md` G18; mục `I-004` của làn `integration`
+- tiêu chí xong:
+  - ✅ **Đã kiểm bằng chạy thật, 2026-09-21** (trong PR của `I-004`): workspace tạm, phụ thuộc thật từ
+    registry, hai lần chạy khác nhau đúng một điều kiện. Có bản mồi → giữ `semver@7.5.0`; xoá lockfile rồi
+    sinh lại → `semver@7.8.5`. Cùng một manifest `^7.0.0`, nên chênh lệch đo được chính là tác dụng bản mồi.
+  - Kiểm lại khi nâng `pnpm` qua một phiên bản chính. Không đưa vào `pnpm check`: cần mạng, và một bài kiểm
+    im lặng bỏ qua khi không có mạng còn tệ hơn không có bài kiểm.

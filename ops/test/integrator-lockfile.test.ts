@@ -21,7 +21,10 @@ import { resolveAdditiveMerge } from '../scripts/integrator-resolve.ts';
 import { isLockfile, isManifest, regenerateLockfile } from '../scripts/integrator-lockfile.ts';
 
 function git(cwd: string, args: string[]): string {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  // `maxBuffer` lớn vì cùng lý do với bản trong `integrator-resolve.ts`:
+  // bài kiểm lockfile > 1 MiB dưới đây làm chính helper này đứt trước, và
+  // khi đó test đỏ vì fixture chứ không vì code — đã gặp thật.
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (result.status !== 0) {
     throw new Error(`git ${args.join(' ')} thất bại: ${result.stderr || result.stdout}`);
   }
@@ -289,12 +292,15 @@ test('pnpm đỏ khi tạo lại: huỷ lần gộp, cây quay về nguyên tr�
   }
 });
 
-test('pnpm xanh nhưng lockfile còn dấu xung đột: coi là hỏng', () => {
+test('pnpm xanh nhưng lockfile SINH RA còn dấu xung đột: coi là hỏng', () => {
   const dir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-unit-'));
   try {
-    const pnpmCommand = fakePnpm(dir, 'exit 0');
-    const seed = '<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n';
-    const result = regenerateLockfile(dir, 'pnpm-lock.yaml', seed, { pnpmCommand });
+    // Bản mồi sạch — chỗ đang kiểm là ĐẦU RA, không phải đầu vào.
+    const pnpmCommand = fakePnpm(
+      dir,
+      'printf "<<<<<<< HEAD\\nours\\n=======\\ntheirs\\n>>>>>>> main\\n" > pnpm-lock.yaml\nexit 0',
+    );
+    const result = regenerateLockfile(dir, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n", { pnpmCommand });
     assert.equal(result.ok, false);
     assert.match(result.reason ?? '', /VẪN còn dấu xung đột/);
   } finally {
@@ -333,7 +339,129 @@ test('cổng --frozen-lockfile đỏ sau khi sinh: coi là hỏng, không nuốt
   }
 });
 
-test('bản mồi lấy từ MERGE_HEAD, và lệnh sinh mang đúng --no-frozen-lockfile', () => {
+test('bản mồi pnpm thấy ĐÚNG LÀ bản của MERGE_HEAD, không phải của HEAD', () => {
+  // Bài kiểm này đi qua `resolveAdditiveMerge` và chụp lại nội dung
+  // `pnpm-lock.yaml` ĐÚNG LÚC pnpm được gọi. Bản trước chỉ gọi thẳng
+  // `regenerateLockfile` với `seed` do chính nó dựng rồi khẳng định file
+  // bằng `seed` — tức là tự khẳng định thứ nó dựng sẵn. Kiểm bằng đột biến
+  // cho thấy bản đó xanh giả: đổi `MERGE_HEAD:` thành `HEAD:`, hoặc bỏ hẳn
+  // bản mồi (`seed = null`), đều KHÔNG làm test nào đỏ. Bảo đảm "không trôi
+  // phiên bản" vì thế chưa từng được kiểm. Đây là chỗ kiểm nó.
+  const dir = initWorkspace();
+  const binDir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-bin-'));
+  try {
+    makeLockfileConflict(dir);
+    const captured = join(binDir, 'seed-pnpm-nhin-thay.yaml');
+    // pnpm giả: chụp bản mồi ở lần gọi đầu, rồi để nguyên file (coi như
+    // không có gì phải đổi) để cổng --frozen-lockfile giả cũng xanh.
+    const pnpmCommand = fakePnpm(binDir, `[ -f "${captured}" ] || cp pnpm-lock.yaml "${captured}"\nexit 0`);
+
+    const result = resolveAdditiveMerge(dir, 'main', { pnpmCommand });
+    assert.equal(result.outcome, 'resolved', result.reason);
+
+    const seedSeen = readFileSync(captured, 'utf8');
+    const mergeHeadVersion = git(dir, ['show', 'main:pnpm-lock.yaml']);
+    const headVersion = git(dir, ['show', 'HEAD~1:pnpm-lock.yaml']);
+    assert.equal(seedSeen, mergeHeadVersion, 'pnpm phải thấy bản lockfile của MERGE_HEAD');
+    assert.notEqual(seedSeen, headVersion, 'fixture sai: hai bên có lockfile giống nhau');
+    assert.notEqual(seedSeen, '', 'bản mồi rỗng nghĩa là cơ chế chống trôi phiên bản đã mất');
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('lockfile lớn hơn 1 MiB: không bị cắt cụt, không thành aborted-error', () => {
+  // `spawnSync` mặc định cho stdout 1 MiB; vượt ngưỡng thì Node GIẾT tiến
+  // trình (`ENOBUFS`, `signal: SIGTERM`) và trả về stdout ĐÃ CẮT CỤT. Với
+  // `git show MERGE_HEAD:pnpm-lock.yaml` thì 1 MiB là ngưỡng mà mọi repo có
+  // phụ thuộc thật vượt qua — repo này mới 2,4 KB nên chưa lộ. Nếu không
+  // chặn, mọi xung đột lockfile thật sẽ ra `aborted-error` và PR nằm chờ
+  // người, tức là đúng thứ I-004 sinh ra để xoá.
+  const dir = initWorkspace();
+  const binDir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-bin-'));
+  try {
+    const filler = `# ${'x'.repeat(78)}\n`.repeat(24_000); // ~1,9 MiB
+    for (const [branch, marker] of [
+      ['main', 'main'],
+      ['feature', 'feature'],
+    ] as const) {
+      git(dir, ['checkout', '-q', branch]);
+      writeFileSync(join(dir, 'pnpm-lock.yaml'), `# ${marker}\n${filler}`, 'utf8');
+      git(dir, ['commit', '-q', '-am', `${branch}: lockfile lớn`]);
+    }
+    assertConflicts(dir, ['pnpm-lock.yaml']);
+
+    // pnpm giả để nguyên file: chỗ đang kiểm là đường ống git, không phải pnpm.
+    const pnpmCommand = fakePnpm(binDir, 'exit 0');
+    const result = resolveAdditiveMerge(dir, 'main', { pnpmCommand });
+    assert.equal(result.outcome, 'resolved', result.reason);
+
+    const committed = readFileSync(join(dir, 'pnpm-lock.yaml'), 'utf8');
+    const fromMergeHead = git(dir, ['show', 'main:pnpm-lock.yaml']);
+    assert.ok(committed.length > 1024 * 1024, 'fixture sai: lockfile chưa vượt 1 MiB');
+    assert.equal(committed.length, fromMergeHead.length, 'bản mồi bị cắt cụt');
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('lockfile KHÔNG ở gốc repo: dừng lại, vì pnpm chạy ở thư mục con không sinh lại nó', () => {
+  const dir = initWorkspace();
+  try {
+    // Cả hai bên cùng thêm một lockfile lồng, nội dung khác nhau → add/add.
+    for (const [branch, content] of [
+      ['main', 'noi-dung-cua-main\n'],
+      ['feature', 'noi-dung-cua-feature\n'],
+    ] as const) {
+      git(dir, ['checkout', '-q', branch]);
+      writeFileSync(join(dir, 'packages', 'a', 'pnpm-lock.yaml'), content, 'utf8');
+      git(dir, ['add', '-A']);
+      git(dir, ['commit', '-q', '-m', `${branch}: thêm lockfile lồng`]);
+    }
+
+    assertConflicts(dir, ['packages/a/pnpm-lock.yaml']);
+
+    const before = git(dir, ['rev-parse', 'HEAD']).trim();
+    const result = resolveAdditiveMerge(dir, 'main');
+    assert.equal(result.outcome, 'aborted-ineligible');
+    assert.match(result.reason ?? '', /không nằm ở gốc repo/);
+    assert.equal(git(dir, ['rev-parse', 'HEAD']).trim(), before);
+    assert.equal(git(dir, ['status', '--porcelain']).trim(), '');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('bản mồi còn dấu xung đột: dừng lại, vì pnpm sẽ lặng lẽ sinh lại từ số không', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-unit-'));
+  try {
+    const pnpmCommand = fakePnpm(dir, 'exit 0');
+    const seed = "<<<<<<< HEAD\nlockfileVersion: '9.0'\n=======\nlockfileVersion: '9.0'\n>>>>>>> main\n";
+    const result = regenerateLockfile(dir, 'pnpm-lock.yaml', seed, { pnpmCommand });
+    assert.equal(result.ok, false);
+    assert.equal(result.ineligible, true, 'ca này cần người, không phải lỗi kỹ thuật');
+    assert.match(result.reason ?? '', /bản mồi ở MERGE_HEAD còn dấu xung đột/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('pnpm nói nó đã vứt bản mồi: coi là thất bại, dù thoát 0', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-unit-'));
+  try {
+    // Đúng câu pnpm thật in ra khi nó bỏ bản mồi — đã đo bằng chạy thật.
+    const pnpmCommand = fakePnpm(dir, 'echo "WARN  Ignoring broken lockfile at /repo: khong phan giai duoc"\nexit 0');
+    const result = regenerateLockfile(dir, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n", { pnpmCommand });
+    assert.equal(result.ok, false);
+    assert.match(result.reason ?? '', /đã VỨT bản mồi/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('lệnh sinh mang đúng --no-frozen-lockfile, rồi mới tới lượt kiểm lại', () => {
   const dir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-unit-'));
   try {
     // pnpm giả chỉ ghi lại đối số của lần gọi đầu, rồi để nguyên file.

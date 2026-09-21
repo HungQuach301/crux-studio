@@ -30,14 +30,18 @@
  *    `origin/main`), không phải từ số không. `pnpm` giữ nguyên mọi phép
  *    phân giải còn thoả manifest và chỉ tính lại phần cần đổi, nên lockfile
  *    không trôi sang phiên bản mới của hàng trăm gói phụ thuộc gián tiếp.
+ *    Đó là giả định **G18**, đã kiểm bằng chạy thật với gói từ registry:
+ *    có bản mồi thì `semver@7.5.0` ở nguyên, không có thì nhảy lên
+ *    `7.8.5` — cùng một manifest `^7.0.0`.
  *    Chọn `main` vì đó là thân chung: cái gì đã vào `main` thì các PR khác
  *    cũng đang đứng trên đó.
- * 2. Sau khi sinh, chạy lại **đúng cổng mà CI dùng** —
- *    `pnpm install --frozen-lockfile` — trên chính cây vừa gộp. Cổng này đỏ
- *    khi lockfile lệch manifest, nên nó bắt được cả trường hợp `pnpm` chạy
- *    nhầm thư mục. Đã kiểm bằng đột biến: bỏ một khối `importers` khỏi
- *    lockfile thì cổng này thoát mã 1 với "specifiers in the lockfile don't
- *    match specifiers in package.json".
+ * 2. Sau khi sinh, chạy lại `pnpm install --frozen-lockfile` — cùng cờ mà
+ *    CI dùng ở bước cài đặt — trên chính cây vừa gộp. Đã kiểm bằng đột
+ *    biến, và ghi đúng những gì nó bắt được chứ không hơn: bỏ một khối
+ *    `importers` khỏi lockfile thì nó thoát mã 1 ("specifiers in the
+ *    lockfile don't match specifiers in package.json"), nhưng đổi một
+ *    `version: link:…` thành đường dẫn không tồn tại thì nó vẫn xanh. Tức
+ *    là cổng này bắt **lệch specifier**, không bắt lệch phép phân giải.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -53,6 +57,22 @@ export function isLockfile(file: string): boolean {
   return basename(file) === LOCKFILE_BASENAME;
 }
 
+/**
+ * Lockfile **ở gốc repo** — cái duy nhất tạo lại được.
+ *
+ * Một `pnpm-lock.yaml` nằm sâu trong cây là ca phải dừng lại, không phải ca
+ * tạo lại, và lý do là một cái bẫy im lặng đã đo được: gọi
+ * `pnpm install --lockfile-only` từ `packages/a` của một workspace thì pnpm
+ * **thoát 0 và không ghi gì** vào `packages/a/pnpm-lock.yaml` — nó làm việc
+ * với lockfile ở gốc workspace. Bản mồi vì thế vẫn nằm nguyên đó, không có
+ * dấu xung đột, và cổng `--frozen-lockfile` (kiểm lockfile GỐC) vẫn xanh.
+ * Kết quả: tool báo `ok`, rồi `git add` đúng bản của `MERGE_HEAD` và vứt
+ * lặng lẽ phía bên kia. Đúng nhóm lỗi Z.
+ */
+export function isRootLockfile(file: string): boolean {
+  return file === LOCKFILE_BASENAME;
+}
+
 export function isManifest(file: string): boolean {
   return MANIFEST_BASENAMES.has(basename(file));
 }
@@ -65,10 +85,25 @@ export interface RegenerateOptions {
 export interface RegenerateResult {
   ok: boolean;
   reason?: string;
+  /** `true`: ca cần người, không phải lỗi kỹ thuật. Caller trả `aborted-ineligible`. */
+  ineligible?: boolean;
 }
 
 /** Dấu xung đột của git ở đầu dòng. Không dùng `<<<` lỏng lẻo: YAML có thể chứa chuỗi đó. */
 const CONFLICT_MARKER = /^(<{7}|={7}|>{7})(\s|$)/m;
+
+/**
+ * Những câu `pnpm` nói khi nó **vứt bản mồi đi và sinh lại từ số không**.
+ * Đã đo, cả hai đều kèm `exit 0`:
+ *
+ * - `Ignoring broken lockfile at …` — lockfile không phân giải được;
+ * - `Merge conflict detected in pnpm-lock.yaml and successfully merged` —
+ *   bản mồi còn dấu xung đột.
+ *
+ * Cả hai đều làm bốc hơi bảo đảm "không trôi phiên bản" mà không gì đỏ, nên
+ * ở đây chúng là THẤT BẠI, không phải cảnh báo.
+ */
+const SEED_DISCARDED = /Ignoring broken lockfile|Merge conflict detected/i;
 
 function tail(text: string, lines = 12): string {
   return text.trim().split('\n').slice(-lines).join(' / ');
@@ -94,6 +129,18 @@ export function regenerateLockfile(
   const absolute = join(cwd, lockfilePath);
   const root = dirname(absolute);
 
+  // Bản mồi hỏng thì `pnpm` KHÔNG đỏ: nó chỉ nói một câu rồi sinh lại từ số
+  // không, và lockfile ra vẫn hợp lệ. Ca dễ gặp nhất là `main` lỡ mang một
+  // lockfile còn dấu xung đột (ai đó giải tay để sót). Bắt ở đây, trước khi
+  // ghi, vì sau khi `pnpm` chạy xong thì không còn dấu vết nào để bắt.
+  if (seed !== null && CONFLICT_MARKER.test(seed)) {
+    return {
+      ok: false,
+      ineligible: true,
+      reason: `${lockfilePath}: bản mồi ở MERGE_HEAD còn dấu xung đột — pnpm sẽ lặng lẽ bỏ nó và sinh lại từ số không, cần người`,
+    };
+  }
+
   if (seed === null) {
     rmSync(absolute, { force: true });
   } else {
@@ -114,6 +161,16 @@ export function regenerateLockfile(
       ok: false,
       reason: `${lockfilePath}: pnpm install --lockfile-only thất bại (mã ${generate.status ?? 'không chạy được'}): ${tail(
         `${generate.stdout ?? ''}\n${generate.stderr ?? ''}${generate.error ? `\n${generate.error.message}` : ''}`,
+      )}`,
+    };
+  }
+
+  const generateOutput = `${generate.stdout ?? ''}\n${generate.stderr ?? ''}`;
+  if (SEED_DISCARDED.test(generateOutput)) {
+    return {
+      ok: false,
+      reason: `${lockfilePath}: pnpm đã VỨT bản mồi và sinh lại từ số không — mọi phép phân giải cũ có thể đã trôi: ${tail(
+        generateOutput,
       )}`,
     };
   }

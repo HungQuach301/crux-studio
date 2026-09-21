@@ -32,7 +32,7 @@ import type { SpawnSyncReturns } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isLockfile, isManifest, regenerateLockfile } from './integrator-lockfile.ts';
+import { isLockfile, isManifest, isRootLockfile, regenerateLockfile } from './integrator-lockfile.ts';
 import type { RegenerateOptions } from './integrator-lockfile.ts';
 
 export type ResolveOutcome = 'clean' | 'resolved' | 'aborted-ineligible' | 'aborted-error';
@@ -43,14 +43,35 @@ export interface ResolveResult {
   reason?: string;
 }
 
+/**
+ * `maxBuffer` mặc định của Node là 1 MiB, và vượt ngưỡng thì `spawnSync`
+ * KHÔNG báo lỗi theo cách dễ thấy: nó giết tiến trình (`signal: SIGTERM`,
+ * `error.code: ENOBUFS`) và trả về stdout **đã bị cắt cụt**. Với
+ * `git show <ref>:pnpm-lock.yaml` thì 1 MiB là ngưỡng một repo có phụ
+ * thuộc thật vượt qua rất sớm — repo này mới 2,4 KB nên chưa lộ. Cũng vậy
+ * với `ops/logs/*.jsonl`: file append-only chỉ dài thêm theo thời gian.
+ * Nâng trần lên 64 MiB, và ở `gitOrThrow` coi `error` là thất bại thật —
+ * một stdout cắt cụt mà vẫn `status === 0` là đúng hình dạng nhóm lỗi Z.
+ */
+const GIT_MAX_BUFFER = 64 * 1024 * 1024;
+
 function git(cwd: string, args: string[]): SpawnSyncReturns<string> {
-  return spawnSync('git', args, { cwd, encoding: 'utf8' });
+  return spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER });
+}
+
+/** Cắt ngắn một thông điệp lỗi: `reason` đi thẳng vào log routine và bản tin. */
+function briefly(text: string, max = 600): string {
+  const trimmed = text.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}… (cắt bớt)`;
 }
 
 function gitOrThrow(cwd: string, args: string[]): string {
   const result = git(cwd, args);
+  if (result.error) {
+    throw new Error(`git ${args.join(' ')} không chạy trọn: ${briefly(result.error.message)}`);
+  }
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')} thất bại: ${result.stderr || result.stdout}`);
+    throw new Error(`git ${args.join(' ')} thất bại: ${briefly(result.stderr || result.stdout)}`);
   }
   return result.stdout;
 }
@@ -72,15 +93,23 @@ function numstat(cwd: string, base: string, side: string, file: string): Numstat
   return { added: Number(addedRaw), deleted: Number(deletedRaw), binary: false };
 }
 
-/** Nội dung của `file` tại `ref`, hoặc `''` nếu file không tồn tại ở đó (trường hợp add/add). */
-function showOrEmpty(cwd: string, ref: string, file: string): string {
-  const result = git(cwd, ['show', `${ref}:${file}`]);
-  return result.status === 0 ? result.stdout : '';
-}
-
 /** File có tồn tại ở `ref` không. */
 function existsAt(cwd: string, ref: string, file: string): boolean {
   return git(cwd, ['cat-file', '-e', `${ref}:${file}`]).status === 0;
+}
+
+/**
+ * Nội dung của `file` tại `ref`, hoặc `''` nếu file không tồn tại ở đó
+ * (trường hợp add/add).
+ *
+ * Hỏi `existsAt` TRƯỚC rồi mới `show`, thay vì coi mọi lỗi của `show` là
+ * "không có file": một lỗi khác — mất quyền đọc, hay ENOBUFS trước khi
+ * trần được nâng — từng biến thành base RỖNG, và base rỗng làm
+ * `merge-file --union` nhân đôi toàn bộ file mà không gì đỏ.
+ */
+function showOrEmpty(cwd: string, ref: string, file: string): string {
+  if (!existsAt(cwd, ref, file)) return '';
+  return gitOrThrow(cwd, ['show', `${ref}:${file}`]);
 }
 
 /**
@@ -162,6 +191,20 @@ function resolveAfterMergeAttempt(
   const additive = conflicted.filter((file) => !isLockfile(file));
 
   if (lockfiles.length > 0) {
+    // Chỉ lockfile ở GỐC repo mới tạo lại được — xem `isRootLockfile`. Một
+    // lockfile lồng sâu phải dừng ở đây, không được rơi xuống đường union
+    // (nó vẫn là file dẫn xuất) và càng không được "tạo lại" bằng một lệnh
+    // pnpm thoát 0 mà chẳng ghi gì.
+    const nested = lockfiles.find((file) => !isRootLockfile(file));
+    if (nested !== undefined) {
+      git(cwd, ['merge', '--abort']);
+      return {
+        outcome: 'aborted-ineligible',
+        files: conflicted,
+        reason: `${nested}: lockfile không nằm ở gốc repo — pnpm chạy ở thư mục con sẽ không sinh lại nó, cần người`,
+      };
+    }
+
     // Tạo lại lockfile nghĩa là sinh nó TỪ manifest của cây vừa gộp. Nếu
     // chính manifest còn đang xung đột thì cái "nguồn" đó chưa tồn tại —
     // union một `package.json` cho ra JSON hỏng, và sinh lockfile từ JSON
@@ -265,7 +308,11 @@ function resolveAfterMergeAttempt(
     const regenerated = regenerateLockfile(cwd, lock, seed, options);
     if (!regenerated.ok) {
       git(cwd, ['merge', '--abort']);
-      return { outcome: 'aborted-error', files: conflicted, reason: regenerated.reason };
+      return {
+        outcome: regenerated.ineligible === true ? 'aborted-ineligible' : 'aborted-error',
+        files: conflicted,
+        reason: regenerated.reason,
+      };
     }
     gitOrThrow(cwd, ['add', '--', lock]);
   }
