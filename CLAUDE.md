@@ -31,6 +31,7 @@ pnpm check                       # CỔNG CHÍNH: chạy tất cả mục dướ
 | `pnpm contracts` | Tự kiểm bộ schema trong `kernel/contracts/` và validate toàn bộ fixture |
 | `pnpm lint:deps` | Lint phụ thuộc (bất biến I3): xưởng chỉ được import `kernel/` |
 | `pnpm lint:workflows` | Kiểm cú pháp YAML và bash của `ops/workflows/*.yml` trước khi chúng tới GitHub |
+| `pnpm assumptions` | Kiểm sổ giả định: mỗi phần phụ thuộc phải thật sự ghi mã giả định của nó |
 | `pnpm typecheck` | `tsc --noEmit` trên toàn workspace |
 | `pnpm test` | `node --test` — unit test của kernel và của từng xưởng |
 | `pnpm replay` | Chạy lại tập vàng ở chế độ replay và so với snapshot |
@@ -91,6 +92,7 @@ Agent dùng danh tính GitHub của chủ dự án, nên quy ước này là d�
 - Mọi commit trên nhánh `claude/` mang trailer `Claude-Session: <url phiên>`, cùng với `Co-Authored-By`.
 - **Không được tắt** tính năng này (`attribution.sessionUrl`), không xoá trailer khỏi commit message, không sửa `.claude/settings.json` để bỏ nó.
 - Mô tả PR có link phiên.
+- Trailer này là **giả định G14** trong `docs/assumptions.md`, mới kiểm được một phần. Job `trailer-warn` của CI chính là cách kiểm phần còn lại.
 - CI chỉ **cảnh báo** khi thiếu trailer, không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì luật cứng sẽ chặn toàn bộ công việc. Cảnh báo vẫn phải được xử lý, không được bỏ qua lâu dài.
 - Không ghi tên hay mã model vào commit message, mô tả PR, comment code hay bất cứ thứ gì đẩy lên repo.
 
@@ -99,7 +101,7 @@ Agent dùng danh tính GitHub của chủ dự án, nên quy ước này là d�
 `docs/assumptions.md` ghi các giả định chịu tải **G1–G15** (CHARTER 11.2).
 
 - **Kiểm trước, dựa vào sau.** Không được xây một mục backlog trên giả định có độ tin cậy "suy luận" khi chưa kiểm xong. Ngoại lệ duy nhất: phương án dự phòng đã viết sẵn.
-- Mỗi phần của code, tài liệu hay workflow dựa vào một giả định phải **ghi mã giả định** ngay tại chỗ — comment `# G10`, dòng `> Phụ thuộc: G2` trong tài liệu, hoặc cột trong bảng. Nhờ đó khi giả định sai, tìm ra ngay phần bị ảnh hưởng.
+- Mỗi phần của code, tài liệu hay workflow dựa vào một giả định phải **ghi mã giả định** ngay tại chỗ — comment `# G10`, một dòng trong tài liệu, hoặc một ô trong bảng. Nhờ đó khi giả định sai, tìm ra ngay phần bị ảnh hưởng. **`pnpm assumptions` kiểm việc này:** file nào được liệt kê ở cột *Phần phụ thuộc* của sổ mà không nhắc tới mã giả định thì CI đỏ.
 - Phát hiện một giả định sai thì làm đủ bốn bước: ghi trạng thái **sai** vào sổ → có phương án dự phòng thì chuyển ngay (là quyết định `reversible`, ghi vào bản tin) → chưa có thì mở `🤖 [QĐ]` kèm danh sách phần bị ảnh hưởng → sửa CHARTER bằng PR `owner-merge` và ghi vào nhật ký thay đổi (CHARTER mục 14).
 - Kiểm một giả định bằng **chạy thật**, không bằng đọc tài liệu. Đọc tài liệu chỉ cho trạng thái "tài liệu nói vậy".
 - Routine integrator chạy lại các kiểm tra tự động của sổ mỗi thứ Hai.
