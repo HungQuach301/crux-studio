@@ -27,6 +27,17 @@ on:
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
+    inputs:
+      # P-010 · chế độ chạy thử, và là chế độ DUY NHẤT mà
+      # `smoke-workflows.yml` được phép gọi file này. Hàng rào nằm ở phía
+      # gọi, hai lớp độc lập trong `ops/scripts/smoke-workflows.ts`:
+      # `NEVER_REAL_DISPATCH` bắt theo tên file, `MERGE_PATTERNS` bắt theo
+      # nội dung. Thiếu `dry_run` ở đây thì bên gọi TỪ CHỐI gọi, chứ không
+      # rơi về chế độ thật — xem `planSmokeRuns` nhánh `refused`.
+      dry_run:
+        description: 'Chạy thử: xét đủ hàng đợi, in ra PR ĐỊNH merge, KHÔNG merge gì'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -34,8 +45,8 @@ permissions:
   actions: write
 
 # KF-004 push: merge ở đây sinh sự kiện `push` vào main, mà `main-ci.yml`,
-# `labels.yml` và `.github/workflows/sync-workflows.yml` đăng ký nghe. Cả ba
-# được gọi TƯỜNG MINH ở bước cuối job, theo danh sách mà
+# `labels.yml`, `smoke-workflows.yml` và `.github/workflows/sync-workflows.yml`
+# đăng ký nghe. Cả bốn được gọi TƯỜNG MINH ở bước cuối job, theo danh sách mà
 # `ops/invariants.post-merge-dispatch.ts` trả về.
 #
 # Trước D-C06, `ops/workflows/**` nằm trọn trong vùng `owner-merge`, nên
@@ -90,6 +101,7 @@ jobs:
           REPO: ${{ github.repository }}
           OWNER: HungQuach301
           NUMS: ${{ steps.queue.outputs.nums }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
           WORK="$RUNNER_TEMP/automerge"
@@ -153,6 +165,17 @@ jobs:
             echo "  $OUTCOME — $(echo "$DECISION" | jq -r .reason)"
             [ "$OUTCOME" != "merge" ] && continue
 
+            # Chạy thử dừng ở ĐÚNG đây và không sớm hơn: mọi thứ phía trên
+            # — hàng đợi, `mergeable` hỏi lại, tính lại cửa bằng
+            # `invariants.protected-area.ts`, quyết định của
+            # `invariants.merge-gate.ts` — đều đã chạy thật trên dữ liệu
+            # thật. Chỉ một lệnh duy nhất bị chặn, và đó là lệnh duy nhất
+            # không hoàn tác được.
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  CHẠY THỬ — ĐỊNH merge #$NUM (squash, sha $HEAD). KHÔNG merge."
+              continue
+            fi
+
             gh api -X PUT "repos/$REPO/pulls/$NUM/merge" \
               -f merge_method=squash \
               -f sha="$HEAD"
@@ -162,6 +185,11 @@ jobs:
 
           echo "merged=${MERGED# }" >> "$GITHUB_OUTPUT"
 
+      # Chế độ chạy thử không bao giờ tới được bước này: nó `continue`
+      # trước khi ghi vào `MERGED`, nên `steps.merge.outputs.merged` rỗng và
+      # điều kiện dưới đây sai. Đó là chủ đích — không merge thì cũng không
+      # có sự kiện `push` nào để thay thế, nên gọi các workflow này ở chế độ
+      # thử sẽ là gọi nhầm.
       - name: Gọi tay các workflow lẽ ra chạy theo sự kiện push
         if: steps.merge.outputs.merged != ''
         env:

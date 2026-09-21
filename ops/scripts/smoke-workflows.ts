@@ -206,6 +206,16 @@ export interface SmokePlan {
 }
 
 /**
+ * Tên file của chính workflow chạy thử. Nó phải tự loại mình ra khỏi kế
+ * hoạch, và lý do là một chỗ kẹt thật chứ không phải sự gọn gàng:
+ * `smoke-workflows.yml` khai `concurrency: smoke-workflows` để hai lần chạy
+ * thử không giẫm chân nhau. Nếu nó tự gọi mình rồi `gh run watch` chờ, lần
+ * chạy mới sẽ nằm trong hàng đợi của CHÍNH nhóm mà lần chạy đang chờ đang
+ * giữ — hai bên chờ nhau tới khi hết giờ.
+ */
+export const SELF_FILE = 'smoke-workflows.yml';
+
+/**
  * Quyết định gọi workflow nào, ở chế độ nào.
  *
  * Bốn nhánh, theo đúng thứ tự xét:
@@ -220,11 +230,21 @@ export interface SmokePlan {
  * 4. Không có `dry_run`, không bị cấm → gọi thường. `pnpm lint:workflows`
  *    đã cảnh báo về trường hợp này ở chỗ rẻ hơn (luật `dry-run`), nên tới
  *    đây là một lựa chọn có ý thức, không phải một chỗ sót.
+ *
+ * Trước cả bốn nhánh: chính `smoke-workflows.yml` bị loại — xem `SELF_FILE`.
  */
 export function planSmokeRuns(entries: readonly WorkflowSource[]): SmokePlan {
   const plan: SmokePlan = { dispatch: [], notDispatchable: [], refused: [] };
 
   for (const entry of entries) {
+    if (entry.file === SELF_FILE) {
+      plan.notDispatchable.push({
+        file: entry.file,
+        why: 'là chính workflow chạy thử, và nó đang chạy — tự gọi mình sẽ kẹt ở `concurrency` của chính nó. Lần chạy đang đọc dòng này CHÍNH LÀ phép thử của nó.',
+      });
+      continue;
+    }
+
     if (!hasWorkflowDispatch(entry.source)) {
       plan.notDispatchable.push({
         file: entry.file,
@@ -324,14 +344,16 @@ export function alertIssueBody(options: {
 
 // ── CLI ──────────────────────────────────────────────────────────────────
 //
-//   node ops/scripts/smoke-workflows.ts plan <thư-mục-workflow> <file-danh-sách>
+//   node ops/scripts/smoke-workflows.ts plan  <thư-mục-workflow> <file-danh-sách>
+//   node ops/scripts/smoke-workflows.ts alert <plan.json> <results.json> <sha> <runUrl> <owner>
 //
 // `<file-danh-sách>` là đầu ra của `git diff --name-only`, đường dẫn tính từ
 // gốc repo. Chỉ những dòng dưới `ops/workflows/` và có đuôi `.yml`/`.yaml`
 // mới được xét; `README.md` trong cùng thư mục vì thế bị bỏ qua.
 //
-// In ra JSON của `SmokePlan`. Không bao giờ in rỗng khi có file hợp lệ —
-// một kế hoạch rỗng nghĩa là không workflow nào vừa đổi.
+// `plan` in ra JSON của `SmokePlan`; `alert` in ra thân issue cảnh báo.
+// Hai lệnh, không phải một `node -e` trong YAML: bash trong workflow là
+// đúng thứ không kiểm được ở đây, nên càng ít logic nằm trong đó càng tốt.
 
 /** Lọc danh sách `git diff --name-only` xuống các workflow thật sự vừa đổi. */
 export function changedWorkflowFiles(changed: readonly string[]): string[] {
@@ -344,12 +366,39 @@ export function changedWorkflowFiles(changed: readonly string[]): string[] {
 
 const isMain = process.argv[1]?.endsWith('smoke-workflows.ts') === true;
 
-if (isMain) {
+const USAGE =
+  'Dùng:\n' +
+  '  node ops/scripts/smoke-workflows.ts plan  <thư-mục-workflow> <file-danh-sách-đã-đổi>\n' +
+  '  node ops/scripts/smoke-workflows.ts alert <plan.json> <results.json> <sha> <runUrl> <owner>\n';
+
+if (isMain && process.argv[2] === 'alert') {
+  const [planPath, resultsPath, sha, runUrl, owner] = process.argv.slice(3);
+  if (
+    planPath === undefined ||
+    resultsPath === undefined ||
+    sha === undefined ||
+    runUrl === undefined ||
+    owner === undefined
+  ) {
+    process.stderr.write(USAGE);
+    process.exit(2);
+  }
+  const plan = JSON.parse(readFileSync(planPath, 'utf8')) as SmokePlan;
+  const results = JSON.parse(readFileSync(resultsPath, 'utf8')) as SmokeResult[];
+  process.stdout.write(
+    alertIssueBody({
+      sha,
+      runUrl,
+      owner,
+      results,
+      notDispatchable: plan.notDispatchable,
+      refused: plan.refused,
+    }),
+  );
+} else if (isMain) {
   const [command, dir, changedPath] = process.argv.slice(2);
   if (command !== 'plan' || dir === undefined || changedPath === undefined) {
-    process.stderr.write(
-      'Dùng: node ops/scripts/smoke-workflows.ts plan <thư-mục-workflow> <file-danh-sách-đã-đổi>\n',
-    );
+    process.stderr.write(USAGE);
     process.exit(2);
   }
 
