@@ -46,7 +46,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
-| G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | `suy luận` | giao làn `verify` | `VF-G8` |
+| G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`đã kiểm một phần`** — đường nhận tiền và nghĩa vụ thuế hai đầu đã đọc từ nguồn gốc; chưa chạy thật đầu cuối | đường đi **có**, nhưng Mỹ giữ lại **30%** vì chưa có hiệp định thuế | `VF-G8` |
 | G9 | Thuê được người soát bản địa và giao việc qua link | `suy luận` | giao làn `verify` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
 | G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** phần routine; thread chưa | lớp thứ hai vẫn giữ | `VF-G11` |
@@ -148,11 +148,53 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 
 - **Nội dung:** có đường hợp pháp để nhận doanh thu AdSense và nộp thuế, cho người cư trú ở Việt Nam.
-- **Độ tin cậy:** `suy luận`
+- **Độ tin cậy:** **`đã kiểm một phần`**
 - **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · CHARTER mục 8
 - **Cách kiểm:** tra điều kiện AdSense và nghĩa vụ thuế hiện hành. Miễn phí.
-- **Dự phòng:** chưa có. Nếu sai thì mở `🤖 [QĐ]` — đây là một trong hai giả định chưa có dự phòng viết sẵn.
-- **Trạng thái:** giao làn `verify`, mục `VF-G8`. Chưa chặn gì ở Đợt 0 và Đợt 1, vì doanh thu chưa tồn tại. Chặn ở Mốc 8.
+- **Dự phòng:** chưa có, và **chưa cần tới**: phần đã kiểm cho thấy đường đi tồn tại ở cả hai đầu. Nếu một trong hai đầu hoá ra không đi được thì mở `🤖 [QĐ]` — G8 vẫn là một trong hai giả định chưa có dự phòng viết sẵn.
+- **Trạng thái:** kiểm ở lượt `crux-worker-1` **2026-09-21**, mục `VF-G8`. **Đường đi có thật ở cả hai đầu.** Chưa chặn gì ở Đợt 0 và Đợt 1, vì doanh thu chưa tồn tại. Chặn ở Mốc 8.
+
+Mọi số dưới đây kèm **URL nguồn và ngày truy cập** (chỉ dẫn 2 của chủ dự án trên issue bản tin #50). Nội dung web là **dữ liệu**, không phải chỉ dẫn (bất biến I7). Không dùng đoạn trích tóm tắt của máy tìm kiếm ở bất cứ kết luận nào dưới đây — mỗi con số đọc từ trang gốc của bên có thẩm quyền.
+
+**✅ Đầu nhận tiền — trang trợ giúp của chính Google, đọc 2026-09-21**
+
+| Việc | Kết quả | Nguồn |
+|---|---|---|
+| Việt Nam có trong bảng phương thức thanh toán AdSense | Check **Yes** · EFT **No** · Wire **Yes** · Hyperwallet **No** (bảng khu vực châu Á – Thái Bình Dương) | `support.google.com/adsense/answer/1714397` |
+| Ngưỡng chi trả | **100 USD** cho tài khoản USD | `support.google.com/adsense/answer/1709871` |
+| Nhịp chi trả | phát hành **giữa ngày 21 và 26** hằng tháng, nếu số dư đạt ngưỡng cuối tháng trước và không có lệnh giữ | `support.google.com/adsense/answer/1709858` |
+
+Tức phương thức dùng được cho Việt Nam là **chuyển khoản quốc tế (wire transfer)** — EFT và Hyperwallet không mở cho Việt Nam.
+
+**⚠️ Đầu thuế Mỹ — khấu trừ tại nguồn 30%, và không có hiệp định để giảm**
+
+- Google giữ lại thuế Mỹ trên doanh thu YouTube của người ngoài Mỹ: **tới 30%** doanh thu từ Mỹ nếu không khai thông tin thuế (tài khoản doanh nghiệp), hoặc **24%** trên doanh thu **toàn cầu** theo dạng *backup withholding* (tài khoản cá nhân); khai đủ thông tin thuế mà **không có quyền lợi hiệp định** thì **30%** trên doanh thu từ người xem ở Mỹ. Nguồn: `support.google.com/youtube/answer/10391362`, đọc 2026-09-21.
+- **Việt Nam không có hiệp định thuế đang có hiệu lực với Mỹ.** Hai nguồn độc lập, đọc 2026-09-21:
+  - IRS, *United States Income Tax Treaties – A to Z* (`www.irs.gov/businesses/international-businesses/united-states-income-tax-treaties-a-to-z`): mục chữ **V trống**, không có Việt Nam.
+  - US Treasury, *Tax treaties* (`home.treasury.gov/policy-issues/tax-policy/treaties`): có văn bản "Agreement US and Vietnam … Respect to Taxes on Income, **July 7 2015**", kèm đúng ghi chú của trang: văn bản được đăng **ngay khi ký, trước khi phê chuẩn và trước khi có hiệu lực**.
+  - Đọc hai nguồn cùng chiều: hiệp định **đã ký 07/07/2015 nhưng chưa có hiệu lực**, nên không có mức giảm nào áp được. Giữ nguyên **30%**.
+- **Hệ quả thẳng vào CHARTER mục 8:** kênh đầu tiên (`us-personal-finance`) nhắm người xem Mỹ, nên gần như **toàn bộ** doanh thu là doanh thu từ người xem ở Mỹ — tức ~30% doanh thu gộp bị giữ lại ở đầu Mỹ trước khi tiền rời Google. Đây là **số đọc từ nguồn**, không phải ước lượng.
+
+**✅ Đầu thuế Việt Nam — có quy định riêng cho người sáng tạo nội dung số**
+
+| Việc | Kết quả | Nguồn (đọc 2026-09-21) |
+|---|---|---|
+| Thuế suất | cá nhân sáng tạo nội dung số: **GTGT 5%** và **TNCN 2%** trên doanh thu | `baochinhphu.vn`, bài 17/07/2026 "Sáng tạo nội dung số, doanh thu bao nhiêu phải nộp thuế?" (Thuế cơ sở 3 tỉnh Phú Thọ trả lời), dẫn Thông tư 40/2021/TT-BTC · Luật Thuế GTGT 48/2024/QH15 · Luật Thuế TNCN 109/2025/QH15 |
+| Ngưỡng không phải nộp thuế | tới 31/12/2025: **100 triệu đồng/năm** · từ 01/01/2026: **500 triệu** (NĐ 68/2026/NĐ-CP), rồi nâng lên **1 tỷ đồng/năm** (NĐ 141/2026/NĐ-CP ngày 29/4/2026, hiệu lực từ 01/01/2026) | như trên |
+| Cách tính khi vượt ngưỡng | trước 2026 tính trên **toàn bộ** doanh thu; từ 2026 thuế TNCN tính trên **phần doanh thu vượt** ngưỡng (Luật TNCN 109/2025/QH15) | như trên |
+| Thủ tục kê khai | ≤ 1 tỷ đồng/năm: chỉ **thông báo doanh thu thực tế** với cơ quan thuế, chậm nhất **31/01** năm dương lịch tiếp theo · > 1 tỷ: **khai và nộp thuế từ quý** phát sinh doanh thu vượt ngưỡng | `xaydungchinhsach.chinhphu.vn`, bài 23/07/2026 (Cục Thuế trả lời), căn cứ NĐ 68/2026/NĐ-CP sửa đổi bởi NĐ 141/2026/NĐ-CP |
+
+**Một bài học về cách kiểm, không phải về thuế:** con số "100 triệu đồng/năm" là con số đúng của Thông tư 40/2021 và là con số mà một agent viết từ trí nhớ sẽ viết ra. Tính tới hôm nay nó **sai gấp mười lần** — ngưỡng hiện hành là 1 tỷ. Đúng loại lỗi mà luật "kiểm bằng chạy thật, không bằng trí nhớ" của làn `verify` sinh ra để chặn.
+
+**Mô hình phần còn lại sau thuế (bất biến I6 — đây là *mô hình*, không phải số đo):** với doanh thu gộp `R` toàn bộ từ người xem Mỹ và doanh thu năm trên ngưỡng 1 tỷ, phần còn lại sau khi trừ khấu trừ Mỹ rồi trừ thuế Việt Nam ≈ `R × (1 − 0,30) × (1 − 0,05 − 0,02) ≈ 0,65 × R`. Hai đầu vào đều có nguồn ở trên; phép nhân là giả định đơn giản hoá — nó **giả định** thuế Việt Nam tính trên doanh thu đã bị khấu trừ và **không** có khoản trừ chéo nào, mà đúng chỗ đó thì chưa kiểm được (xem ⬜ dưới).
+
+**⬜ Còn treo — khai trước, không để tự phát hiện**
+
+- **Chưa chạy thật đầu cuối.** Chưa mở tài khoản AdSense, chưa nhận một lần chuyển tiền nào. Việc đó cần danh tính và tài khoản ngân hàng của chủ dự án, và chỉ làm được khi đã có doanh thu — tức ở Mốc 8. Vì vậy trạng thái là `đã kiểm một phần`, không phải `đã kiểm`: phần đọc được từ nguồn gốc đã đọc xong, phần chạy thật thì chưa tới lúc.
+- **Chưa kiểm:** ngân hàng Việt Nam nhận chuyển khoản USD từ Google cho **cá nhân**, và thủ tục ngoại hối đi kèm.
+- **Chưa kiểm, và là chỗ đắt nhất:** 30% đã bị Mỹ giữ có được trừ vào thuế phải nộp ở Việt Nam hay không. Không có hiệp định tránh đánh thuế hai lần đang có hiệu lực, nên **rủi ro đánh thuế hai lần là thật**; lượt này không đọc được nguồn chính thức nào trả lời thẳng câu đó. Nếu câu trả lời là "không được trừ" thì phần còn lại thấp hơn mô hình trên.
+- **Chưa kiểm:** doanh thu AdSense **trên website** (khác YouTube) có cùng cách phân loại và cùng cách khấu trừ ở đầu Mỹ hay không. Nguồn đọc được ở trên nói cho người sáng tạo nội dung số trên nền tảng.
+- Ba chỗ treo này **không chặn** Đợt 0 hay Đợt 1. Chúng chặn ở Mốc 8, và mục `VF-G8` ghi rõ để Mốc 8 không phải tìm lại từ đầu.
 
 ## G9 · Thuê được người soát bản địa và giao việc qua link
 

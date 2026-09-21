@@ -75,9 +75,15 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - kiểm: tra điều kiện AdSense và nghĩa vụ thuế hiện hành.
 - dự phòng nếu sai: mở `🤖 [QĐ]`.
+- ✅ **Kiểm 2026-09-21** (lượt `crux-worker-1`), G8 chuyển `suy luận` → **`đã kiểm một phần`**. Kết quả đầy đủ kèm URL nguồn và ngày truy cập ở `docs/assumptions.md` mục `G8`; ba điểm chính:
+  - **Nhận tiền được.** Bảng phương thức thanh toán của chính AdSense xếp Việt Nam vào nhóm dùng **Check** và **Wire** (EFT và Hyperwallet **không** mở cho Việt Nam). Ngưỡng chi trả **100 USD**, phát hành giữa ngày 21 và 26 hằng tháng.
+  - **⚠️ Mỹ giữ lại 30%, và không giảm được.** Người ngoài Mỹ khai đủ thông tin thuế mà không có quyền lợi hiệp định thì bị khấu trừ **30%** doanh thu từ người xem ở Mỹ. Hiệp định thuế Mỹ–Việt **đã ký 07/07/2015 nhưng chưa có hiệu lực** — IRS không liệt kê Việt Nam trong danh sách hiệp định đang hiệu lực, còn US Treasury đăng văn bản kèm đúng ghi chú "đăng khi ký, trước khi phê chuẩn và có hiệu lực". Kênh đầu tiên nhắm người xem Mỹ nên khoản này chạm gần như toàn bộ doanh thu — số cho CHARTER mục 8, đọc từ nguồn chứ không ước lượng.
+  - **Nộp thuế ở Việt Nam có đường rõ ràng.** Cá nhân sáng tạo nội dung số: **GTGT 5% + TNCN 2%** trên doanh thu; ngưỡng không phải nộp thuế nay là **1 tỷ đồng/năm** (NĐ 141/2026/NĐ-CP), không còn là 100 triệu của Thông tư 40/2021. Dưới ngưỡng chỉ phải **thông báo doanh thu** chậm nhất 31/01 năm sau; trên ngưỡng thì khai và nộp từ quý vượt ngưỡng.
+- ⬜ **Còn treo, không chặn Đợt 0/1 — chặn ở Mốc 8:** chưa chạy thật đầu cuối (mở tài khoản và nhận một lần chuyển tiền cần danh tính chủ dự án và cần đã có doanh thu); chưa kiểm ngân hàng Việt Nam nhận chuyển khoản USD cho cá nhân và thủ tục ngoại hối; **chưa kiểm 30% đã bị Mỹ giữ có được trừ vào thuế Việt Nam không** — không có hiệp định đang hiệu lực nên rủi ro đánh thuế hai lần là thật; chưa kiểm doanh thu AdSense trên website (khác YouTube) có cùng cách xử lý không.
+- ghi chú về phương pháp: mục này **không** bị bức tường mạng của issue `#36` chặn nữa. Đo bằng chạy thật đầu lượt (`15:41Z`): `support.google.com` 200 · `adsense.google.com` 302 · `policies.google.com` 200 · `www.irs.gov` 200 · `luatvietnam.vn` 200. Mọi domain đã truy cập ghi ở `ops/network-domains.md` (chỉ dẫn 2 của chủ dự án trên issue bản tin #50).
 
 ### VF-G9 · Thuê người soát bản địa và giao việc qua link
 - deps: —
