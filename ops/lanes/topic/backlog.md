@@ -11,12 +11,13 @@ Trước khi xây kho dữ liệu, chứng minh **bằng bảng** rằng mỗi �
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec WP-009
 - tiêu chí xong:
-  - `packs/channels/us-personal-finance/topic-source-map.md` liệt kê mọi tham số của mỗi đề tài khởi đầu, kèm nguồn cụ thể (nhà công bố, mã chuỗi, tần suất, độ trễ công bố).
-  - Tham số nào không có nguồn công khai thì ghi rõ, và đề tài đó bị đánh dấu không khả thi.
-  - Không đề tài nào còn ô trống.
+  - ✅ `packs/channels/us-personal-finance/topic-source-map.md` liệt kê mọi tham số của mỗi đề tài khởi đầu, kèm nguồn cụ thể (nhà công bố, mã chuỗi/tài liệu, tần suất, độ trễ công bố) — mọi chuỗi/tài liệu đã xác nhận tồn tại thật bằng `WebSearch`/`WebFetch`, không viết từ trí nhớ.
+  - ✅ Tham số nào không có nguồn công khai thì ghi rõ, và đề tài đó bị đánh dấu không khả thi: đề tài 1 (biểu phí PMI), 2 (đường cong mất giá xe theo dòng), 6 (ngưỡng xét duyệt điểm tín dụng), 8 (tỷ lệ chi phí quỹ) — đúng bốn đề tài `data-sources.md` nhóm 3 đã biết trước, không thêm đề tài nào mới.
+  - ✅ Không đề tài nào còn ô trống — 12/12 đề tài có kết luận khả thi hoặc không khả thi kèm lý do.
+- **Kết quả Mốc 3:** 4/12 đề tài không khả thi, **không vượt** ngưỡng dừng "quá 4 trong 12" (spec dòng ~1808) — dự án đi tiếp. Ba đề tài (5, 9, 10) dùng một tham số là **đại lượng thay thế**, ghi rõ trong bảng, không trình bày như phép đo thật.
 - ⚠️ **Chặn từ phiên cloud, đo ngày 2026-09-21** (lượt trước): `curl` một lần mỗi đích: `fred.stlouisfed.org`, `api.stlouisfed.org`, `www.bls.gov`, `api.census.gov`, `www.census.gov`, `www.federalreserve.gov`, `www.huduser.gov` — tất cả `000`; `registry.npmjs.org` trả `200`. Cùng bức tường mạng của issue `#36`.
 - ✅ **Đo lại bằng chạy thật, cùng ngày 2026-09-21 (lượt `crux-worker-3` kế tiếp, phiên khác):** mạng **KHÔNG** còn chặn ở phiên này. `curl` tới `fred.stlouisfed.org` (200), `api.stlouisfed.org` (301), `www.federalreserve.gov` (200), `www.census.gov` (200), `www.huduser.gov` (202), `api.census.gov` (302) — tất cả nối được. `WebFetch` đọc được nội dung thật của `fred.stlouisfed.org/series/UNRATE` (số liệu, định nghĩa, tần suất — không phải trang chặn). Chỉ `www.bls.gov` trả `403`, nhiều khả năng BLS tự chặn bot ở phía họ (không phải egress phía sandbox — các đích liên bang khác đều qua). Kết luận: bức tường mạng **không đồng nhất giữa các phiên cloud** — không suy ra "còn chặn" từ một lần đo cũ, đo lại mỗi lượt trước khi coi mục này là `parked`. Đã ghi vào issue #36. Mục này đi tiếp được **ngay bây giờ**, không cần chờ #36.
 
