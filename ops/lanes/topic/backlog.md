@@ -17,18 +17,20 @@ Trước khi xây kho dữ liệu, chứng minh **bằng bảng** rằng mỗi �
   - `packs/channels/us-personal-finance/topic-source-map.md` liệt kê mọi tham số của mỗi đề tài khởi đầu, kèm nguồn cụ thể (nhà công bố, mã chuỗi, tần suất, độ trễ công bố).
   - Tham số nào không có nguồn công khai thì ghi rõ, và đề tài đó bị đánh dấu không khả thi.
   - Không đề tài nào còn ô trống.
+- ⚠️ **Chặn từ phiên cloud, đo ngày 2026-09-21** (ghi ở đây để lượt worker sau không tốn thêm một lượt vào cùng bức tường): mục này là *chỉ nghiên cứu và lập bảng*, mà không nguồn nào của nó nối được. `curl` một lần mỗi đích: `fred.stlouisfed.org`, `api.stlouisfed.org`, `www.bls.gov`, `api.census.gov`, `www.census.gov`, `www.federalreserve.gov`, `www.huduser.gov` — tất cả `000`; `registry.npmjs.org` trả `200`. WP-009 đòi mỗi ô "Có" kèm mã chuỗi cụ thể và **cấm** đề xuất nguồn không truy cập được công khai, nên bảng chỉ có thể viết từ trí nhớ — đúng loại bằng chứng đã làm bản C1 sai ba chỗ. Cùng bức tường mạng của issue `#36`, nên mục này đi tiếp được ngay khi `#36` được trả lời. Giữ `status: ready`, **không** chuyển `parked`: chặn nằm ở môi trường, không ở nội dung mục.
 
 ### T-002 · Chuyển Channel Pack từ spec vào `packs/channels/`
 Channel pack đầy đủ đang nằm trong spec tham chiếu. Chuyển sang `packs/` theo bảng chuyển đường dẫn để code đọc được, giữ nguyên nội dung nghiệp vụ.
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec phần Channel Pack; CHARTER 5.1
 - tiêu chí xong:
   - `channel-bible`, `persona`, `lexicon`, `data-sources`, `topic-map`, `thesis-bank` nằm trong `packs/channels/us-personal-finance/`.
   - `channel.json` mở rộng từ bản tối thiểu của Đợt 0, và `pnpm check` vẫn xanh.
   - Không copy phần nào có dấu **⚠️ Crux**.
+- ✅ **Xong, 2026-09-21** (PR `#38`): sáu file nội dung cộng `channel.json` mở rộng nằm trong `packs/channels/us-personal-finance/`. Không khối nào của spec phần I mang dấu ⚠️ Crux nên không phải bỏ phần nào. `channel.json` giữ khoá `locale` của Đợt 0 thay vì đổi sang `language` như spec, vì `kernel/src/packs.ts` đọc đúng tên đó; `pillars` đổi từ bộ tạm `[thresholds, tradeoffs, timing]` sang năm trụ nội dung của spec (không code nào đọc trường này — xưởng `topic` stub giữ hằng số `PILLARS` riêng của nó). Giá trị chưa điền để `null`: `displayName`, `googleAccount` cần chủ dự án; `ttsVoiceId` và `providers.*` bị chặn bởi G7 (`#36`) và bởi CHARTER 2.3 nhóm 3. `title-formulas`, `thumbnail-spec`, `distribution`, `monetization` để lại cho `R-001`; `visual-tokens.json` để lại cho `V-001`. `pnpm check` xanh 286/286, `pnpm replay` khớp snapshot 6/6.
 
 ### T-003 · Kho ảnh chụp dữ liệu có phiên bản
 Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập đầu, cùng adapter cho ba nhà cung cấp. **Không xây adapter tổng quát** — đó là tối ưu hoá sớm.
