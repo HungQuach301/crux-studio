@@ -141,6 +141,49 @@ Cách 2 hợp với báo động hơn: một cái `@nhắc` nằm ngay trong th�
 
 ---
 
+## Nhóm Z · Hỏng mà mọi chỉ báo đều xanh — rà soát có hệ thống
+
+**KF-001, KF-002 và KF-004 đều thuộc một nhóm**, và nhóm đó nguy hiểm hơn tổng ba mục cộng lại. Đặc điểm chung: **một bước im lặng không chạy, và không có gì đỏ.** Không phải "chạy rồi sai" — mà "không chạy, và chỗ đáng lẽ phải đỏ thì lại xanh vì không có gì để đỏ".
+
+Ba mục trên chỉ là ba lần nhóm này lộ ra. Bảng dưới là rà soát **tất cả** những chỗ còn lại trong repo nơi cùng chuyện đó xảy ra được. Nó được viết ra để đọc một lần rồi dựng máy kiểm, không phải để nhớ.
+
+### Vì sao nhóm này khác mọi nhóm khác
+
+Một bài kiểm bình thường trả lời câu "nó chạy có đúng không". Nhóm Z hỏi câu **trước đó**: "nó có chạy không". Không bài kiểm nào tự trả lời được câu đó về chính mình — một bộ kiểm không chạy thì cũng không báo là nó không chạy. Nên mọi cách phát hiện ở cột bên phải đều có chung một hình dạng: **một thứ ở ngoài đếm và so**, chứ không phải một thứ ở trong tự khai.
+
+Ba cách duy nhất có tác dụng, xếp theo thứ tự nên chọn:
+
+1. **So hai con số phải bằng nhau.** Số file test trên đĩa so với số file test thật sự chạy. Nội dung `ops/workflows/` so với nội dung `.github/workflows/`. Số PR đã merge so với số dòng log có `costUsd`.
+2. **Nhịp tim.** Một thứ phải xuất hiện đều đặn; vắng quá lâu là đỏ. Dùng khi không so được hai con số.
+3. **Cấm im lặng.** Mọi bước có điều kiện phải **in ra kết luận của nó** — "có nhãn fix, đã kiểm" hoặc "không có nhãn fix, bỏ qua" — và không bao giờ được `skipped` không lời.
+
+### Bảng rà soát
+
+| # | Chỗ | Thứ im lặng không chạy | Vì sao không gì đỏ | Cách phát hiện chủ động |
+|---|---|---|---|---|
+| **Z1** | Sự kiện do `GITHUB_TOKEN` sinh ra | Workflow nghe `issues`, `issue_comment`, `pull_request`, `push` sau một hành động của workflow khác | Sự kiện **không tồn tại**. Bên sinh ra `success`, bên tiêu thụ không có lần chạy nào để mà đỏ | ✅ **Đã có** — luật `brokenEventChains` trong `pnpm lint:workflows` (P-011). Ghép bên sinh với bên nghe, đỏ khi có cặp chưa khai |
+| **Z2** | `if:` của một bước hoặc một job | Bước kiểm bị `skipped`, job vẫn `success` | `skipped` **không phải** `failure`. Nhìn từ ngoài giống hệt đã kiểm và qua | P-009. Luật: bước có điều kiện phải **in ra kết luận**; thêm một luật linter đỏ khi một bước trong job kiểm bắt buộc có `if:` mà không có bước in kết luận đi kèm |
+| **Z3** | `.github/` lệch `ops/workflows/` | `sync-workflows.yml` không chạy, hoặc chạy hỏng vì PAT hết hạn | Bản **cũ** trong `.github/` vẫn chạy và vẫn xanh. Mọi thứ trông bình thường, chỉ là code mới chưa bao giờ có hiệu lực | **So hash.** `main-ci` chạy trên `main` đọc được cả hai thư mục: so nội dung từng file `ops/workflows/*.yml` với file cùng tên trong `.github/workflows/`. Lệch là đỏ. Không cần PAT, không cần quyền gì thêm |
+| **Z4** | PAT `WORKFLOW_SYNC_TOKEN` hết hạn | `sync-workflows.yml` | Trùng với Z3 về hệ quả, nhưng lộ sớm hơn nếu bắt riêng | Bước đầu của workflow dùng PAT **khẳng định secret không rỗng** và gọi một API rẻ để xác nhận token còn sống. Rỗng hoặc 401 là đỏ **và mở issue**, không phải bỏ qua |
+| **Z5** | Secret thiếu nói chung | Bất kỳ bước nào dùng `${{ secrets.X }}` | Biến nở thành chuỗi rỗng. Lệnh vẫn chạy, có khi vẫn exit 0 | Luật linter: workflow nhắc tới `secrets.X` thì phải có một bước khẳng định `X` không rỗng **trước** lần dùng đầu tiên |
+| **Z6** | `cron` không chạy | `main-ci.yml` (`17 * * * *` — dự phòng của G2), `watchdog.yml` | GitHub tạm ngưng workflow theo lịch khi repo im lặng lâu, và `cron` vốn là nỗ lực tốt nhất chứ không bảo đảm. Không chạy thì không có gì đỏ | **Nhịp tim.** `main-ci` ghi thời điểm chạy vào một file trong repo. Routine `crux-integrator` mỗi thứ Hai đọc file đó; cũ quá ngưỡng là mở issue `alert`. Hai cơ chế **khác họ** nhau nên không cùng chết |
+| **Z7** | Routine bị tắt, hết lượt, hoặc không nhận được việc | Cả một làn | Không có lần chạy nào để mà đỏ. Backlog đứng im trông giống backlog đã xong | `watchdog` hiện đếm PR merged. Bổ sung: đọc `ops/logs/<lane>.jsonl`, làn nào không có dòng mới quá ngưỡng thì liệt kê tên làn đó trong cảnh báo. Ngưỡng theo làn, vì các làn chạy nhịp khác nhau |
+| **Z8** | Nhãn `owner-merge` do `protected-area` gắn | Job gắn nhãn | Không gắn được nhãn thì `automerge` **không thấy** `owner-merge` và merge một PR chạm vùng bảo vệ. Bất biến I4 thủng, không gì đỏ | `automerge.yml` **từ chối merge** khi job `protected-area` chưa xanh **trên đúng SHA sắp merge**. Không đủ nếu chỉ kiểm "CI xanh" ở mức run |
+| **Z9** | `\|\| true` và `continue-on-error: true` | Một lệnh bất kỳ trong khối `run:` | Lỗi bị nuốt ngay tại chỗ, theo đúng thiết kế — vấn đề là nó ở chỗ không ai định | Luật linter: liệt kê **mọi** chỗ có `\|\| true` hoặc `continue-on-error` trong `ops/workflows/`, và đòi một comment ngay trên đó giải thích. Không giải thích là đỏ |
+| **Z10** | Thiếu `set -euo pipefail` | Mọi lệnh sau lệnh hỏng đầu tiên | Bash mặc định chạy tiếp và trả mã thoát của **lệnh cuối**. Script hỏng giữa chừng vẫn exit 0 | Luật linter: mọi khối `run: \|` nhiều dòng phải mở đầu bằng `set -euo pipefail`. Rẻ, máy kiểm được ngay, và bắt được một họ lỗi rộng |
+| **Z11** | Test có trên đĩa nhưng không nằm trong glob của `pnpm test` | Chính bài test | Bộ test xanh với ít test hơn nó tưởng. Không ai đếm nên không ai biết | **So hai con số.** Đếm file `*.test.ts` bằng `find`, so với số file `node --test` thật sự nạp. Lệch là đỏ |
+| **Z12** | Bộ kiểm sổ giả định đọc mục **cuối** tới hết file | Phần kiểm "có nói về dự phòng không", cho mục cuối | Nội dung cuối file (phần "Cách thêm một giả định") trôi vào thân mục cuối và mang theo chữ khoá, làm mục đó xanh sai. **Đã xảy ra thật với G15** — chỉ lộ ra khi thêm G16 đẩy nó khỏi vị trí cuối | Cắt mục ở dấu `---` thay vì ở hết file, kèm một test âm: một sổ có mục cuối **thiếu** dự phòng phải đỏ |
+| **Z13** | `pnpm replay` so snapshot | Chính phép so, nếu snapshot được cập nhật trong cùng PR | Snapshot mới khớp output mới, đương nhiên xanh. Phép so mất hết giá trị mà không báo gì | CHARTER 6.1 đã đòi `--update` đi trong **PR riêng**. Chưa có máy nào ép: thêm một job đỏ khi một PR vừa chạm `ops/golden/**` vừa chạm thứ khác |
+| **Z14** | Dòng log `costUsd` (bất biến I8) | Bước ghi log, khi lần chạy chết trước đó | Thiếu một dòng log không làm gì đỏ. Chi phí thật cao hơn chi phí thấy được, và ngân sách học trôi | So số PR đã merge theo làn với số dòng trong `ops/logs/<lane>.jsonl` cùng khoảng thời gian. Lệch quá ngưỡng thì báo trong bản tin ngày |
+
+### Cái giá của việc không làm
+
+Ba mục đã lộ ra (KF-001, KF-002, KF-004) đều **chỉ lộ ra vì có người bấm tay** — không mục nào được máy tìm thấy. Đó là con số đáng lo nhất trong sổ này: tỉ lệ tự phát hiện của nhóm Z hiện là **0/3**.
+
+Rà soát này thành mục `P-014` trong `ops/lanes/platform/backlog.md`. Thứ tự làm theo giá trên mỗi đồng: **Z10 → Z11 → Z3 → Z5 → Z9** trước (đều là luật máy kiểm rẻ, viết một lần chạy mãi), rồi tới Z2, Z8, Z13 (gắn vào CI), cuối cùng Z6, Z7, Z14 (cần nhịp tim và ngưỡng, phải chỉnh dần).
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
