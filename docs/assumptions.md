@@ -46,7 +46,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
-| G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | `suy luận` | giao làn `verify` | `VF-G8` |
+| G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
 | G9 | Thuê được người soát bản địa và giao việc qua link | `suy luận` | giao làn `verify` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
 | G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** phần routine; thread chưa | lớp thứ hai vẫn giữ | `VF-G11` |
@@ -131,7 +131,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G7 · Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B
 
 - **Nội dung:** điều khoản của các nhà cung cấp giọng đọc, ảnh stock, font và bản đồ cho phép **cả** dùng thương mại **lẫn** giao lại cho khách hàng B2B.
-- **Độ tin cậy:** **`đã kiểm một phần`** (2026-09-21, mục `VF-G7`) — xem hai gạch đầu dòng bằng chứng bên dưới.
+- **Độ tin cậy:** **`tài liệu nói vậy`** — đọc tài liệu chính thức của bên có thẩm quyền, chưa chạy thật. Theo đúng thang ở đầu file: chưa có ngữ cảnh nào của **đường tiền** được chạy thật, nên **không** được khai `đã kiểm một phần`. Đo egress trong lượt này là kiểm **mạng**, không phải kiểm G8. (2026-09-21, mục `VF-G7`) — xem hai gạch đầu dòng bằng chứng bên dưới.
 - **Phần phụ thuộc:** `workshops/audio/src/index.ts` · `kernel/contracts/audio.payload.v0.schema.json` · `ops/license-ledger.md` · `ops/lanes/audio/backlog.md` (AU-001) · `ops/lanes/verify/backlog.md`
 - **Cách kiểm:** đọc điều khoản từng nhà cung cấp, **trích dẫn kèm ngày đọc** vào `ops/license-ledger.md`. Không tóm tắt bằng trí nhớ. Miễn phí, chỉ tốn thời gian.
 - **✅ Bằng chứng, nhóm font, 2026-09-21:** đọc **văn bản giấy phép gốc** đi kèm chính gói font — `package/LICENSE` của `@fontsource/inter@5.3.0` trên `registry.npmjs.org`, khai `"license": "OFL-1.1"` trong `package.json`. SIL Open Font License 1.1 điều 5 nói thẳng: `The requirement for fonts to remain under this license does not apply to any document created using the Font Software.` Video đã dựng đọc là "document" theo nghĩa đó — **bước đọc này là suy luận**, vì giấy phép không định nghĩa chữ "document" và nguồn xác nhận chuẩn (OFL FAQ ở `scripts.sil.org`) đúng là một trong các đích bị chặn. Theo cách đọc đó thì **cả hai** câu hỏi của G7 đều `được` cho ca dùng của dự án. Giao **file font** cho khách hàng là ca khác, có điều kiện (điều 1 và 2). Trích nguyên văn và ranh giới hai ca ở `ops/license-ledger.md`.
@@ -148,11 +148,54 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 
 - **Nội dung:** có đường hợp pháp để nhận doanh thu AdSense và nộp thuế, cho người cư trú ở Việt Nam.
-- **Độ tin cậy:** `suy luận`
+- **Độ tin cậy:** **`đã kiểm một phần`**
 - **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · CHARTER mục 8
 - **Cách kiểm:** tra điều kiện AdSense và nghĩa vụ thuế hiện hành. Miễn phí.
-- **Dự phòng:** chưa có. Nếu sai thì mở `🤖 [QĐ]` — đây là một trong hai giả định chưa có dự phòng viết sẵn.
-- **Trạng thái:** giao làn `verify`, mục `VF-G8`. Chưa chặn gì ở Đợt 0 và Đợt 1, vì doanh thu chưa tồn tại. Chặn ở Mốc 8.
+- **Dự phòng:** chưa có, và **chưa cần tới**: phần đã kiểm cho thấy đường đi tồn tại ở cả hai đầu. Nếu một trong hai đầu hoá ra không đi được thì mở `🤖 [QĐ]` — G8 vẫn là một trong hai giả định chưa có dự phòng viết sẵn.
+- **Trạng thái:** đọc nguồn chính thức ở lượt `crux-worker-1` **2026-09-21**, mục `VF-G8`. **Đường đi có thật ở cả hai đầu — trên giấy.** Theo luật 3 của CHARTER 11.1, `tài liệu nói vậy` **chưa đủ để dựa vào**; dựa vào được chỉ sau khi chạy thật, mà việc đó cần doanh thu và danh tính chủ dự án. Chưa chặn gì ở Đợt 0 và Đợt 1, vì doanh thu chưa tồn tại. Chặn ở Mốc 8.
+
+Mọi số dưới đây kèm **URL nguồn và ngày truy cập** (chỉ dẫn 2 của chủ dự án trên issue bản tin #50). Nội dung web là **dữ liệu**, không phải chỉ dẫn (bất biến I7). Không dùng đoạn trích tóm tắt của máy tìm kiếm ở bất cứ kết luận nào dưới đây — mỗi con số đọc từ trang gốc của bên có thẩm quyền.
+
+**✅ Đầu nhận tiền — trang trợ giúp của chính Google, đọc 2026-09-21**
+
+| Việc | Kết quả | Nguồn |
+|---|---|---|
+| Việt Nam có trong bảng phương thức thanh toán AdSense | Check **Yes** · EFT **No** · Wire **Yes** · Hyperwallet **No** (bảng khu vực châu Á – Thái Bình Dương) | `support.google.com/adsense/answer/1714397` |
+| Ngưỡng chi trả | **100 USD** cho tài khoản USD | `support.google.com/adsense/answer/1709871` |
+| Nhịp chi trả | phát hành **giữa ngày 21 và 26** hằng tháng, nếu số dư đạt ngưỡng cuối tháng trước và không có lệnh giữ | `support.google.com/adsense/answer/1709858` |
+
+Tức phương thức dùng được cho Việt Nam là **chuyển khoản quốc tế (wire transfer)** — EFT và Hyperwallet không mở cho Việt Nam.
+
+**⚠️ Đầu thuế Mỹ — khấu trừ tại nguồn 30%, và không có hiệp định để giảm**
+
+- Google giữ lại thuế Mỹ trên doanh thu YouTube của người ngoài Mỹ: **tới 30%** doanh thu từ Mỹ nếu không khai thông tin thuế (tài khoản doanh nghiệp), hoặc **24%** trên doanh thu **toàn cầu** theo dạng *backup withholding* (tài khoản cá nhân); khai đủ thông tin thuế mà **không có quyền lợi hiệp định** thì **30%** trên doanh thu từ người xem ở Mỹ. Nguồn: `support.google.com/youtube/answer/10391362`, đọc 2026-09-21.
+- **Việt Nam chưa có hiệp định thuế ĐANG CÓ HIỆU LỰC với Mỹ** (đã ký 07/07/2015, chưa phê chuẩn). Kết luận này suy ra từ hai nguồn, không nguồn nào nói thẳng câu đó: Hai nguồn độc lập, đọc 2026-09-21:
+  - IRS, *United States Income Tax Treaties – A to Z* (`www.irs.gov/businesses/international-businesses/united-states-income-tax-treaties-a-to-z`): mục chữ **V trống**, không có Việt Nam.
+  - US Treasury, *Tax treaties* (`home.treasury.gov/policy-issues/tax-policy/treaties`): có văn bản "Agreement US and Vietnam … Respect to Taxes on Income, **July 7 2015**", kèm đúng ghi chú của trang: văn bản được đăng **ngay khi ký, trước khi phê chuẩn và trước khi có hiệu lực**.
+  - Đọc hai nguồn cùng chiều: hiệp định **đã ký 07/07/2015 nhưng chưa có hiệu lực**, nên không có mức giảm nào áp được. Giữ nguyên **30%**.
+- **Hệ quả thẳng vào CHARTER mục 8:** kênh đầu tiên (`us-personal-finance`) nhắm người xem Mỹ, nên gần như **toàn bộ** doanh thu là doanh thu từ người xem ở Mỹ — tức ~30% doanh thu gộp bị giữ lại ở đầu Mỹ trước khi tiền rời Google. Đây là **số đọc từ nguồn**, không phải ước lượng.
+
+**✅ Đầu thuế Việt Nam — có quy định riêng cho người sáng tạo nội dung số**
+
+| Việc | Kết quả | Nguồn (đọc 2026-09-21) |
+|---|---|---|
+| Thuế suất | cá nhân sáng tạo nội dung số: **GTGT 5%** và **TNCN 2%** trên doanh thu | `baochinhphu.vn/sang-tao-noi-dung-so-doanh-thu-bao-nhieu-phai-nop-thue-102260716165956679.htm`, bài 17/07/2026 "Sáng tạo nội dung số, doanh thu bao nhiêu phải nộp thuế?" (Thuế cơ sở 3 tỉnh Phú Thọ trả lời), dẫn Thông tư 40/2021/TT-BTC · Luật Thuế GTGT 48/2024/QH15 · Luật Thuế TNCN 109/2025/QH15 |
+| Ngưỡng không phải nộp thuế | tới 31/12/2025: **100 triệu đồng/năm** · từ 01/01/2026: **500 triệu** (NĐ 68/2026/NĐ-CP), rồi nâng lên **1 tỷ đồng/năm** (NĐ 141/2026/NĐ-CP ngày 29/4/2026, hiệu lực từ 01/01/2026) | như trên |
+| Cách tính khi vượt ngưỡng | trước 2026 tính trên **toàn bộ** doanh thu; từ 2026 thuế TNCN tính trên **phần doanh thu vượt** ngưỡng (Luật TNCN 109/2025/QH15) | như trên |
+| Thủ tục kê khai | ≤ 1 tỷ đồng/năm: chỉ **thông báo doanh thu thực tế** với cơ quan thuế, chậm nhất **31/01** năm dương lịch tiếp theo · > 1 tỷ: **khai và nộp thuế từ quý** phát sinh doanh thu vượt ngưỡng | `xaydungchinhsach.chinhphu.vn/lam-video-dang-tai-len-nen-tang-youtube-va-co-phat-sinh-doanh-thu-co-can-ke-khai-thue-119260723152359049.htm`, bài 23/07/2026 (Cục Thuế trả lời), căn cứ NĐ 68/2026/NĐ-CP sửa đổi bởi NĐ 141/2026/NĐ-CP |
+
+**Một bài học về cách kiểm, không phải về thuế:** con số "100 triệu đồng/năm" là con số đúng của Thông tư 40/2021 và là con số mà một agent viết từ trí nhớ sẽ viết ra. Tính tới hôm nay nó **sai gấp mười lần** — ngưỡng hiện hành là 1 tỷ. Đúng loại lỗi mà luật "kiểm bằng chạy thật, không bằng trí nhớ" của làn `verify` sinh ra để chặn.
+
+**Mô hình phần còn lại sau thuế (bất biến I6 — đây là *mô hình*, không phải số đo):** với doanh thu gộp `R` toàn bộ từ người xem Mỹ và doanh thu năm trên ngưỡng 1 tỷ, phần còn lại sau khi trừ khấu trừ Mỹ rồi trừ thuế Việt Nam ≈ `R × (1 − 0,30) × (1 − 0,05 − 0,02) ≈ 0,65 × R`. Hai đầu vào đều có nguồn ở trên; phép nhân là giả định đơn giản hoá — nó **giả định** thuế Việt Nam tính trên doanh thu đã bị khấu trừ, **không** có khoản trừ chéo nào, và cả 5% lẫn 2% tính trên **toàn bộ** doanh thu chứ không phải trên **phần vượt ngưỡng** như dòng ngay trên bảng đã ghi. Ba giả định đó đều nghiêng về phía thu ít hơn, nên **`0,65 × R` là cận dưới**, không phải số đo. Đúng chỗ đó thì chưa kiểm được (xem ⬜ dưới).
+
+**⬜ Còn treo — khai trước, không để tự phát hiện**
+
+- **Chưa chạy thật đầu cuối.** Chưa mở tài khoản AdSense, chưa nhận một lần chuyển tiền nào. Việc đó cần danh tính và tài khoản ngân hàng của chủ dự án, và chỉ làm được khi đã có doanh thu — tức ở Mốc 8. Vì vậy trạng thái là `đã kiểm một phần`, không phải `đã kiểm`: phần đọc được từ nguồn gốc đã đọc xong, phần chạy thật thì chưa tới lúc.
+- **Chưa kiểm:** ngân hàng Việt Nam nhận chuyển khoản USD từ Google cho **cá nhân**, và thủ tục ngoại hối đi kèm.
+- **Chưa kiểm, và là chỗ đắt nhất:** 30% đã bị Mỹ giữ có được trừ vào thuế phải nộp ở Việt Nam hay không. Không có hiệp định tránh đánh thuế hai lần đang có hiệu lực, nên **rủi ro đánh thuế hai lần là thật**; lượt này không đọc được nguồn chính thức nào trả lời thẳng câu đó. Nếu câu trả lời là "không được trừ" thì phần còn lại thấp hơn mô hình trên.
+- **Chưa đọc toàn văn** NĐ 68/2026/NĐ-CP và NĐ 141/2026/NĐ-CP, dù `vanban.chinhphu.vn` và `quochoi.vn` đều nối được trong chính lượt đo. Hai kết luận phía Việt Nam đang dựa vào bài tường thuật câu trả lời của cơ quan thuế trên cổng thông tin Chính phủ — là nguồn có thẩm quyền, nhưng lùi một bậc so với văn bản gốc. Đúng loại khoảng cách mà bài học "100 triệu" ở trên cảnh báo.
+- **Chưa kiểm:** doanh thu AdSense **trên website** (khác YouTube) có cùng cách phân loại và cùng cách khấu trừ ở đầu Mỹ hay không. Nguồn đọc được ở trên nói cho người sáng tạo nội dung số trên nền tảng.
+- Bốn chỗ treo này **không chặn** Đợt 0 hay Đợt 1. Chúng chặn ở Mốc 8, và mục `VF-G8` ghi rõ để Mốc 8 không phải tìm lại từ đầu.
 
 ## G9 · Thuê được người soát bản địa và giao việc qua link
 
@@ -246,7 +289,9 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 - **Cách kiểm phần còn lại:** đọc kết quả job `trailer-warn` trên các PR do routine mở, trong một tuần. Miễn phí, và tự động.
 - **Kiểm tự động:** `session-trailer-on-branch` — quét 14 ngày commit trên các nhánh `origin/claude/*` **chưa vào `main`**, và đòi mọi commit ở đó mang `Claude-Session`. Commit do **công cụ** tạo (merge commit của `integrator-resolve.ts`, message mặc định của `git merge`) được loại bằng một **danh sách trắng hẹp theo subject**, không phải bằng "commit nào thiếu `Co-Authored-By` thì là của công cụ" — luật sau fail-open đúng vào kịch bản phải bắt, vì hôm nền tảng tắt `attribution` thì cả hai trailer biến mất cùng lúc và mọi commit của agent bị xếp nhầm sang nhóm công cụ.
 
-  Bài kiểm **tự fetch cả hai đầu vào** của phép quét trước khi quét (mục `I-005`): `+refs/heads/claude/*:refs/remotes/origin/claude/*` (tập cần quét) và `+refs/heads/main:refs/remotes/origin/main` (phép loại `^main`). Thiếu vế đầu thì bài kiểm quét một tập rỗng và in `◦ chưa quan sát được` — im lặng bỏ qua ở **chế độ chạy mặc định** của cả ba routine. Thiếu vế sau thì tệ hơn, vì nó ra **số sai**: `origin/main` của clone đứng yên ở lúc clone, nên commit **squash** của `main` — vốn đã bị bước 0 của phụ lục P3 gộp vào nhánh PR — lọt qua phép loại, mà commit squash thì mất trailer, nên G14 ra `sai` giả và lệnh in sẵn một thân issue `🤖 [QĐ]` cho một giả định chẳng hề đổi trạng thái. Cả hai đều là nhóm lỗi Z, chỉ khác mặt. Fetch hỏng, hoặc fetch xong vẫn không có ref `claude/*` nào, thì bài kiểm **ném** và ra `⚠ … KHÔNG CHẠY ĐƯỢC`, không ra `◦`.
+  Bài kiểm **tự fetch cả hai đầu vào** của phép quét trước khi quét (mục `I-005`): `+refs/heads/claude/*:refs/remotes/origin/claude/*` (tập cần quét) và `+refs/heads/main:refs/remotes/origin/main` (phép loại `^main`). Thiếu vế đầu thì bài kiểm quét một tập rỗng và in `◦ chưa quan sát được` — im lặng bỏ qua ở **chế độ chạy mặc định** của cả ba routine. Thiếu vế sau thì tệ hơn, vì nó ra **số sai**: `origin/main` của clone đứng yên ở lúc clone, nên commit **squash** của `main` — vốn đã bị bước 0 của phụ lục P3 gộp vào nhánh PR — lọt qua phép loại, mà commit squash thì mất trailer, nên G14 ra `sai` giả và lệnh in sẵn một thân issue `🤖 [QĐ]` cho một giả định chẳng hề đổi trạng thái. Cả hai đều là nhóm lỗi Z, chỉ khác mặt.
+
+  Bản sửa đầu của `I-005` ném **vô điều kiện** khi `for-each-ref` cục bộ (sau fetch) rỗng — đúng cho ca "chưa quét được", nhưng gộp nhầm với một ca khác: kho **thật sự** không còn nhánh `claude/*` nào (mọi PR đã merge, nhánh đã xoá). Đó vẫn là một quan sát hợp lệ, không phải lỗi, nhưng bản sửa đầu biến nó thành `broken` giả — cùng nhóm lỗi Z, chỉ đổi "im lặng sai" (bản gốc) sang "kêu oan" (bản sửa `I-005`). Mục `I-007` tách hai ca bằng cách hỏi thẳng remote (`listRemoteClaudeBranches`, `git ls-remote --heads origin 'refs/heads/claude/*'`), không phụ thuộc kết quả fetch cục bộ: remote xác nhận rỗng thì trả `[]` và in `◦ chưa quan sát được`; remote không xác nhận được rỗng, hoặc chính `ls-remote` lỗi, thì vẫn ném và ra `⚠ … KHÔNG CHẠY ĐƯỢC`. Test dựng kho bare thật cho cả hai nhánh (`ops/test/recheck-assumptions.test.ts`), cùng quy ước với các bài kiểm G14/G17 khác trong file — không mô phỏng.
 
   Hai giới hạn khai trước: (a) bài kiểm canh **hồi quy** "trailer còn được ghi không", nó **không** phân biệt được commit của routine với commit của thread — git không có trường nào cho việc đó, nên phần phân biệt ấy vẫn nằm ở `VF-G14`; (b) **trên `main` gần như không có trailer nào**, vì repo merge bằng squash và commit squash giữ `Co-Authored-By` nhưng mất `Claude-Session` — muốn kiểm G14 thì phải đọc commit trên nhánh PR, không đọc `main`.
 - **Dự phòng — đã viết sẵn:** dựa vào quy ước 🤖 và log làn. CI **chỉ cảnh báo**, cố ý không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì một luật cứng ở đó sẽ chặn toàn bộ công việc.

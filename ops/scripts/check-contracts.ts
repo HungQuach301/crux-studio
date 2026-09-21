@@ -10,7 +10,7 @@
  * 3. Phong bì giữ đủ các trường của CHARTER 5.2, không thừa không thiếu.
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
  * 5. Fixture `input.json` nạp pack từ `packs/` và không mang bản sao cấu
- *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008`).
+ *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008` và `I-009`).
  * 6. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
  * 7. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
  */
@@ -158,6 +158,6 @@ if (problems.length > 0) {
 
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
-    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/, ` +
+    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng, ` +
     `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json.\n`,
 );

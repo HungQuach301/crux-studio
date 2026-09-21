@@ -58,6 +58,11 @@ function initWorkspace(): string {
   git(dir, ['config', 'user.email', 'test@example.invalid']);
   git(dir, ['config', 'user.name', 'Test']);
   writeManifest(dir, 'root');
+  // `node_modules/` phải được bỏ qua như ở repo thật: từ mục `I-006`, cổng
+  // lockfile sau khi gộp là một lần CÀI THẬT, nên nó để lại `node_modules/`
+  // trong cây. Thiếu dòng này, bài kiểm "cây sạch sau khi gộp" dưới đây đỏ
+  // vì fixture, không vì code.
+  writeFileSync(join(dir, '.gitignore'), 'node_modules/\n', 'utf8');
   writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n', 'utf8');
   writeFileSync(join(dir, 'shared.log'), 'dong-goc-1\n', 'utf8');
   for (const name of ['a', 'b', 'c', 'd']) {

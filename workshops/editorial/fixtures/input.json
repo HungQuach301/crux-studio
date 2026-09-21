@@ -1,84 +1,13 @@
 {
-  "$note": "🤖 Fixture chạy độc lập xưởng editorial (CHARTER 5.4): node workshops/editorial/src/run.ts --input workshops/editorial/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel — fixture KHÔNG chép pack (mục integration/I-008).",
+  "$note": "🤖 Fixture chạy độc lập xưởng editorial (CHARTER 5.4): node workshops/editorial/src/run.ts --input workshops/editorial/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel (mục integration/I-008); artifact đầu vào nạp từ snapshot tập vàng theo upstreamFrom, KHÔNG chép vào đây — bản chép trôi mà không gì đỏ (mục integration/I-009, hàng Z16 của ops/known-failures.md).",
   "episodeId": "ep-0001-stub",
   "channel": "us-personal-finance",
   "genre": "data-explainer",
   "locale": "en-US",
-  "upstream": {
-    "topic": {
-      "schemaVersion": "0",
-      "kind": "topic.brief",
-      "producer": {
-        "workshop": "topic",
-        "version": "0.0.0-stub",
-        "impl": "stub"
-      },
-      "episodeId": "ep-0001-stub",
-      "channel": "us-personal-finance",
-      "genre": "data-explainer",
-      "locale": "en-US",
-      "inputsHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "inputs": [],
-      "createdAt": "2026-09-20T00:00:00.000Z",
-      "costUsd": 0,
-      "status": "ok",
-      "payload": {
-        "selected": {
-          "id": "T-582-0",
-          "question": "At what point does option 1 stop being the better answer for a US household?",
-          "pillar": "timing",
-          "matrixFeasible": true
-        },
-        "candidates": [
-          {
-            "id": "T-582-0",
-            "question": "At what point does option 1 stop being the better answer for a US household?",
-            "totalScore": 80
-          },
-          {
-            "id": "T-582-1",
-            "question": "At what point does option 2 stop being the better answer for a US household?",
-            "totalScore": 73
-          },
-          {
-            "id": "T-582-2",
-            "question": "At what point does option 3 stop being the better answer for a US household?",
-            "totalScore": 66
-          }
-        ],
-        "claims": [
-          {
-            "id": "C1",
-            "statement": "Stub claim 1 for ep-0001-stub: the crossover point moves with parameter 1.",
-            "evidence": {
-              "kind": "model",
-              "ref": "M-STUB-1"
-            }
-          },
-          {
-            "id": "C2",
-            "statement": "Stub claim 2 for ep-0001-stub: the crossover point moves with parameter 2.",
-            "evidence": {
-              "kind": "model",
-              "ref": "M-STUB-2"
-            }
-          },
-          {
-            "id": "C3",
-            "statement": "Stub claim 3 for ep-0001-stub: the crossover point moves with parameter 3.",
-            "evidence": {
-              "kind": "model",
-              "ref": "M-STUB-3"
-            }
-          }
-        ],
-        "targetDurationMs": 1260000,
-        "modelRefs": [
-          "M-STUB-1",
-          "M-STUB-2",
-          "M-STUB-3"
-        ]
-      }
-    }
+  "upstreamFrom": {
+    "golden": "ep-0001-stub",
+    "workshops": [
+      "topic"
+    ]
   }
 }
