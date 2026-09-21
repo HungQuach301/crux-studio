@@ -10,7 +10,7 @@
  * 3. Phong bì giữ đủ các trường của CHARTER 5.2, không thừa không thiếu.
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
  * 5. Fixture `input.json` nạp pack từ `packs/` và không mang bản sao cấu
- *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008`).
+ *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008` và `I-009`).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -119,5 +119,5 @@ if (problems.length > 0) {
 
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
-    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/.\n`,
+    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
 );

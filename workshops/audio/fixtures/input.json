@@ -1,131 +1,13 @@
 {
-  "$note": "🤖 Fixture chạy độc lập xưởng audio (CHARTER 5.4): node workshops/audio/src/run.ts --input workshops/audio/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel — fixture KHÔNG chép pack (mục integration/I-008).",
+  "$note": "🤖 Fixture chạy độc lập xưởng audio (CHARTER 5.4): node workshops/audio/src/run.ts --input workshops/audio/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel (mục integration/I-008); artifact đầu vào nạp từ snapshot tập vàng theo upstreamFrom, KHÔNG chép vào đây — bản chép trôi mà không gì đỏ (mục integration/I-009, hàng Z16 của ops/known-failures.md).",
   "episodeId": "ep-0001-stub",
   "channel": "us-personal-finance",
   "genre": "data-explainer",
   "locale": "en-US",
-  "upstream": {
-    "editorial": {
-      "schemaVersion": "0",
-      "kind": "editorial.script",
-      "producer": {
-        "workshop": "editorial",
-        "version": "0.0.0-stub",
-        "impl": "stub"
-      },
-      "episodeId": "ep-0001-stub",
-      "channel": "us-personal-finance",
-      "genre": "data-explainer",
-      "locale": "en-US",
-      "inputsHash": "74fd7eec4b2b7db471e6be3d435cf04e27831a81af40622599b610a265097524",
-      "inputs": [
-        {
-          "kind": "topic.brief",
-          "path": "episodes/us-personal-finance/ep-0001-stub/topic/artifact.json",
-          "hash": "ca0660951fa8ddf2cccb8e94d6da5ba91c032abd860ce8a1d10fd8d3d14e542c"
-        }
-      ],
-      "createdAt": "2026-09-20T00:00:00.000Z",
-      "costUsd": 0,
-      "status": "ok",
-      "payload": {
-        "outline": {
-          "beats": [
-            {
-              "index": 1,
-              "name": "cold-open",
-              "purpose": "Nêu câu hỏi tiền cụ thể và một con số gây bất ngờ",
-              "estimatedMs": 75600,
-              "claimIds": [],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 2 is where it flips."
-            },
-            {
-              "index": 2,
-              "name": "stakes",
-              "purpose": "Vì sao trả lời sai thì tốn bao nhiêu",
-              "estimatedMs": 126000,
-              "claimIds": [],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 3 is where it flips."
-            },
-            {
-              "index": 3,
-              "name": "default-belief",
-              "purpose": "Nêu niềm tin mặc định mà tập này sẽ thách thức",
-              "estimatedMs": 151200,
-              "claimIds": [],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 4 is where it flips."
-            },
-            {
-              "index": 4,
-              "name": "the-model",
-              "purpose": "Giới thiệu mô hình và các tham số",
-              "estimatedMs": 226800,
-              "claimIds": [
-                "C1"
-              ],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 5 is where it flips."
-            },
-            {
-              "index": 5,
-              "name": "threshold-matrix",
-              "purpose": "Ma trận ngưỡng ba tầng với số thật",
-              "estimatedMs": 277200,
-              "claimIds": [
-                "C2"
-              ],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 6 is where it flips."
-            },
-            {
-              "index": 6,
-              "name": "sensitivity",
-              "purpose": "Điểm đảo chiều và phạm vi áp dụng",
-              "estimatedMs": 252000,
-              "claimIds": [
-                "C3"
-              ],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 7 is where it flips."
-            },
-            {
-              "index": 7,
-              "name": "what-to-do",
-              "purpose": "Người xem tự xác định mình ở đâu trên ma trận",
-              "estimatedMs": 151200,
-              "claimIds": [],
-              "curiosityBridge": "That number holds — until the next parameter moves, and beat 8 is where it flips."
-            }
-          ],
-          "adBreaks": [
-            {
-              "atMs": 352800,
-              "derivedFromBeat": 3
-            },
-            {
-              "atMs": 856800,
-              "derivedFromBeat": 5
-            }
-          ]
-        },
-        "script": {
-          "wordCount": 69,
-          "claimIds": [
-            "C1",
-            "C2",
-            "C3"
-          ],
-          "geoScopeStated": true,
-          "localeReviewDone": false,
-          "text": "In the United States, At what point does option 1 stop being the better answer for a US household? Stub claim 1 for ep-0001-stub: the crossover point moves with parameter 1. Stub claim 2 for ep-0001-stub: the crossover point moves with parameter 2. Stub claim 3 for ep-0001-stub: the crossover point moves with parameter 3. This conclusion is scoped to US federal filers; state rules move the crossover point.",
-          "devicesUsed": [
-            "concrete-number",
-            "comparison-anchor"
-          ]
-        },
-        "selfCheck": {
-          "declaredBeatCount": 7,
-          "declaredWordCount": 69,
-          "declaredBridgeCount": 7
-        }
-      }
-    }
+  "upstreamFrom": {
+    "golden": "ep-0001-stub",
+    "workshops": [
+      "editorial"
+    ]
   }
 }

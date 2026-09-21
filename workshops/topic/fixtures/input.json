@@ -1,5 +1,5 @@
 {
-  "$note": "🤖 Fixture chạy độc lập xưởng topic (CHARTER 5.4): node workshops/topic/src/run.ts --input workshops/topic/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel — fixture KHÔNG chép pack (mục integration/I-008).",
+  "$note": "🤖 Fixture chạy độc lập xưởng topic (CHARTER 5.4): node workshops/topic/src/run.ts --input workshops/topic/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel (mục integration/I-008); artifact đầu vào nạp từ snapshot tập vàng theo upstreamFrom, KHÔNG chép vào đây — bản chép trôi mà không gì đỏ (mục integration/I-009, hàng Z16 của ops/known-failures.md).",
   "episodeId": "ep-0001-stub",
   "channel": "us-personal-finance",
   "genre": "data-explainer",

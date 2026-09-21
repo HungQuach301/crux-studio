@@ -15,6 +15,33 @@
  * Luật khoá là **danh sách cho phép**, không phải danh sách cấm. Chặn đúng
  * tên `packs` thì một bản sao đặt tên `channelPack` hay `limits` đi qua im
  * lặng, và Z16 tái hiện nguyên vẹn dưới một cái tên khác.
+ *
+ * ## `upstreamFrom` — nửa còn lại của Z16 (mục `integration/I-009`)
+ *
+ * `I-008` bỏ được bản sao **pack**, nhưng khối `upstream` của fixture vẫn là
+ * bản **chép** của `ops/golden/<tập>/snapshots/*.json`, và bản chép đó đã
+ * trôi thật: `assembly←visual` lệch 14 đường dẫn, `release←assembly` lệch 28
+ * và thiếu hẳn `payload.preflight.antiSlide`. `I-008` thêm được hai lớp bắt
+ * (validate theo contract, so bối cảnh với channel pack), nhưng **nội dung
+ * payload không bị buộc vào nguồn nào** — một bản sao hợp contract mà lệch
+ * snapshot vẫn xanh, nên nó trôi lại được.
+ *
+ * Cách chặn giữ đúng hình dạng của `I-008`: **bỏ bản sao thì không cần so**.
+ * File `--input` khai `upstreamFrom` — tên tập vàng và danh sách xưởng — và
+ * artifact tới từ `ops/golden/<tập>/snapshots/` lúc chạy. Không còn bản chép
+ * nào để trôi.
+ *
+ * Điều này cũng **hoà giải với CHARTER 6.1** (PR cập nhật snapshot không kèm
+ * thay đổi nào khác): fixture tự đi theo snapshot, nên một PR
+ * `pnpm replay -- --update` chỉ chạm `ops/golden/**` và không phải sửa file
+ * nào khác. Phương án "giữ bản sao cộng một phép so" thì ngược lại — nó ép
+ * mỗi PR cập nhật snapshot phải sửa kèm fixture, đúng thứ 6.1 cấm.
+ *
+ * Khối `upstream` khai thẳng **vẫn được giữ**, vì chạy độc lập một xưởng với
+ * một artifact viết tay là chế độ CHARTER 5.4 nói tới, và nó không phải lúc
+ * nào cũng là bản sao của tập vàng. Luật chặt hơn — fixture **trong repo**
+ * không được chép — nằm ở `ops/scripts/check-fixtures.ts`, nơi biết file nào
+ * là fixture của repo. Kernel trung tính, không đoán ý người gọi.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -36,6 +63,22 @@ export interface InputFile {
   genre?: string;
   locale?: string;
   upstream?: Partial<Record<WorkshopName, Envelope>>;
+  upstreamFrom?: UpstreamFrom;
+}
+
+/**
+ * Trỏ tới artifact đầu vào trong một tập vàng, thay cho việc chép chúng vào
+ * file (mục `integration/I-009`).
+ *
+ * `workshops` khai **đúng** những xưởng mà xưởng này tiêu thụ, không phải cả
+ * sáu: `inputsHashOf` băm con trỏ artifact đầu vào, nên thừa một artifact là
+ * đổi `inputsHash` của output.
+ */
+export interface UpstreamFrom {
+  /** Tên thư mục tập vàng trong `ops/golden/`. */
+  golden: string;
+  /** Tên các xưởng cần nạp snapshot. */
+  workshops: readonly WorkshopName[];
 }
 
 /** Khoá cấp một được phép có trong một file `--input`. */
@@ -46,7 +89,60 @@ export const INPUT_FILE_KEYS = [
   'genre',
   'locale',
   'upstream',
+  'upstreamFrom',
 ] as const;
+
+/** Đường dẫn snapshot của một xưởng trong một tập vàng. */
+export function goldenSnapshotPath(root: string, golden: string, workshop: string): string {
+  return resolve(root, 'ops', 'golden', golden, 'snapshots', `${workshop}.json`);
+}
+
+/**
+ * Nạp khối `upstream` từ snapshot tập vàng. Ném lỗi ở mọi chỗ khai sai —
+ * KHÔNG có nhánh nào trả về rỗng rồi chạy tiếp: "nạp được 0 artifact" và
+ * "xưởng này không tiêu thụ gì" trông giống hệt nhau lúc chạy, và đó đúng là
+ * cách nhóm Z của `ops/known-failures.md` sống. Xưởng không tiêu thụ gì thì
+ * khai `upstream: {}`, không khai `upstreamFrom` với danh sách rỗng.
+ */
+function readUpstreamFromGolden(root: string, full: string, raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error(`File --input ${full} khai "upstreamFrom" không phải một object JSON.`);
+  }
+  const { golden, workshops } = raw as { golden?: unknown; workshops?: unknown };
+
+  if (typeof golden !== 'string' || golden.length === 0) {
+    throw new Error(`File --input ${full} khai "upstreamFrom" thiếu trường "golden" (tên tập vàng).`);
+  }
+  if (!Array.isArray(workshops) || workshops.length === 0) {
+    throw new Error(
+      `File --input ${full} khai "upstreamFrom.workshops" không phải một mảng không rỗng. ` +
+        `Xưởng không tiêu thụ artifact nào thì khai "upstream": {} — một danh sách rỗng ở đây ` +
+        `không phân biệt được với "quên khai" (mục integration/I-009).`,
+    );
+  }
+
+  const upstream: Record<string, unknown> = {};
+  for (const name of workshops as readonly unknown[]) {
+    if (typeof name !== 'string' || !(WORKSHOPS as readonly string[]).includes(name)) {
+      throw new Error(
+        `File --input ${full} khai "upstreamFrom.workshops" có "${String(name)}", ` +
+          `không phải tên xưởng nào. Sáu xưởng: ${WORKSHOPS.join(', ')}.`,
+      );
+    }
+    if (name in upstream) {
+      throw new Error(`File --input ${full} khai xưởng "${name}" hai lần trong "upstreamFrom.workshops".`);
+    }
+    const path = goldenSnapshotPath(root, golden, name);
+    if (!existsSync(path)) {
+      throw new Error(
+        `File --input ${full} trỏ tới snapshot không có: ${path}. ` +
+          `Tập vàng "${golden}" không có output của xưởng ${name}.`,
+      );
+    }
+    upstream[name] = JSON.parse(readFileSync(path, 'utf8'));
+  }
+  return upstream;
+}
 
 /**
  * Đọc một file `--input` và dựng đầu vào của xưởng, với pack nạp từ `packs/`.
@@ -105,15 +201,30 @@ export function readInputFile(
     }
   }
 
-  // `null` là một giá trị JSON hợp lệ, nên `?? {}` sẽ nuốt nó thành "không có
-  // artifact đầu vào" — im lặng đúng kiểu nhóm Z. Khai `upstream` thì phải
-  // khai một object.
-  const upstreamRaw: unknown = 'upstream' in file ? file.upstream : {};
-  if (typeof upstreamRaw !== 'object' || upstreamRaw === null || Array.isArray(upstreamRaw)) {
-    throw new Error(`File --input ${full} khai "upstream" không phải một object JSON.`);
+  // Hai cách khai artifact đầu vào loại trừ nhau. Khai cả hai thì bên nào
+  // thắng cũng là một luật ngầm, và bên thua nằm im trong file trông như
+  // đang có tác dụng — đúng nhóm Z.
+  if ('upstream' in file && 'upstreamFrom' in file) {
+    throw new Error(
+      `File --input ${full} khai cả "upstream" lẫn "upstreamFrom". Chọn một: ` +
+        `"upstreamFrom" trỏ tới snapshot tập vàng (không có bản sao nào để trôi), ` +
+        `"upstream" khai thẳng artifact cho một lần chạy độc lập (mục integration/I-009).`,
+    );
   }
 
-  const upstream = upstreamRaw as Record<string, unknown>;
+  let upstream: Record<string, unknown>;
+  if ('upstreamFrom' in file) {
+    upstream = readUpstreamFromGolden(root, full, file.upstreamFrom);
+  } else {
+    // `null` là một giá trị JSON hợp lệ, nên `?? {}` sẽ nuốt nó thành "không
+    // có artifact đầu vào" — im lặng đúng kiểu nhóm Z. Khai `upstream` thì
+    // phải khai một object.
+    const upstreamRaw: unknown = 'upstream' in file ? file.upstream : {};
+    if (typeof upstreamRaw !== 'object' || upstreamRaw === null || Array.isArray(upstreamRaw)) {
+      throw new Error(`File --input ${full} khai "upstream" không phải một object JSON.`);
+    }
+    upstream = upstreamRaw as Record<string, unknown>;
+  }
   for (const name of Object.keys(upstream)) {
     if (!(WORKSHOPS as readonly string[]).includes(name)) {
       throw new Error(
