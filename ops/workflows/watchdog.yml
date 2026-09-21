@@ -19,6 +19,12 @@ permissions:
   contents: read
   issues: write
   actions: read
+
+# KF-004 issues: @nhắc nằm NGAY TRONG thân issue, không chờ notify.yml.
+# Đây là workflow quan trọng nhất phải báo được: nó là thứ duy nhất báo khi
+# nhà máy đứng im vì Claude hỏng (rủi ro B7). Nếu nó phải nhờ một workflow
+# thứ hai mới tới được điện thoại, thì nó có thêm đúng một chỗ để đứt — và
+# nó ĐÃ đứt ở đúng chỗ đó. Xem KF-004.
   # pull-requests: read cho `gh pr list` ở dấu hiệu số 2 (không PR nào merge
   # trong 48 giờ). Đọc PR không nằm trong `contents: read`. Xem KF-003.
   pull-requests: read
@@ -34,6 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          OWNER: HungQuach301
           TEST: ${{ inputs.test_alert }}
         run: |
           set -euo pipefail
@@ -95,6 +102,8 @@ jobs:
           EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
             --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
           BODY=$(printf '%s\n' \
+            "@$OWNER người canh có việc cần anh xem." \
+            "" \
             "Người canh phát hiện:" \
             "" \
             "$PROBLEMS" \

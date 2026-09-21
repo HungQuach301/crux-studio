@@ -17,6 +17,19 @@ permissions:
   pull-requests: write
   actions: write
 
+# KF-004 push: merge ở đây sinh sự kiện `push` vào main, mà `main-ci.yml` và
+# `labels.yml` đăng ký nghe. Cả hai được gọi TƯỜNG MINH ở bước cuối job, nên
+# chuỗi không đứt.
+#
+# Còn một workflow thứ ba nghe `push` vào main: `.github/workflows/sync-workflows.yml`
+# (do chủ dự án tạo, agent không sửa được). Nó cũng KHÔNG chạy sau một lần
+# automerge. Hiện điều đó vô hại vì nó chỉ quan tâm `ops/workflows/**`, mà
+# thư mục đó nằm trong vùng bảo vệ (I4) nên automerge không bao giờ merge PR
+# chạm tới nó — chỉ chủ dự án merge, và merge của người thì sinh sự kiện thật.
+#
+# Nghĩa là chỗ này an toàn NHỜ phạm vi vùng bảo vệ, không nhờ thiết kế của
+# automerge. Rút `ops/workflows/**` khỏi vùng bảo vệ sẽ làm nó đứt im lặng.
+
 concurrency:
   group: automerge
   cancel-in-progress: false
@@ -81,11 +94,30 @@ jobs:
             -f sha="$SHA"
           echo "merged=1" >> "$GITHUB_ENV"
 
-      - name: Gọi main-ci sau khi merge
+      - name: Gọi tay các workflow lẽ ra chạy theo sự kiện push
         if: env.merged == '1'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        # Merge bằng GITHUB_TOKEN KHÔNG tự kích hoạt workflow khác, nên phải
-        # gọi tường minh (giả định G2).
-        run: gh workflow run main-ci.yml --repo "$REPO" --ref main
+          PR: ${{ steps.pr.outputs.number }}
+        # Merge bằng GITHUB_TOKEN KHÔNG tự kích hoạt workflow khác (giả định
+        # G2, và cùng cơ chế với KF-004). Mọi workflow đăng ký `on: push` vào
+        # main vì thế phải được gọi TƯỜNG MINH ở đây — thiếu một cái là nó im
+        # lặng không chạy, và không có gì đỏ để báo.
+        run: |
+          set -euo pipefail
+
+          # main-ci: luôn gọi. main vừa đổi thì phải kiểm lại main.
+          gh workflow run main-ci.yml --repo "$REPO" --ref main
+          echo "đã gọi main-ci"
+
+          # labels: chỉ gọi khi PR vừa merge có đụng nguồn sự thật của nhãn.
+          # Không gọi vô điều kiện, để một lần merge không đẻ ra một lần chạy
+          # thừa mỗi lần.
+          CHANGED=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          if echo "$CHANGED" | grep -qx 'ops/labels.json'; then
+            gh workflow run labels.yml --repo "$REPO" --ref main
+            echo "đã gọi labels (ops/labels.json có đổi)"
+          else
+            echo "ops/labels.json không đổi, không cần gọi labels"
+          fi

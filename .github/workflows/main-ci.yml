@@ -16,6 +16,12 @@ permissions:
   contents: read
   issues: write
 
+# KF-004 issues: @nhắc nằm NGAY TRONG thân issue, không chờ notify.yml.
+# Issue này do GITHUB_TOKEN mở, mà GitHub cố ý không kích hoạt workflow từ
+# sự kiện do GITHUB_TOKEN tạo ra — nên notify.yml KHÔNG bao giờ chạy cho nó.
+# Một @nhắc trong thân issue sinh thông báo của chính GitHub, không cần
+# mắt xích thứ hai nào. Xem KF-004.
+
 concurrency:
   group: main-ci
   cancel-in-progress: false
@@ -49,6 +55,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          OWNER: HungQuach301
           SHA: ${{ github.sha }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -57,6 +64,8 @@ jobs:
           EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
             --search "main đỏ in:title" --json number --jq '.[0].number // empty')
           BODY=$(printf '%s\n' \
+            "@$OWNER \`main\` đang đỏ." \
+            "" \
             "\`pnpm check\` đỏ trên \`main\` tại commit \`$SHA\`." \
             "" \
             "Nhật ký lần chạy: $RUN" \
