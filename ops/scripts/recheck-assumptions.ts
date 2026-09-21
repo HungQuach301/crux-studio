@@ -234,8 +234,7 @@ export function judgeTrailerEvidence(commits: CommitTrailerInfo[]): CheckOutcome
       observedNothing: true,
       observed: 'không có commit nào trên nhánh `claude/*` chưa vào `main` — không có gì để quan sát.',
       evidence: [
-        'Không quan sát được gì KHÁC với quan sát được và thấy đúng. Thứ Hai không có PR nào đang mở là ' +
-          'chuyện bình thường (nhánh merge xong thì bị xoá), nên trạng thái này sẽ xuất hiện thật.',
+        'Không quan sát được gì KHÁC với quan sát được và thấy đúng.',
         'Tới được đây nghĩa là ĐÃ có ref `origin/claude/*` để quét, chỉ là mọi commit của chúng đã vào ' +
           '`main` hoặc đã quá cửa sổ ngày — `collectCommits` ném khi chưa quét được gì (mục `I-005`).',
       ],
@@ -285,13 +284,28 @@ const RECORD = '\u001e';
 const FIELD = '\u001f';
 
 /**
- * Kéo về `refs/remotes/origin/claude/*` trước khi quét — mục `I-005`.
+ * Kéo về **cả hai** đầu vào của phép quét trước khi quét — mục `I-005`:
+ * `refs/remotes/origin/claude/*` (tập cần quét) và `refs/remotes/origin/main`
+ * (phép loại `^main`). Thiếu một trong hai là một lỗi khác nhau, và cả hai
+ * đều đã xảy ra thật.
  *
- * Cả ba routine chạy trong một clone mới của phiên cloud, và clone đó chỉ
- * `git fetch origin main`. Không có ref `origin/claude/*` nào, nên bài kiểm
- * G14 quét một tập rỗng và kết luận "không có gì để quan sát" — trong khi
- * thật ra nó **chưa quét được gì**. Đó là chế độ chạy mặc định, không phải
- * trường hợp hiếm: bài kiểm của thứ Hai im lặng ở hầu hết các lượt.
+ * **Thiếu `claude/*`:** cả ba routine chạy trong một clone mới của phiên
+ * cloud, và clone đó chỉ `git fetch origin main`. Không có ref
+ * `origin/claude/*` nào, nên bài kiểm quét một tập rỗng và kết luận "không
+ * có gì để quan sát" — trong khi thật ra nó **chưa quét được gì**. Đó là
+ * chế độ chạy mặc định, không phải trường hợp hiếm.
+ *
+ * **Thiếu `main` mới:** nguy hiểm hơn, vì nó cho ra **số sai** chứ không
+ * phải im lặng. `origin/main` của clone đứng yên ở lúc clone, còn các nhánh
+ * `claude/*` được kéo về **tại thời điểm chạy** — mà bước 0 của phụ lục P3
+ * thường xuyên gộp `main` mới vào các nhánh PR rồi push. Những commit
+ * **squash** của `main` nằm trong nhánh PR nhưng chưa có trong `origin/main`
+ * cũ thì lọt qua phép loại `^refs/remotes/origin/main`, và commit squash
+ * của GitHub **mất** trailer `Claude-Session` (xem chú thích của
+ * `judgeTrailerEvidence`). Kết quả: G14 ra `sai` giả, và `main()` in sẵn
+ * thân issue `🤖 [QĐ]` cho một giả định chẳng hề đổi trạng thái — tức là
+ * gọi chủ dự án vì một con số sai. Tái hiện được bằng một clone
+ * `--single-branch --branch main` của chính repo này.
  *
  * Phụ lục P3 bước 4 không ghi "phải fetch trước", nên chỗ sửa là ở đây —
  * bài kiểm tự lo lấy đầu vào của mình, thay vì để một luật chỉ nằm trong
@@ -301,12 +315,13 @@ const FIELD = '\u001f';
  * nhánh `broken` (`⚠ … KHÔNG CHẠY ĐƯỢC`). "Chưa quét được" phải kêu, vì nó
  * là nhóm lỗi Z — hỏng mà mọi chỉ báo đều xanh.
  */
-function fetchClaudeRefs(root: string): void {
+function fetchScanInputs(root: string): void {
   git(root, [
     'fetch',
     '--quiet',
     '--prune',
     'origin',
+    '+refs/heads/main:refs/remotes/origin/main',
     '+refs/heads/claude/*:refs/remotes/origin/claude/*',
   ]);
 }
@@ -321,9 +336,15 @@ function fetchClaudeRefs(root: string): void {
  * chưa kéo nhánh nào về", và đoán bừa một trong hai chính là lỗi cũ. Bên
  * gọi — `main()` — biến lỗi này thành dòng `broken`, thấy được và làm
  * `process.exitCode = 1`.
+ *
+ * Giới hạn khai trước: khi kho **thật sự** không còn nhánh `claude/*` nào
+ * (mọi PR đã merge và nhánh đã xoá), đây là một quan sát hợp lệ nhưng vẫn ra
+ * `broken`. Repo hiện **không** xoá nhánh sau merge nên chưa chạm phải; mục
+ * `I-007` tách hai trường hợp đó bằng `git ls-remote`. Chọn kêu-oan thay vì
+ * im-lặng là có chủ ý, và đúng tiêu chí xong của `I-005`.
  */
 export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
-  fetchClaudeRefs(root);
+  fetchScanInputs(root);
 
   const refs = git(root, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/claude/'])
     .split('\n')

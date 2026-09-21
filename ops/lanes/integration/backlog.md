@@ -85,3 +85,29 @@ tức bài kiểm chạy được, chỉ là nó đã bỏ qua một cách lặn
     hoặc phụ lục P3 bước 4 ghi rõ phải fetch trước — chọn một, đừng để cả hai cùng không ai làm.
   - Test tái hiện lỗi (bắt buộc, bất biến I2): một repo git dựng thật, **không** có ref
     `origin/claude/*`, phải cho `broken` chứ không cho `observedNothing`.
+
+### I-007 · Tách "kho thật sự không có nhánh `claude/*`" khỏi "chưa quét được"
+
+Tìm ra trong vòng soát của `I-005`, chưa chặn gì hôm nay.
+
+`collectCommits` ném khi sau fetch vẫn không có ref `origin/claude/*` nào, và `main()` xếp vào
+`broken`. Đúng tiêu chí xong của `I-005`, và đúng ở chế độ chạy hiện tại. Nhưng rỗng ở đó có **hai**
+nghĩa, và một trong hai là quan sát hợp lệ:
+
+- **chưa quét được** — fetch hỏng, thiếu quyền đọc nhánh. Phải kêu.
+- **kho thật sự không còn nhánh `claude/*`** — mọi PR đã merge và nhánh đã xoá. Không có gì để quan
+  sát, nhưng cũng không có gì hỏng.
+
+Repo hiện **không** xoá nhánh sau merge (`origin/claude/integration/I-001…` vẫn còn), nên vế thứ hai
+chưa xảy ra. Bật xoá nhánh sau merge là nó thành một cảnh báo kêu mãi — và một cảnh báo kêu mọi lượt
+là một cảnh báo không ai đọc.
+
+- deps: `I-005`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-005`; `ops/known-failures.md` nhóm Z (cách 3 — cấm im lặng)
+- tiêu chí xong:
+  - `git ls-remote --heads origin 'refs/heads/claude/*'` rỗng → `◦ chưa quan sát được` (quan sát hợp lệ);
+    `ls-remote` hoặc `fetch` hỏng → `broken`.
+  - Test cho cả hai nhánh, dựng kho bare thật.
+  - Ghi lại trong `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
