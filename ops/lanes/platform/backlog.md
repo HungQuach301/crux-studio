@@ -376,3 +376,23 @@ Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với
 - tiêu chí xong:
   - Danh sách status check bắt buộc được ghi vào `docs/decisions/` sau khi chủ dự án bật.
   - Không bật được (gói không cho) thì ghi rõ và dựa vào `automerge.yml` cộng hook.
+
+### P-023 · Dòng log bước 0 tự khoá hàng đợi: tách khỏi file dùng chung `ops/logs/platform/P-016.jsonl`
+Mỗi lượt integrator và mỗi lượt worker ghi một dòng bước 0 vào **cùng một** file `ops/logs/platform/P-016.jsonl`. Dòng đó vào `main` là mọi PR đang mở có dòng riêng trong file ấy **xung đột ngay** phía GitHub — vì GitHub không áp `merge=union` khi tự tính `mergeable` (**KF-009**), còn `automerge.yml` thì nghe phía GitHub.
+
+Đã đo, không suy: lượt integrator 04:05 giờ VN 2026-09-22 thấy **7 PR** cùng đứng lại một lúc, cả 7 ở đúng file này, nguyên nhân là **một dòng duy nhất** mà `bfccc8c` (merge PR #80) mang tới. Giải xong 7 PR thì chính PR ghi log của lượt giải lại khoá **8 PR** cho lượt sau. Vòng này tự lặp mỗi lượt, và nó nuốt đúng thứ `P-016` sinh ra để xoá.
+
+`D-C04` đã tách log tới mức **mục**, nhưng bước 0 không phải một mục — nó là **một lượt chạy** của mọi routine, nên mọi lượt dồn vào mã mục `P-016`. Lớp phòng thủ `merge=union` vẫn giữ đủ dữ liệu ở phía `git`, nhưng `KF-009` cho thấy nó **không bao giờ** một mình đủ để một PR merge được.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: `ops/known-failures.md` KF-009 và KF-005; `ops/logs/platform/P-016.jsonl` (dòng 20:12Z đề nghị việc này lần đầu, dòng 21:10Z đo được quy mô); quyết định `D-C04`; CHARTER mục 7
+- tiêu chí xong:
+  - Dòng bước 0 ghi vào file **theo lượt chạy**, không theo mã mục — hình dạng đã dùng thật ở `ops/logs/integration/P3-run-<ngày>T<giờ>.jsonl`, nên cơ chế gần như có sẵn. Chốt một tên file và **một** chỗ sinh ra nó (hàm của kernel hoặc `ops/scripts/`), đừng để mỗi routine tự ghép.
+  - `ops/logs/README.md` và phụ lục **P3 bước 0d** của `CHARTER.md` nói cùng một đường dẫn. Lệch nhau thì lượt sau lại ghi vào file cũ.
+  - Bên đọc không hỏng: `readRunLogs` gom theo thư mục nên tự thấy, nhưng `ops/scripts/digest-metrics.ts` và `ops/scripts/conflict-watch.ts` đang đọc **đích danh** `ops/logs/platform/P-016.jsonl` để lấy số giờ kẹt và chuỗi `aborted-ineligible` (phụ lục P2). Sửa cả hai trong cùng PR, **có test**.
+  - Dòng cũ trong `P-016.jsonl` **không chuyển đi và không xoá** — log append-only (`ops/logs/README.md`). Bên đọc phải hiểu cả hai chỗ cho tới khi các dòng cũ rơi khỏi mọi cửa sổ thời gian đang dùng.
+  - **Bằng chứng bằng chạy thật, không bằng lập luận:** dựng lại đúng hình dạng trên — hai nhánh cùng mang một dòng bước 0, một bên vào `main` trước — rồi đo `git merge-tree --write-tree` ở chế độ **tắt** `merge=union` (ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes`, cách mô phỏng GitHub mà KF-009 dùng). Trước khi sửa: `EXIT=1`. Sau khi sửa: `EXIT=0`.
+  - Ghi kết quả vào `ops/known-failures.md` KF-009 — đó là chỗ đang giữ câu chuyện này.
+- **mã mục nhận trước lúc 2026-09-22 04:1x giờ VN** (`ops/logs/README.md`, KF-005): `P-022` là mã cao nhất trên `main` **và** trên cả 11 nhánh PR đang mở tại lúc nhận, nên `P-023` không đụng ai.
