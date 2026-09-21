@@ -94,8 +94,11 @@ jobs:
           #     Lấy CẬN DƯỚI của ngân sách (600 USD trong khoảng 600–900) —
           #     cảnh báo sớm một nhịp rẻ hơn cảnh báo muộn một nhịp.
           #     Nguồn số liệu là bất biến I8: mỗi lần chạy một dòng `costUsd`.
+          #     `find` chứ không phải `cat ops/logs/*.jsonl`: từ `D-C04` log
+          #     nằm ở `ops/logs/<lane>/<id>.jsonl`, nên glob một tầng không
+          #     khớp file nào và tổng chi phí ra 0 mà không gì đỏ (nhóm Z).
           BUDGET=600
-          SPENT=$(cat ops/logs/*.jsonl 2>/dev/null | jq -s 'map(.costUsd // 0) | add // 0' || echo 0)
+          SPENT=$(find ops/logs -name '*.jsonl' -exec cat {} + 2>/dev/null | jq -s 'map(.costUsd // 0) | add // 0' || echo 0)
           PCT=$(awk -v s="$SPENT" -v b="$BUDGET" 'BEGIN { printf "%d", (s * 100) / b }')
           echo "Chi phí tích luỹ: $SPENT USD / $BUDGET USD = $PCT%."
           if [ "$PCT" -ge 80 ]; then
