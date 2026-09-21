@@ -90,8 +90,15 @@ jobs:
     name: fix-has-test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    permissions:
-      pull-requests: read
+    # KHÔNG khai `permissions:` riêng ở đây (bẫy KF-003/KF-008 đã sập một
+    # lần khi soát chéo PR này): một khối `permissions:` cấp JOB thay thế
+    # toàn bộ khối cấp WORKFLOW cho đúng job đó, không cộng thêm — quyền
+    # không liệt kê thành `none`, kể cả `contents`, làm `actions/checkout`
+    # hỏng với lỗi gây hiểu lầm "Repository not found" (404). Khối cấp
+    # workflow phía trên đã có sẵn CẢ HAI quyền job này cần —
+    # `contents: read` (cho checkout) và `pull-requests: write`, thoả luôn
+    # `pull-requests: read` (cho `gh api repos/.../pulls/$PR`) — nên không
+    # cần khai gì thêm ở đây.
     steps:
       - uses: actions/checkout@v7
         with:
