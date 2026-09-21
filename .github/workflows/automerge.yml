@@ -1,0 +1,91 @@
+# 🤖 Merge tự động (CHARTER 3.3, bất biến I2 và I4).
+#
+# Agent KHÔNG BAO GIỜ merge. Agent chỉ gắn nhãn `automerge`. File này merge.
+#
+# Kích hoạt bằng `workflow_run`, nên nó luôn chạy theo định nghĩa trên main:
+# nhánh PR không sửa được nó. Đó là toàn bộ lý do dùng workflow_run thay vì
+# pull_request.
+name: automerge
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: automerge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: merge
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Tìm PR của lần chạy CI này
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          NUM=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+            -H "Accept: application/vnd.github+json" \
+            --jq '[.[] | select(.state=="open")][0].number // empty')
+          if [ -z "$NUM" ]; then
+            echo "Không có PR mở nào cho $SHA."
+            echo "number=" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=$NUM" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge khi thoả đủ bốn điều kiện
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.pr.outputs.number }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          DATA=$(gh api "repos/$REPO/pulls/$PR")
+          DRAFT=$(echo "$DATA" | jq -r .draft)
+          HEAD=$(echo "$DATA"  | jq -r .head.sha)
+          LABELS=$(echo "$DATA" | jq -r '[.labels[].name] | join(",")')
+
+          # 1 · CI xanh — đã được `if` của job bảo đảm.
+          # 2 · Có nhãn automerge.
+          # 3 · Không chạm vùng bảo vệ — CI gắn owner-merge cho những PR đó.
+          # 4 · Không ở trạng thái nháp.
+          echo "PR #$PR · draft=$DRAFT · nhãn=$LABELS"
+
+          case ",$LABELS," in *",automerge,"*) ;; *) echo "Không có nhãn automerge. Dừng."; exit 0;; esac
+          case ",$LABELS," in *",owner-merge,"*) echo "PR chạm vùng bảo vệ — chỉ chủ dự án merge (I4). Dừng."; exit 0;; esac
+          [ "$DRAFT" = "true" ] && { echo "PR còn nháp. Dừng."; exit 0; }
+
+          # CI đã xanh trên SHA nào thì merge đúng SHA đó. Nếu nhánh đã có
+          # commit mới sau lần CI đó, merge bây giờ là merge một thứ chưa được kiểm.
+          if [ "$HEAD" != "$SHA" ]; then
+            echo "Nhánh đã đổi sau lần CI ($HEAD ≠ $SHA). Chờ lần CI kế tiếp."
+            exit 0
+          fi
+
+          gh api -X PUT "repos/$REPO/pulls/$PR/merge" \
+            -f merge_method=squash \
+            -f sha="$SHA"
+          echo "merged=1" >> "$GITHUB_ENV"
+
+      - name: Gọi main-ci sau khi merge
+        if: env.merged == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        # Merge bằng GITHUB_TOKEN KHÔNG tự kích hoạt workflow khác, nên phải
+        # gọi tường minh (giả định G2).
+        run: gh workflow run main-ci.yml --repo "$REPO" --ref main
