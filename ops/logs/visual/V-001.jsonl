@@ -1,0 +1,1 @@
+{"at":"2026-09-21T11:41:20.759Z","lane":"visual","kind":"lane","ref":"visual/V-001","status":"ok","durationMs":1200000,"costUsd":0,"note":"layouts.json + visual-tokens.json vào packs/, schema kernel, Preflight check layout-id-known (chưa nối pipeline thật). Chạy bằng gói subscription, không gọi API runtime."}

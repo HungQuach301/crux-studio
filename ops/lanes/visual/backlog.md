@@ -9,11 +9,13 @@ Chuyển `layouts.json`, hệ thống thị giác và visual tokens từ spec v�
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec phần Genre Pack; CHARTER 5.1
 - tiêu chí xong:
-  - `packs/genres/data-explainer/layouts.json` và `packs/channels/us-personal-finance/visual-tokens.json` tồn tại và validate được.
-  - Preflight bổ sung một kiểm: `layoutId` nào không có trong `layouts.json` thì chặn.
+  - ✅ `packs/genres/data-explainer/layouts.json` và `packs/channels/us-personal-finance/visual-tokens.json` tồn tại và validate được — `kernel/contracts/layouts.schema.json` + `visual-tokens.schema.json`, nạp qua `loadGenreLayouts`/`loadChannelVisualTokens` (`kernel/src/packs.ts`), kiểm trong `pnpm contracts`.
+  - ✅ Preflight có check mới `layout-id-known` (`workshops/assembly/src/preflight.ts`): `layoutId` không có trong `validLayoutIds` thì `fail` (`warn` ở `impl: stub`, cùng quy ước với các kiểm khối lượng nội dung khác).
+  - **Còn treo, cố ý:** check `layout-id-known` **chưa nối** vào pipeline thật (`ops/scripts/pipeline.ts` → `workshops/assembly/src/index.ts`) — xưởng `visual` stub hiện sinh `layoutId` giả (`L-1`…`L-5`), nối cứng bây giờ sẽ đổi `ops/golden/ep-0001-stub/snapshots/assembly.json`, và cập nhật snapshot phải đi **PR riêng** (CHARTER 6.1). Nối là việc tự nhiên của `V-006` (xưởng `visual` lên `impl: v1`), vì mục đó vốn đã phải ghi lại snapshot.
+  - PR: xem `ops/logs/visual/V-001.jsonl`.
 
 ### V-002 · Spike canvas liên tục — cổng chặn kiến trúc
 Trả lời **bằng số đo thật**: canvas liên tục với máy quay di chuyển có khả thi trên runner Actions không, và ở cấu hình nào thì chuyển động chấp nhận được.
