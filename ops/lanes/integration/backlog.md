@@ -387,3 +387,67 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
   - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
     nó đang kiểm thì không kiểm gì.
   - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
+
+### I-012 · Bài kiểm G14 quét cả nhánh đã merge, nên nó kêu oan và sẽ kêu mãi mãi
+
+Tìm ra ở lượt `crux-integrator` 2026-09-22 02:05 giờ VN — lần đầu phụ lục P3 bước 4 có cơ chế thật để
+chạy (`pnpm recheck:assumptions`, mục `I-003`). Đã đo bằng chạy thật.
+
+`collectCommits` quét `refs/remotes/origin/claude/*` trừ `^refs/remotes/origin/main`. Phép loại đó đúng
+với ý định — chú thích của `judgeTrailerEvidence` nói rõ loại `main` ra vì **squash làm mất trailer, không
+phải agent làm mất** — nhưng nó rò: GitHub merge kiểu **squash**, nên nhánh đã merge vẫn còn trên remote
+với **toàn bộ** lịch sử không nằm trong `main`. Bài kiểm vì thế đếm lại đúng những commit mà nó định loại.
+
+Đo được, lượt 2026-09-22: **14/131 commit "thiếu trailer"**, và phân loại từng commit thì
+
+- **10** nằm trên đúng một nhánh stale, `origin/claude/platform/P-009` (PR `#9` đã merge, nhánh chưa xoá).
+  Trong đó có `99d6bcf Initial commit`, `e01a667 Add files via upload`, `087246e Delete .github/...` —
+  commit của **chính chủ dự án** qua giao diện web, không bao giờ có trailer và không nên có;
+- **2** là `chore: sync workflows from ops/workflows [skip ci]`, do GitHub Action `sync-workflows` sinh;
+- **2** là merge tay dạng `Gộp main vào <nhánh>` mà `isToolCommit` không khớp (nó chỉ nhận
+  `Gộp … (integrator,` và `Merge branch …`);
+- **1** là tín hiệu thật: `7fc292a` (`integration: bước 0 của P3 lượt 23:05`, trên
+  `origin/claude/keen-mayer-nzkvdy`) — commit do agent soạn, thiếu trailer `Claude-Session`. Đây là đúng
+  phần mà giả định **G14** còn để ngỏ, và là thứ duy nhất trong 14 dòng đáng gọi là quan sát.
+
+Vì sao đáng một mục chứ không phải một dòng ghi chú: bài kiểm này **không bao giờ xanh được nữa**. Commit
+của chủ dự án trên nhánh stale sẽ nằm đó mãi, nên mỗi thứ Hai nó lại in sẵn một thân issue `🤖 [QĐ]` cho
+một giả định chẳng đổi trạng thái — đúng lý do mà chính script đã bỏ kết luận `nâng` ("một cảnh báo kêu
+mọi lượt là một cảnh báo không ai đọc"), và đúng hình dạng `I-005`/`I-007` đã sửa một lần cho ca "kêu
+oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue; lượt sau sẽ không may như vậy.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: lượt `crux-integrator` 2026-09-22 02:05 giờ VN, `ops/logs/integration/P3-daily-2026-09-22.jsonl`;
+  `docs/assumptions.md` G14; mục `I-003`, `I-005`, `I-007`
+- tiêu chí xong:
+  - Phạm vi quét chỉ còn commit **của agent, trên nhánh còn sống**. Loại nhánh đã merge bằng câu hỏi trả
+    lời được — ví dụ đối chiếu với danh sách PR đang mở, hoặc loại mọi commit có trước điểm rẽ của nhánh
+    khỏi `main` — chứ không phải nới `isToolCommit` cho tới khi hết đỏ. Nới danh sách chữ ký là vá sản
+    phẩm (CLAUDE.md mục 13).
+  - `isToolCommit` nhận thêm hai dạng đã đo được: `chore: sync workflows…` (máy sinh) và merge tay dạng
+    `Gộp <ref> vào <nhánh>`. Mỗi dạng một test âm.
+  - Một test dựng kho bare thật có **đúng hình dạng đã gặp** — một nhánh đã squash-merge còn sót trên
+    remote, mang commit không trailer — và bài kiểm G14 phải ra `khớp`, không `sai`. Cùng quy ước "không
+    mô phỏng" với các test G14/G17 đang có trong `ops/test/recheck-assumptions.test.ts`.
+  - `7fc292a` không được biến mất cùng với nhiễu: sau khi siết phạm vi, một commit agent thật sự thiếu
+    trailer vẫn phải ra `sai`. Có test cho đúng điều đó.
+- **Đã làm:**
+  - `collectCommits` (`ops/scripts/recheck-assumptions.ts`) nay lọc `refs/remotes/origin/claude/*` còn
+    đúng nhánh có **PR mở**, trước khi `git log` — trả lời "trả lời được" mà tiêu chí xong đòi, không đoán
+    theo ngày hay theo lịch sử git (squash không giữ SHA cũ nên "điểm rẽ khỏi `main`" của một nhánh stale
+    không nói lên gì). `fetchOpenPrBranches()` gọi `gh pr list --state open` — cùng quy ước gọi lệnh với
+    `fetchMergedPrs()` của `ops/scripts/update-metrics.ts`, không phải cách mới. Nhánh hết PR mở (đã
+    merge/đã đóng) loại thẳng khỏi phạm vi quét: `liveRefs.length === 0` trả `[]` như một quan sát hợp lệ
+    (cùng nhánh `observedNothing` với ca "kho không còn nhánh nào" của `I-007`), không phải lỗi.
+  - `isToolCommit` nhận thêm đúng hai dạng đã đo được, neo chặt để không rơi lại thành danh sách đen:
+    `chore: sync workflows from ops/workflows` (tiền tố do Action `sync-workflows` sinh) và
+    `Gộp (origin/)?main(...) vào ` (mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ
+    "Gộp … vào" nói chung — giữ nguyên vẹn ca âm `"Gộp hai mô hình định lượng vào một bảng"` đã có).
+  - Test mới trong `ops/test/recheck-assumptions.test.ts`: hai test cho `isToolCommit`, ba test cho
+    `collectCommits` (nhánh stale bị loại dù thiếu trailer thật; nhánh sống vẫn ra `sai` khi thật sự thiếu
+    trailer — phép lọc mới không được nuốt tín hiệu thật; mọi nhánh hết PR mở thì trả rỗng, không ném).
+    Ba test `collectCommits` cũ (mục `I-005`, `I-007`) cập nhật để tự khai nhánh nào có PR mở, không gọi
+    `gh` thật trong test.
+  - `ops/known-failures.md` hàng **Z15**: thêm đoạn "Sửa tiếp ở mục `I-012`".
