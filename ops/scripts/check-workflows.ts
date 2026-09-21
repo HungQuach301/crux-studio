@@ -17,6 +17,10 @@
  *    `permissions` thì mọi quyền KHÔNG liệt kê thành `none`, nên thiếu một
  *    dòng là mất hẳn một quyền — và trên repo private, lỗi hiện ra dưới
  *    dạng 404 "Repository not found", không phải 403.
+ * 5. Chuỗi sự kiện đứt (KF-004): workflow A tạo ra một sự kiện bằng
+ *    `GITHUB_TOKEN` mà workflow B đang lắng nghe. GitHub cố ý KHÔNG kích
+ *    hoạt workflow từ sự kiện do `GITHUB_TOKEN` tạo ra, nên B không bao
+ *    giờ chạy — và không có gì đỏ để báo điều đó.
  */
 
 import { readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -203,6 +207,118 @@ export function missingPermissions(source: string): string[] {
   return [...new Set(missing)];
 }
 
+/**
+ * KF-004 — chuỗi sự kiện đứt vì `GITHUB_TOKEN`.
+ *
+ * GitHub cố ý không kích hoạt workflow từ sự kiện do `GITHUB_TOKEN` tạo ra,
+ * để tránh vòng lặp vô hạn. Hệ quả: nếu workflow A mở issue / gắn nhãn /
+ * đẩy commit bằng `GITHUB_TOKEN`, và workflow B đăng ký lắng nghe đúng sự
+ * kiện đó, thì **B không bao giờ chạy**.
+ *
+ * Đây là loại hỏng tệ nhất vì nó KHÔNG CÓ CHỮ KÝ: A vẫn xanh, thứ A tạo ra
+ * vẫn đúng, B chỉ đơn giản là không tồn tại trong lịch sử chạy. Không job
+ * nào đỏ, không dòng lỗi nào được in.
+ *
+ * Luật này bắt cặp A–B đó. Nó KHÔNG tự đoán được cách xử lý đúng, vì có hai
+ * cách hợp lệ và chúng khác nhau về bản chất:
+ *   1. Gọi thẳng workflow kia bằng `gh workflow run` (`workflow_dispatch`).
+ *   2. Không dựa vào workflow kia nữa — làm luôn việc đó trong chính A.
+ *
+ * Vì vậy luật đòi một **khai báo tường minh có lý do** trong file A:
+ *
+ *     # KF-004 <tên sự kiện>: <vì sao chuỗi này không đứt>
+ *
+ * Bắt người viết gõ ra lý do là chủ ý. Một cờ `true` thì ai cũng bật được
+ * mà không nghĩ; một câu lý do thì không.
+ */
+interface EventProducer {
+  match: RegExp;
+  /** Sự kiện mà thao tác này sinh ra, theo tên GitHub dùng trong khối `on:`. */
+  event: string;
+  what: string;
+}
+
+const EVENT_PRODUCERS: readonly EventProducer[] = [
+  { match: /\bgh\s+issue\s+create\b/, event: 'issues', what: 'mở issue' },
+  {
+    match: /\bgh\s+issue\s+edit\b[^\n]*--(add|remove)-label/,
+    event: 'issues',
+    what: 'gắn hoặc gỡ nhãn trên issue',
+  },
+  { match: /\bgh\s+(issue|pr)\s+comment\b/, event: 'issue_comment', what: 'bình luận' },
+  {
+    match: /\bgh\s+pr\s+edit\b[^\n]*--(add|remove)-label/,
+    event: 'pull_request',
+    what: 'gắn hoặc gỡ nhãn trên PR',
+  },
+  { match: /\bgh\s+pr\s+create\b/, event: 'pull_request', what: 'mở PR' },
+  {
+    match: /\bgh\s+api\b[^\n]*-X\s+PUT[^\n]*\/merge/,
+    event: 'push',
+    what: 'merge PR, tức là đẩy commit lên nhánh đích',
+  },
+];
+
+/** Tên các sự kiện mà một workflow đăng ký trong khối `on:`. */
+export function subscribedEvents(source: string): string[] {
+  const lines = source.split('\n');
+  const start = lines.findIndex((l) => /^on:/.test(l));
+  if (start === -1) return [];
+
+  // `on: [push, pull_request]` hoặc `on: push`
+  const inline = /^on:\s*(.+)$/.exec(lines[start]!);
+  if (inline && inline[1]!.trim() !== '') {
+    return inline[1]!
+      .replace(/[[\]]/g, '')
+      .split(',')
+      .map((e) => e.trim())
+      .filter((e) => e !== '');
+  }
+
+  const events: string[] = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+    if (!/^\s/.test(line)) break;
+    const entry = /^\s{1,2}([a-z_]+):/.exec(line);
+    if (entry) events.push(entry[1]!);
+  }
+  return events;
+}
+
+export interface BrokenChain {
+  event: string;
+  what: string;
+  consumers: string[];
+}
+
+/**
+ * Cặp sản-xuất / tiêu-thụ chưa được khai báo trong `source`.
+ * `consumersByEvent` gom từ TẤT CẢ workflow, kể cả chính file đang xét —
+ * một workflow tự kích hoạt lại mình cũng đứt y hệt.
+ */
+export function brokenEventChains(
+  source: string,
+  consumersByEvent: ReadonlyMap<string, readonly string[]>,
+): BrokenChain[] {
+  const found: BrokenChain[] = [];
+  for (const producer of EVENT_PRODUCERS) {
+    if (!producer.match.test(source)) continue;
+    const consumers = consumersByEvent.get(producer.event);
+    if (!consumers || consumers.length === 0) continue;
+    // `[^\S\n]*\S` chứ không phải `\s*\S`: `\s` nuốt cả xuống dòng, nên một
+    // khai báo RỖNG sẽ khớp với ký tự đầu của dòng kế tiếp và coi như đã có
+    // lý do. Lý do phải nằm trên CÙNG một dòng với khai báo.
+    const declared = new RegExp(
+      `#[^\\S\\n]*KF-004[^\\S\\n]+${producer.event}[^\\S\\n]*:[^\\S\\n]*\\S`,
+    ).test(source);
+    if (declared) continue;
+    if (found.some((f) => f.event === producer.event)) continue;
+    found.push({ event: producer.event, what: producer.what, consumers: [...consumers] });
+  }
+  return found;
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 //
 // Phần dưới chỉ chạy khi gọi trực tiếp. Nhờ vậy test import được
@@ -213,6 +329,19 @@ const isMain = process.argv[1]?.endsWith('check-workflows.ts') === true;
 if (isMain) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
   if (files.length === 0) problems.push('ops/workflows/ rỗng.');
+
+  // Bản đồ "sự kiện → workflow đang lắng nghe nó", gom từ TẤT CẢ workflow.
+  // Phải gom trước vòng lặp: luật KF-004 xét một file dựa trên những gì các
+  // file KHÁC đăng ký nghe.
+  const consumersByEvent = new Map<string, string[]>();
+  for (const file of files) {
+    if (file === 'sync-workflows.yml') continue;
+    for (const event of subscribedEvents(readFileSync(join(dir, file), 'utf8'))) {
+      const bucket = consumersByEvent.get(event) ?? [];
+      bucket.push(file);
+      consumersByEvent.set(event, bucket);
+    }
+  }
 
   const scratch = mkdtempSync(join(tmpdir(), 'crux-wf-'));
   let blockCount = 0;
@@ -238,6 +367,17 @@ if (isMain) {
 
       for (const missing of missingPermissions(source)) {
         problems.push(`${file} — khối \`permissions\` ${missing}`);
+      }
+
+      for (const chain of brokenEventChains(source, consumersByEvent)) {
+        problems.push(
+          `${file} — ${chain.what} bằng GITHUB_TOKEN sinh ra sự kiện \`${chain.event}\`, ` +
+            `mà ${chain.consumers.join(', ')} đang lắng nghe sự kiện đó. ` +
+            'GitHub KHÔNG kích hoạt workflow từ sự kiện do GITHUB_TOKEN tạo ra, nên workflow kia ' +
+            'sẽ không bao giờ chạy — và không có gì đỏ để báo điều đó (KF-004).\n' +
+            `      Xử lý: gọi thẳng bằng \`gh workflow run\`, HOẶC làm luôn việc đó trong ${file}.\n` +
+            `      Rồi khai báo trong ${file}:  # KF-004 ${chain.event}: <vì sao chuỗi này không đứt>`,
+        );
       }
 
       for (const block of runBlocks(source, file)) {

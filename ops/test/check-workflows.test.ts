@@ -13,7 +13,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { missingPermissions } from '../scripts/check-workflows.ts';
+import {
+  missingPermissions,
+  brokenEventChains,
+  subscribedEvents,
+} from '../scripts/check-workflows.ts';
 
 // ── Test âm ──────────────────────────────────────────────────────────────
 
@@ -245,5 +249,135 @@ test('không workflow nào còn dùng action chạy Node 20', () => {
     for (const stale of ['actions/checkout@v4', 'actions/setup-node@v4', 'pnpm/action-setup@v4']) {
       assert.ok(!source.includes(stale), `${file} còn dùng ${stale} (Node 20, đã bị khai tử)`);
     }
+  }
+});
+
+// ── KF-004 · chuỗi sự kiện đứt vì GITHUB_TOKEN ───────────────────────────
+
+const PRODUCER = 'gh' + ' issue create --title x --label alert';
+
+function consumers(pairs: Record<string, string[]>): Map<string, string[]> {
+  return new Map(Object.entries(pairs));
+}
+
+test('KF-004 · mở issue bằng GITHUB_TOKEN khi có workflow nghe `issues` thì đỏ', () => {
+  const producer = `name: watchdog
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+permissions:
+  issues: write
+jobs:
+  watch:
+    steps:
+      - run: ${PRODUCER}
+`;
+  const found = brokenEventChains(producer, consumers({ issues: ['notify.yml'] }));
+  assert.equal(found.length, 1, JSON.stringify(found));
+  assert.equal(found[0]?.event, 'issues');
+  assert.deepEqual(found[0]?.consumers, ['notify.yml']);
+});
+
+test('KF-004 · khai báo có lý do thì hết đỏ', () => {
+  const declared = `name: watchdog
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+
+# KF-004 issues: @nhắc nằm ngay trong thân issue, không chờ notify.yml.
+permissions:
+  issues: write
+jobs:
+  watch:
+    steps:
+      - run: ${PRODUCER}
+`;
+  assert.deepEqual(brokenEventChains(declared, consumers({ issues: ['notify.yml'] })), []);
+});
+
+test('KF-004 · khai báo RỖNG không tính — phải có lý do viết ra', () => {
+  const empty = `name: watchdog
+on: [schedule]
+# KF-004 issues:
+jobs:
+  watch:
+    steps:
+      - run: ${PRODUCER}
+`;
+  assert.equal(brokenEventChains(empty, consumers({ issues: ['notify.yml'] })).length, 1);
+});
+
+test('KF-004 · không ai nghe sự kiện đó thì không đỏ', () => {
+  const noConsumer = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: ${PRODUCER}
+`;
+  assert.deepEqual(brokenEventChains(noConsumer, consumers({ push: ['main-ci.yml'] })), []);
+});
+
+test('KF-004 · workflow tự kích hoạt lại chính mình cũng là chuỗi đứt', () => {
+  const selfLoop = `name: ci
+on:
+  pull_request:
+    types: [opened, labeled]
+jobs:
+  j:
+    steps:
+      - run: gh pr edit 1 --add-label owner-merge
+`;
+  const found = brokenEventChains(selfLoop, consumers({ pull_request: ['ci.yml'] }));
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0]?.consumers, ['ci.yml']);
+});
+
+test('KF-004 · merge bằng gh api sinh sự kiện push', () => {
+  const merger = `name: automerge
+on: [workflow_run]
+jobs:
+  j:
+    steps:
+      - run: gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=squash
+`;
+  const found = brokenEventChains(merger, consumers({ push: ['main-ci.yml', 'labels.yml'] }));
+  assert.equal(found[0]?.event, 'push');
+  assert.deepEqual(found[0]?.consumers, ['main-ci.yml', 'labels.yml']);
+});
+
+test('đọc đúng khối `on:` ở cả ba cách viết', () => {
+  assert.deepEqual(subscribedEvents('on: push\njobs:\n'), ['push']);
+  assert.deepEqual(subscribedEvents('on: [push, pull_request]\njobs:\n'), ['push', 'pull_request']);
+  assert.deepEqual(
+    subscribedEvents('on:\n  pull_request:\n    branches: [main]\n  workflow_dispatch:\njobs:\n'),
+    ['pull_request', 'workflow_dispatch'],
+  );
+});
+
+// ── Cây hiện tại: mọi chuỗi phải được khai báo ───────────────────────────
+
+test('watchdog và main-ci đặt @nhắc NGAY TRONG thân issue, không chờ notify', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of ['watchdog.yml', 'main-ci.yml']) {
+    const source = readFileSync(join(dir, file), 'utf8');
+    assert.match(source, /OWNER: HungQuach301/, `${file} không khai OWNER`);
+    assert.match(source, /"@\$OWNER /, `${file} không đặt @nhắc trong thân issue`);
+    assert.match(source, /#\s*KF-004\s+issues\s*:\s*\S/, `${file} thiếu khai báo KF-004`);
+  }
+});
+
+test('không workflow nào còn chuỗi sự kiện đứt chưa khai báo', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  const files = readdirSync(dir).filter((f) => f.endsWith('.yml'));
+  const map = new Map<string, string[]>();
+  for (const file of files) {
+    for (const event of subscribedEvents(readFileSync(join(dir, file), 'utf8'))) {
+      map.set(event, [...(map.get(event) ?? []), file]);
+    }
+  }
+  for (const file of files) {
+    const found = brokenEventChains(readFileSync(join(dir, file), 'utf8'), map);
+    assert.deepEqual(found, [], `${file}: ${found.map((f) => f.event).join(', ')}`);
   }
 });

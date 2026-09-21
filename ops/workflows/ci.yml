@@ -14,6 +14,18 @@ on:
 
 permissions:
   contents: read
+# KF-004 pull_request: job `protected-area` gắn và gỡ nhãn bằng GITHUB_TOKEN,
+# và chính workflow này đăng ký `on: pull_request`. Hiện KHÔNG đứt, vì
+# `on.pull_request` đang dùng bộ types mặc định — `opened, synchronize,
+# reopened` — không có `labeled`. Nhãn do chính CI gắn vì thế không kích hoạt
+# lại CI, và đó là điều mong muốn: nếu có, nó sẽ thành vòng lặp.
+#
+# ⚠️ Mục `P-009` sẽ thêm `labeled` và `unlabeled` vào types, để bắt được
+# trường hợp nhãn `fix` gắn muộn. Lúc đó dòng khai báo này KHÔNG còn đúng:
+# nhãn do CI tự gắn sẽ không kích hoạt lại CI (GITHUB_TOKEN), còn nhãn do
+# người gắn thì có — hai đường đi khác nhau cho cùng một hành động. P-009
+# phải xử lý đúng chỗ đó, và viết lại dòng này.
+
   # pull-requests: write đủ cho CẢ hai việc của job protected-area: gắn nhãn
   # lên PR, VÀ tạo nhãn của repo bằng `gh label create`. Đã kiểm bằng chạy
   # thật — ci run #1 tạo được `automerge` và `cross-lane` mà không có quyền

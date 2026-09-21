@@ -104,8 +104,31 @@ Và một điều nữa lộ ra khi PR #7 chạy CI: **workflow chạy trên m�
 - **Vì sao nó đặc biệt nguy hiểm ở dự án này:** `notify.yml` tồn tại vì GitHub không báo cho chính người thực hiện hành động, còn agent thì hành động bằng danh tính chủ dự án (CHARTER 2.4). Nhưng nó chỉ chạy được cho issue do **agent** mở — không chạy cho issue do **workflow** mở. Mà đúng những issue quan trọng nhất lại do workflow mở: cảnh báo của `watchdog` (nhà máy đứng im, rủi ro **B7**) và cảnh báo `main` đỏ của `main-ci`.
 
   Nói cách khác: chuỗi báo động hoạt động cho mọi thứ **trừ** hai trường hợp nó được dựng ra để phục vụ.
-- **Đã sửa ở đâu:** chưa. Mục `P-011` trong `ops/lanes/platform/backlog.md`.
-- **Máy chặn từ nay:** chưa có. Tới khi `P-011` xong, đây là luật mềm ghi trong tài liệu.
+- **Đã sửa ở đâu:** `watchdog.yml` và `main-ci.yml` đặt `@HungQuach301` **ngay trong thân issue** chúng mở. Một `@nhắc` trong thân issue sinh thông báo của chính GitHub, không cần mắt xích thứ hai. `notify.yml` giữ nguyên và được ghi rõ phạm vi: nó chỉ phủ issue do **người hoặc agent** mở.
+- **Máy chặn từ nay:** `pnpm lint:workflows` có luật `brokenEventChains`. Nó dựng bản đồ *sự kiện → workflow đang nghe* từ tất cả workflow, rồi đối chiếu với các thao tác sinh sự kiện bằng `GITHUB_TOKEN` (`gh issue create`, `gh pr edit --add-label`, `gh api -X PUT …/merge`, …). Cặp nào chưa được khai báo thì CI đỏ.
+
+  Luật **không** tự đoán cách xử lý, vì có hai cách hợp lệ và chúng khác nhau về bản chất: gọi thẳng workflow kia bằng `gh workflow run`, hoặc thôi không dựa vào nó nữa. Vì vậy luật đòi một dòng khai báo **có lý do viết ra**, trên cùng một dòng:
+
+  ```
+  # KF-004 <tên sự kiện>: <vì sao chuỗi này không đứt>
+  ```
+
+  Bắt gõ ra lý do là chủ ý: một cờ `true` thì ai cũng bật được mà không nghĩ; một câu lý do thì không.
+
+### Luật mới tìm thêm hai chỗ nữa, một trong đó là lỗ hổng thật
+
+Lần chạy đầu tiên của luật này báo hai cặp mà tôi **chưa** nghĩ tới khi rà bằng mắt:
+
+| Workflow | Sinh sự kiện | Ai đang nghe | Tình trạng |
+|---|---|---|---|
+| `automerge.yml` | `push` (merge) | `main-ci.yml`, **`labels.yml`** | `main-ci` đã được gọi tường minh; **`labels` thì chưa** |
+| `ci.yml` | `pull_request` (gắn nhãn) | `ci.yml` (chính nó) | chưa đứt hôm nay, sẽ đứt khi `P-009` thêm `labeled` |
+
+**`labels.yml` là lỗ hổng thật, đang sống.** Nó nghe `push` vào `main` với `paths: ops/labels.json`. Một PR đổi `ops/labels.json` mà được `automerge` merge sẽ **không** đồng bộ nhãn — và `ops/labels.json` **không** nằm trong vùng bảo vệ, nên đường đó mở. Đã sửa: `automerge.yml` gọi `labels.yml` sau khi merge, nhưng chỉ khi PR vừa merge có đụng `ops/labels.json`.
+
+Còn một workflow thứ ba nghe `push` vào `main`: `.github/workflows/sync-workflows.yml`. Nó cũng không chạy sau automerge. Hiện vô hại **vì** nó chỉ quan tâm `ops/workflows/**`, mà thư mục đó nằm trong vùng bảo vệ nên `automerge` không bao giờ merge PR chạm tới nó. Chỗ đó an toàn **nhờ phạm vi vùng bảo vệ, không nhờ thiết kế** — rút `ops/workflows/**` khỏi vùng bảo vệ sẽ làm nó đứt im lặng. Đã ghi ngay trong `automerge.yml`.
+
+Đây là điều đáng chú ý nhất của mục này: rà bằng mắt tìm ra **2** chỗ, luật tìm ra **3**, và chỗ thứ ba là chỗ đang mở.
 
 ### Luật rút ra
 
