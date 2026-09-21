@@ -89,9 +89,14 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G11 · Hook và luật deny có hiệu lực trong routine và thread không
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - kiểm: trong một lần chạy routine, cho agent thử một lệnh nằm trong danh sách chặn của `.claude/hooks/guard.mjs` và xem nó có bị chặn không.
-- dự phòng nếu sai: bổ sung kiểm tra phía CI. Xem bảng hai lớp trong `.claude/README.md`.
+- dự phòng nếu sai: bổ sung kiểm tra phía CI. Xem bảng hai lớp trong `.claude/README.md`. **Không cần dùng tới** — nhưng lớp thứ hai vẫn giữ nguyên, xem dưới.
+- ✅ **Kiểm bằng chạy thật TRONG routine, 2026-09-21** (lượt `crux-worker-2`): **cả hai lớp đều có hiệu lực**. 5 phép thử, mỗi phép chọn sao cho vô hại nếu không bị chặn. 2 phép bị `guard.mjs` chặn (trả về đúng câu tiếng Việt của hook, kèm đường dẫn file hook); 3 phép bị `permissions.deny` chặn (câu của lớp quyền, không nhắc hook). Phép tách hai lớp: `git push --force origin <nhánh của chính lượt chạy>` — nằm trong `permissions.deny` mà **không** có trong `guard.mjs`, và nhánh trùng khít `origin` nên chạy được thì cũng là lệnh rỗng. Đối chứng ngược: công cụ `Read` trên `.gitattributes` trong cùng lượt đọc được bình thường. Bảng đủ 5 phép, kèm nguyên văn từng lời báo lỗi, ở `docs/assumptions.md` mục `G11`.
+- ⬜ **Còn treo, khai trước thay vì để tự phát hiện:**
+  - ngữ cảnh **thread** chưa kiểm — chưa chặn gì, chưa có làn nào dựa vào nó;
+  - hai luật `deny` cho công cụ MCP (`merge_pull_request`, `enable_pr_auto_merge`) và luật cấm ghi `.github/` **cố ý không thử**: lớp chặn mà hỏng thì chính phép thử đã merge một PR hoặc đã ghi vào `.github/`. Chúng ở lại mức suy ra từ cùng một cơ chế đã quan sát được, không phải "đã kiểm".
+- ghi chú: **không đưa được vào `pnpm recheck:assumptions`.** Bài kiểm tự động chạy được `guard.mjs` (đó là `ops/test/guard.test.ts`), nhưng điều G11 nói là *nền tảng có gọi hook hay không* — chỉ quan sát được từ bên trong một lượt agent thật. Phần chạy tự động được là hồi quy của lớp dưới: `ops/test/settings.test.ts` khoá đăng ký hook và 14 luật `deny`.
 
 ### VF-G12 · Ruleset bảo vệ nhánh trên repo private cần gói nào
 - deps: —

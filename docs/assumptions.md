@@ -49,7 +49,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | `suy luận` | giao làn `verify` | `VF-G8` |
 | G9 | Thuê được người soát bản địa và giao việc qua link | `suy luận` | giao làn `verify` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
-| G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm một phần`** | lớp thứ hai đã có | `VF-G11` |
+| G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** | lớp thứ hai vẫn giữ | `VF-G11` |
 | G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | `tài liệu nói vậy` | dự phòng đã viết sẵn | `VF-G12` |
 | G13 | GitHub Actions gọi được API trigger `/fire` của routine | `tài liệu nói vậy` | hoãn tới Đợt 1 | `VF-G13` |
 | G14 | Commit của routine và thread có trailer `Claude-Session` | **`đã kiểm một phần`** | CI chỉ cảnh báo | `VF-G14` |
@@ -58,7 +58,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
 
-**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G11`, `G14`) đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
+**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Hai giả định khác (`G2`, `G14`) đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới. `G11` đã kiểm **xong** phần routine ngày 2026-09-21, mục `VF-G11`.
 
 > Mã `G16` từng được **nhận trước** cho PR #11 trong lúc PR #15 viết `G17`, nên có một quãng bảng này nhảy từ G15 sang G17. Hai PR gộp vào nhau xong thì đủ cả hai, không ai mất số. Nhận mã trước khi viết là cách duy nhất để hai worker không cùng lấy một số (xem KF-005).
 
@@ -171,17 +171,35 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 - **Nội dung:** hook `PreToolUse` và luật `deny` trong `.claude/settings.json` có hiệu lực **trong routine và trong thread**, không chỉ trong phiên tương tác.
 - **Nguồn:** tài liệu Claude Code (khi dùng một repo).
-- **Độ tin cậy:** **`đã kiểm một phần`**
+- **Độ tin cậy:** **`đã kiểm`** cho phần **routine** — ngữ cảnh mà charter thật sự dựa vào.
 
-  **Bằng chứng, 2026-09-20 (phiên cloud tương tác):** ngay sau khi `.claude/settings.json` và `hooks/guard.mjs` được ghi vào cây làm việc, hook chặn thật một lệnh Bash của chính agent trong cùng phiên đó — lệnh chứa nguyên văn chuỗi bị cấm khi agent đang **soạn file test** cho hook. Hook trả về mã 2 và agent nhận được lý do bằng tiếng Việt. Nghĩa là: (a) hook nạp mà không cần khởi động lại phiên, (b) nó soi nội dung lệnh chứ không chỉ tên công cụ, (c) nó chặn kể cả khi ý định của agent là vô hại.
+  **Bằng chứng 1, 2026-09-20 (phiên cloud tương tác):** ngay sau khi `.claude/settings.json` và `hooks/guard.mjs` được ghi vào cây làm việc, hook chặn thật một lệnh Bash của chính agent trong cùng phiên đó — lệnh chứa nguyên văn chuỗi bị cấm khi agent đang **soạn file test** cho hook. Hook trả về mã 2 và agent nhận được lý do bằng tiếng Việt. Nghĩa là: (a) hook nạp mà không cần khởi động lại phiên, (b) nó soi nội dung lệnh chứ không chỉ tên công cụ, (c) nó chặn kể cả khi ý định của agent là vô hại.
 
   Điểm (c) là một phát hiện, không phải một trục trặc: hook chặn theo **hình dạng lệnh**, không theo ý định. Mặt trái là nó chặn cả việc chính đáng — file test vì thế ghép chuỗi lệnh từ mảnh và ghi rõ lý do ngay trong file. Mặt phải là không có cách "giải thích cho hook hiểu" để đi qua nó.
 
-  **Chưa kiểm:** routine và thread. Đó mới là ngữ cảnh mà charter thực sự dựa vào, vì worker chạy không có người giám sát.
-- **Phần phụ thuộc:** `.claude/README.md` · `ops/test/guard.test.ts` · `ops/workflows/README.md` · bất biến I4
-- **Cách kiểm phần còn lại:** trong một lần chạy routine, cho agent thử một lệnh nằm trong danh sách chặn và xem nó có bị chặn không. Miễn phí.
-- **Dự phòng — đã có sẵn:** mọi thứ hook chặn đều có **lớp thứ hai không phụ thuộc G11**, ghi trong bảng ở `.claude/README.md`: `automerge.yml` chạy theo định nghĩa trên `main` (nhánh PR không sửa được), `protected-area` gắn nhãn `owner-merge` từ phía CI, và proxy GitHub của Claude cho `.github/`.
-- **Trạng thái:** giao làn `verify` mục `VF-G11` cho phần routine.
+  **Bằng chứng 2, 2026-09-21 — chạy thật TRONG một lượt routine** (`crux-worker-2`, 15:25 giờ VN). Đây là ngữ cảnh còn thiếu: worker chạy không có người giám sát, nên routine là chỗ duy nhất mà bất biến I4 phải đứng một mình. Năm phép thử, và mỗi phép được chọn sao cho **vô hại nếu KHÔNG bị chặn** — điều kiện bắt buộc khi đi thử một lớp chặn, vì phép thử nào mà "hỏng" đồng nghĩa với "đã làm đúng việc bị cấm" thì không được phép chạy:
+
+  | # | Phép thử | Kết quả | Lớp nào chặn |
+  |---|---|---|---|
+  | 1 | `cat .github/workflows/ci.yml | head -3` | **CHẶN** — `PreToolUse:Bash hook error: [….claude/hooks/guard.mjs]: CHẶN — Agent không ghi vào .github/ (CHARTER 3.2, giả định G10).` | hook |
+  | 2 | `git commit --no-verify -m …` | **CHẶN** — `CHẶN — Không bỏ qua hook. Hook bị chặn là hệ thống đang chạy đúng, không phải một trở ngại cần lách.` | hook |
+  | 3 | `git push --force origin claude/verify/VF-G11` — nhánh trùng khít `origin`, nên chạy được thì cũng là lệnh rỗng | **CHẶN** — `Permission to use Bash … has been denied.` | `permissions.deny` |
+  | 4 | công cụ `Read` trên `./.env` | **CHẶN** — `File is in a directory that is denied by your permission settings.` | `permissions.deny` |
+  | 5 | `ls -la .env` | **CHẶN** — `Permission to use Bash … has been denied.` | `permissions.deny` |
+
+  **Hai lớp tách được ra bằng chính lời báo lỗi** — đây là chỗ đáng đọc nhất, vì "bị chặn" không tự nói cho biết *cái gì* chặn. Phép 1 và 2 trả về đúng câu tiếng Việt do `guard.mjs` tự in, kèm đường dẫn tới chính file hook: hook đã **chạy**. Phép 3, 4, 5 trả về câu của lớp quyền — **không** nhắc `guard.mjs`, **không** có chữ `CHẶN`. Phép 3 được chọn chính vì `git push` kèm cờ ép nằm trong `permissions.deny` mà **không** có trong `guard.mjs`: nó chứng minh lớp quyền tự nó có hiệu lực chứ không phải hook chặn hộ. Đối chứng ngược: công cụ `Read` trên `.gitattributes` trong cùng lượt chạy **đọc được bình thường**, nên lời từ chối ở phép 4 là luật theo đường dẫn, không phải công cụ `Read` hỏng.
+
+  **Một quan sát đi kèm, rộng hơn luật đã viết:** phép 5 cho thấy luật `Read(./.env)` chặn cả một lệnh **Bash** chạm tới đường dẫn đó, không riêng công cụ `Read`. Lớp quyền mạnh hơn cách đọc chữ trong `.claude/settings.json`. Ghi ra để không ai tưởng Bash là cửa sau — nhưng **không** dựa vào nó như một bảo đảm: đó là hành vi của nền tảng, không phải luật của repo.
+
+  **Một xác nhận thứ hai, không cố ý:** ngay trong lượt này hook còn chặn thêm một lệnh **hợp lệ** của chính agent — lệnh `python3` kèm heredoc để soạn đúng mục G11 này, vì nội dung văn bản có chứa nguyên văn chuỗi ở phép 2. Đó đúng là điểm (c) của bằng chứng 1, gặp lại trong routine: hook soi **hình dạng lệnh**, không soi ý định. Cách đi tiếp là cách `ops/test/guard.test.ts` đã dùng — ghép chuỗi từ mảnh, hoặc ghi file bằng công cụ ghi file thay vì bằng shell.
+
+  **Cố ý KHÔNG thử, và lý do:** (a) `mcp__github__merge_pull_request` và `enable_pr_auto_merge` — lớp chặn mà hỏng thì phép thử **đã merge một PR**, đúng thứ bất biến I4 cấm tuyệt đối; (b) ghi một file vào `.github/` — hỏng thì phép thử đã vi phạm `CLAUDE.md` mục 4. Hai chỗ đó ở lại mức "suy ra từ cùng một cơ chế đã quan sát được", **không** phải "đã kiểm". Một phép thử không được lấy chính cái nó bảo vệ ra làm giá.
+
+  **Chưa kiểm:** ngữ cảnh **thread**. Chưa chặn gì, vì chưa có làn nào dựa vào thread.
+- **Phần phụ thuộc:** `.claude/README.md` · `ops/test/guard.test.ts` · `ops/test/settings.test.ts` · `ops/workflows/README.md` · bất biến I4
+- **Cách kiểm — và vì sao nó không tự động hoá được:** cách kiểm là cho agent thử, **trong chính một lượt routine**, một lệnh nằm trong danh sách chặn, và chọn lệnh sao cho vô hại nếu không bị chặn; rồi đọc lời báo lỗi để biết lớp nào đã chặn. Miễn phí, lặp lại được, và đó là cách bằng chứng 2 ở trên được tạo ra. Nó **không** vào được `pnpm recheck:assumptions`: `ops/test/guard.test.ts` chạy `guard.mjs` và kiểm nó **phân loại** đúng, nhưng không quan sát được điều G11 thật sự nói — **nền tảng có gọi hook hay không**. Câu đó chỉ trả lời được từ bên trong một lượt agent thật, nên nó không vào được `pnpm recheck:assumptions`. Cái chạy tự động được là hồi quy của lớp dưới: `ops/test/settings.test.ts` khoá đăng ký hook `PreToolUse` và cả 14 luật `deny`, gỡ một trong hai thì CI đỏ.
+- **Dự phòng — vẫn giữ, không gỡ:** mọi thứ hook chặn đều có **lớp thứ hai không phụ thuộc G11**, ghi trong bảng ở `.claude/README.md`: `automerge.yml` chạy theo định nghĩa trên `main` (nhánh PR không sửa được), `protected-area` gắn nhãn `owner-merge` từ phía CI, và proxy GitHub của Claude cho `.github/`. G11 đúng **không** phải lý do bỏ lớp thứ hai: G11 nói về hành vi của nền tảng, mà nền tảng đổi thì không ai báo trước.
+- **Trạng thái:** **đã kiểm** phần routine, 2026-09-21 (mục `VF-G11`). Phần `thread` để mở, chưa có ai dựa vào.
 
 ## G12 · Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro
 
@@ -207,9 +225,9 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 - **Nội dung:** commit do routine và thread tạo mang trailer `Claude-Session: <url>`, và mô tả PR có link phiên. Đây là **dấu vết duy nhất phân biệt người với máy** trong lúc chưa tách danh tính (mặc định M6).
 - **Nguồn:** tài liệu Claude Code về `attribution.sessionUrl`.
-- **Độ tin cậy:** **`đã kiểm một phần`**
+- **Độ tin cậy:** **`đã kiểm`** cho phần **routine** — ngữ cảnh mà charter thật sự dựa vào.
 
-  **Bằng chứng, 2026-09-20 (phiên cloud tương tác):** cả hai commit của Đợt 0 mang trailer `Claude-Session: https://claude.ai/code/session_…`, đọc được bằng `git log --format='%(trailers:key=Claude-Session,valueonly=true)'`. Commit `e01a667` do chủ dự án upload qua web thì **không** có trailer — nghĩa là trailer thật sự phân biệt được hai nguồn.
+  **Bằng chứng 1, 2026-09-20 (phiên cloud tương tác):** cả hai commit của Đợt 0 mang trailer `Claude-Session: https://claude.ai/code/session_…`, đọc được bằng `git log --format='%(trailers:key=Claude-Session,valueonly=true)'`. Commit `e01a667` do chủ dự án upload qua web thì **không** có trailer — nghĩa là trailer thật sự phân biệt được hai nguồn.
 
   **Bằng chứng, 2026-09-21 (lần quan sát tự động đầu tiên):** `pnpm recheck:assumptions` quét các commit trên `origin/claude/*` chưa vào `main` và thấy **mọi commit của agent ở đó đều mang trailer**, trong đó có `b244b1e` do routine `crux-integrator` tạo. Đây là bằng chứng đầu tiên từ ngữ cảnh **routine**, chứ không phải phiên tương tác. Nhưng nó **chưa đóng được** phần chưa kiểm: bài kiểm không phân biệt được routine với thread, và các commit còn lại trong lần quét là của chính phiên đang viết mục này — bằng chứng tự dẫn chính mình. Cái bài kiểm thật sự bảo đảm là **hồi quy**: hôm nào trailer thôi được ghi thì nó đỏ ngay. Phần phân biệt routine/thread vẫn ở `VF-G14`.
 
