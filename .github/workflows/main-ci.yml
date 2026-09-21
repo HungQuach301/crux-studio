@@ -51,20 +51,31 @@ jobs:
     steps:
       # Main đỏ được revert ngay; việc sửa làm lại trên nhánh. Issue này là
       # thứ routine crux-integrator đọc ở lần chạy kế tiếp.
-      - name: Mở issue main đỏ
+      #
+      # D-C06 · @NHẮC CÓ ĐỘ TRỄ. Lần đỏ đầu tiên KHÔNG @nhắc chủ dự án: nhà
+      # máy có một cơ chế tự sửa (integrator revert, CHARTER 6.5 và phụ lục
+      # P3) và nó chạy mỗi giờ. Gọi người ngay ở phút đầu là gọi người cho
+      # một việc mà máy sắp tự làm xong.
+      #
+      # Chỉ khi `main` còn đỏ sau 2 GIỜ — tức là cơ chế tự sửa đã có ít nhất
+      # một lượt và không xong — thì đây mới thành một trong bốn cảnh báo
+      # khẩn của CHARTER 2.4, và lúc đó mới @nhắc, đúng một lần.
+      - name: Mở issue main đỏ, @nhắc khi quá 2 giờ
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           OWNER: HungQuach301
           SHA: ${{ github.sha }}
+          MARKER: '<!-- crux-escalate-main-do -->'
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           TITLE="[CẢNH BÁO] main đỏ tại ${SHA:0:7}"
           EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
-            --search "main đỏ in:title" --json number --jq '.[0].number // empty')
+            --search "main đỏ in:title" --json number,createdAt \
+            --jq '.[0] | select(.) | "\(.number)\t\(.createdAt)"')
           BODY=$(printf '%s\n' \
-            "@$OWNER \`main\` đang đỏ." \
+            "🤖 \`main\` đang đỏ." \
             "" \
             "\`pnpm check\` đỏ trên \`main\` tại commit \`$SHA\`." \
             "" \
@@ -76,8 +87,30 @@ jobs:
             "3. Ghi vào \`ops/known-failures.md\`, và thêm một mục \`fix\` vào backlog của làn gây lỗi." \
             "" \
             "Không sửa trực tiếp trên \`main\`. Việc sửa làm lại trên nhánh.")
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
-          else
+
+          if [ -z "$EXISTING" ]; then
             gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
+            echo "Mở issue main đỏ. CHƯA @nhắc: máy còn 2 giờ để tự revert (D-C06)."
+            exit 0
           fi
+
+          NUM=$(echo "$EXISTING" | cut -f1)
+          CREATED=$(echo "$EXISTING" | cut -f2)
+          gh issue comment "$NUM" --repo "$REPO" --body "$BODY"
+
+          AGE=$(( ( $(date -u +%s) - $(date -u -d "$CREATED" +%s) ) / 3600 ))
+          echo "main đã đỏ $AGE giờ (ngưỡng @nhắc: 2)."
+          if [ "$AGE" -lt 2 ]; then
+            echo "Chưa tới ngưỡng. Không @nhắc."
+            exit 0
+          fi
+          if gh issue view "$NUM" --repo "$REPO" --json comments --jq '.comments[].body' \
+              | grep -qF "$MARKER"; then
+            echo "Đã @nhắc rồi. Không nhắc lại."
+            exit 0
+          fi
+          gh issue comment "$NUM" --repo "$REPO" --body "$(printf '%s\n' \
+            "$MARKER" \
+            "@$OWNER \`main\` đã đỏ $AGE giờ mà máy chưa tự sửa được." \
+            "" \
+            "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng.")"

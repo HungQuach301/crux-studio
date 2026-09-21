@@ -4,6 +4,24 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-017 · Chế độ vận hành 1–2 lần mỗi ngày — quyết định `D-C06`
+Chủ dự án chỉ xuất hiện tối đa **hai lần mỗi ngày, tổng không quá 15 phút**, và mọi việc cần anh nằm trong **một** chỗ: bản tin sáng. Bản C3.1 không đạt được điều đó vì ba thứ cộng lại: vùng bảo vệ quá rộng, danh sách `irreversible` quá dài, và mỗi quyết định là một cuộc gọi riêng. Cả ba đều là **cách thực thi** bất biến, không phải bất biến.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: chỉ dẫn của chủ dự án trong phiên 2026-09-21; `docs/decisions/D-C06.md`
+- tiêu chí xong:
+  - ✅ `docs/decisions/D-C06.md` ghi đủ bảy nhóm `irreversible`, ba nhóm `owner-merge`, và cách đảo ngược.
+  - ✅ CHARTER mục 1.3, 2.3, 2.4, 2.5, 3, 3.3, 12 (M8), 14 (C4), phụ lục P1–P3 sửa theo. `CLAUDE.md` mục 0, 1, 2, 3, 5, 10, 13, 14 sửa theo.
+  - ✅ Ba luật tách thành `ops/invariants.*` — nên chính chúng là `owner-merge`, một PR không tự nới được lớp chặn của mình. 57 test.
+  - ✅ `automerge.yml` tính lại **cửa** bằng bản trên `main` thay vì tin nhãn do `ci.yml` gắn. Đây là rà soát **Z8**, nay có máy chặn.
+  - ✅ **KF-004:** `automerge.yml` gọi `sync-workflows` bằng `workflow_dispatch` khi PR chạm `ops/workflows/`. Danh sách do `ops/invariants.post-merge-dispatch.ts` quyết định, không viết cứng trong bash. 12 test riêng, gồm ba test đọc lại chính `automerge.yml`.
+  - ✅ `notify.yml` bỏ nhãn `decision`; `main-ci.yml` @nhắc muộn 2 giờ; `watchdog.yml` thêm dấu hiệu chi phí ≥ 80% ngân sách.
+  - ✅ Không cơ chế nào đòi chủ dự án sửa lịch routine. Bước 0 của integrator chuyển sang chạy ở **đầu mỗi lượt worker** (phụ lục P1), và đề nghị đổi lịch của `P-016` đã được rút.
+  - ⬜ **Chưa xong, thuộc `P-014`:** rà soát **Z3** — `main-ci` so nội dung `ops/workflows/*` với `.github/workflows/*`, lệch là đỏ. Tới khi có nó, lời gọi `sync-workflows` **chưa có dự phòng**, và đó là chỗ hở lớn nhất mà `D-C06` tạo ra (ghi ở `docs/assumptions.md` mục G2).
+  - ⬜ **Kiểm bằng chạy thật:** mục này chỉ chuyển `done` khi một PR `automerge-delayed` thật sự tự vào `main` sau 12 giờ, **và** `sync-workflows` chạy sau đó. Merge PR này chưa phải bằng chứng.
+
 ### P-013 · Bỏ khối `ask` để routine chạy trọn không cần người bấm — giả định G16 — **ưu tiên cao**
 Chủ dự án cấp phép toàn bộ cho mọi phiên và routine, và chỉ nhận kết quả. Khối `ask` trong `.claude/settings.json` đi ngược lại điều đó: trong một lần chạy routine không có người ngồi cạnh, mỗi lời hỏi là một lần **treo tới khi hết giờ** — và không chỉ báo nào đỏ. Đây là mục **chặn** việc bật routine.
 

@@ -18,7 +18,8 @@
  *    dòng là mất hẳn một quyền — và trên repo private, lỗi hiện ra dưới
  *    dạng 404 "Repository not found", không phải 403.
  * 5. Chuỗi sự kiện đứt (KF-004): workflow A tạo ra một sự kiện bằng
- *    `GITHUB_TOKEN` mà workflow B đang lắng nghe. GitHub cố ý KHÔNG kích
+ *    `GITHUB_TOKEN` mà workflow B đang lắng nghe — kể cả khi B nằm ngoài
+ *    `ops/workflows/` (xem `EXTERNAL_CONSUMERS`). GitHub cố ý KHÔNG kích
  *    hoạt workflow từ sự kiện do `GITHUB_TOKEN` tạo ra, nên B không bao
  *    giờ chạy — và không có gì đỏ để báo điều đó.
  */
@@ -286,6 +287,23 @@ export function subscribedEvents(source: string): string[] {
   return events;
 }
 
+/**
+ * Workflow đăng ký nghe sự kiện nhưng KHÔNG nằm trong `ops/workflows/`, nên
+ * vòng lặp bên dưới không thấy chúng.
+ *
+ * Hiện có đúng một: `.github/workflows/sync-workflows.yml` do chủ dự án tạo
+ * một lần (CHARTER 3.2). Nó nghe `push` vào `main` với `paths: ops/workflows/**`.
+ *
+ * Bỏ sót nó từng vô hại: `ops/workflows/**` nằm trong vùng `owner-merge`,
+ * nên chỉ NGƯỜI mới đưa được PR chạm tới đó vào `main`, và thao tác của
+ * người sinh sự kiện thật. D-C06 chuyển thư mục đó sang `automerge-delayed`
+ * — máy tự đưa vào `main` được — nên chỗ đó thành một chuỗi đứt thật. Khai
+ * ở đây để luật KF-004 nhìn thấy nó như mọi workflow khác.
+ */
+export const EXTERNAL_CONSUMERS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['push', ['.github/workflows/sync-workflows.yml']],
+]);
+
 export interface BrokenChain {
   event: string;
   what: string;
@@ -334,6 +352,9 @@ if (isMain) {
   // Phải gom trước vòng lặp: luật KF-004 xét một file dựa trên những gì các
   // file KHÁC đăng ký nghe.
   const consumersByEvent = new Map<string, string[]>();
+  for (const [event, consumers] of EXTERNAL_CONSUMERS) {
+    consumersByEvent.set(event, [...consumers]);
+  }
   for (const file of files) {
     if (file === 'sync-workflows.yml') continue;
     for (const event of subscribedEvents(readFileSync(join(dir, file), 'utf8'))) {

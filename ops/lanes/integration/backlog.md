@@ -20,11 +20,13 @@ Tín hiệu của rủi ro R12 (độ phức tạp tự phình to): số file co
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER 6.7; phụ lục P3 bước 3
 - tiêu chí xong:
-  - Một lệnh tính: số file code / số mục `done`, số lần revert, tỷ lệ `main` xanh.
-  - Số liệu ghi vào `ops/metrics.md`, không chỉ in ra màn hình.
+  - ✅ Một lệnh tính: số file code / số mục `done`, số lần revert, tỷ lệ `main` xanh — `ops/scripts/update-metrics.ts`.
+  - ✅ Số liệu ghi vào `ops/metrics.md`, không chỉ in ra màn hình.
+  - Logic đếm và chỉnh bảng markdown là hàm thuần, kiểm bằng `ops/test/update-metrics.test.ts`; lớp gọi `gh pr list` trong `main()` không kiểm đơn vị (không có lịch sử merge thật để dựa vào ở đây, cùng lý do với `I-001`).
+  - **Chưa kiểm bằng chạy thật:** routine `crux-integrator` (Phụ lục P3 bước 3) chưa gọi tool này — lần tới bước 3 chạy thật (thứ Hai kế tiếp hoặc lần chạy `main` ≥ 02:00 giờ Việt Nam kế tiếp) sẽ là lần đầu.
 
 ### I-003 · Chạy lại kiểm tra tự động của sổ giả định mỗi thứ Hai
 Nhiều tính năng đang ở giai đoạn research preview và có thể đổi bất cứ lúc nào (rủi ro B6).

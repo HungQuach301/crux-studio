@@ -17,6 +17,7 @@ import {
   missingPermissions,
   brokenEventChains,
   subscribedEvents,
+  EXTERNAL_CONSUMERS,
 } from '../scripts/check-workflows.ts';
 
 // ── Test âm ──────────────────────────────────────────────────────────────
@@ -371,6 +372,7 @@ test('không workflow nào còn chuỗi sự kiện đứt chưa khai báo', () 
   const dir = join(process.cwd(), 'ops', 'workflows');
   const files = readdirSync(dir).filter((f) => f.endsWith('.yml'));
   const map = new Map<string, string[]>();
+  for (const [event, consumers] of EXTERNAL_CONSUMERS) map.set(event, [...consumers]);
   for (const file of files) {
     for (const event of subscribedEvents(readFileSync(join(dir, file), 'utf8'))) {
       map.set(event, [...(map.get(event) ?? []), file]);
@@ -380,4 +382,34 @@ test('không workflow nào còn chuỗi sự kiện đứt chưa khai báo', () 
     const found = brokenEventChains(readFileSync(join(dir, file), 'utf8'), map);
     assert.deepEqual(found, [], `${file}: ${found.map((f) => f.event).join(', ')}`);
   }
+});
+
+// ── Bên nghe nằm ngoài ops/workflows/ (D-C06) ────────────────────────────
+
+test('KF-004 · sync-workflows.yml được khai là bên nghe `push`, dù nó nằm trong .github/', () => {
+  // Linter chỉ đọc `ops/workflows/`, nên nếu không khai tường minh thì
+  // `sync-workflows.yml` vô hình với nó. Trước D-C06 chỗ đó an toàn nhờ
+  // phạm vi vùng bảo vệ; sau D-C06 máy tự đưa `ops/workflows/**` vào `main`
+  // được, nên nó phải nằm trong bản đồ như mọi bên nghe khác.
+  assert.deepEqual(EXTERNAL_CONSUMERS.get('push'), ['.github/workflows/sync-workflows.yml']);
+});
+
+test('KF-004 · workflow sinh sự kiện `push` mà không khai báo thì đỏ, dù ops/workflows/ không ai nghe push', () => {
+  const broken = [
+    'name: x',
+    'on: [workflow_dispatch]',
+    '',
+    'permissions:',
+    '  contents: write',
+    '',
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh api -X PUT "repos/$REPO/pulls/$NUM/merge" -f merge_method=squash',
+    '',
+  ].join('\n');
+  const found = brokenEventChains(broken, EXTERNAL_CONSUMERS);
+  assert.equal(found.length, 1, JSON.stringify(found));
+  assert.equal(found[0]!.event, 'push');
+  assert.deepEqual(found[0]!.consumers, ['.github/workflows/sync-workflows.yml']);
 });
