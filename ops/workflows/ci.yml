@@ -113,13 +113,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      # BẤT BIẾN I4: vùng bảo vệ chỉ chủ dự án merge. CI gắn nhãn
-      # `owner-merge`; automerge.yml bỏ qua mọi PR mang nhãn đó.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      # BẤT BIẾN I4, sau quyết định D-C06: vùng bảo vệ có HAI mức.
+      #
+      #   owner-merge        · chỉ chủ dự án merge
+      #   automerge-delayed  · máy merge sau 12 giờ CI xanh, nếu không có
+      #                        comment `dừng` của chủ dự án
+      #
+      # Luật phân loại nằm ở `ops/invariants.protected-area.ts`, KHÔNG nằm
+      # trong file này. Lý do: `ci.yml` chạy theo định nghĩa trong nhánh PR,
+      # nên một luật viết ở đây tự nó không chặn được gì. `automerge.yml`
+      # chạy cùng luật đó theo bản trên `main` và ĐÓ mới là lớp chặn thật
+      # (rà soát Z8). Nhãn gắn ở đây là để người đọc PR.
       #
       # Cũng gắn nhãn mềm `cross-lane` khi PR chạm nhiều thư mục làn
       # (CHARTER mục 4) — chỉ để reviewer soát kỹ hơn, không chặn.
       # Nhãn phải tồn tại trước khi gắn. Nguồn sự thật là ops/labels.json;
-      # bước này chỉ bảo đảm bốn nhãn mà chính CI dùng đã có mặt, để job
+      # bước này chỉ bảo đảm năm nhãn mà chính CI dùng đã có mặt, để job
       # không đỏ vì một lý do không liên quan gì tới nội dung PR.
       - name: Bảo đảm nhãn CI dùng đã tồn tại
         env:
@@ -127,33 +139,62 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for NAME in owner-merge automerge cross-lane fix; do
+          for NAME in owner-merge automerge-delayed automerge cross-lane fix; do
             ROW=$(jq -c --arg n "$NAME" '.labels[] | select(.name==$n)' ops/labels.json)
             gh label create "$NAME" --repo "$REPO" \
               --color "$(echo "$ROW" | jq -r .color)" \
               --description "$(echo "$ROW" | jq -r .description)" --force
           done
 
-      - name: Gắn nhãn owner-merge và cross-lane
+      - name: Gắn nhãn theo cửa merge, và cross-lane
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
-          CHANGED=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
+          git fetch --no-tags origin "$BASE"
+          git diff --name-only "origin/$BASE...HEAD" > "$RUNNER_TEMP/changed.txt"
+          cat "$RUNNER_TEMP/changed.txt"
 
-          PROTECTED='^(CHARTER\.md|CLAUDE\.md|docs/decisions/|docs/spec/|kernel/contracts/|\.claude/|ops/workflows/|\.github/|ops/invariants\.)'
-          if echo "$CHANGED" | grep -Eq "$PROTECTED"; then
-            echo "PR chạm vùng bảo vệ:"
-            echo "$CHANGED" | grep -E "$PROTECTED"
-            gh pr edit "$PR" --add-label owner-merge
-            gh pr edit "$PR" --remove-label automerge || true
-          else
-            gh pr edit "$PR" --remove-label owner-merge || true
-          fi
+          # CHARTER được cắt theo MỤC, không theo file: chỉ mục 1 (mục tiêu)
+          # và mục 3 (bất biến) mới cần chủ dự án. Vì vậy luật cần cả bản cũ
+          # lẫn bản mới để biết diff rơi vào mục nào.
+          git show "origin/$BASE:CHARTER.md" > "$RUNNER_TEMP/base-CHARTER.md" 2>/dev/null || true
 
-          LANES=$(echo "$CHANGED" | grep -Eo '^(workshops|ops/lanes)/[a-z]+' | sort -u | wc -l)
+          AREA=$(node ops/invariants.protected-area.ts \
+            --changed "$RUNNER_TEMP/changed.txt" \
+            --head . \
+            --base-charter "$RUNNER_TEMP/base-CHARTER.md")
+          GATE=$(echo "$AREA" | jq -r .gate)
+
+          # Cấm im lặng (rà soát Z2): bước này LUÔN in ra kết luận của nó.
+          # Một bước có điều kiện mà không in gì thì nhìn từ ngoài giống hệt
+          # một bước đã kiểm và đã qua.
+          echo "::notice::cửa merge = $GATE"
+          echo "$AREA" | jq -r '(.owner[] | "  owner-merge vì \(.)"), (.delayed[] | "  chờ vì \(.)")'
+
+          # `|| true` ở đây là chủ ý: gỡ một nhãn không có mặt không phải lỗi,
+          # và bước này phải chạy được ở cả lần đầu lẫn các lần sau (rà soát Z9).
+          case "$GATE" in
+            owner-merge)
+              gh pr edit "$PR" --add-label owner-merge
+              gh pr edit "$PR" --remove-label automerge-delayed || true
+              gh pr edit "$PR" --remove-label automerge || true
+              ;;
+            automerge-delayed)
+              gh pr edit "$PR" --add-label automerge-delayed
+              gh pr edit "$PR" --remove-label owner-merge || true
+              gh pr edit "$PR" --remove-label automerge || true
+              ;;
+            *)
+              gh pr edit "$PR" --remove-label owner-merge || true
+              gh pr edit "$PR" --remove-label automerge-delayed || true
+              ;;
+          esac
+
+          LANES=$(grep -Eo '^(workshops|ops/lanes)/[a-z]+' "$RUNNER_TEMP/changed.txt" | sort -u | wc -l)
+          echo "số làn bị chạm: $LANES"
           if [ "$LANES" -gt 1 ]; then
             gh pr edit "$PR" --add-label cross-lane
           else

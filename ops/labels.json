@@ -4,37 +4,42 @@
     {
       "name": "decision",
       "color": "5319E7",
-      "description": "Hộp quyết định. Issue 🤖 [QĐ]. Luôn đi kèm reversible hoặc irreversible."
+      "description": "Hộp quyết định. Issue 🤖 [QĐ]. Luôn đi kèm reversible hoặc irreversible. KHÔNG còn @nhắc riêng lẻ (D-C06): mỗi quyết định là một dòng trong bản tin sáng."
     },
     {
       "name": "reversible",
       "color": "B4A7F5",
-      "description": "Agent làm theo khuyến nghị NGAY và ghi lại. Chủ dự án phủ quyết thì agent hoàn tác."
+      "description": "Agent làm theo khuyến nghị NGAY, ghi vào bản tin. Chủ dự án phủ quyết trong 24 giờ bằng comment 'hoàn tác #N'."
     },
     {
       "name": "irreversible",
       "color": "B60205",
-      "description": "Agent CHỜ trả lời. Chỉ nhánh việc liên quan chờ; các làn khác vẫn chạy."
+      "description": "Agent CHỜ trả lời. Bảy nhóm, khai ở CHARTER 2.3. Trả lời trong MỘT comment trên bản tin, dạng '#19 A, #14 B'."
     },
     {
       "name": "digest",
       "color": "0E8A16",
-      "description": "Bản tin ngày. Dòng đầu luôn là 'Cần anh quyết: N việc'."
+      "description": "Bản tin sáng — hộp quyết định DUY NHẤT. Dòng đầu luôn là 'Cần anh quyết: N việc'. Nơi chủ dự án trả lời mọi thứ."
     },
     {
       "name": "alert",
       "color": "D93F0B",
-      "description": "Cảnh báo của người canh hoặc của main-ci. Đẩy thông báo về điện thoại qua notify.yml."
+      "description": "Cảnh báo KHẨN, bốn loại (CHARTER 2.4). Thứ duy nhất ngoài bản tin được phép @nhắc chủ dự án."
     },
     {
       "name": "automerge",
       "color": "0052CC",
-      "description": "PR không chạm vùng bảo vệ. automerge.yml merge khi CI xanh và PR không còn nháp."
+      "description": "PR không chạm vùng bảo vệ. automerge.yml merge ngay khi CI xanh và PR không còn nháp."
     },
     {
       "name": "owner-merge",
       "color": "B60205",
-      "description": "PR chạm vùng bảo vệ (I4). CI tự gắn. automerge.yml bỏ qua; chỉ chủ dự án merge."
+      "description": "PR chạm vùng chỉ chủ dự án merge (I4, đã thu hẹp theo D-C06): CHARTER mục 1 và 3, ops/invariants.*, .claude/settings.json, hooks, automerge.yml, .github/**, workflow dùng secret hoặc phát hành."
+    },
+    {
+      "name": "automerge-delayed",
+      "color": "1D76DB",
+      "description": "PR chạm vùng bảo vệ cũ nhưng không thuộc owner-merge (D-C06). Tự merge sau 12 giờ CI xanh, trừ khi chủ dự án comment 'dừng'."
     },
     {
       "name": "fix",

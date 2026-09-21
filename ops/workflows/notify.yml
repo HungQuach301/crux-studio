@@ -5,10 +5,23 @@
 # máy chủ dự án. Workflow này chạy bằng github-actions[bot] — một danh tính
 # khác — nên @nhắc của nó mới đẩy được thông báo qua GitHub Mobile.
 #
-# ⚠️ PHẠM VI: workflow này CHỈ phủ issue do NGƯỜI hoặc AGENT mở. Nó KHÔNG
-# phủ issue do workflow khác mở, vì GitHub không kích hoạt workflow từ sự
-# kiện do GITHUB_TOKEN tạo ra (KF-004). `watchdog.yml` và `main-ci.yml` vì
-# thế tự đặt @nhắc ngay trong thân issue chúng mở, không nhờ file này.
+# ⚠️ PHẠM VI 1 — loại issue: từ D-C06, file này CHỈ @nhắc cho HAI thứ:
+#   `digest` · bản tin sáng — hộp quyết định DUY NHẤT của chủ dự án
+#   `alert`  · cảnh báo khẩn — bốn loại, khai ở CHARTER 2.4
+#
+# Nhãn `decision` đã bị BỎ khỏi danh sách này, và đó là thay đổi chính của
+# D-C06. Trước đó mỗi issue `🤖 [QĐ]` đẩy một thông báo riêng về điện thoại,
+# nên một ngày nhiều quyết định là một ngày nhiều lần bị gọi. Từ nay mọi
+# quyết định `irreversible` xuất hiện dưới dạng MỘT DÒNG trong bản tin sáng,
+# và chủ dự án trả lời tất cả trong MỘT comment trên issue bản tin
+# ("#19 A, #14 B"). Issue `[QĐ]` vẫn được mở như cũ — nó là chỗ ghi bối cảnh
+# và là chỗ agent đóng lại sau khi xử lý — chỉ là nó không còn gọi điện nữa.
+#
+# ⚠️ PHẠM VI 2 — nguồn issue: workflow này CHỈ phủ issue do NGƯỜI hoặc AGENT
+# mở. Nó KHÔNG phủ issue do workflow khác mở, vì GitHub không kích hoạt
+# workflow từ sự kiện do GITHUB_TOKEN tạo ra (KF-004). `watchdog.yml` và
+# `main-ci.yml` vì thế tự đặt @nhắc ngay trong thân issue chúng mở, không
+# nhờ file này.
 #
 # Đừng "sửa" bằng cách thêm gì đó ở đây — không có gì ở đây sửa được, vì
 # file này không bao giờ được gọi trong trường hợp đó.
@@ -26,7 +39,6 @@ jobs:
     name: mention
     runs-on: ubuntu-latest
     if: >-
-      contains(github.event.issue.labels.*.name, 'decision') ||
       contains(github.event.issue.labels.*.name, 'digest') ||
       contains(github.event.issue.labels.*.name, 'alert')
     steps:
@@ -47,9 +59,8 @@ jobs:
 
           LABELS=$(gh issue view "$NUM" --repo "$REPO" --json labels --jq '[.labels[].name] | join(", ")')
           case "$LABELS" in
-            *decision*) LEAD="Có việc cần anh quyết.";;
-            *alert*)    LEAD="Có cảnh báo cần anh xem.";;
-            *)          LEAD="Bản tin mới.";;
+            *alert*) LEAD="Có cảnh báo khẩn cần anh xem.";;
+            *)       LEAD="Bản tin sáng. Mọi việc cần anh nằm ở đây.";;
           esac
 
           # Comment này do github-actions[bot] viết, không phải agent. Nó
@@ -61,5 +72,5 @@ jobs:
             "" \
             "Nhãn: $LABELS" \
             "" \
-            "Trả lời bằng một comment ngay trong issue này. Comment của anh không có 🤖, nên agent nhận ra đó là câu trả lời của anh.")
+            "Trả lời bằng MỘT comment ngay trong issue này, dạng \`#19 A, #14 B\`. Comment của anh không có 🤖, nên agent nhận ra đó là câu trả lời của anh.")
           gh issue comment "$NUM" --repo "$REPO" --body "$BODY"
