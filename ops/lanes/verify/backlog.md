@@ -119,6 +119,12 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - kiểm: theo từng mục; chia nhỏ thành mục con khi tới lượt.
 - ghi chú: `parked` cho tới khi có một làn cần tới một mục cụ thể. Mở cả 19 mục bây giờ là mở rộng phạm vi không có người tiêu thụ.
 
+### VF-G16 · Routine có chạy trọn một mục mà không cần người bấm cấp quyền không
+- deps: VF-G1
+- risk: medium
+- status: ready
+- kiểm: bật một routine worker và để nó nhận một mục backlog. Xem lần chạy đó có đi hết vòng — sửa file, `pnpm check`, commit, push, mở PR, gắn nhãn — hay dừng giữa chừng ở một lời hỏi cấp quyền. Bằng chứng: link lần chạy, cộng PR nó mở ra (hoặc chỗ nó dừng).
+- dự phòng nếu sai: quay `permissions.defaultMode` về `acceptEdits` và nhận việc phải bấm tay ở đúng những chỗ lần chạy đã dừng.
 ### VF-G17 · GitHub có dùng `.gitattributes` khi tự tính `mergeable` không
 - deps: —
 - risk: medium

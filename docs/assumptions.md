@@ -44,11 +44,12 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 | G13 | GitHub Actions gọi được API trigger `/fire` của routine | `tài liệu nói vậy` | hoãn tới Đợt 1 | `VF-G13` |
 | G14 | Commit của routine và thread có trailer `Claude-Session` | **`đã kiểm một phần`** | CI chỉ cảnh báo | `VF-G14` |
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | theo từng mục | `parked` | `VF-G15` |
+| G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Hai giả định khác đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
 
-> Mã `G16` **đã được nhận trước** cho PR #11 (bỏ khối `ask`), chưa merge vào `main`. Đó là lý do bảng này nhảy từ G15 sang G17: nhận mã trước khi viết là cách duy nhất để hai worker không cùng lấy một số (xem KF-005).
+> Mã `G16` từng được **nhận trước** cho PR #11 trong lúc PR #15 viết `G17`, nên có một quãng bảng này nhảy từ G15 sang G17. Hai PR gộp vào nhau xong thì đủ cả hai, không ai mất số. Nhận mã trước khi viết là cách duy nhất để hai worker không cùng lấy một số (xem KF-005).
 
 ---
 
@@ -207,6 +208,19 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 - **Cách kiểm:** chia nhỏ thành mục con **khi một làn cần tới một mục cụ thể**.
 - **Dự phòng:** không cần — `parked` nghĩa là chưa có gì xây lên trên G15, nên không có gì để dự phòng. Khi một làn tách ra một mục con, mục con đó mới phải có dự phòng riêng theo luật 2.
 - **Trạng thái:** `parked`. Mở cả 19 mục bây giờ là mở rộng phạm vi không có người tiêu thụ — đúng thứ ngân sách độ phức tạp ở CHARTER mục 9 cấm.
+
+## G16 · Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền
+
+- **Nội dung:** sau khi bỏ hẳn khối `ask` và đặt `permissions.defaultMode` thành `dontAsk`, một phiên cloud hoặc một lần chạy routine đi hết một mục backlog — sửa file, chạy `pnpm check`, commit, push, mở PR, gắn nhãn — mà **không lần nào dừng lại chờ người bấm cấp quyền**.
+- **Nguồn:** tài liệu Claude Code về `permissions.defaultMode` cho biết `dontAsk` thì không hỏi nữa. Nhưng việc một **routine chạy không có người** thật sự đi trọn một mục thì chưa có nguồn nào xác nhận: routine còn có thể dừng vì lý do khác — hết lượt, hết giờ, hoặc một công cụ không nằm trong `allow` mà cũng không nằm trong `deny`. Vì thế giả định này ở mức `suy luận`, không phải `tài liệu nói vậy`.
+- **Độ tin cậy:** `suy luận`
+- **Phần phụ thuộc:** `.claude/README.md` · `ops/lanes/verify/backlog.md`
+- **Ghi chú truy vết:** file thật sự dựa vào G16 là `.claude/settings.json`. Nó là JSON nên không mang được comment, không ghi được mã giả định vào trong — vì thế mã nằm ở `.claude/README.md` ngay cạnh, và cột trên trỏ vào đó. Đây là ngoại lệ duy nhất của luật 1, và nó được ghi ra thay vì im lặng.
+- **Cách kiểm:** **chạy thật một routine** và xem nó có đi hết một mục backlog không. Không đọc tài liệu — đây đúng loại giả định mà luật 3 nói tới. Bằng chứng cần thu: lần chạy đó có mở được PR và gắn được nhãn, hay dừng giữa chừng ở một lời hỏi. Chỉ chủ dự án bật được routine, nên mục này phụ thuộc G1.
+- **Vì sao `dontAsk` chứ không phải `bypassPermissions`:** `bypassPermissions` là mức cao nhất trong thang, nhưng nó bỏ qua **toàn bộ** kiểm tra quyền, kể cả khối `deny`. Chọn nó là tự tay gỡ lớp thứ nhất của bất biến I4. `dontAsk` không hỏi gì nữa mà `deny` và hook `guard.mjs` vẫn có hiệu lực, nên nó là **mức cao nhất còn giữ được cả hai lớp chặn**.
+- **Dự phòng — đã viết sẵn:** quay `defaultMode` về `acceptEdits` và chấp nhận phải bấm tay ở đúng những chỗ ghi trong nhật ký lần chạy hỏng. Không mất gì về kiến trúc, chỉ chậm hơn và cần người. Việc quay lại là một dòng trong `.claude/settings.json`, và PR đó là `owner-merge` như mọi PR chạm vùng bảo vệ.
+- **Rủi ro còn lại:** giả định này **đánh đổi rào chắn lấy tốc độ**. Khối `ask` trước đây là lớp thứ ba cho vùng bảo vệ — một người đọc diff trước khi agent chạm `CHARTER.md`. Bỏ nó đi thì vùng bảo vệ còn hai lớp: nhãn `owner-merge` do workflow `protected-area` gắn từ phía CI, và hook `guard.mjs`. Cả hai đều **không** phụ thuộc vào việc agent tự giác, và đó là điều làm việc bỏ `ask` chấp nhận được. Ngược lại, giữ `ask` trong một routine không có người ngồi cạnh thì mỗi lời hỏi là một lần treo tới khi hết giờ — một lần chạy hỏng mà **không chỉ báo nào đỏ**, đúng nhóm lỗi đang được rà ở `ops/known-failures.md`.
+- **Trạng thái:** đang dựa vào, có dự phòng. Giao làn `verify` mục `VF-G16`. Chuyển sang `đã kiểm` khi lần chạy routine đầu tiên đi trọn một mục backlog.
 
 ---
 

@@ -1,6 +1,33 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "Bash(git *)",
+      "Bash(pnpm *)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh label:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh workflow run:*)",
+      "Read",
+      "Edit",
+      "Glob",
+      "Grep"
+    ],
     "deny": [
       "Bash(gh pr merge:*)",
       "Bash(gh pr review:*)",
@@ -16,19 +43,6 @@
       "Read(./**/.env)",
       "Read(./**/*.pem)",
       "Read(./**/id_rsa*)"
-    ],
-    "ask": [
-      "Bash(git push:*)",
-      "Write(./CHARTER.md)",
-      "Edit(./CHARTER.md)",
-      "Write(./CLAUDE.md)",
-      "Edit(./CLAUDE.md)",
-      "Write(./kernel/contracts/**)",
-      "Edit(./kernel/contracts/**)",
-      "Write(./.claude/**)",
-      "Edit(./.claude/**)",
-      "Write(./docs/decisions/**)",
-      "Edit(./docs/decisions/**)"
     ]
   },
   "hooks": {
