@@ -30,9 +30,13 @@ mẫu `us-personal-finance-2026-09-01` là số đo thật của cơ chế, khô
 |---|---|
 | Truy vấn | 5 |
 | Trang đã lấy (= số lần gọi) | 10 |
-| Video giữ lại | 36 |
+| Video giữ lại | 38 |
 | Phần bucket dùng được đã tiêu | 10 / 80 = **12,5 %** |
 | Nếu chạy mỗi ngày, một tuần | 70 / 560 = **12,5 %** |
+
+**Corpus mẫu dựng bằng tay, chưa gọi API lần nào** (`provenance: "hand-built"`, xem mục `T-011`). Nên
+12,5 % ở trên là số của **cơ chế đếm**, không phải mức tiêu của một lần xây thật. Nó trả lời được câu
+"cơ chế có đếm đúng không", không trả lời được câu "một lần xây thật tốn bao nhiêu".
 
 Con số 10 không phải viết tay vào bảng này: `corpusProblems` trong `workshops/topic/src/corpus.ts` đỏ khi
 `quota.spent.searchCalls` lệch tổng `pagesFetched`. Bảng và dữ liệu không trôi khỏi nhau được.

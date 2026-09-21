@@ -59,8 +59,16 @@
         }
       }
     },
-    "similarCount": { "type": "integer", "minimum": 0 },
-    "contradictingCount": { "type": "integer", "minimum": 0 },
+    "similarCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Số video nói CÙNG chuyện và KHÔNG nói ngược. Một video vừa trùng đề tài vừa phản biện được đếm vào `contradictingCount`, không đếm vào đây — hai số này rời nhau, cộng lại ra tổng số video trùng đề tài."
+    },
+    "contradictingCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Số video trùng đề tài VÀ mang dấu hiệu nói ngược. Bằng 0 không chứng minh điều gì — xem `limitation`."
+    },
     "matches": {
       "type": "array",
       "items": {

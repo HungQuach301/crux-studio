@@ -31,7 +31,47 @@ test('WP-014 kiểm 1: corpus mẫu hợp contract và sạch mọi phép soát'
   const corpus = loadCorpus();
   assert.equal(validateCorpus(corpus).valid, true);
   assert.deepEqual(corpusProblems(corpus), []);
-  assert.ok(corpus.coverage.videoCount >= MIN_CORPUS_VIDEOS);
+  assert.equal(corpus.coverage.videoCount, 38);
+  assert.ok(38 >= MIN_CORPUS_VIDEOS, 'corpus mẫu phải vượt ngưỡng tối thiểu để kiểm mới lạ chạy được');
+});
+
+test('nguồn gốc corpus nằm trong DỮ LIỆU: corpus mẫu tự khai là dựng tay', () => {
+  // Cùng luật với `quota.limits.source`. Ai đọc file cũng thấy, kể cả khi
+  // chưa từng mở README của thư mục.
+  const corpus = loadCorpus();
+  assert.equal(corpus.provenance, 'hand-built');
+
+  const stripped: Record<string, unknown> = { ...corpus };
+  delete stripped['provenance'];
+  assert.equal(validateCorpus(stripped).valid, false, 'provenance phải là trường BẮT BUỘC');
+
+  const invented = { ...corpus, provenance: 'scraped' };
+  assert.equal(validateCorpus(invented).valid, false);
+});
+
+test('mốc thời gian đứng vững: không video nào đăng sau ngày dựng corpus', () => {
+  const corpus = loadCorpus();
+  for (const video of corpus.videos) {
+    assert.ok(
+      Date.parse(video.publishedAt) <= Date.parse(corpus.builtAt),
+      `${video.videoId} đăng sau builtAt`,
+    );
+  }
+
+  // Một ngày đăng ở tương lai không làm schema đỏ — nó hợp `format: date-time`.
+  // Phép soát thứ 5 là thứ duy nhất bắt được, và nó phải bắt được.
+  const future = structuredClone(corpus);
+  future.videos[0]!.publishedAt = '2027-01-01T00:00:00.000Z';
+  assert.equal(validateCorpus(future).valid, true, 'schema KHÔNG bắt được ca này — đó là lý do có luật 5');
+  assert.ok(corpusProblems(future).some((p) => p.includes('nằm SAU builtAt')));
+});
+
+test('cửa sổ đã khai phải đúng với dữ liệu: video quá cũ bị bắt', () => {
+  const corpus = loadCorpus();
+  const tooOld = structuredClone(corpus);
+  // `scope.asOf` là 2026-09-01 và `windowDays` là 730, nên 2020 nằm ngoài hẳn.
+  tooOld.videos[1]!.publishedAt = '2020-01-01T00:00:00.000Z';
+  assert.ok(corpusProblems(tooOld).some((p) => p.includes('nằm ngoài cửa sổ')));
 });
 
 test('coverage.contentLevel bị khoá: corpus không bao giờ mang nội dung video', () => {
@@ -104,7 +144,12 @@ test('WP-014 kiểm âm 4: hết bucket tìm kiếm thì cửa quota đóng, có
   assert.equal(open.reserved, 20);
   assert.equal(open.remaining, 70);
 
-  // Chạm đúng mốc 20% còn lại: dừng, không lấn vào phần dự trữ.
+  // Biên ghim bằng SỐ, không bằng chính hằng số đang kiểm: 79 lần gọi thì
+  // còn mở, 80 thì đóng. Đổi luật dự trữ mà quên đổi test là đỏ ngay.
+  const justBefore = quotaGate({ ...limits, spent: 79 });
+  assert.equal(justBefore.allowed, true);
+  assert.equal(justBefore.remaining, 1);
+
   const atReserve = quotaGate({ ...limits, spent: 80 });
   assert.equal(atReserve.allowed, false);
   assert.equal(atReserve.remaining, 0);
@@ -113,4 +158,12 @@ test('WP-014 kiểm âm 4: hết bucket tìm kiếm thì cửa quota đóng, có
   const past = quotaGate({ ...limits, spent: 95 });
   assert.equal(past.allowed, false);
   assert.equal(past.remaining, 0);
+});
+
+test('phần dự trữ làm tròn LÊN — nghi ngờ thì giữ lại nhiều hơn, không ít hơn', () => {
+  // 100 × 0,2 = 20 chẵn, nên ca đó không phân biệt được `ceil` với `floor`.
+  // Hai ca lẻ dưới đây ghim hướng làm tròn.
+  assert.equal(quotaGate({ searchCallsPerDay: 100, reserveFraction: 0.15, spent: 0 }).reserved, 15);
+  assert.equal(quotaGate({ searchCallsPerDay: 100, reserveFraction: 0.155, spent: 0 }).reserved, 16);
+  assert.equal(quotaGate({ searchCallsPerDay: 33, reserveFraction: 0.2, spent: 0 }).reserved, 7);
 });

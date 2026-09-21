@@ -22,6 +22,11 @@ bị cấm lọt vào — lưới thứ hai, ngoài `additionalProperties: false
 
 ## `us-personal-finance-2026-09-01.json`
 
-Corpus **mẫu**, 36 video, dựng bằng tay để ba module của `T-008` có dữ liệu chạy thật khi chưa có khoá API
-(xem `T-011`). Nó không phải dữ liệu thu được từ nền tảng, và `quota.limits.source` ghi `vendor-docs` —
-đúng như mọi corpus khác cho tới khi có người đọc Cloud Console (giả định **G19**).
+Corpus **mẫu**, 38 video, dựng bằng tay để ba module của `T-008` có dữ liệu chạy thật khi chưa có khoá API
+(xem `T-011`). Nó không phải dữ liệu thu được từ nền tảng — và điều đó nằm trong **dữ liệu**, không nằm ở
+dòng này: `provenance: "hand-built"`. `quota.limits.source` ghi `vendor-docs`, đúng như mọi corpus khác cho
+tới khi có người đọc Cloud Console (giả định **G19**).
+
+Hai trong 38 video (`yt-0037`, `yt-0038`) mang dấu hiệu **nói ngược**, trên đề tài khác với thesis mẫu.
+Không có chúng thì nhánh `contested-in-corpus` chỉ được chạm bằng video tự dựng trong test — cơ chế có bài
+kiểm nhưng dữ liệu mẫu không bao giờ chịu lực.

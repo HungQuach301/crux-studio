@@ -104,10 +104,18 @@ const STOPWORDS = new Set([
   'where', 'which', 'who', 'why', 'will', 'with', 'you', 'your',
 ]);
 
-/** Dấu hiệu một video đang nói NGƯỢC chứ không nói cùng. Cố ý hẹp: thà sót còn hơn gán oan. */
+/**
+ * Dấu hiệu một video đang nói NGƯỢC chứ không nói cùng. Cố ý hẹp: thà sót
+ * còn hơn gán oan, vì `contested-in-corpus` thắng mọi nhánh khác nên một
+ * marker rộng nuốt cả `crowded-in-corpus` lẫn `novel-in-corpus`.
+ *
+ * `stop` từng nằm trong danh sách và đã bị bỏ: "Stop doing X" là khuôn tiêu
+ * đề rất phổ biến của tài chính cá nhân Mỹ, dùng cho cả video nói xuôi.
+ * Đừng thêm lại mà không có ca đo.
+ */
 const CONTRADICTION_MARKERS = [
   'myth', 'myths', 'debunk', 'debunked', 'debunking', 'wrong', 'mistake', 'mistakes',
-  'misleading', 'overrated', 'scam', 'lie', 'lies', 'busted', 'stop',
+  'misleading', 'overrated', 'scam', 'lie', 'lies', 'busted',
 ];
 
 export function tokenize(text: string): string[] {

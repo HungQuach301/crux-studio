@@ -5,11 +5,15 @@
   "description": "Corpus là METADATA, không phải nội dung. Ba giới hạn của WP-014 mục 3c được mã hoá thành trường bắt buộc ở đây, không nằm trong ghi chú: coverage.contentLevel khoá 'metadata-only'; quota.limits.source nói rõ số hạn mức đọc từ đâu; coverage.partialReason bắt buộc có chữ khi corpus chỉ chụp được một phần.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "corpusId", "builtAt", "scope", "queries", "coverage", "quota", "videos"],
+  "required": ["schemaVersion", "corpusId", "builtAt", "provenance", "scope", "queries", "coverage", "quota", "videos"],
   "properties": {
     "schemaVersion": { "type": "integer", "minimum": 0 },
     "corpusId": { "type": "string", "minLength": 1 },
     "builtAt": { "type": "string", "format": "date-time" },
+    "provenance": {
+      "enum": ["hand-built", "api"],
+      "description": "Corpus này thu từ API nền tảng, hay dựng bằng tay để có dữ liệu chạy khi chưa có khoá? Cùng luật với `quota.limits.source`: đây là giới hạn LỚN NHẤT của một file corpus, nên nó phải đi theo file, không nằm trong README mà bên đọc có thể chưa từng mở."
+    },
     "scope": { "$ref": "#/definitions/scope" },
     "queries": {
       "type": "array",

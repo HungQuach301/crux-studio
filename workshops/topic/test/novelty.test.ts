@@ -73,28 +73,50 @@ test('tiêu chí xong T-008: kiểm trả về LÝ DO, không chỉ trả về �
 });
 
 test('WP-014 kiểm âm 1: contradictingCount = 0 KHÔNG tự thành novel-in-corpus khi similarCount cao', () => {
+  // Biên ghim bằng SỐ CỤ THỂ, không bằng chính hằng số đang kiểm. Bản đầu
+  // dùng `DEFAULT_THRESHOLDS.crowdedAt` ở cả hai vế, nên đặt ngưỡng thành
+  // 100 — tức giết hẳn cơ chế — mà test vẫn xanh (reviewer ngữ cảnh sạch đo
+  // được). Corpus mẫu có sẵn 3 video cùng chuyện.
   const corpus = loadCorpus();
-  const crowded = withVideos(corpus, [
-    ...corpus.videos,
-    ...Array.from({ length: DEFAULT_THRESHOLDS.crowdedAt }, (_, i) => similarVideo(i)),
-  ]);
-  const check = checkNovelty(THESIS, crowded, CHECKED_AT);
+  const withExtra = (extra: number) =>
+    checkNovelty(
+      THESIS,
+      withVideos(corpus, [...corpus.videos, ...Array.from({ length: extra }, (_, i) => similarVideo(i))]),
+      CHECKED_AT,
+    );
 
-  assert.equal(check.contradictingCount, 0);
-  assert.ok(check.similarCount >= DEFAULT_THRESHOLDS.crowdedAt);
-  assert.equal(check.verdict, 'crowded-in-corpus');
-  assert.ok(check.reasons.some((r) => r.code === 'similar-above-threshold'));
-  assert.equal(validateNoveltyCheck(check).valid, true);
+  const seven = withExtra(4);
+  assert.equal(seven.similarCount, 7);
+  assert.equal(seven.contradictingCount, 0);
+  assert.equal(seven.verdict, 'novel-in-corpus', '7 video cùng chuyện: chưa đông');
+
+  const eight = withExtra(5);
+  assert.equal(eight.similarCount, 8);
+  assert.equal(eight.contradictingCount, 0);
+  assert.equal(eight.verdict, 'crowded-in-corpus', '8 video cùng chuyện: đã đông, dù không ai nói ngược');
+  assert.ok(eight.reasons.some((r) => r.code === 'similar-above-threshold'));
+  assert.equal(validateNoveltyCheck(eight).valid, true);
+
+  // Ngưỡng đang dùng phải đúng bằng biên vừa ghim — nếu ai đổi hằng số mà
+  // quên đổi hai ca trên, dòng này chỉ thẳng vào chỗ lệch.
+  assert.equal(DEFAULT_THRESHOLDS.crowdedAt, 8);
 });
 
 test('WP-014 kiểm âm 2: corpus dưới ngưỡng tối thiểu trả insufficient-corpus', () => {
+  // Cùng lý do: ghim 29 và 30 bằng số, không bằng `MIN_CORPUS_VIDEOS − 1`.
   const corpus = loadCorpus();
-  const thin = withVideos(corpus, corpus.videos.slice(0, MIN_CORPUS_VIDEOS - 1));
-  const check = checkNovelty(THESIS, thin, CHECKED_AT);
+  const sliced = (n: number) => checkNovelty(THESIS, withVideos(corpus, corpus.videos.slice(0, n)), CHECKED_AT);
 
-  assert.equal(check.verdict, 'insufficient-corpus');
-  assert.ok(check.reasons.some((r) => r.code === 'corpus-below-minimum'));
-  assert.equal(validateNoveltyCheck(check).valid, true);
+  const thin = sliced(29);
+  assert.equal(thin.verdict, 'insufficient-corpus');
+  assert.ok(thin.reasons.some((r) => r.code === 'corpus-below-minimum'));
+  assert.equal(validateNoveltyCheck(thin).valid, true);
+
+  const atMinimum = sliced(30);
+  assert.notEqual(atMinimum.verdict, 'insufficient-corpus', '30 video: đủ ngưỡng, phải kết luận được');
+  assert.ok(!atMinimum.reasons.some((r) => r.code === 'corpus-below-minimum'));
+
+  assert.equal(MIN_CORPUS_VIDEOS, 30);
 });
 
 test('corpus rỗng: không có ai nói ngược vẫn KHÔNG phải mới lạ', () => {
@@ -120,6 +142,23 @@ test('một video nói ngược là đủ để hạ kết luận xuống contes
   assert.equal(check.verdict, 'contested-in-corpus');
   assert.equal(check.contradictingCount, 1);
   assert.ok(check.reasons.some((r) => r.code === 'contradicting-found'));
+});
+
+test('nhánh contested chạm được bằng chính dữ liệu corpus mẫu, không cần video tự dựng', () => {
+  // Corpus mẫu mang sẵn hai video nói ngược trên đề tài khác. Không có chúng,
+  // nhánh `contested-in-corpus` chỉ sống trong test — cơ chế có bài kiểm
+  // nhưng dữ liệu mẫu không bao giờ chịu lực (reviewer ngữ cảnh sạch nêu).
+  const check = checkNovelty(
+    {
+      id: 'TH-002',
+      statement: 'Chasing high yield savings rate moves between banks is a mistake for most households.',
+    },
+    loadCorpus(),
+    CHECKED_AT,
+  );
+  assert.equal(check.verdict, 'contested-in-corpus');
+  assert.equal(check.contradictingCount, 1);
+  assert.ok(check.matches?.some((m) => m.videoId === 'yt-0037'));
 });
 
 test('corpus một phần và phạm vi hẹp được nói ra bằng lý do, không im lặng', () => {

@@ -50,6 +50,8 @@ export interface Corpus {
   schemaVersion: number;
   corpusId: string;
   builtAt: string;
+  /** Thu từ API nền tảng, hay dựng tay để có dữ liệu chạy khi chưa có khoá. */
+  provenance: 'hand-built' | 'api';
   scope: Scope;
   queries: { text: string; pagesFetched: number; resultsKept: number }[];
   coverage: {
@@ -172,6 +174,31 @@ export function corpusProblems(value: unknown): string[] {
       `quota.spent.searchCalls = ${corpus.quota.spent.searchCalls} nhưng tổng pagesFetched là ${pages}. ` +
         'Mỗi trang kết quả tốn đúng một lần gọi — lệch nghĩa là một trong hai số bị khai tay.',
     );
+  }
+
+  // 5 · Mốc thời gian phải đứng vững: không video nào đăng SAU ngày dựng
+  //     corpus, và không video nào nằm ngoài cửa sổ đã khai.
+  //
+  //     Vì sao đáng một luật riêng: một ngày đăng ở tương lai hợp
+  //     `format: date-time` nên schema không bắt được, nhưng nó đi thẳng vào
+  //     mẫu số của `viewsPerDayOfAge` và thổi đại lượng nhu cầu lên — hỏng mà
+  //     mọi chỉ báo đều xanh, đúng nhóm Z của `ops/known-failures.md`.
+  const builtMs = Date.parse(corpus.builtAt);
+  const windowStartMs = Date.parse(corpus.scope.asOf) - corpus.scope.windowDays * 86_400_000;
+  for (const video of corpus.videos) {
+    const publishedMs = Date.parse(video.publishedAt);
+    if (publishedMs > builtMs) {
+      problems.push(
+        `${video.videoId}: publishedAt ${video.publishedAt} nằm SAU builtAt ${corpus.builtAt}. ` +
+          'Corpus không chụp được video chưa đăng.',
+      );
+    }
+    if (publishedMs < windowStartMs) {
+      problems.push(
+        `${video.videoId}: publishedAt ${video.publishedAt} nằm ngoài cửa sổ ${corpus.scope.windowDays} ngày ` +
+          `tính từ ${corpus.scope.asOf}. Cửa sổ đã khai phải đúng với dữ liệu trong file.`,
+      );
+    }
   }
 
   return problems;

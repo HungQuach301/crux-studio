@@ -64,8 +64,28 @@ export interface MeasureContext {
   language: string;
 }
 
+/**
+ * Tuổi của một video tính tới mốc đo, theo ngày.
+ *
+ * Ném lỗi khi video đăng SAU mốc đo, thay vì kẹp về 1 ngày. Bản đầu của hàm
+ * này kẹp, và reviewer ngữ cảnh sạch đo được hậu quả: đẩy đúng một video
+ * đang khớp đề tài sang tương lai thì `viewsPerDayOfAge` nhảy từ 1331 lên
+ * 2232 mà không chỉ báo nào đỏ. Một phép kẹp im lặng ở mẫu số là cách rẻ
+ * nhất để một đại lượng nhu cầu nói dối — đúng nhóm Z của
+ * `ops/known-failures.md`.
+ */
 function ageDays(video: CorpusVideo, asOf: string): number {
-  return Math.max(1, (Date.parse(asOf) - Date.parse(video.publishedAt)) / 86_400_000);
+  const days = (Date.parse(asOf) - Date.parse(video.publishedAt)) / 86_400_000;
+  if (days < 0) {
+    throw new Error(
+      `${video.videoId}: publishedAt ${video.publishedAt} nằm SAU mốc đo ${asOf}, nên video có tuổi âm. ` +
+        'Không kẹp về 1 ngày — kẹp làm mẫu số nhỏ đi và thổi lượt xem mỗi ngày tuổi lên. ' +
+        'Soát corpus bằng corpusProblems trước khi đo.',
+    );
+  }
+  // Video đăng đúng mốc đo có tuổi 0; sàn 1 ngày ở đây là để không chia cho 0,
+  // và chỉ chạm tới đúng ca đó.
+  return Math.max(1, days);
 }
 
 /** Trung vị, không trung bình: một video viral kéo trung bình đi rất xa. */

@@ -115,8 +115,9 @@ Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **
     chặn; hết bucket thì cửa quota đóng sạch.
 - ✅ **Đã làm, 2026-09-21** (lượt `crux-worker-2`): ba contract v0 trong `workshops/topic/contracts/`
   (`corpus`, `novelty-check`, `demand-signal`), ba module trong `workshops/topic/src/`
-  (`corpus.ts`, `novelty.ts`, `demand.ts`), một corpus mẫu 36 video trong `workshops/topic/data/corpus/`,
-  bảng ngân sách quota ở `packs/channels/us-personal-finance/quota-budget.md`, và 30 test mới. Ba giới hạn
+  (`corpus.ts`, `novelty.ts`, `demand.ts`), một corpus mẫu 38 video trong `workshops/topic/data/corpus/`,
+  bảng ngân sách quota ở `packs/channels/us-personal-finance/quota-budget.md`, và 38 test mới
+  (corpus 14, novelty 12, demand 12). Ba giới hạn
   của WP-014 mục 3c được mã hoá thành **trường bắt buộc**, không thành ghi chú: `coverage.contentLevel`
   khoá `metadata-only`; `verdict` không có giá trị `novel` và `limitation` bắt buộc dài ≥ 40 ký tự;
   ba đại lượng nhu cầu bắt buộc mang `asOf`, `region`, `language`, `knownBias`.

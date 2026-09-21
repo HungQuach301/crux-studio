@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unsupportedKeywords } from '@crux/kernel';
-import { type Corpus } from '../src/corpus.ts';
+import { corpusProblems, type Corpus } from '../src/corpus.ts';
 import {
   autocompleteSuggestions,
   demandSignalSchema,
@@ -124,6 +124,31 @@ test('gợi ý tự động đếm đúng danh sách được truyền vào, và
   assert.equal(signal.value, 2);
   assert.equal(signal.basis.kind, 'autocomplete');
   assert.equal(signal.basis.ref, 'emergency fund');
+});
+
+test('video có tuổi âm thì ném lỗi, không kẹp về 1 ngày', () => {
+  // Kẹp về 1 ngày làm mẫu số nhỏ đi và thổi lượt xem mỗi ngày tuổi lên, mà
+  // không chỉ báo nào đỏ. Đo bằng chạy thật: đẩy một video đang khớp đề tài
+  // sang tương lai thì bản kẹp cho 2231,88 thay vì 1331,18.
+  const corpus = loadCorpus();
+  const future = structuredClone(corpus);
+  future.videos[0]!.publishedAt = '2027-01-01T00:00:00.000Z';
+
+  assert.throws(() => viewsPerDayOfAge(future, TOPIC, CTX), /tuổi âm/);
+  // Và corpus đó lẽ ra không bao giờ tới được đây: phép soát bắt trước.
+  assert.ok(corpusProblems(future).length > 0);
+});
+
+test('video đăng đúng mốc đo có tuổi 0 — sàn 1 ngày chỉ để không chia cho 0', () => {
+  // Đo đúng vào ngày đăng của video khớp đề tài MỚI NHẤT: video đó có tuổi 0,
+  // hai video còn lại vẫn có tuổi dương, nên ca này tách riêng được sàn 1 ngày
+  // khỏi ca tuổi âm ở bài kiểm trên.
+  const corpus = loadCorpus();
+  const newest = corpus.videos[2]!;
+  const signal = viewsPerDayOfAge(corpus, TOPIC, { ...CTX, asOf: newest.publishedAt });
+  assert.equal(signal.basis.sampleSize, 3);
+  assert.ok(Number.isFinite(signal.value));
+  assert.ok(signal.value > 0);
 });
 
 test('đo lại cho ra đúng số cũ — cùng corpus, cùng mốc, cùng kết quả', () => {
