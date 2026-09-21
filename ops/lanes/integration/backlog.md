@@ -230,3 +230,44 @@ trước khi viết máy kiểm.
   - Nếu chọn (a) hoặc (b): hoà giải với CHARTER 6.1 — nói rõ một PR `pnpm replay -- --update` được
     phép chạm file nào, hoặc sửa 6.1 bằng PR `owner-merge` nếu cần.
   - Kiểm nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường của một artifact đầu vào.
+
+### I-010 · Mục đã vào `main` mà vẫn nằm `status: review` — không có gì chuyển nó sang `done`
+
+Tìm ra ở lượt `crux-worker-2` ngày 2026-09-21, khi duyệt làn theo `ops/lanes/priority.md` và **không**
+nhận được mục nào: cả ba mục `ready` của làn `integration` (`I-006`, `I-007`, `I-009`) đều bị chặn bởi
+`deps` là mục mà PR **đã merge vào `main`** rồi.
+
+`ops/lanes/README.md` định nghĩa `deps` là "các mục phải `done` trước". Phụ lục P1 bước 7 đặt mục sang
+`review` trong chính PR của nó. Nhưng **không bước nào** trong P1, P2 hay P3 đặt nó sang `done` sau khi
+PR merge — phụ lục P3 bước 2 ("Dọn dẹp") chỉ đóng PR nháp bỏ quá 72 giờ và tạo lại lockfile.
+
+Hệ quả đo được trên `main` ở `61fb084`: **13 mục** có PR đã merge mà vẫn `review`. Chỉ hai mục trong cả
+repo ở `done`, và cả hai được sửa tay trong một PR khác (`P-008` ở `bc48f6e`, `VF-G18` trong PR của
+`I-004`). Mọi mục có `deps` vì thế đứng chờ vĩnh viễn, và làn `integration` — **ưu tiên số một** —
+là làn chết đói nặng nhất.
+
+Đây đúng **nhóm lỗi Z** của `ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh. CI xanh, PR merge
+đẹp, backlog đọc vẫn hợp lệ — chỉ có hàng đợi việc là cạn, và cách duy nhất nó lộ ra là một worker
+đọc tay từng `deps`. Tỉ lệ tự phát hiện hiện tại: 0.
+
+- deps: —
+- risk: low
+- status: claimed
+- nguồn: `ops/lanes/README.md` (định nghĩa `deps`); CHARTER phụ lục P1 bước 7, P3 bước 2; `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - `ops/scripts/backlog-status.ts`: đối chiếu mọi mục `status: review` trong `ops/lanes/*/backlog.md`
+    với commit trên `main`, và phân loại mỗi mục thành đúng một trong ba nhóm — `stale` (nên chuyển
+    `done`), `held` (cố ý giữ `review`), `unmerged` (chưa thấy commit hoàn thành).
+  - Luật phải **thận trọng theo hướng an toàn**: chỉ `stale` khi có commit `[<lane>] <id> — …` trên
+    `main` **và** thân mục không còn ô `⬜` nào. Mục còn `⬜` là mục cố ý giữ `review` — `VF-G2` ghi
+    thẳng "giữ mục này `review`, không `done`, cho tới khi…". Đoán sai theo hướng này chỉ để lại một
+    mục chờ thêm một nhịp; đoán sai theo hướng kia mở khoá một `deps` chưa thật sự xong.
+  - Test, gồm test âm: mục còn `⬜` không bị chuyển; mục không có commit hoàn thành không bị chuyển;
+    commit nhắc `id` trong ngoặc mà không đúng dạng tiêu đề (`… (KF-005, P-015)`) không tính là hoàn thành.
+  - `pnpm backlog:status` báo cáo, `--fix` ghi lại file. **Không** đưa vào `pnpm check`: ngay sau khi
+    một PR merge, mục của nó còn `review` trong đúng một nhịp — cổng cứng ở đó sẽ làm `main` đỏ sau
+    **mỗi** lần merge, tự tạo ra nhóm lỗi mới.
+  - Chạy `--fix` một lần trong chính PR này, và gỡ hai dòng ghim `P-018`/`P-016` ở `ops/lanes/priority.md`
+    đúng như file đó tự dặn ("Gỡ dòng này khi … chuyển `done`").
+  - Nối vào phụ lục P3 bước 2 là **việc của lượt sau**, cố ý tách ra: PR #43 đang mở và đang sửa
+    CHARTER, nên chạm CHARTER ở đây là tự tạo xung đột cho hàng đợi tuần tự.
