@@ -235,6 +235,8 @@ Nói gọn: KF-002 là lỗi của **hình dạng nhánh**, KF-005 là lỗi c�
 
   Cộng thêm `ops/test/logs-layout.test.ts`: **không còn file `.jsonl` phẳng nào trong `ops/logs/`**. Xoá hết file phẳng trong một PR chưa khoá được `D-C04` — hình dạng cũ quay lại được mà không gì đỏ, và đã quay lại thật một lần (`ops/logs/verify.jsonl`, PR #29 → lần gộp cuối của PR #26). Chi tiết ở `docs/decisions/D-C04.md`.
 
+  Cùng file test còn khoá một bẫy tinh vi hơn một bậc: **dòng log nằm sai file**. Git **nhận ra đổi tên** `ops/logs/verify.jsonl` → `ops/logs/verify/VF-G2.jsonl` (cùng nội dung), nên một dòng `ref: verify/VF-G11` mà `main` thêm vào file phẳng cũ được áp thẳng lên đường dẫn mới và `merge=union` gộp êm — **không một dấu xung đột nào**, không dòng nào mất, chỉ là chi phí của `VF-G11` từ nay tính cho `VF-G2`. Luật `misfiledLogLines` đối chiếu `lane` và `logIdFromRef(ref)` của từng dòng với đường dẫn chứa nó.
+
 ### Rà nốt: còn file dùng chung nào khác
 
 Union chỉ cứu được file mà **thứ tự dòng không mang nghĩa**. Với Markdown thì không — nên phần còn lại phải chữa bằng cách khác.

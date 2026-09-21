@@ -25,7 +25,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { flatLogFiles, listLogFiles } from '@crux/kernel';
+import { flatLogFiles, listLogFiles, misfiledLogLines } from '@crux/kernel';
 
 const LOGS_DIR = join(process.cwd(), 'ops', 'logs');
 
@@ -96,4 +96,59 @@ test('D-C04 · test âm — một file phẳng PHẢI bị bắt', () => {
 
 test('D-C04 · test âm — thư mục chưa tồn tại thì rỗng, không ném', () => {
   assert.deepEqual(flatLogFiles(join(tmpdir(), 'crux-logs-khong-co-that-0f3a')), []);
+});
+
+/**
+ * Hình dạng đúng **chưa đủ**: một dòng vẫn có thể nằm trong một file lồng thư
+ * mục, đúng hai tầng, mà **sai file**.
+ *
+ * Đã xảy ra thật ở lần gộp thứ hai của PR #26, và **không một dấu xung đột nào**:
+ * nhánh xoá `ops/logs/verify.jsonl` rồi tạo `ops/logs/verify/VF-G2.jsonl` với
+ * đúng nội dung đó, nên git **nhận ra một lần đổi tên**. `main` thêm một dòng
+ * `ref: "verify/VF-G11"` vào file phẳng cũ ⇒ git áp thay đổi ấy lên đường dẫn
+ * đã đổi tên, `merge=union` gộp êm, và dòng `VF-G11` nằm gọn trong `VF-G2.jsonl`.
+ *
+ * Không dòng nào mất, `flatLogFiles` xanh, `pnpm check` xanh — chỉ là chi phí
+ * của `VF-G11` từ nay tính cho `VF-G2`. Đúng nhóm Z, và đúng loại lỗi mà
+ * `D-C04` sinh ra để xoá (mỗi mục một file thì mới đếm tiền theo mục được).
+ */
+test('D-C04 · mỗi dòng log nằm ĐÚNG file của nó (`lane` và `ref` khớp đường dẫn)', () => {
+  const misfiled = misfiledLogLines(LOGS_DIR).map(
+    (m) => `${relative(process.cwd(), m.file)} chứa ref=${m.ref} (đúng ra ở ${relative(process.cwd(), m.expected)})`,
+  );
+  assert.deepEqual(
+    misfiled,
+    [],
+    `dòng log nằm sai file: ${misfiled.join(' · ')}. ` +
+      'Không gì đỏ khi việc này xảy ra, nhưng chi phí của mục này bị tính cho mục kia.',
+  );
+});
+
+test('D-C04 · test âm — dòng nằm sai file PHẢI bị bắt', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crux-logs-misfiled-'));
+  const line = (lane: string, ref: string) =>
+    `${JSON.stringify({ at: '2026-09-21T08:00:00.000Z', lane, kind: 'lane', ref, status: 'ok', durationMs: 0, costUsd: 0 })}\n`;
+  try {
+    mkdirSync(join(dir, 'verify'), { recursive: true });
+    writeFileSync(join(dir, 'verify', 'VF-G2.jsonl'), line('verify', 'verify/VF-G2'), 'utf8');
+    assert.deepEqual(misfiledLogLines(dir), [], 'dòng đúng chỗ mà bị báo là sai');
+
+    // Đúng ca của PR #26: dòng VF-G11 bị git đổi-tên-rồi-union vào file VF-G2.
+    writeFileSync(
+      join(dir, 'verify', 'VF-G2.jsonl'),
+      line('verify', 'verify/VF-G2') + line('verify', 'verify/VF-G11'),
+      'utf8',
+    );
+    const misfiled = misfiledLogLines(dir);
+    assert.equal(misfiled.length, 1);
+    assert.equal(misfiled[0]!.ref, 'verify/VF-G11');
+    assert.equal(misfiled[0]!.expected, join(dir, 'verify', 'VF-G11.jsonl'));
+
+    // Sai `lane` cũng phải bị bắt: integrator ghi hộ mà bỏ nhầm vào thư mục làn mình.
+    mkdirSync(join(dir, 'integration'), { recursive: true });
+    writeFileSync(join(dir, 'integration', 'P-016.jsonl'), line('platform', 'platform/P-016'), 'utf8');
+    assert.equal(misfiledLogLines(dir).length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

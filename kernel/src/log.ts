@@ -226,3 +226,36 @@ export function flatLogFiles(logsDir: string): string[] {
   // hàm trả rỗng — tức là báo "sạch" cho một thư mục nó chưa thật sự xét.
   return listLogFiles(logsDir).filter((path) => !relative(logsDir, path).includes(sep));
 }
+
+/**
+ * Một dòng log **nằm sai file**: `ops/logs/<lane>/<id>.jsonl` mà `lane` hoặc
+ * `logIdFromRef(ref)` của dòng đó không khớp với đường dẫn chứa nó.
+ *
+ * Đây là nhóm Z tinh vi hơn `flatLogFiles` một bậc, và nó đã xảy ra **thật**
+ * ở lần gộp thứ hai của PR #26 — **không một dấu xung đột nào**:
+ *
+ * Nhánh xoá `ops/logs/verify.jsonl` và tạo `ops/logs/verify/VF-G2.jsonl` với
+ * đúng nội dung đó. Git **nhận ra đó là một lần đổi tên**. Khi `main` thêm một
+ * dòng `ref: "verify/VF-G11"` vào file phẳng cũ, git áp thay đổi ấy lên *đường
+ * dẫn đã đổi tên*, và `merge=union` gộp êm — dòng `VF-G11` nằm gọn trong
+ * `VF-G2.jsonl`. Không dòng nào mất, không gì đỏ, CI xanh; chỉ là chi phí của
+ * `VF-G11` từ nay bị tính cho `VF-G2`.
+ *
+ * `flatLogFiles` **không** bắt được ca này: file vẫn lồng thư mục và vẫn đúng
+ * hai tầng. Phải hỏi bằng chính `ref` của từng dòng.
+ */
+export function misfiledLogLines(logsDir: string): Array<{ file: string; ref: string; expected: string }> {
+  const found: Array<{ file: string; ref: string; expected: string }> = [];
+  for (const file of listLogFiles(logsDir)) {
+    const parts = relative(logsDir, file).split(sep);
+    if (parts.length !== 2) continue; // hình dạng sai là việc của `flatLogFiles`
+    const [lane, base] = parts as [string, string];
+    const id = base.replace(/\.jsonl$/, '');
+    for (const line of parseRunLogs([readFileSync(file, 'utf8')])) {
+      const wantId = logIdFromRef(line.ref, line.lane);
+      if (line.lane === lane && wantId === id) continue;
+      found.push({ file, ref: line.ref, expected: join(logsDir, line.lane, `${wantId}.jsonl`) });
+    }
+  }
+  return found;
+}
