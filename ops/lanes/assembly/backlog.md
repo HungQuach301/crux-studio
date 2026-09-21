@@ -9,11 +9,34 @@ Quyết định này ràng buộc cả làn `visual` lẫn ngân sách phút Act
 
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - nguồn: CHARTER mục 10 (Đợt 1); giả định G5
 - tiêu chí xong:
-  - Đo thật cả hai cấu hình: thời gian render, dung lượng output, phút Actions cho một tập đầy đủ.
-  - Mở `🤖 [QĐ]` với hai phương án và số đo kèm theo. Đây là quyết định `irreversible` nếu nó đổi `fpsAllowed` của genre pack.
+  - ✅ **Đo thật cả hai cấu hình, 2026-09-21** — một tập **đầy đủ** 21 phút (`targetDurationMs` của genre
+    pack `data-explainer`) dựng ở cả 30fps lẫn 60fps, cộng bản proof của mỗi bên và hai lượt nền để trừ
+    chi phí giải mã. Bộ đo: `ops/scripts/render-trial.ts`. Kết quả: `docs/assembly/render-trial.md`.
+  - ⬜ **Phút Actions thật còn thiếu.** Số giây tường đo trên container phiên cloud (cùng 4 nhân / 16 GB
+    với `ubuntu-latest`), nhưng con số hoá đơn phải do runner thật trả lời. `ops/workflows/render-trial.yml`
+    làm đúng việc đó và **chỉ chạy được sau khi PR này merge** rồi `sync-workflows` chép sang `.github/`
+    (CHARTER 3.2, giả định **G10**). Chạy nó là việc của lượt kế tiếp, không phải một mục mới.
+  - ✅ **Đã mở `🤖 [QĐ]`** với hai phương án và số đo kèm theo.
+  - ⬜ **`fpsAllowed` giữ nguyên `[30, 60]`, cố ý.** Xem ghi chú dưới.
+
+**Vì sao không tự chốt fps ở đây.** Quyết định fps đứng trên **hai** phép đo, và mục này chỉ có một:
+
+| Nửa câu hỏi | Ai đo | Trạng thái |
+|---|---|---|
+| 60fps đắt hơn 30fps bao nhiêu | `A-001` (mục này) | ✅ đo xong |
+| 30fps có giật không — clip có xem được không | `visual/V-002`, chỉ số 4–6 của WP-003 | ⬜ chưa, và WP-003 mục 5 ghi rõ **không kết luận thay chủ dự án** về ba chỉ số đó |
+
+Siết `fpsAllowed` lúc này là chốt bằng một nửa bằng chứng, và nửa còn lại đã được charter giao cho mắt
+chủ dự án chứ không cho bộ đo. Theo `D-C06` đây là quyết định `reversible`, nên việc phải làm **ngay** là
+dán số và nói rõ còn thiếu gì — không phải đứng chờ, và cũng không phải đoán nốt nửa kia.
+
+**Số đo đáng chú ý:** gấp đôi số khung **không** làm gấp đôi chi phí dựng. Ở 30fps mỗi khung đắt hơn, vì
+bỏ bớt khung làm chuyển động giữa hai khung liền nhau lớn hơn và bộ dự đoán chuyển động phải tìm xa hơn.
+Hai hiệu ứng ngược chiều triệt tiêu một phần. Con số chính xác nằm trong `docs/assembly/render-trial.md`;
+đừng chép nó vào đây, vì chép là tạo thêm một chỗ để lệch.
 
 ### A-002 · Preflight đủ 12 kiểm
 Đợt 0 đã có 10 kiểm đo được từ storyboard. Ba kiểm còn lại cần Canvas Map và độ dẫn âm thanh.

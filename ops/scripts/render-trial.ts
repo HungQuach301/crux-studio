@@ -396,8 +396,9 @@ function fixed(value: number, digits: number): string {
   return value.toFixed(digits);
 }
 
+/** Giây tường ở đơn vị đọc được: dưới một phút thì để nguyên giây. */
 function minutes(seconds: number): string {
-  return `${(seconds / 60).toFixed(1)} phút`;
+  return seconds < 60 ? `${seconds.toFixed(1)} s` : `${(seconds / 60).toFixed(1)} phút`;
 }
 
 function row(m: Measurement, file: MeasurementFile): string {
@@ -521,9 +522,10 @@ export function renderReport(file: MeasurementFile): string {
       `| Phút Actions cho 4 tập mỗi tháng | ${actionsMinutes(s30) * 4} | ${actionsMinutes(s60) * 4} |`,
       `| Dung lượng master mỗi tập | ${fixed(scaleToEpisode(mb(m30.bytes), file.measuredDurationMs, file.episodeDurationMs), 0)} MB | ${fixed(scaleToEpisode(mb(m60.bytes), file.measuredDurationMs, file.episodeDurationMs), 0)} MB |`,
       '',
-      'Chỉ là **phần dựng**. Phần sinh khung của xưởng `visual` (mục `V-002`) cộng thêm vào,',
-      'và đó mới là phần lớn: số đo của `V-002` cho ~70 ms mỗi khung, tức là hàng giờ runner',
-      'cho một tập đầy đủ. Ngân sách G5 phải cộng cả hai.',
+      'Chỉ là **phần dựng**. Phần **sinh khung** của xưởng `visual` (đo ở mục `V-002`) cộng',
+      'thêm vào, và theo hình dạng đường ống thì đó mới là phần lớn — nhưng con số của nó',
+      'thuộc `V-002`, không thuộc bộ đo này, nên ở đây không chép lại. Ngân sách **G5** phải',
+      'cộng cả hai phần; lấy một mình bảng trên làm ngân sách là tính thiếu.',
       '',
     );
   }
@@ -541,7 +543,8 @@ export function renderReport(file: MeasurementFile): string {
     '  là cận dưới lỏng, không phải cận trên.',
     '- **Không đo chất lượng nhìn được.** `A-001` hỏi chi phí; câu hỏi "30fps có giật không"',
     '  thuộc mục `visual/V-002` (chỉ số 4–6 của WP-003), và nó là việc của mắt người, không',
-    '  phải của bộ đo.',
+    '  phải của bộ đo. **Quyết định fps phải đọc cả hai**: bảng ở đây nói 60fps đắt bao nhiêu,',
+    '  `V-002` nói 30fps có giật hay không. Chọn theo một mình bảng này là chọn thiếu một nửa.',
     '- **Chưa có phút Actions thật.** Xem cảnh báo ở đầu file.',
     '',
   );
