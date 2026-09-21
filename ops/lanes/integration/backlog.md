@@ -54,9 +54,40 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 ### I-004 · Tạo lại lockfile khi xung đột
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER mục 7 (file nóng được phân vùng)
 - tiêu chí xong: lockfile do làn này tạo lại, không phải do làn gây xung đột tự sửa.
+  - ✅ Cơ chế là tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-lockfile.ts`, gọi từ
+    `integrator-resolve.ts` — tức là từ bước 0 của routine integrator VÀ từ đầu mỗi lượt worker (phụ lục P1).
+    Làn gây xung đột không phải chạm vào lockfile, và cũng không được: nó là file dẫn xuất.
+  - ✅ Lockfile **tách khỏi** luật "thuần cộng thêm" của `P-016`. Xung đột lockfile thật gần như luôn có sửa
+    dòng ở cả hai bên, nên luật cũ luôn trả `aborted-ineligible`; union thì merge được mà vẫn hỏng (nhóm lỗi
+    Z — KF-005 đã ghi). Tạo lại từ manifest của cây vừa gộp là cách duy nhất không cần người.
+  - ✅ **Không trôi phiên bản:** bản mồi lấy từ `MERGE_HEAD` (thân chung, thực tế là `origin/main`) rồi mới
+    gọi `pnpm install --lockfile-only`, nên mọi phép phân giải còn thoả manifest được giữ nguyên. Có test
+    đi qua đường thật, chụp nội dung lockfile **đúng lúc pnpm được gọi** và so với `git show MERGE_HEAD:`.
+  - ✅ **Kiểm lại sau khi sinh:** `pnpm install --frozen-lockfile` — cùng cờ CI dùng ở bước cài đặt; đỏ thì
+    `git merge --abort`, không push. Ghi đúng sức của nó, không hơn: đột biến cho thấy nó bắt **lệch
+    specifier** (bỏ một khối `importers` thì đỏ), nhưng **không** bắt lệch phép phân giải.
+  - ✅ **Bốn chỗ dừng lại thay vì đoán,** đều có test âm: manifest (`package.json`, `pnpm-workspace.yaml`)
+    xung đột cùng lúc → `aborted-ineligible` (sinh lockfile từ JSON đã bị union làm hỏng là đóng băng cái
+    hỏng vào một file không ai đọc bằng mắt); lockfile bị xoá ở một bên; lockfile **không ở gốc repo** (đã
+    đo: `pnpm` chạy ở thư mục con thoát 0 mà **không ghi gì** — tool sẽ báo `ok` rồi vứt lặng lẽ một bên);
+    bản mồi còn dấu xung đột (đã đo: `pnpm` chỉ nói một câu rồi sinh lại từ số không, vẫn thoát 0). Đầu ra
+    của `pnpm` cũng bị soi tìm câu "đã vứt bản mồi" — thoát 0 không đủ để tin.
+  - ✅ **Trần `maxBuffer` 1 MiB của `spawnSync`** nâng lên 64 MiB, và `error` nay là thất bại thật. Vượt trần
+    thì Node giết tiến trình và trả stdout **cắt cụt** — với `git show <ref>:pnpm-lock.yaml` thì mọi repo có
+    phụ thuộc thật vượt ngưỡng đó, nên cơ chế này sẽ chết đúng lúc cần sống. Có test dựng lockfile ~1,9 MiB.
+  - ✅ `.gitattributes` ghi rõ vì sao union **không** áp cho lockfile; KF-005 ghi cùng lý do.
+  - ✅ 15 test trong `ops/test/integrator-lockfile.test.ts`: git thật, workspace pnpm thật, `pnpm` thật, và
+    fixture không gọi mạng (mọi phụ thuộc là `workspace:*`). Kiểm bằng đột biến, mỗi đột biến giết đúng
+    test của nó: gỡ đường lockfile (4 đỏ), `MERGE_HEAD`→`HEAD`, bỏ bản mồi, nhận lockfile lồng, trả
+    `maxBuffer` về mặc định.
+  - ✅ **Giả định nền đã vào sổ và đã kiểm:** `G18` — "`pnpm install --lockfile-only` giữ nguyên phép phân
+    giải cũ của bản mồi". Kiểm bằng chạy thật với gói từ registry, hai lần chạy khác nhau đúng một điều
+    kiện: có bản mồi → giữ `semver@7.5.0`; sinh từ số không → `semver@7.8.5`, cùng manifest `^7.0.0`.
+    Fixture của bộ test toàn `workspace:*` nên **không** quan sát được điều này — vì thế nó được đo riêng
+    và ghi vào `docs/assumptions.md` cùng mục `VF-G18`, thay vì để trong đầu người viết.
 
 ### I-005 · `recheck:assumptions` phải phân biệt "chưa quét được" với "quét rồi không thấy gì"
 Lỗi nhóm Z (số sai mà không gì đỏ), tìm ra bằng chạy thật ở lượt `crux-integrator` ngày 2026-09-21.
@@ -85,3 +116,15 @@ tức bài kiểm chạy được, chỉ là nó đã bỏ qua một cách lặn
     hoặc phụ lục P3 bước 4 ghi rõ phải fetch trước — chọn một, đừng để cả hai cùng không ai làm.
   - Test tái hiện lỗi (bắt buộc, bất biến I2): một repo git dựng thật, **không** có ref
     `origin/claude/*`, phải cho `broken` chứ không cho `observedNothing`.
+
+### I-006 · Lockfile gộp **sạch** mà vẫn lệch manifest
+Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ phủ ca lockfile **xung đột**. Khi git gộp lockfile sạch, integrator không đụng tới nó — nhưng "merge được" không đồng nghĩa "đúng": git ghép hunk theo dòng, không hiểu YAML, nên về lý thuyết nó ghép ra một lockfile lệch với manifest sau khi gộp. Local `pnpm check` **không** bắt được: nó không chạy `pnpm install --frozen-lockfile` (CI mới chạy). Nghĩa là integrator báo "xanh, đã push" rồi CI mới đỏ — đúng nhóm lỗi Z.
+
+- deps: I-004
+- risk: low
+- status: ready
+- nguồn: phát hiện khi làm `I-004`; CHARTER mục 7; KF-005
+- tiêu chí xong:
+  - **Kiểm trước, dựa vào sau (CHARTER 11.1):** trước khi viết gì, dựng bằng chạy thật một ca git gộp lockfile **sạch** mà kết quả lệch manifest. Không dựng được thì ghi lại là không tái hiện được và đóng mục — không xây cơ chế cho một lỗi chưa ai thấy.
+  - Nếu tái hiện được: sau mỗi lần gộp có chạm `pnpm-lock.yaml`, integrator chạy `pnpm install --frozen-lockfile`; đỏ thì tạo lại lockfile bằng `ops/scripts/integrator-lockfile.ts` (đã có sẵn) rồi kiểm lại, thay vì push một PR chắc chắn đỏ ở CI.
+  - Test tái hiện đi kèm, theo luật `fix` của bất biến I2.

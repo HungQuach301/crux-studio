@@ -19,6 +19,12 @@
  * mà `.gitattributes` dùng cho `merge=union` (KF-005) — áp dụng cho MỌI
  * file xung đột đủ điều kiện, không chỉ file đã khai attribute, vì G17 cho
  * thấy attribute không tự áp cho chính lần gộp mang nó tới.
+ *
+ * **Một ngoại lệ, có tên: lockfile** (mục `I-004`, CHARTER mục 7). Luật
+ * "thuần cộng thêm" ở trên KHÔNG áp cho `pnpm-lock.yaml`, và union cũng
+ * không: lockfile là file dẫn xuất, nên nó được **tạo lại** từ các manifest
+ * của cây vừa gộp — xem `ops/scripts/integrator-lockfile.ts`. Đây là lý do
+ * làn gây xung đột không phải tự sửa lockfile: làn `integration` tạo lại.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -26,6 +32,8 @@ import type { SpawnSyncReturns } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isLockfile, isManifest, isRootLockfile, regenerateLockfile } from './integrator-lockfile.ts';
+import type { RegenerateOptions } from './integrator-lockfile.ts';
 
 export type ResolveOutcome = 'clean' | 'resolved' | 'aborted-ineligible' | 'aborted-error';
 
@@ -35,14 +43,35 @@ export interface ResolveResult {
   reason?: string;
 }
 
+/**
+ * `maxBuffer` mặc định của Node là 1 MiB, và vượt ngưỡng thì `spawnSync`
+ * KHÔNG báo lỗi theo cách dễ thấy: nó giết tiến trình (`signal: SIGTERM`,
+ * `error.code: ENOBUFS`) và trả về stdout **đã bị cắt cụt**. Với
+ * `git show <ref>:pnpm-lock.yaml` thì 1 MiB là ngưỡng một repo có phụ
+ * thuộc thật vượt qua rất sớm — repo này mới 2,4 KB nên chưa lộ. Cũng vậy
+ * với `ops/logs/*.jsonl`: file append-only chỉ dài thêm theo thời gian.
+ * Nâng trần lên 64 MiB, và ở `gitOrThrow` coi `error` là thất bại thật —
+ * một stdout cắt cụt mà vẫn `status === 0` là đúng hình dạng nhóm lỗi Z.
+ */
+const GIT_MAX_BUFFER = 64 * 1024 * 1024;
+
 function git(cwd: string, args: string[]): SpawnSyncReturns<string> {
-  return spawnSync('git', args, { cwd, encoding: 'utf8' });
+  return spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER });
+}
+
+/** Cắt ngắn một thông điệp lỗi: `reason` đi thẳng vào log routine và bản tin. */
+function briefly(text: string, max = 600): string {
+  const trimmed = text.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}… (cắt bớt)`;
 }
 
 function gitOrThrow(cwd: string, args: string[]): string {
   const result = git(cwd, args);
+  if (result.error) {
+    throw new Error(`git ${args.join(' ')} không chạy trọn: ${briefly(result.error.message)}`);
+  }
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')} thất bại: ${result.stderr || result.stdout}`);
+    throw new Error(`git ${args.join(' ')} thất bại: ${briefly(result.stderr || result.stdout)}`);
   }
   return result.stdout;
 }
@@ -64,15 +93,23 @@ function numstat(cwd: string, base: string, side: string, file: string): Numstat
   return { added: Number(addedRaw), deleted: Number(deletedRaw), binary: false };
 }
 
-/** Nội dung của `file` tại `ref`, hoặc `''` nếu file không tồn tại ở đó (trường hợp add/add). */
-function showOrEmpty(cwd: string, ref: string, file: string): string {
-  const result = git(cwd, ['show', `${ref}:${file}`]);
-  return result.status === 0 ? result.stdout : '';
-}
-
 /** File có tồn tại ở `ref` không. */
 function existsAt(cwd: string, ref: string, file: string): boolean {
   return git(cwd, ['cat-file', '-e', `${ref}:${file}`]).status === 0;
+}
+
+/**
+ * Nội dung của `file` tại `ref`, hoặc `''` nếu file không tồn tại ở đó
+ * (trường hợp add/add).
+ *
+ * Hỏi `existsAt` TRƯỚC rồi mới `show`, thay vì coi mọi lỗi của `show` là
+ * "không có file": một lỗi khác — mất quyền đọc, hay ENOBUFS trước khi
+ * trần được nâng — từng biến thành base RỖNG, và base rỗng làm
+ * `merge-file --union` nhân đôi toàn bộ file mà không gì đỏ.
+ */
+function showOrEmpty(cwd: string, ref: string, file: string): string {
+  if (!existsAt(cwd, ref, file)) return '';
+  return gitOrThrow(cwd, ['show', `${ref}:${file}`]);
 }
 
 /**
@@ -82,7 +119,11 @@ function existsAt(cwd: string, ref: string, file: string): boolean {
  * `aborted-ineligible` hoặc `aborted-error` — merge luôn được `--abort`
  * trước khi hàm trả về, nên cây làm việc quay lại đúng trạng thái ban đầu.
  */
-export function resolveAdditiveMerge(cwd: string, ontoRef: string): ResolveResult {
+export function resolveAdditiveMerge(
+  cwd: string,
+  ontoRef: string,
+  options: RegenerateOptions = {},
+): ResolveResult {
   const dirty = gitOrThrow(cwd, ['status', '--porcelain']).trim();
   if (dirty !== '') {
     return { outcome: 'aborted-error', files: [], reason: 'cây làm việc không sạch, không thử gộp' };
@@ -90,7 +131,7 @@ export function resolveAdditiveMerge(cwd: string, ontoRef: string): ResolveResul
 
   const merge = git(cwd, ['merge', '--no-commit', '--no-ff', ontoRef]);
   try {
-    return resolveAfterMergeAttempt(cwd, ontoRef, merge);
+    return resolveAfterMergeAttempt(cwd, ontoRef, merge, options);
   } catch (error) {
     // Lưới an toàn cuối cùng: bất kỳ lỗi nào chưa lường trước ở dưới đây
     // (một `gitOrThrow` ném ra, một trường hợp git chưa nghĩ tới) đều KHÔNG
@@ -110,6 +151,7 @@ function resolveAfterMergeAttempt(
   cwd: string,
   ontoRef: string,
   merge: SpawnSyncReturns<string>,
+  options: RegenerateOptions,
 ): ResolveResult {
   if (merge.status === 0) {
     const staged = gitOrThrow(cwd, ['diff', '--cached', '--name-only']).trim();
@@ -142,7 +184,60 @@ function resolveAfterMergeAttempt(
 
   const base = gitOrThrow(cwd, ['merge-base', 'HEAD', 'MERGE_HEAD']).trim();
 
-  for (const file of conflicted) {
+  // Lockfile đi đường riêng: nó là file dẫn xuất, được TẠO LẠI chứ không
+  // union và không phải qua luật "thuần cộng thêm" (mục `I-004`, CHARTER
+  // mục 7). Mọi file còn lại vẫn theo luật cũ, không đổi một chữ.
+  const lockfiles = conflicted.filter(isLockfile);
+  const additive = conflicted.filter((file) => !isLockfile(file));
+
+  if (lockfiles.length > 0) {
+    // Chỉ lockfile ở GỐC repo mới tạo lại được — xem `isRootLockfile`. Một
+    // lockfile lồng sâu phải dừng ở đây, không được rơi xuống đường union
+    // (nó vẫn là file dẫn xuất) và càng không được "tạo lại" bằng một lệnh
+    // pnpm thoát 0 mà chẳng ghi gì.
+    const nested = lockfiles.find((file) => !isRootLockfile(file));
+    if (nested !== undefined) {
+      git(cwd, ['merge', '--abort']);
+      return {
+        outcome: 'aborted-ineligible',
+        files: conflicted,
+        reason: `${nested}: lockfile không nằm ở gốc repo — pnpm chạy ở thư mục con sẽ không sinh lại nó, cần người`,
+      };
+    }
+
+    // Tạo lại lockfile nghĩa là sinh nó TỪ manifest của cây vừa gộp. Nếu
+    // chính manifest còn đang xung đột thì cái "nguồn" đó chưa tồn tại —
+    // union một `package.json` cho ra JSON hỏng, và sinh lockfile từ JSON
+    // hỏng là đóng băng cái hỏng đó vào một file không ai đọc bằng mắt.
+    // Dừng ở đây, để người quyết. Nhóm lỗi Z nếu đi tiếp.
+    const manifest = additive.find(isManifest);
+    if (manifest !== undefined) {
+      git(cwd, ['merge', '--abort']);
+      return {
+        outcome: 'aborted-ineligible',
+        files: conflicted,
+        reason: `${manifest}: manifest xung đột cùng lúc với lockfile — không sinh lockfile từ manifest chưa giải, cần người`,
+      };
+    }
+
+    for (const lock of lockfiles) {
+      const oursExists = existsAt(cwd, 'HEAD', lock);
+      const theirsExists = existsAt(cwd, 'MERGE_HEAD', lock);
+      if (!oursExists || !theirsExists) {
+        // Một bên XOÁ lockfile là một quyết định về kiến trúc (bỏ pnpm, đổi
+        // vị trí workspace), không phải xung đột nội dung. Tạo lại ở đây sẽ
+        // hồi sinh file mà một bên vừa cố tình bỏ đi.
+        git(cwd, ['merge', '--abort']);
+        return {
+          outcome: 'aborted-ineligible',
+          files: conflicted,
+          reason: `${lock}: bị xoá ở một bên (ours tồn tại=${oursExists}, theirs tồn tại=${theirsExists}) — không tự tạo lại, cần người`,
+        };
+      }
+    }
+  }
+
+  for (const file of additive) {
     // Kiểm tồn tại TRƯỚC, tách khỏi numstat: một file bị XOÁ hẳn ở một bên
     // trong khi bản base đã RỖNG cho ra `numstat` "0 0" — trông như không
     // đổi gì, dù thực ra là xung đột xoá/sửa. numstat một mình không bắt
@@ -172,12 +267,12 @@ function resolveAfterMergeAttempt(
     }
   }
 
-  // Mọi file xung đột đều thuần cộng thêm ở cả hai bên. Giải bằng cùng
-  // thuật toán union mà `.gitattributes` dùng cho log append-only (KF-005),
-  // áp cho từng file này dù nó chưa khai attribute.
+  // Mọi file xung đột (trừ lockfile) đều thuần cộng thêm ở cả hai bên. Giải
+  // bằng cùng thuật toán union mà `.gitattributes` dùng cho log append-only
+  // (KF-005), áp cho từng file này dù nó chưa khai attribute.
   const tmp = mkdtempSync(join(tmpdir(), 'integrator-resolve-'));
   try {
-    for (const file of conflicted) {
+    for (const file of additive) {
       const baseFile = join(tmp, 'base');
       const oursFile = join(tmp, 'ours');
       const theirsFile = join(tmp, 'theirs');
@@ -204,6 +299,24 @@ function resolveAfterMergeAttempt(
     rmSync(tmp, { recursive: true, force: true });
   }
 
+  // Lockfile: tạo lại từ manifest của cây vừa gộp, bản mồi lấy từ
+  // `MERGE_HEAD` (nhánh thân chung). Chạy SAU union, vì union có thể vừa
+  // đụng tới một manifest không xung đột nhưng nằm trong danh sách — thứ tự
+  // này bảo đảm `pnpm` đọc cây ở trạng thái cuối cùng.
+  for (const lock of lockfiles) {
+    const seed = gitOrThrow(cwd, ['show', `MERGE_HEAD:${lock}`]);
+    const regenerated = regenerateLockfile(cwd, lock, seed, options);
+    if (!regenerated.ok) {
+      git(cwd, ['merge', '--abort']);
+      return {
+        outcome: regenerated.ineligible === true ? 'aborted-ineligible' : 'aborted-error',
+        files: conflicted,
+        reason: regenerated.reason,
+      };
+    }
+    gitOrThrow(cwd, ['add', '--', lock]);
+  }
+
   const stillConflicted = gitOrThrow(cwd, ['diff', '--name-only', '--diff-filter=U']).trim();
   if (stillConflicted !== '') {
     // `--union` không bao giờ để lại dấu xung đột theo thiết kế của git; nếu
@@ -216,12 +329,13 @@ function resolveAfterMergeAttempt(
     };
   }
 
-  gitOrThrow(cwd, [
-    'commit',
-    '--no-edit',
-    '-m',
-    `Gộp ${ontoRef} (integrator, union thuần cộng thêm: ${conflicted.join(', ')})`,
-  ]);
+  const how = [
+    additive.length > 0 ? `union thuần cộng thêm: ${additive.join(', ')}` : '',
+    lockfiles.length > 0 ? `lockfile tạo lại: ${lockfiles.join(', ')}` : '',
+  ]
+    .filter((part) => part !== '')
+    .join('; ');
+  gitOrThrow(cwd, ['commit', '--no-edit', '-m', `Gộp ${ontoRef} (integrator, ${how})`]);
   return { outcome: 'resolved', files: conflicted };
 }
 
