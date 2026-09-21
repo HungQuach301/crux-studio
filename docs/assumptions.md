@@ -40,7 +40,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | Mã | Giả định | Độ tin cậy | Trạng thái | Mục kiểm |
 |---|---|---|---|---|
 | G1 | Tài khoản có Claude Code Projects | `suy luận` | giao làn `verify` | `VF-G1` |
-| G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | `tài liệu nói vậy` | dự phòng đã viết sẵn | DoD Đợt 0 |
+| G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
 | G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
@@ -57,7 +57,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 
-**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Hai giả định khác đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
+**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G11`, `G14`) đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
 
 > Mã `G16` từng được **nhận trước** cho PR #11 trong lúc PR #15 viết `G17`, nên có một quãng bảng này nhảy từ G15 sang G17. Hai PR gộp vào nhau xong thì đủ cả hai, không ai mất số. Nhận mã trước khi viết là cách duy nhất để hai worker không cùng lấy một số (xem KF-005).
 
@@ -82,7 +82,11 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 - **Cách kiểm:** DoD Đợt 0 đòi `automerge` merge **thật** một PR low-risk mà không cần người. Đó là bài kiểm, và nó là chạy thật chứ không phải đọc tài liệu.
 - **Dự phòng — đã viết sẵn cho `main-ci`:** `main-ci.yml` chạy thêm **theo lịch mỗi giờ** (`cron: '17 * * * *'`). Nếu lời gọi tường minh không chạy được, `main` vẫn được kiểm trong vòng một giờ. Không cần sửa gì khi phát hiện sai.
 - **Dự phòng cho `sync-workflows` — CHƯA có.** `D-C06` đưa `ops/workflows/**` vào diện máy tự merge được, nên nếu lời gọi tường minh hỏng thì workflow mới nằm trong `main` mà `.github/workflows/` vẫn giữ bản cũ — và **mọi thứ vẫn xanh** (rà soát **Z3** trong `ops/known-failures.md`). Dự phòng đúng cho chỗ này là phép so nội dung `ops/workflows/*` với `.github/workflows/*` trong `main-ci`, thuộc mục `P-014`, **chưa xây**. Tới khi nó xong, đây là chỗ hở lớn nhất mà `D-C06` tạo ra.
-- **Trạng thái:** đang dựa vào, có dự phòng. Chuyển sang `đã kiểm` khi PR low-risk đầu tiên được automerge.
+- **Độ tin cậy (cập nhật):** `đã kiểm một phần` (2026-09-21, mục `VF-G2`).
+- **Bằng chứng, 2026-09-21:** DoD Đợt 0 chạy thật, không phải suy đoán — 8 lần `automerge.yml` merge PR bằng `GITHUB_TOKEN` (`merged_by: github-actions[bot]`) đều được nối tiếp bằng một lần chạy `main-ci` do chính `github-actions[bot]` gọi qua `workflow_dispatch` (không phải `push`), luôn kết luận `success`. Cặp gần nhất, khít nhất: PR #12 (`[platform] P-014`, nhãn `automerge`, không chạm vùng bảo vệ) merge lúc `2026-09-21T00:42:51Z`; `main-ci` run [#5](https://github.com/HungQuach301/crux-studio/actions/runs/35548564831) khởi động `2026-09-21T00:42:53Z` — 2 giây sau, do `github-actions[bot]` gọi bằng `workflow_dispatch`. Bảy cặp khác cùng hình dạng: PR #9→run [#6](https://github.com/HungQuach301/crux-studio/actions/runs/35549260675), PR #16(ghim)→run [#8](https://github.com/HungQuach301/crux-studio/actions/runs/35551226238), PR #18→run [#10](https://github.com/HungQuach301/crux-studio/actions/runs/35552488882), #21→run [#12](https://github.com/HungQuach301/crux-studio/actions/runs/35562965729), #23→run [#15](https://github.com/HungQuach301/crux-studio/actions/runs/35566283545), #24→run [#17](https://github.com/HungQuach301/crux-studio/actions/runs/35568132566), #25→run [#18](https://github.com/HungQuach301/crux-studio/actions/runs/35568521900).
+  Sự kiện `workflow_dispatch` (không phải `push`) trên các run này cũng là bằng chứng cho vế thứ hai của giả định — merge bằng `GITHUB_TOKEN` **không** tự sinh sự kiện `push` kích hoạt `main-ci`, đúng như tài liệu nói, nên buộc phải gọi tường minh.
+- **Còn thiếu, KHÔNG tính vào phần đã kiểm:** chuỗi `automerge` → gọi tường minh `labels.yml` sau khi PR đụng `ops/labels.json`, và `automerge` → `sync-workflows` sau khi PR đụng `ops/workflows/**`, đều **chưa quan sát được bằng chạy thật** — ba lần `labels` chạy tới nay đều do chủ dự án tự kích (`push`/`workflow_dispatch` bởi `HungQuach301`), chưa lần nào do `automerge` gọi. Giữ nguyên gạch đầu dòng "Dự phòng cho `sync-workflows` — CHƯA có" ở trên; chỗ hở đó không đổi.
+- **Trạng thái:** `đã kiểm một phần` — phần lõi DoD Đợt 0 (automerge merge bằng `GITHUB_TOKEN`, không tự sinh `push`, gọi tường minh được `main-ci`) đã kiểm bằng chạy thật, 8/8 lần quan sát khớp. Phần `labels`/`sync-workflows` của cùng giả định vẫn `tài liệu nói vậy`, giao `VF-G2` theo dõi tiếp khi có PR automerge chạm đúng hai loại file đó.
 
 ## G3 · Trần số lần chạy routine mỗi ngày
 
