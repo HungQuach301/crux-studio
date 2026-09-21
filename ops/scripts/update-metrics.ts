@@ -222,9 +222,15 @@ export function sumCostUsd(lines: readonly RunLogLine[]): number {
   return Math.round(total * 10_000) / 10_000;
 }
 
-/** Các dòng có `at` trong nửa khoảng `[since, until)`. */
-export function linesInWindow(lines: readonly RunLogLine[], since: string, until: string): RunLogLine[] {
-  return lines.filter((line) => line.at >= since && line.at < until);
+/**
+ * Các dòng có `at` từ `since` trở đi. KHÔNG có cận trên: một dòng mang
+ * `at` ở tương lai (lệch đồng hồ, hoặc dòng ghi tay đề ngày mai) vẫn phải
+ * được tính vào chi phí 24 giờ. Cắt cận trên ở "bây giờ" sẽ làm chính
+ * dòng log của lượt chạy đang viết biến mất khỏi cột 24h — mất tiền một
+ * cách lặng lẽ, đúng nhóm Z.
+ */
+export function linesSince(lines: readonly RunLogLine[], since: string): RunLogLine[] {
+  return lines.filter((line) => line.at >= since);
 }
 
 export function budgetPercent(spent: number, budget: number = BUDGET_LOW_USD): number {
@@ -332,7 +338,7 @@ function main(): void {
   const logLines = readRunLogs(join(root, 'ops', 'logs'));
   const totalCost = sumCostUsd(logLines);
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const cost24h = sumCostUsd(linesInWindow(logLines, dayAgo, new Date(Date.now() + 1).toISOString()));
+  const cost24h = sumCostUsd(linesSince(logLines, dayAgo));
 
   const metricsPath = join(root, 'ops', 'metrics.md');
   let content = readFileSync(metricsPath, 'utf8');

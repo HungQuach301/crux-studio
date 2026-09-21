@@ -21,7 +21,7 @@ import {
   updateArchitectureTable,
   updateStabilityTable,
   sumCostUsd,
-  linesInWindow,
+  linesSince,
   budgetPercent,
   formatCostRow,
   updateCostTable,
@@ -265,15 +265,17 @@ test('sumCostUsd: cộng và làm tròn sai số dấu phẩy động', () => {
   assert.equal(sumCostUsd([logLine('2026-09-21T00:00:00.000Z', 12.5), logLine('2026-09-21T01:00:00.000Z', 7.25)]), 19.75);
 });
 
-test('linesInWindow: nửa khoảng [since, until), dùng để tính chi phí 24 giờ', () => {
+test('linesSince: lấy từ mốc trở đi, KHÔNG cắt cận trên', () => {
   const lines = [
     logLine('2026-09-20T23:00:00.000Z', 1),
     logLine('2026-09-21T00:00:00.000Z', 2),
     logLine('2026-09-21T12:00:00.000Z', 4),
+    // Dòng "ở tương lai" so với đồng hồ lúc chạy — vẫn phải được tính.
+    logLine('2099-01-01T00:00:00.000Z', 8),
   ];
-  const picked = linesInWindow(lines, '2026-09-21T00:00:00.000Z', '2026-09-21T12:00:00.000Z');
-  assert.deepEqual(picked.map((l) => l.costUsd), [2]);
-  assert.equal(sumCostUsd(picked), 2);
+  const picked = linesSince(lines, '2026-09-21T00:00:00.000Z');
+  assert.deepEqual(picked.map((l) => l.costUsd), [2, 4, 8]);
+  assert.equal(sumCostUsd(picked), 14);
 });
 
 test('budgetPercent: lấy cận dưới của ngân sách học, ngân sách 0 thì không chia', () => {
