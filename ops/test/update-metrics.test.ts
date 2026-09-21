@@ -15,6 +15,7 @@ import {
   architectureRatio,
   greenRatioPercent,
   upsertTableRow,
+  replaceOnlyRow,
   formatArchitectureRow,
   formatStabilityRow,
   updateArchitectureTable,
@@ -145,6 +146,74 @@ test('formatStabilityRow: có % khi merged > 0', () => {
   assert.deepEqual(row, ['2026-09-20 → 2026-09-21', '14', '0', '100% (không lần nào phải revert)']);
 });
 
+test('replaceOnlyRow: thay dòng đặt chỗ duy nhất', () => {
+  const content = [
+    '## Độ ổn định của `main`',
+    '| Tuần | Lần merge | Lần revert | Tỷ lệ `main` xanh |',
+    '|---|---|---|---|',
+    '| — | — | — | — |',
+  ].join('\n');
+
+  const updated = replaceOnlyRow(content, '## Độ ổn định của `main`', [
+    '2026-09-20 → 2026-09-21',
+    '14',
+    '0',
+    '100% (không lần nào phải revert)',
+  ]);
+  const lines = updated.split('\n');
+
+  assert.equal(lines.length, 4, 'vẫn đúng một dòng dữ liệu');
+  assert.doesNotMatch(updated, /\| — \| — \| — \| — \|/);
+  assert.match(updated, /\| 2026-09-20 → 2026-09-21 \| 14 \| 0 \| 100% \(không lần nào phải revert\) \|/);
+});
+
+test('replaceOnlyRow: KHÔNG phình khi nhãn cột đầu đổi mỗi lần gọi (bug đã sửa)', () => {
+  // Đây chính là ca gây lỗi: bảng "Độ ổn định" là số cộng dồn từ khi bắt
+  // đầu tới hôm nay, nên nhãn "startDate → today" đổi mỗi ngày dù số liệu
+  // không đổi. `upsertTableRow` khớp theo nhãn đó sẽ không bao giờ trùng
+  // khoá cũ và cứ thêm dòng mới mỗi ngày. `replaceOnlyRow` không khớp theo
+  // khoá — nó luôn ghi đè đúng dòng duy nhất, bất kể nhãn đổi thế nào.
+  const day1 = [
+    '## Độ ổn định của `main`',
+    '| Tuần | Lần merge | Lần revert | Tỷ lệ `main` xanh |',
+    '|---|---|---|---|',
+    '| — | — | — | — |',
+  ].join('\n');
+
+  const afterDay1 = replaceOnlyRow(day1, '## Độ ổn định của `main`', [
+    '2026-09-01 → 2026-09-21',
+    '14',
+    '0',
+    '100% (không lần nào phải revert)',
+  ]);
+  const afterDay2 = replaceOnlyRow(afterDay1, '## Độ ổn định của `main`', [
+    '2026-09-01 → 2026-09-22',
+    '15',
+    '0',
+    '100% (không lần nào phải revert)',
+  ]);
+
+  const dataLines = afterDay2.split('\n').filter((line) => line.trim().startsWith('| 2026'));
+  assert.equal(dataLines.length, 1, 'hai lần gọi ở hai "ngày" khác nhau vẫn chỉ để lại một dòng');
+  assert.match(afterDay2, /2026-09-01 → 2026-09-22/);
+});
+
+test('replaceOnlyRow: gộp về một dòng nếu bảng lỡ có nhiều hơn một dòng từ trước', () => {
+  const content = [
+    '## Độ ổn định của `main`',
+    '| Tuần | Lần merge | Lần revert | Tỷ lệ `main` xanh |',
+    '|---|---|---|---|',
+    '| 2026-09-01 → 2026-09-20 | 13 | 0 | 100% |',
+    '| 2026-09-01 → 2026-09-21 | 14 | 0 | 100% |',
+  ].join('\n');
+
+  const updated = replaceOnlyRow(content, '## Độ ổn định của `main`', ['2026-09-01 → 2026-09-22', '15', '0', '100%']);
+  const dataLines = updated.split('\n').filter((line) => line.trim().startsWith('|') && !line.includes('Tuần') && !line.includes('---'));
+
+  assert.equal(dataLines.length, 1);
+  assert.match(updated, /2026-09-01 → 2026-09-22/);
+});
+
 test('updateArchitectureTable + updateStabilityTable: cùng hoạt động trên nội dung thật của ops/metrics.md', () => {
   const content = [
     '# 🤖 Thước đo nhà máy',
@@ -171,7 +240,7 @@ test('updateArchitectureTable + updateStabilityTable: cùng hoạt động trên
 
   assert.match(updated, /\| 2026-09-21 \| 35 \| 1 \| 35 \| ghi chú kiến trúc \|/);
   assert.match(updated, /\| 2026-09-20 → 2026-09-21 \| 14 \| 0 \| 100% \(không lần nào phải revert\) \|/);
-  // Dòng đặt ("— | — | — | —") của bảng ổn định vẫn còn, vì key của nó ("—") khác key mới.
-  assert.match(updated, /\| — \| — \| — \| — \|/);
+  // Dòng đặt chỗ ("— | — | — | —") của bảng ổn định đã bị THAY, không còn (khác bảng kiến trúc — đó là nhật ký, cái này là trạng thái).
+  assert.doesNotMatch(updated, /\| — \| — \| — \| — \|/);
   assert.match(updated, /## Phần khác$/);
 });

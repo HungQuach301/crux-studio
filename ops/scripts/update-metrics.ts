@@ -117,10 +117,16 @@ function findTableAfterHeading(lines: string[], headingLine: string): MarkdownTa
 
 /**
  * Thay hoặc thêm một dòng dữ liệu trong bảng ngay sau `headingLine` của
- * `content`. Khớp theo cột `keyIndex` (thường là cột đầu — ngày hoặc
- * khoảng thời gian): trùng `keyValue` thì THAY dòng đó, không trùng thì
- * thêm dòng mới vào cuối bảng. Không thấy heading hoặc bảng thì trả về
- * `content` nguyên văn — không đoán, không tự tạo bảng mới.
+ * `content`. Khớp theo cột `keyIndex` (thường là cột đầu — ngày): trùng
+ * `keyValue` thì THAY dòng đó, không trùng thì thêm dòng mới vào cuối
+ * bảng. Không thấy heading hoặc bảng thì trả về `content` nguyên văn —
+ * không đoán, không tự tạo bảng mới.
+ *
+ * Dùng cho bảng dạng **nhật ký** — mỗi khoá (vd. mỗi ngày) một dòng, dòng
+ * cũ vẫn giữ để thấy xu hướng. Bảng dạng **trạng thái hiện tại, không
+ * phải nhật ký** (chỉ một dòng duy nhất, luôn ghi đè) thì dùng
+ * `replaceOnlyRow` — xem đó để biết vì sao hai việc này KHÔNG dùng chung
+ * một hàm.
  */
 export function upsertTableRow(
   content: string,
@@ -141,6 +147,39 @@ export function upsertTableRow(
     lines[lineIndex] = newLine;
   } else {
     lines.splice(table.endIndex, 0, newLine);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Thay DÒNG DUY NHẤT của bảng ngay sau `headingLine` bằng `newRow`, bất kể
+ * nội dung dòng cũ là gì; bảng chưa có dòng nào thì thêm `newRow`. Có hơn
+ * một dòng (dữ liệu cũ để lại, hoặc lỗi trước đó) thì gộp về còn đúng một
+ * — dòng đầu bị thay, các dòng sau bị xoá.
+ *
+ * Bảng "Độ ổn định của `main`" là số **cộng dồn từ khi bắt đầu tới hôm
+ * nay**, không phải một lần đo của riêng ngày hôm đó — cột đầu (nhãn
+ * khoảng ngày) đổi mỗi ngày dù số liệu cộng dồn không đổi. Dùng
+ * `upsertTableRow` khớp theo cột đó sẽ không bao giờ trùng khoá cũ, nên
+ * mỗi lần chạy lại thêm một dòng gần như trùng dòng trước — bảng phình vô
+ * hạn, đúng thứ rủi ro R12 mà chính số liệu này đo. `replaceOnlyRow` giữ
+ * bảng luôn đúng một dòng "trạng thái hiện tại".
+ */
+export function replaceOnlyRow(content: string, headingLine: string, newRow: string[]): string {
+  const lines = content.split('\n');
+  const table = findTableAfterHeading(lines, headingLine);
+  if (!table) return content;
+
+  const newLine = serializeRow(newRow);
+  const firstRowLineIndex = table.separatorIndex + 1;
+
+  if (table.rows.length === 0) {
+    lines.splice(table.endIndex, 0, newLine);
+  } else {
+    lines[firstRowLineIndex] = newLine;
+    const extraRows = table.rows.length - 1;
+    if (extraRows > 0) lines.splice(firstRowLineIndex + 1, extraRows);
   }
 
   return lines.join('\n');
@@ -186,13 +225,7 @@ export function updateStabilityTable(
   reverts: number,
   note: string,
 ): string {
-  return upsertTableRow(
-    content,
-    '## Độ ổn định của `main`',
-    0,
-    rangeLabel,
-    formatStabilityRow(rangeLabel, merged, reverts, note),
-  );
+  return replaceOnlyRow(content, '## Độ ổn định của `main`', formatStabilityRow(rangeLabel, merged, reverts, note));
 }
 
 // --- Lớp vỏ đọc đĩa / gọi `gh` — không kiểm bằng test đơn vị, cùng lý do
@@ -222,6 +255,9 @@ interface GhMergedPr {
 }
 
 function fetchMergedPrs(): GhMergedPr[] {
+  // `--limit 500`: không phân trang. Đủ cho quy mô hiện tại (một nhà máy
+  // mới bắt đầu); vượt ngưỡng này thì số liệu bị cắt âm thầm — thêm phân
+  // trang khi số PR merged thật sự tới gần đó.
   const result = spawnSync(
     'gh',
     ['pr', 'list', '--state', 'merged', '--json', 'number,headRefName,mergedAt', '--limit', '500'],
