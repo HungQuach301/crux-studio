@@ -249,6 +249,27 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 Điểm đáng lưu ý về thời điểm: `kernel/src/log.ts` nhận đường dẫn làm tham số, và bên đọc **chưa tồn tại** (`P-005` còn `ready`). Nghĩa là đổi bây giờ gần như miễn phí, và mỗi tuần chờ thì đắt thêm.
 
+### Cập nhật 2026-09-21 · `merge=union` KHÔNG cứu được lần vận hành thật đầu tiên — giả định G17 `sai`
+
+⚠️ **Union chỉ cứu lúc gộp bằng `git` trong phiên, và chỉ khi nhánh đã mang sẵn luật. Nó không cứu trạng thái `mergeable` mà GitHub tính.** Đừng coi `.gitattributes` là thứ làm xung đột log biến mất.
+
+**Chuyện đã xảy ra:** `.gitattributes` lên `main` khi PR #13 merge. Ngay sau đó PR #11 **vẫn** báo xung đột ở `ops/logs/platform.jsonl` trên trang PR, và `git merge origin/main` trong phiên cũng **vẫn** sinh dấu xung đột ở đúng file đó.
+
+**Nguyên nhân, tách ra bằng hai lần thử có đối chứng:**
+
+| Lần thử | Nhánh có `.gitattributes` lúc **bắt đầu** gộp? | Kết quả |
+|---|---|---|
+| 1 — tái hiện đúng PR #11: nhánh tách ra trước, `main` mang luật vào cùng lần gộp | **Không** | **CONFLICT** |
+| 2 — cùng repo, chỉ khác: lấy `.gitattributes` vào nhánh trước rồi mới gộp | **Có** | Merge sạch, giữ cả hai dòng |
+
+**Git đọc `.gitattributes` của nhánh đích ở trạng thái TRƯỚC lần gộp.** Một luật merge do `main` mang tới **không tự áp cho chính lần gộp mang nó tới**. Mọi nhánh mở ra trước PR #13 vì thế phải chịu đúng một lần giải tay; từ lần gộp sau thì luật mới có tác dụng.
+
+**Một chỗ phải nói cho đúng:** quan sát ở PR #11 **không** chứng minh được GitHub bỏ qua `.gitattributes`. Ở tình huống đó git phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Câu hỏi về GitHub vẫn mở, và chỉ trả lời được bằng hai PR mà **cả hai đã mang sẵn** luật — xem `VF-G17`.
+
+**Vì sao hai lần thử của `P-015` bỏ sót:** cả hai đều dựng ở **trạng thái sau cùng**, nơi luật đã nằm sẵn ở commit gốc. Không lần nào dựng ở trạng thái mà lỗi thật sẽ xảy ra. Đây là bài học vượt ra ngoài mục này: *"kiểm bằng chạy thật" chưa đủ — bài thử phải tái hiện đúng **điều kiện đầu vào**, và điều kiện dễ bỏ sót nhất là thứ tự thời gian: ai có gì, vào lúc nào.*
+
+**Dự phòng đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được các lần gộp sau — không mất gì. Nhưng cơ chế chính chuyển sang mục **`P-016`**: routine integrator tự gộp `main` vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Giải xung đột thành việc của máy.
+
 ---
 
 ## Cách thêm một mục

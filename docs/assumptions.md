@@ -45,8 +45,11 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 | G14 | Commit của routine và thread có trailer `Claude-Session` | **`đã kiểm một phần`** | CI chỉ cảnh báo | `VF-G14` |
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | theo từng mục | `parked` | `VF-G15` |
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
+| G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 
-**Không có giả định nào ở trạng thái `sai`.** Hai giả định đã kiểm được một phần ngay trong Đợt 0 — chi tiết ở dưới.
+**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Hai giả định khác đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
+
+> Mã `G16` từng được **nhận trước** cho PR #11 trong lúc PR #15 viết `G17`, nên có một quãng bảng này nhảy từ G15 sang G17. Hai PR gộp vào nhau xong thì đủ cả hai, không ai mất số. Nhận mã trước khi viết là cách duy nhất để hai worker không cùng lấy một số (xem KF-005).
 
 ---
 
@@ -218,6 +221,32 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 - **Dự phòng — đã viết sẵn:** quay `defaultMode` về `acceptEdits` và chấp nhận phải bấm tay ở đúng những chỗ ghi trong nhật ký lần chạy hỏng. Không mất gì về kiến trúc, chỉ chậm hơn và cần người. Việc quay lại là một dòng trong `.claude/settings.json`, và PR đó là `owner-merge` như mọi PR chạm vùng bảo vệ.
 - **Rủi ro còn lại:** giả định này **đánh đổi rào chắn lấy tốc độ**. Khối `ask` trước đây là lớp thứ ba cho vùng bảo vệ — một người đọc diff trước khi agent chạm `CHARTER.md`. Bỏ nó đi thì vùng bảo vệ còn hai lớp: nhãn `owner-merge` do workflow `protected-area` gắn từ phía CI, và hook `guard.mjs`. Cả hai đều **không** phụ thuộc vào việc agent tự giác, và đó là điều làm việc bỏ `ask` chấp nhận được. Ngược lại, giữ `ask` trong một routine không có người ngồi cạnh thì mỗi lời hỏi là một lần treo tới khi hết giờ — một lần chạy hỏng mà **không chỉ báo nào đỏ**, đúng nhóm lỗi đang được rà ở `ops/known-failures.md`.
 - **Trạng thái:** đang dựa vào, có dự phòng. Giao làn `verify` mục `VF-G16`. Chuyển sang `đã kiểm` khi lần chạy routine đầu tiên đi trọn một mục backlog.
+
+---
+
+## G17 · `merge=union` làm xung đột file log biến mất trong vận hành thật
+
+- **Nội dung:** đặt `merge=union` trong `.gitattributes` cho `ops/logs/*.jsonl` là đủ để hai PR song song trong cùng một làn **không còn** kẹt vì xung đột log. Đây là giả định mà `P-015` và KF-005 được xây lên trên.
+- **Nguồn:** hai lần chạy thử trong `P-015` — cả hai đều cho union giữ cả hai dòng, 0 dấu xung đột.
+- **Độ tin cậy:** **`sai`**
+
+  **Bằng chứng, 2026-09-21 (vận hành thật):** `.gitattributes` đã nằm trên `main` từ khi PR #13 merge. Ngay sau đó, PR #11 **vẫn** báo xung đột ở `ops/logs/platform.jsonl`, và lệnh `git merge origin/main` trong phiên cũng **vẫn** sinh dấu xung đột ở đúng file đó. Union không cứu được lần nào.
+
+  **Vì sao — đã tách ra bằng hai lần chạy thử có đối chứng**, chứ không suy luận:
+
+  | Lần thử | Nhánh có `.gitattributes` lúc **bắt đầu** gộp? | Kết quả |
+  |---|---|---|
+  | 1 — tái hiện đúng PR #11: nhánh tách ra trước, `main` mang luật vào cùng lần gộp | **Không** | **CONFLICT**, 1 dấu xung đột |
+  | 2 — cùng repo đó, chỉ khác: lấy `.gitattributes` vào nhánh trước rồi mới gộp | **Có** | Merge sạch, **0 dấu xung đột**, giữ cả hai dòng |
+
+  Kết luận: **git đọc `.gitattributes` của nhánh đích ở trạng thái TRƯỚC lần gộp.** Một luật merge do `main` mang tới **không tự áp cho chính lần gộp mang nó tới**. Hai lần thử của `P-015` đều đặt luật sẵn ở commit gốc, nên cả hai đều bỏ sót đúng điều kiện đã làm hỏng việc thật.
+
+  **Chỗ vẫn chưa kiểm, và phải nói rõ:** bằng chứng trên **không** chứng minh được GitHub bỏ qua `.gitattributes` khi nó tự tính trạng thái `mergeable`. Trong tình huống của PR #11, git ở phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Câu hỏi "GitHub có dùng `.gitattributes` không" chỉ trả lời được bằng hai PR mà **cả hai đều đã mang sẵn** `.gitattributes` — chưa có cặp nào như thế. Giữ nó ở mục `VF-G17`.
+- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes`
+- **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào `ops/logs/<lane>.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai.
+- **Dự phòng — đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được mọi lần gộp **sau khi** nhánh đã mang luật — không mất gì. Nhưng nó không còn được coi là cơ chế chính. Cơ chế chính chuyển sang mục `P-016`: routine integrator **tự gộp `main`** vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Việc giải xung đột trở thành việc của máy, không phải việc của người.
+- **Bài học chung, vượt ra ngoài mục này:** hai lần thử của `P-015` là chạy thật, và vẫn cho kết luận sai — vì cả hai đều dựng ở **trạng thái sau cùng**, không dựng ở trạng thái mà lỗi thật sẽ xảy ra. "Kiểm bằng chạy thật" (CHARTER 11.1 luật 3) chưa đủ. Bài thử phải tái hiện **đúng điều kiện đầu vào của lần chạy thật**, và điều kiện dễ bỏ sót nhất là *thứ tự thời gian*: ai có gì, vào lúc nào.
+- **Trạng thái:** `sai`, đã chuyển dự phòng ngay trong cùng PR ghi nhận nó (quyết định `reversible` theo CLAUDE.md mục 7). Phần còn mở giao làn `verify` mục `VF-G17`.
 
 ---
 
