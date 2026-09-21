@@ -77,7 +77,7 @@ từ đầu, chưa trừ hao gì" — lượt kiểm này xác nhận đúng nh�
 
 | Tham số | Nhóm | Nguồn cụ thể | Tần suất | Độ trễ | Ghi chú |
 |---|---|---|---|---|---|
-| Lãi suất khoản vay xe hiện hành (để chọn ví dụ 5,2% có thật, không bịa) | 1 | FRED — Bankrate Monitor, *Auto Loan Rate – 60 Month New Car* (`BRMALR0101`), hoặc G.19 `RIFLPBCIANM60NM` | Bankrate: hàng tuần · G.19: hàng tháng | Bankrate: ~theo tuần, gần như tức thời · G.19: ~2 tháng | Hai chuỗi cùng đo một thứ, khác nhà cung cấp gốc (Bankrate khảo sát tuần vs. Fed G.19 khảo sát ngân hàng thương mại) — chọn một, ghi rõ chuỗi đã dùng khi sản xuất thật (việc của `T-003`). |
+| Lãi suất khoản vay xe hiện hành (để chọn ví dụ 5,2% có thật, không bịa) | 1 | FRED — Bankrate Monitor, *Auto Loan Rate – 60 Month New Car* (`BRMALR0102`; đã kiểm lại bằng `WebFetch` 2026-09-21 — **không phải** `BRMALR0101`, mã đó là *48 Month Used Car*, dễ nhầm vì cùng họ series), hoặc G.19 `RIFLPBCIANM60NM` | Bankrate: hàng tuần, kết vào thứ Năm · G.19: hàng tháng | Bankrate: ~theo tuần, gần như tức thời (kiểm 2026-09-21: kỳ 16/9/2026 công bố 17/9/2026) · G.19: ~2 tháng | Hai chuỗi cùng đo một thứ, khác nhà cung cấp gốc (Bankrate khảo sát tuần vs. Fed G.19 khảo sát ngân hàng thương mại) — chọn một, ghi rõ chuỗi đã dùng khi sản xuất thật (việc của `T-003`). |
 | Thuế suất biên (để tính lợi suất sau thuế của khoản đầu tư thay thế) | 2 | Sở Thuế vụ liên bang (IRS) — *Revenue Procedure* công bố bậc thuế thu nhập hàng năm (ví dụ Rev. Proc. 2025-32 cho năm thuế 2026), trang `irs.gov/newsroom` | Hàng năm (annual-reset) | Thường công bố vào mùa thu năm trước (ví dụ bậc thuế 2026 công bố tháng 10/2025) | Nhóm 2 — không có API, đi qua ảnh chụp biên tập (hai lượt trích xuất độc lập) theo quy trình ở `data-sources.md`. Chuỗi `annual-reset`, áp luật lô. |
 
 **Kết luận: khả thi.**
@@ -111,6 +111,18 @@ từ đầu, chưa trừ hao gì" — lượt kiểm này xác nhận đúng nh�
 
 ---
 
+## Đề tài 6 · Điểm tín dụng chỉ quan trọng ở năm ngưỡng — chúng là những ngưỡng nào?
+
+**Biến quét:** không có — đề tài hỏi thẳng danh sách ngưỡng, bản thân danh sách đó là thứ cần một nguồn công khai, không phải biến quét ra từ mô hình.
+
+| Tham số | Nhóm | Nguồn cụ thể | Tần suất | Độ trễ | Ghi chú |
+|---|---|---|---|---|---|
+| Ngưỡng xét duyệt điểm tín dụng theo loại khoản vay (ví dụ mốc lãi suất ưu đãi đổi bậc ở FICO bao nhiêu) | 3 | **Không có trong danh sách trắng.** Ngưỡng cắt cụ thể là chính sách bảo lãnh nội bộ của từng người cho vay/nhà đầu tư thứ cấp (Fannie Mae, Freddie Mac loại LLPA theo dải điểm là dữ liệu gần nhất có công bố, nhưng Fannie Mae/Freddie Mac **không** nằm trong Fed/BLS/Census/IRS/CFPB/thuế bang của danh sách trắng). CFPB công bố **phân phối** điểm tín dụng của người vay được duyệt (qua *Consumer Credit Trends*), nhưng đó là số liệu mô tả ai đã vay được, không phải bảng ngưỡng quyết định lãi suất — không đúng loại dữ liệu đề tài cần. | — | — | Đã biết trước ở `data-sources.md` nhóm 3. Không tìm nguồn thay thế trong danh sách trắng ở lượt kiểm này; CFPB Consumer Credit Trends được cân nhắc và loại vì sai loại số (phân phối, không phải ngưỡng bảo lãnh). |
+
+**Kết luận: không khả thi** — thiếu nguồn công khai cho chính ngưỡng bảo lãnh, đúng như `data-sources.md` đã ghi trước.
+
+---
+
 ## Đề tài 7 · Ở mức chênh lãi suất nào thì tái cấp vốn hoàn lại được chi phí đóng hồ sơ?
 
 **Biến quét:** chênh lệch lãi suất giữa khoản vay cũ và khoản vay mới.
@@ -122,6 +134,19 @@ từ đầu, chưa trừ hao gì" — lượt kiểm này xác nhận đúng nh�
 | Thời gian giữ nhà (để tính điểm hoà vốn) | — | Không phải tham số cần nguồn — biến giả định của kịch bản (kênh nêu vài mốc thời gian giữ nhà điển hình, không phải số đo có nguồn). | — | — | — |
 
 **Kết luận: khả thi.**
+
+---
+
+## Đề tài 8 · Chênh lệch tỷ lệ chi phí quỹ bao nhiêu thì cần thêm bao nhiêu lợi suất để hoà trong 20 năm?
+
+**Biến quét:** lợi suất bù trừ cần thiết (kết quả của phép tính, đã có chênh lệch chi phí quỹ làm đầu vào).
+
+| Tham số | Nhóm | Nguồn cụ thể | Tần suất | Độ trễ | Ghi chú |
+|---|---|---|---|---|---|
+| Tỷ lệ chi phí (expense ratio) của các quỹ cụ thể để dựng ví dụ chênh lệch có thật | 3 | **Không có trong danh sách trắng.** Tỷ lệ chi phí quỹ nằm trong bản cáo bạch (prospectus) do SEC lưu trữ (EDGAR) hoặc trang của chính công ty quỹ (Vanguard, Fidelity…) — không phải Fed/BLS/Census/IRS/CFPB/thuế bang. SEC EDGAR có thể coi là nguồn liên bang, nhưng **không nằm trong danh sách trắng đã duyệt** của `data-sources.md`; thêm SEC vào danh sách trắng là quyết định ngoài phạm vi mục này (đổi danh sách trắng là việc của `data-sources.md`, không phải `T-001`). | — | — | Đã biết trước ở `data-sources.md` nhóm 3. Ghi nhận SEC EDGAR như một hướng mở rộng danh sách trắng khả dĩ cho lượt sau, không tự thêm ở đây. |
+| Thời gian nắm giữ 20 năm | — | Không phải tham số cần nguồn — cố định bởi chính câu hỏi (20 năm), không phải một số đo cần trích dẫn. | — | — | — |
+
+**Kết luận: không khả thi** — thiếu nguồn công khai trong danh sách trắng cho tỷ lệ chi phí quỹ theo từng quỹ cụ thể, đúng như `data-sources.md` đã ghi trước.
 
 ---
 
