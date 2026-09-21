@@ -4,27 +4,27 @@
     {
       "name": "decision",
       "color": "5319E7",
-      "description": "Hộp quyết định. Issue 🤖 [QĐ]. Luôn đi kèm reversible hoặc irreversible. KHÔNG còn @nhắc riêng lẻ (D-C06): mỗi quyết định là một dòng trong bản tin sáng."
+      "description": "Hộp quyết định 🤖 [QĐ]. Đi kèm reversible hoặc irreversible. Một dòng tóm tắt trong bản tin."
     },
     {
       "name": "reversible",
       "color": "B4A7F5",
-      "description": "Agent làm theo khuyến nghị NGAY, ghi vào bản tin. Chủ dự án phủ quyết trong 24 giờ bằng comment 'hoàn tác #N'."
+      "description": "Agent làm ngay theo khuyến nghị. Phủ quyết trong 24 giờ: comment 'hoàn tác #N' ở bản tin."
     },
     {
       "name": "irreversible",
       "color": "B60205",
-      "description": "Agent CHỜ trả lời. Bảy nhóm, khai ở CHARTER 2.3. Trả lời trong MỘT comment trên bản tin, dạng '#19 A, #14 B'."
+      "description": "Agent chờ trả lời. Bảy nhóm ở CHARTER 2.3. Trả lời ở bản tin, dạng '#19 A, #14 B'."
     },
     {
       "name": "digest",
       "color": "0E8A16",
-      "description": "Bản tin sáng — hộp quyết định DUY NHẤT. Dòng đầu luôn là 'Cần anh quyết: N việc'. Nơi chủ dự án trả lời mọi thứ."
+      "description": "Bản tin sáng — hộp quyết định duy nhất. Mọi việc cần chủ dự án đều nằm ở đây."
     },
     {
       "name": "alert",
       "color": "D93F0B",
-      "description": "Cảnh báo KHẨN, bốn loại (CHARTER 2.4). Thứ duy nhất ngoài bản tin được phép @nhắc chủ dự án."
+      "description": "Cảnh báo khẩn, bốn loại (CHARTER 2.4). Thứ duy nhất ngoài bản tin được @nhắc."
     },
     {
       "name": "automerge",
@@ -34,12 +34,12 @@
     {
       "name": "owner-merge",
       "color": "B60205",
-      "description": "PR chạm vùng chỉ chủ dự án merge (I4, đã thu hẹp theo D-C06): CHARTER mục 1 và 3, ops/invariants.*, .claude/settings.json, hooks, automerge.yml, .github/**, workflow dùng secret hoặc phát hành."
+      "description": "PR chạm vùng chỉ chủ dự án merge (I4, thu hẹp theo D-C06). Ba nhóm ở CHARTER mục 3."
     },
     {
       "name": "automerge-delayed",
       "color": "1D76DB",
-      "description": "PR chạm vùng bảo vệ cũ nhưng không thuộc owner-merge (D-C06). Tự merge sau 12 giờ CI xanh, trừ khi chủ dự án comment 'dừng'."
+      "description": "Vùng bảo vệ mức 2 (D-C06). Tự merge sau 12 giờ CI xanh, trừ khi chủ dự án nói 'dừng'."
     },
     {
       "name": "fix",

@@ -274,6 +274,28 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 ---
 
+## KF-006 · Mô tả nhãn dài quá 100 ký tự làm đỏ **bước đầu tiên** của job gắn nhãn `owner-merge`
+
+- **Lần gặp:** 1 — ghi ngay từ lần đầu, vì hệ quả của nó không tỉ lệ với nguyên nhân: một ký tự thừa trong một file JSON làm thủng đường thực thi bất biến **I4**.
+- **Chữ ký:**
+  ```
+  HTTP 422: Validation Failed (https://api.github.com/repos/<owner>/<repo>/labels)
+  description is too long (maximum is 100 characters)
+  Label.name already exists
+  ```
+  ở bước "Bảo đảm nhãn CI dùng đã tồn tại" của job `protected-area`.
+- **Bằng chứng:** `ci` run trên PR #20, 2026-09-21. Job `protected-area` đỏ sau **5 giây**, trước khi chạm tới dòng nào của PR.
+- **Nguyên nhân gốc:** GitHub giới hạn mô tả nhãn ở **100 ký tự**. `D-C06` viết lại mô tả của bảy nhãn cho khớp luật mới, và sáu trong số đó vượt giới hạn — dài nhất là `owner-merge` với 193 ký tự. Giới hạn này không có ở đâu trong repo, nên không có gì để mà đối chiếu.
+
+  Dòng thứ hai của thông báo lỗi (`Label.name already exists`) là **nhiễu**: `--force` xử lý được trường hợp đó. Chỉ dòng thứ nhất là lỗi thật. Đọc nhầm dòng thứ hai sẽ dẫn tới sửa nhầm chỗ.
+- **Vì sao nó đặc biệt nguy hiểm ở dự án này:** tạo nhãn là bước **đầu tiên** của `protected-area`, và `protected-area` là job gắn nhãn `owner-merge`. Job đỏ ở dòng đầu nghĩa là **PR chạm vùng bảo vệ không được gắn nhãn** — đúng lỗ hổng mà rà soát **Z8** mô tả. Ở đây nó lộ ra vì job đỏ; nếu bước tạo nhãn từng được viết với `|| true` thì nó đã im lặng.
+
+  Giới hạn đếm **ký tự**, không phải byte: mô tả tiếng Việt có dấu tốn nhiều byte hơn ký tự, và nhãn `parked` (86 ký tự, hơn 100 byte) đã sync thành công ở `labels` run #2. Nhầm chỗ này sẽ sinh ra một luật chặt quá mức và ép viết mô tả cụt.
+- **Đã sửa ở đâu:** `ops/labels.json` — bảy mô tả viết lại, dài nhất còn 91 ký tự.
+- **Máy chặn từ nay:** `ops/test/labels.test.ts`, nằm trong `pnpm test` nên `pnpm check` chặn trước khi PR tới GitHub. Năm bài kiểm: độ dài ≤ 100, `name` và `color` hợp lệ, không trùng tên, đủ năm nhãn mà `ci.yml` tự tạo, và `ci.yml` tạo đúng những nhãn nó gắn — bài cuối bắt trường hợp thêm một nhãn mới vào `ci.yml` mà quên thêm vào vòng lặp tạo nhãn.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
