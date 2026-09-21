@@ -175,12 +175,13 @@ Ba cách duy nhất có tác dụng, xếp theo thứ tự nên chọn:
 | **Z12** | Bộ kiểm sổ giả định đọc mục **cuối** tới hết file | Phần kiểm "có nói về dự phòng không", cho mục cuối | Nội dung cuối file (phần "Cách thêm một giả định") trôi vào thân mục cuối và mang theo chữ khoá, làm mục đó xanh sai. **Đã xảy ra thật với G15** — chỉ lộ ra khi thêm G16 đẩy nó khỏi vị trí cuối | Cắt mục ở dấu `---` thay vì ở hết file, kèm một test âm: một sổ có mục cuối **thiếu** dự phòng phải đỏ |
 | **Z13** | `pnpm replay` so snapshot | Chính phép so, nếu snapshot được cập nhật trong cùng PR | Snapshot mới khớp output mới, đương nhiên xanh. Phép so mất hết giá trị mà không báo gì | CHARTER 6.1 đã đòi `--update` đi trong **PR riêng**. Chưa có máy nào ép: thêm một job đỏ khi một PR vừa chạm `ops/golden/**` vừa chạm thứ khác |
 | **Z14** | Dòng log `costUsd` (bất biến I8) | Bước ghi log, khi lần chạy chết trước đó | Thiếu một dòng log không làm gì đỏ. Chi phí thật cao hơn chi phí thấy được, và ngân sách học trôi | So số PR đã merge theo làn với số dòng trong `ops/logs/<lane>/**` cùng khoảng thời gian. Lệch quá ngưỡng thì báo trong bản tin ngày |
+| **Z15** | Bài kiểm tự động của sổ giả định (`pnpm recheck:assumptions`) | Bài kiểm G14, khi clone chưa có ref `origin/claude/*` nào để quét | "Quét rồi không thấy gì" và "chưa quét được gì" in ra **cùng một dòng** `◦ chưa quan sát được`, và lệnh vẫn exit 0. Clone của phiên cloud chỉ fetch `main`, nên đó là chế độ chạy **mặc định** của cả ba routine: bài kiểm của thứ Hai im lặng ở hầu hết các lượt | ✅ **Đã có** — mục `I-005`: bài kiểm **tự fetch cả hai đầu vào** của mình (`claude/*` **và** `main`), và ném khi vẫn không có ref nào. Thiếu đầu vào ra `⚠ … KHÔNG CHẠY ĐƯỢC` cộng exit khác 0, không bao giờ ra `◦`. Hình dạng chung: **cấm im lặng** (cách 3) — một bài kiểm không được tự khai "không có gì để xem" khi nó chưa nhìn. ⚠️ **Bản sửa đầu chỉ fetch `claude/*`, và thế là đổi im lặng lấy số sai:** `origin/main` cũ làm commit squash lọt vào phạm vi quét ⇒ G14 `sai` giả ⇒ một issue `[QĐ]` giả gửi tới chủ dự án. Vòng soát bắt được bằng chạy thật trên một clone `--single-branch`. Bài học: khi chữa một bước im lặng, hỏi ngay "nó có đủ đầu vào để trả lời đúng chưa" — không thì chỉ đổi mặt của nhóm Z |
 
 ### Cái giá của việc không làm
 
 Ba mục đã lộ ra (KF-001, KF-002, KF-004) đều **chỉ lộ ra vì có người bấm tay** — không mục nào được máy tìm thấy. Đó là con số đáng lo nhất trong sổ này: tỉ lệ tự phát hiện của nhóm Z hiện là **0/3**.
 
-Rà soát này thành mục `P-014` trong `ops/lanes/platform/backlog.md`. Thứ tự làm theo giá trên mỗi đồng: **Z10 → Z11 → Z3 → Z5 → Z9** trước (đều là luật máy kiểm rẻ, viết một lần chạy mãi), rồi tới Z2, Z8, Z13 (gắn vào CI), cuối cùng Z6, Z7, Z14 (cần nhịp tim và ngưỡng, phải chỉnh dần).
+Rà soát này thành mục `P-014` trong `ops/lanes/platform/backlog.md`. Thứ tự làm theo giá trên mỗi đồng: **Z10 → Z11 → Z3 → Z5 → Z9** trước (đều là luật máy kiểm rẻ, viết một lần chạy mãi), rồi tới Z2, Z8, Z13 (gắn vào CI), cuối cùng Z6, Z7, Z14 (cần nhịp tim và ngưỡng, phải chỉnh dần). **Z15 đã xong** ở mục `I-005`, và nó vào bảng này theo đường khác hẳn: không ai rà ra nó, nó lộ ra vì một lượt `crux-integrator` chạy thật rồi có người đọc bản in. Đáng ghi lại vì nó đúng chỗ nhóm Z đau nhất — bài kiểm **của chính sổ giả định** cũng nằm trong nhóm Z, và nó không tự nói được là nó chưa chạy.
 
 ---
 
@@ -232,6 +233,8 @@ Nói gọn: KF-002 là lỗi của **hình dạng nhánh**, KF-005 là lỗi c�
 
 - **Máy chặn từ nay:** `ops/test/gitattributes.test.ts` khoá luật union cho từng file append-only đang có, và khoá luôn chiều ngược lại — **không** file Markdown nào được nhận `merge=union`. Union trên Markdown sẽ trộn hai mục thành một mục hỏng mà vẫn merge được: đó là nhóm Z, hỏng mà không gì đỏ.
 
+  Cộng thêm `ops/test/logs-layout.test.ts`: **không còn file `.jsonl` phẳng nào trong `ops/logs/`**. Xoá hết file phẳng trong một PR chưa khoá được `D-C04` — hình dạng cũ quay lại được mà không gì đỏ, và đã quay lại thật một lần (`ops/logs/verify.jsonl`, PR #29 → lần gộp cuối của PR #26). Chi tiết ở `docs/decisions/D-C04.md`.
+
 ### Rà nốt: còn file dùng chung nào khác
 
 Union chỉ cứu được file mà **thứ tự dòng không mang nghĩa**. Với Markdown thì không — nên phần còn lại phải chữa bằng cách khác.
@@ -279,6 +282,8 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 **Dự phòng đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được các lần gộp sau — không mất gì. Nhưng cơ chế chính chuyển sang mục **`P-016`**: routine integrator tự gộp `main` vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Giải xung đột thành việc của máy.
 
 **Cập nhật 2026-09-21 (tiếp) · Cơ chế của `P-016` đã có, dạng tool chứ không phải lời:** `ops/scripts/integrator-resolve.ts` đối chiếu bằng `git diff --numstat` với tổ tiên chung ở cả hai bên trước khi quyết — đúng "đối chiếu, không đoán" của KF-002 — rồi giải bằng `git merge-file --union` cho MỌI file đủ điều kiện, không chỉ file đã khai `merge=union`. Nhờ vậy lỗ hổng của G17 (attribute không tự áp cho chính lần gộp mang nó tới) không còn quan trọng: tool không phụ thuộc `.gitattributes` để quyết định giải hay không. Còn treo: nhịp chạy mỗi giờ của routine `crux-integrator` cần chủ dự án tự đổi lịch ở `claude.ai/code/routines` (agent không đổi được lịch một routine đã tạo).
+
+**Cập nhật 2026-09-21 (mục `I-004`) · Một loại file mà union là SAI, và vì sao:** `pnpm-lock.yaml`. Union chỉ đúng khi mỗi dòng độc lập và thứ tự dòng không mang ý nghĩa — lockfile không thoả cả hai: nó là YAML có cấu trúc, và là **file dẫn xuất** của các `package.json`. Ghép dòng của hai bên cho ra file *merge được mà vẫn hỏng* (nhóm lỗi Z): khoá lặp hoặc thụt lề sai, không gì đỏ cho tới khi `pnpm install --frozen-lockfile` chạy ở một máy khác. Thêm vào đó, xung đột lockfile thật gần như luôn có **sửa dòng ở cả hai bên** (một phiên bản đổi chỗ), nên luật "thuần cộng thêm" của `integrator-resolve.ts` luôn trả `aborted-ineligible` — PR nằm chờ người, đúng thứ `P-016` sinh ra để xoá. Cách đúng là **tạo lại** từ manifest của cây vừa gộp: `ops/scripts/integrator-lockfile.ts` (CHARTER mục 7 — lockfile do làn `integration` tạo lại).
 
 ---
 

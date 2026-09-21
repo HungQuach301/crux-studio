@@ -17,7 +17,7 @@
  */
 
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, type Dirent } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { LANES, type LaneName } from './envelope.ts';
 
 export interface RunLogLine {
@@ -202,4 +202,27 @@ export function listLogFiles(logsDir: string): string[] {
  */
 export function readRunLogs(logsDir: string): RunLogLine[] {
   return parseRunLogs(listLogFiles(logsDir).map((path) => readFileSync(path, 'utf8')));
+}
+
+/**
+ * Những file log **phẳng** còn sót dưới `ops/logs/` — hình dạng trước
+ * `D-C04`, tức `.jsonl` nằm ngay tầng đầu (`ops/logs/<lane>.jsonl`) thay
+ * vì trong thư mục của làn (`ops/logs/<lane>/<id>.jsonl`).
+ *
+ * Vì sao phải hỏi bằng một hàm chứ không nhìn bằng mắt: một file phẳng
+ * **mới** sinh ra trên `main` sau khi một nhánh rẽ ra sẽ được git gộp vào
+ * êm ru — nhánh chưa từng thấy file đó nên không có gì để xung đột. Kết
+ * quả là PR xanh, merge được, mà hình dạng cũ vẫn nằm đó sau `D-C04`.
+ * Đúng nhóm Z: hỏng mà mọi chỉ báo đều xanh. Đã xảy ra thật với
+ * `ops/logs/verify.jsonl` lúc giải xung đột PR #26.
+ *
+ * `readRunLogs` vẫn đọc cả file phẳng, nên dòng log không mất — cái mất là
+ * chính lý do `D-C04` tồn tại: hai PR trong cùng một làn lại chạm cùng một
+ * file (`KF-005`).
+ */
+export function flatLogFiles(logsDir: string): string[] {
+  // So bằng `relative` chứ không bằng `dirname(path) === logsDir`: bên gọi
+  // đưa `ops/logs/` có dấu gạch chéo cuối là so chuỗi lệch ngay, và lúc đó
+  // hàm trả rỗng — tức là báo "sạch" cho một thư mục nó chưa thật sự xét.
+  return listLogFiles(logsDir).filter((path) => !relative(logsDir, path).includes(sep));
 }

@@ -12,6 +12,9 @@
 
   Trong shell cũng vậy: `find ops/logs -name '*.jsonl' -exec cat {} +`, không phải `cat ops/logs/*.jsonl` — glob một tầng không khớp file nào nữa.
 - **`merge=union`** (`.gitattributes` ở gốc repo) vẫn còn, làm **lớp phòng thủ thứ hai**: nó cứu trường hợp hai lần chạy cùng ghi vào một mục. Giới hạn đã đo của nó ở `KF-005`.
+- **Không file `.jsonl` phẳng nào ở tầng này.** `ops/logs/<lane>.jsonl` là hình dạng **trước** `D-C04`. Nó quay lại được mà không gì đỏ: `readRunLogs` vẫn đọc, nên một làn mới ghi nhầm vào đó — hoặc một file phẳng sinh ra trên `main` **sau** khi nhánh rẽ ra, thứ git gộp vào êm ru vì nhánh chưa từng thấy nó — sẽ đi thẳng vào `main` với CI xanh. Đã xảy ra thật với `ops/logs/verify.jsonl` lúc giải xung đột PR #26.
+
+  `ops/test/logs-layout.test.ts` khoá luật này (kèm test âm), dựa trên `flatLogFiles` của kernel. Gặp nó đỏ thì mang từng dòng sang `ops/logs/<lane>/<id>.jsonl` theo trường `ref` — dùng `logIdFromRef` rồi `runLogPath`, đừng tự ghép đường dẫn — rồi xoá file phẳng.
 - **Append-only.** Không sửa, không xoá dòng đã ghi. Sai thì ghi thêm một dòng đính chính.
 - Một dòng gồm: `at`, `lane`, `kind` (`stage` | `lane`), `ref`, `status`, `durationMs`, `costUsd`, và `note` nếu cần.
 - **`rollup: true`** đánh dấu dòng **tổng hợp**: `costUsd` của nó đã được đếm ở những dòng khác. Một lần `pnpm run:episode` ghi sáu dòng `stage` cộng một dòng `lane` mang đúng tổng của sáu dòng đó, nên cộng hết thì mỗi tập bị tính tiền **hai lần**. `sumCostUsd` bỏ qua dòng có cờ này; dòng vẫn được ghi, vì bất biến I8 đòi mọi lần chạy làn có một dòng.

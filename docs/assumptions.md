@@ -19,7 +19,7 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 pnpm recheck:assumptions
 ```
 
-Lệnh này chạy lại **bài kiểm** của những giả định tự khai `**Kiểm tự động:**` ở mục của mình, và in ra hai loại kết luận: `khớp` (quan sát đúng như sổ ghi) và `sai` (quan sát ngược với sổ). Với mỗi giả định `sai` nó **in sẵn thân issue `🤖 [QĐ]` kèm danh sách phần bị ảnh hưởng**, lấy nguyên từ cột *Phần phụ thuộc* của chính giả định đó. Bài kiểm chạy được nhưng không có gì để quan sát thì mang dấu riêng `◦ chưa quan sát được`, không phải `✓` — hai thứ đó in giống nhau thì một bài kiểm không bao giờ chạy trông y hệt một bài kiểm luôn xanh. Giả định nào không tự kiểm được thì được liệt kê thành "cần người", không im lặng bỏ qua.
+Lệnh này chạy lại **bài kiểm** của những giả định tự khai `**Kiểm tự động:**` ở mục của mình, và in ra hai loại kết luận: `khớp` (quan sát đúng như sổ ghi) và `sai` (quan sát ngược với sổ). Với mỗi giả định `sai` nó **in sẵn thân issue `🤖 [QĐ]` kèm danh sách phần bị ảnh hưởng**, lấy nguyên từ cột *Phần phụ thuộc* của chính giả định đó. Bài kiểm chạy được nhưng không có gì để quan sát thì mang dấu riêng `◦ chưa quan sát được`, không phải `✓` — hai thứ đó in giống nhau thì một bài kiểm không bao giờ chạy trông y hệt một bài kiểm luôn xanh. Bài kiểm **chưa chạy được** (thiếu đầu vào, ví dụ chưa có ref nào để quét) là loại thứ ba, và nó KHÔNG được mang dấu `◦`: nó ra `⚠ … KHÔNG CHẠY ĐƯỢC` và lệnh thoát khác 0 (mục `I-005`). Giả định nào không tự kiểm được thì được liệt kê thành "cần người", không im lặng bỏ qua.
 
 Đừng nhầm với `pnpm assumptions`: lệnh kia kiểm **truy vết** (sổ có đủ mục không, file liệt kê có nhắc mã không) và chạy trong `pnpm check` ở mọi PR. Lệnh này kiểm **nội dung** — điều sổ đang khẳng định về nền tảng còn đúng không — nên nó **không** nằm trong `pnpm check`: một giả định hoá ra sai không được phép chặn mọi làn (CHARTER mục 4).
 
@@ -40,7 +40,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | Mã | Giả định | Độ tin cậy | Trạng thái | Mục kiểm |
 |---|---|---|---|---|
 | G1 | Tài khoản có Claude Code Projects | `suy luận` | giao làn `verify` | `VF-G1` |
-| G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | `tài liệu nói vậy` | dự phòng đã viết sẵn | DoD Đợt 0 |
+| G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
 | G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
@@ -56,8 +56,9 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | theo từng mục | `parked` | `VF-G15` |
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
+| G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
 
-**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Hai giả định khác đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
+**Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G11`, `G14`) đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
 
 > Mã `G16` từng được **nhận trước** cho PR #11 trong lúc PR #15 viết `G17`, nên có một quãng bảng này nhảy từ G15 sang G17. Hai PR gộp vào nhau xong thì đủ cả hai, không ai mất số. Nhận mã trước khi viết là cách duy nhất để hai worker không cùng lấy một số (xem KF-005).
 
@@ -82,7 +83,12 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 - **Cách kiểm:** DoD Đợt 0 đòi `automerge` merge **thật** một PR low-risk mà không cần người. Đó là bài kiểm, và nó là chạy thật chứ không phải đọc tài liệu.
 - **Dự phòng — đã viết sẵn cho `main-ci`:** `main-ci.yml` chạy thêm **theo lịch mỗi giờ** (`cron: '17 * * * *'`). Nếu lời gọi tường minh không chạy được, `main` vẫn được kiểm trong vòng một giờ. Không cần sửa gì khi phát hiện sai.
 - **Dự phòng cho `sync-workflows` — CHƯA có.** `D-C06` đưa `ops/workflows/**` vào diện máy tự merge được, nên nếu lời gọi tường minh hỏng thì workflow mới nằm trong `main` mà `.github/workflows/` vẫn giữ bản cũ — và **mọi thứ vẫn xanh** (rà soát **Z3** trong `ops/known-failures.md`). Dự phòng đúng cho chỗ này là phép so nội dung `ops/workflows/*` với `.github/workflows/*` trong `main-ci`, thuộc mục `P-014`, **chưa xây**. Tới khi nó xong, đây là chỗ hở lớn nhất mà `D-C06` tạo ra.
-- **Trạng thái:** đang dựa vào, có dự phòng. Chuyển sang `đã kiểm` khi PR low-risk đầu tiên được automerge.
+- **Độ tin cậy (cập nhật):** `đã kiểm một phần` (2026-09-21, mục `VF-G2`).
+- **Bằng chứng, 2026-09-21:** DoD Đợt 0 chạy thật, không phải suy đoán — 11 lần `automerge.yml` merge PR bằng `GITHUB_TOKEN` (`merged_by: github-actions[bot]`) đều được nối tiếp bằng một lần chạy `main-ci` do chính `github-actions[bot]` gọi qua `workflow_dispatch` (không phải `push`), 11/11 kết luận `success`. Từng cặp đối chiếu trực tiếp `head_commit` của run với PR (không suy theo số thứ tự run, xem sửa lỗi bên dưới): PR #9→run [#2](https://github.com/HungQuach301/crux-studio/actions/runs/35546665857), PR #12→run [#5](https://github.com/HungQuach301/crux-studio/actions/runs/35548564831), PR #13→run [#6](https://github.com/HungQuach301/crux-studio/actions/runs/35549260675), PR #15→run [#8](https://github.com/HungQuach301/crux-studio/actions/runs/35551226238), PR #16→run [#10](https://github.com/HungQuach301/crux-studio/actions/runs/35552488882), PR #21→run [#12](https://github.com/HungQuach301/crux-studio/actions/runs/35562965729), PR #22→run [#16](https://github.com/HungQuach301/crux-studio/actions/runs/35567002846), PR #23→run [#15](https://github.com/HungQuach301/crux-studio/actions/runs/35566283545), PR #24→run [#17](https://github.com/HungQuach301/crux-studio/actions/runs/35568132566), PR #25→run [#18](https://github.com/HungQuach301/crux-studio/actions/runs/35568521900), PR #27→run [#19](https://github.com/HungQuach301/crux-studio/actions/runs/35572041259). Cặp khít nhất: PR #12 (`[platform] P-014`, nhãn `automerge`, không chạm vùng bảo vệ) merge lúc `2026-09-21T00:42:51Z`; run #5 khởi động `2026-09-21T00:42:53Z` — 2 giây sau.
+  Sự kiện `workflow_dispatch` (không phải `push`) trên các run này cũng là bằng chứng cho vế thứ hai của giả định — merge bằng `GITHUB_TOKEN` **không** tự sinh sự kiện `push` kích hoạt `main-ci`, đúng như tài liệu nói, nên buộc phải gọi tường minh.
+  **Đối chứng ngược chiều, cùng bằng chứng:** PR #18 (`owner-merge`, sửa `CHARTER.md`) do chính chủ dự án bấm merge trên GitHub (`merged_by: HungQuach301`), và merge đó sinh `main-ci` run [#11](https://github.com/HungQuach301/crux-studio/actions/runs/35559518205) bằng một sự kiện `push` **thật** (actor `HungQuach301`, không phải `github-actions[bot]`/`workflow_dispatch`). Đây đúng là cơ chế đối lập với G2, không phải một ví dụ của G2 — giữ lại ở đây làm đối chứng, vì bản đầu của mục này (trước khi reviewer ngữ cảnh sạch soát) đã xếp nhầm PR #18 vào bảng bằng chứng cùng với hai cặp sai số run (PR #9, PR #16); ba lỗi đó đã sửa trong cùng PR `VF-G2`, không đợi PR sau.
+- **Còn thiếu, KHÔNG tính vào phần đã kiểm:** chuỗi `automerge` → gọi tường minh `labels.yml` sau khi PR đụng `ops/labels.json`, và `automerge` → `sync-workflows` sau khi PR đụng `ops/workflows/**`, đều **chưa quan sát được bằng chạy thật** — ba lần `labels` chạy tới nay đều do chủ dự án tự kích (`push`/`workflow_dispatch` bởi `HungQuach301`), chưa lần nào do `automerge` gọi. Giữ nguyên gạch đầu dòng "Dự phòng cho `sync-workflows` — CHƯA có" ở trên; chỗ hở đó không đổi.
+- **Trạng thái:** `đã kiểm một phần` — phần lõi DoD Đợt 0 (automerge merge bằng `GITHUB_TOKEN`, không tự sinh `push`, gọi tường minh được `main-ci`) đã kiểm bằng chạy thật, 8/8 lần quan sát khớp. Phần `labels`/`sync-workflows` của cùng giả định vẫn `tài liệu nói vậy`, giao `VF-G2` theo dõi tiếp khi có PR automerge chạm đúng hai loại file đó.
 
 ## G3 · Trần số lần chạy routine mỗi ngày
 
@@ -212,6 +218,8 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 - **Cách kiểm phần còn lại:** đọc kết quả job `trailer-warn` trên các PR do routine mở, trong một tuần. Miễn phí, và tự động.
 - **Kiểm tự động:** `session-trailer-on-branch` — quét 14 ngày commit trên các nhánh `origin/claude/*` **chưa vào `main`**, và đòi mọi commit ở đó mang `Claude-Session`. Commit do **công cụ** tạo (merge commit của `integrator-resolve.ts`, message mặc định của `git merge`) được loại bằng một **danh sách trắng hẹp theo subject**, không phải bằng "commit nào thiếu `Co-Authored-By` thì là của công cụ" — luật sau fail-open đúng vào kịch bản phải bắt, vì hôm nền tảng tắt `attribution` thì cả hai trailer biến mất cùng lúc và mọi commit của agent bị xếp nhầm sang nhóm công cụ.
 
+  Bài kiểm **tự fetch cả hai đầu vào** của phép quét trước khi quét (mục `I-005`): `+refs/heads/claude/*:refs/remotes/origin/claude/*` (tập cần quét) và `+refs/heads/main:refs/remotes/origin/main` (phép loại `^main`). Thiếu vế đầu thì bài kiểm quét một tập rỗng và in `◦ chưa quan sát được` — im lặng bỏ qua ở **chế độ chạy mặc định** của cả ba routine. Thiếu vế sau thì tệ hơn, vì nó ra **số sai**: `origin/main` của clone đứng yên ở lúc clone, nên commit **squash** của `main` — vốn đã bị bước 0 của phụ lục P3 gộp vào nhánh PR — lọt qua phép loại, mà commit squash thì mất trailer, nên G14 ra `sai` giả và lệnh in sẵn một thân issue `🤖 [QĐ]` cho một giả định chẳng hề đổi trạng thái. Cả hai đều là nhóm lỗi Z, chỉ khác mặt. Fetch hỏng, hoặc fetch xong vẫn không có ref `claude/*` nào, thì bài kiểm **ném** và ra `⚠ … KHÔNG CHẠY ĐƯỢC`, không ra `◦`.
+
   Hai giới hạn khai trước: (a) bài kiểm canh **hồi quy** "trailer còn được ghi không", nó **không** phân biệt được commit của routine với commit của thread — git không có trường nào cho việc đó, nên phần phân biệt ấy vẫn nằm ở `VF-G14`; (b) **trên `main` gần như không có trailer nào**, vì repo merge bằng squash và commit squash giữ `Co-Authored-By` nhưng mất `Claude-Session` — muốn kiểm G14 thì phải đọc commit trên nhánh PR, không đọc `main`.
 - **Dự phòng — đã viết sẵn:** dựa vào quy ước 🤖 và log làn. CI **chỉ cảnh báo**, cố ý không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì một luật cứng ở đó sẽ chặn toàn bộ công việc.
 - **Trạng thái:** giao làn `verify` mục `VF-G14` cho phần routine.
@@ -274,3 +282,22 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 2b. Nếu giả định **kiểm được bằng máy**, thêm một phần `**Kiểm tự động:** \`<mã bài kiểm>\`` và đăng ký bài kiểm cùng mã đó trong `ops/scripts/recheck-assumptions.ts`. Khai một mã không có bài kiểm thì `pnpm assumptions` đỏ — sổ và code không trôi khỏi nhau được. Không kiểm được bằng máy thì **không** thêm phần này: khi đó `pnpm recheck:assumptions` liệt kê mục đó vào nhóm "cần người", và đó là câu trả lời đúng, không phải một ô bỏ trống.
 3. Thêm một mục `VF-<mã>` vào `ops/lanes/verify/backlog.md`.
 4. Nếu giả định chưa có dự phòng viết sẵn thì **không được xây gì lên trên nó** (luật 2).
+
+## G18 · `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi
+
+- **Nội dung:** khi trong cây đã có sẵn một `pnpm-lock.yaml`, `pnpm install --lockfile-only` **giữ lại** mọi phiên bản đã phân giải còn thoả manifest, và chỉ tính lại phần buộc phải đổi. Nó không phân giải lại từ đầu.
+- **Vì sao nó chịu tải:** toàn bộ cơ chế tạo lại lockfile của mục `I-004` đứng trên đây. Nếu sai, mỗi lần integrator giải một xung đột lockfile sẽ **âm thầm nâng phiên bản của hàng trăm gói phụ thuộc gián tiếp** — một thay đổi lớn không ai yêu cầu, đi kèm một PR nói rằng nó chỉ giải xung đột. Không gì đỏ; đúng nhóm lỗi Z.
+- **Độ tin cậy:** **`đã kiểm`** — bằng chạy thật, không bằng đọc tài liệu.
+
+  **Bằng chứng, 2026-09-21.** Một workspace tạm, phụ thuộc thật từ registry, hai lần chạy khác nhau **đúng một điều kiện** — có bản mồi hay không:
+
+  | Điều kiện đầu vào | `pnpm install --lockfile-only` cho ra |
+  |---|---|
+  | lockfile cũ còn nguyên (đã phân giải `semver@7.5.0`), manifest nới thành `^7.0.0` | **giữ `semver@7.5.0`** |
+  | xoá lockfile, sinh từ số không, cùng manifest `^7.0.0` | **`semver@7.8.5`** |
+
+  Hai dòng này là cùng một manifest, nên chênh lệch đo được chính là tác dụng của bản mồi. `semver` được chọn vì nó có nhiều bản phát hành trong cùng một dải `^7`.
+- **Phần phụ thuộc:** `ops/scripts/integrator-lockfile.ts` · `ops/lanes/integration/backlog.md` (I-004)
+- **Cách kiểm lại:** lặp đúng hai dòng trong bảng trên. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi registry npm, mà các lệnh kiểm của repo phải chạy được khi không có mạng — một bài kiểm im lặng bỏ qua vì không ra được internet còn tệ hơn là không có bài kiểm nào. Mục `VF-G18` giữ phần kiểm định kỳ.
+- **Dự phòng — chưa cần viết sẵn:** nếu giả định này hoá ra sai, cơ chế `I-004` không mất an toàn, nó chỉ mất tính "ít xáo trộn nhất": lockfile vẫn khớp manifest và CI vẫn gác. Khi đó `integrator-lockfile.ts` chuyển sang `aborted-ineligible` cho mọi xung đột lockfile và giao lại cho người — một dòng sửa, hành vi quay về đúng như trước mục `I-004`.
+- **Trạng thái:** đã kiểm, đang được dùng. Kiểm lại khi nâng `pnpm` qua một phiên bản chính.

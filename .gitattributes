@@ -32,6 +32,12 @@
 #
 # KHÔNG đặt luật này cho Markdown: union sẽ trộn lẫn hai mục thành một mục
 # hỏng mà vẫn merge được — đúng nhóm lỗi Z, hỏng mà không gì đỏ.
+#
+# KHÔNG đặt luật này cho `pnpm-lock.yaml` (hay bất cứ file dẫn xuất nào):
+# lockfile là YAML có cấu trúc, sinh ra từ các `package.json`. Union ghép
+# dòng sẽ cho khoá lặp hoặc thụt lề sai — lại nhóm lỗi Z. Lockfile xung đột
+# được TẠO LẠI, không ghép: `ops/scripts/integrator-lockfile.ts` (mục
+# `I-004`, CHARTER mục 7).
 ops/logs/*.jsonl              merge=union
 ops/logs/**/*.jsonl           merge=union
 docs/visual/calibration-log.jsonl  merge=union

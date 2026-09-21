@@ -19,10 +19,12 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G2 · `automerge` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci`
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - kiểm: **DoD Đợt 0** — để `automerge` merge thật một PR low-risk mà không cần người, rồi xem `main-ci` có chạy ngay sau đó không.
 - dự phòng: đã viết sẵn — `main-ci.yml` chạy thêm theo lịch mỗi giờ.
 - tiêu chí xong: một PR low-risk đã được merge tự động, và lần chạy `main-ci` tương ứng có trong tab Actions. Ghi kết quả vào sổ.
+- ✅ **Kiểm bằng chạy thật, 2026-09-21:** 11 lần `automerge.yml` merge PR bằng `GITHUB_TOKEN` (`merged_by: github-actions[bot]`), cả 11 đều được nối bằng một lần `main-ci` do `github-actions[bot]` tự gọi qua `workflow_dispatch` (không phải `push`) và xanh. Cặp khít nhất: PR #12 merge `2026-09-21T00:42:51Z` → `main-ci` run #5 khởi động `2026-09-21T00:42:53Z`. Đối chứng ngược chiều: PR #18 (`owner-merge`) do chủ dự án tự bấm merge, sinh `main-ci` bằng sự kiện `push` thật — không phải một ví dụ của G2. Danh sách đủ 11 cặp, và ghi chú về một lần soát bắt lỗi trích dẫn (bản đầu xếp nhầm PR #18 vào bảng, sai số run của PR #9 và PR #16 — đã sửa cùng PR này), ở `docs/assumptions.md` mục `G2`.
+- ⬜ **Còn treo, ngoài phạm vi DoD Đợt 0:** chuỗi `automerge` → `labels.yml` và `automerge` → `sync-workflows.yml` (gọi tường minh sau khi PR đụng đúng loại file) chưa có lần nào quan sát được bằng chạy thật — 3 lần `labels` chạy tới nay đều do chủ dự án tự kích, không phải do `automerge`. Giữ mục này `review`, không `done`, cho tới khi có PR automerge thật chạm `ops/labels.json` hoặc `ops/workflows/**`.
 
 ### VF-G3 · Trần số lần chạy routine mỗi ngày
 - deps: VF-G1
@@ -132,3 +134,15 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - kiểm: cần hai PR song song mà **cả hai đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04` log tách tới mức mục, nên ca kiểm là hai lần chạy của cùng một mục (`ops/logs/<lane>/<id>.jsonl`) hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc **hai** thứ: trạng thái `mergeable` của PR kia trên GitHub, và kết quả `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau — ghi cả hai.
 - vì sao chưa trả lời được: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Xem G17.
 - dự phòng nếu sai: đã có sẵn — mục `P-016`, integrator tự gộp `main` vào PR xung đột. Không phụ thuộc câu trả lời này.
+
+### VF-G18 · `pnpm install --lockfile-only` có giữ phép phân giải cũ không
+- deps: —
+- risk: low
+- status: done
+- nguồn: `docs/assumptions.md` G18; mục `I-004` của làn `integration`
+- tiêu chí xong:
+  - ✅ **Đã kiểm bằng chạy thật, 2026-09-21** (trong PR của `I-004`): workspace tạm, phụ thuộc thật từ
+    registry, hai lần chạy khác nhau đúng một điều kiện. Có bản mồi → giữ `semver@7.5.0`; xoá lockfile rồi
+    sinh lại → `semver@7.8.5`. Cùng một manifest `^7.0.0`, nên chênh lệch đo được chính là tác dụng bản mồi.
+  - Kiểm lại khi nâng `pnpm` qua một phiên bản chính. Không đưa vào `pnpm check`: cần mạng, và một bài kiểm
+    im lặng bỏ qua khi không có mạng còn tệ hơn không có bài kiểm.
