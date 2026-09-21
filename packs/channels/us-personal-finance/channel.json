@@ -1,12 +1,12 @@
 {
   "$note": "🤖 Channel pack của kênh us-personal-finance. Bản Đợt 0 chỉ có phần tối thiểu; mục `topic/T-002` mở rộng bằng khối `channels/us-personal-finance/channel.json` trong docs/spec/CRUX-REFERENCE-SPEC.md. Nội dung dài đi kèm nằm ở các file .md cùng thư mục.",
-  "$chuyenDoi": {
+  "$mapping": {
     "pillars": "Đợt 0 để tạm ['thresholds','tradeoffs','timing'] — đó là ba GÓC NHÌN, không phải trụ nội dung. Spec và channel-bible.md đều khai năm trụ theo lĩnh vực, nên lấy theo spec. Không code nào đọc trường này (xưởng topic stub giữ hằng số riêng của nó).",
     "locale": "Giữ tên `locale` của Đợt 0, không đổi sang `language` như spec: kernel/src/packs.ts đọc đúng khoá này. Giá trị giống nhau, en-US.",
     "market": "Thêm từ spec. Khác `geoScope`: `market` là thị trường của kênh, `geoScope` là phạm vi địa lý mặc định của claim (bất biến I6, luật 3 trong data-sources.md).",
     "engineVersion": "KHÔNG chuyển. Trường này đếm phiên bản engine cũ; ở Crux phiên bản nằm ở `schemaVersion` của phong bì artifact."
   },
-  "$chuaDien": "Bốn nhóm giá trị dưới đây để `null`, không để chuỗi rỗng hay chuỗi '<ĐIỀN>': null đọc được bằng máy và không giả vờ là một giá trị thật. displayName và googleAccount cần chủ dự án. ttsVoiceId và providers.tts bị chặn bởi giả định G7 (điều khoản thương mại chưa đọc được — issue #36) và bởi CHARTER 2.3 nhóm 3: chọn nhà cung cấp và chọn giọng đọc là quyết định irreversible.",
+  "$unfilled": "Bốn nhóm giá trị dưới đây để `null`, không để chuỗi rỗng hay chuỗi '<ĐIỀN>': null đọc được bằng máy và không giả vờ là một giá trị thật. displayName và googleAccount cần chủ dự án. ttsVoiceId và providers.tts bị chặn bởi giả định G7 (điều khoản thương mại chưa đọc được — issue #36) và bởi CHARTER 2.3 nhóm 3: chọn nhà cung cấp và chọn giọng đọc là quyết định irreversible.",
   "slug": "us-personal-finance",
   "displayName": null,
   "genre": "data-explainer",
