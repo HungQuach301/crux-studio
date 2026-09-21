@@ -62,12 +62,39 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cpus, totalmem } from 'node:os';
-import { loadGenrePack } from '@crux/kernel';
+import { loadChannelPack, loadGenrePack } from '@crux/kernel';
 
 // ── Phần thuần ───────────────────────────────────────────────────────────
 
 /** Thể loại và kênh tham chiếu đầu tiên (CHARTER 1.1). */
 export const GENRE = 'data-explainer';
+export const CHANNEL = 'us-personal-finance';
+
+export interface Cadence {
+  phase: string;
+  perMonth: number;
+}
+
+/**
+ * Nhịp ra tập cao nhất mà channel pack khai, cùng tên pha.
+ *
+ * Ngân sách phải tính theo **trần**, không theo pha hiện tại: một con số ngân
+ * sách nhỏ hơn thực tế là loại sai nguy hiểm nhất ở đây, vì nó xanh cho tới
+ * đúng lúc hết quota. Pha nào khai bằng chữ (`"bằng tốc độ Thesis Engine"`)
+ * thì bỏ qua — đoán một con số cho nó là bịa.
+ *
+ * Trả `null` khi pack không khai pha số nào: báo cáo bỏ hẳn dòng ngân sách
+ * tháng thay vì ghi cứng một con số không có nguồn (bất biến **I6**).
+ */
+export function peakCadence(cadence: Record<string, unknown> | undefined): Cadence | null {
+  if (cadence === undefined) return null;
+  let best: Cadence | null = null;
+  for (const [phase, value] of Object.entries(cadence)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) continue;
+    if (best === null || value > best.perMonth) best = { phase, perMonth: value };
+  }
+  return best;
+}
 
 /** Khung làm việc lớn hơn khung ra, để máy quay còn chỗ trôi (D-04). */
 export const CANVAS = { width: 2560, height: 1440 } as const;
@@ -426,7 +453,7 @@ function row(m: Measurement, file: MeasurementFile): string {
  * trong file Markdown, nên chạy lại bộ đo là báo cáo tự đúng theo số mới.
  * Sửa tay file Markdown thì lần chạy sau mất.
  */
-export function renderReport(file: MeasurementFile): string {
+export function renderReport(file: MeasurementFile, cadence: Cadence | null = null): string {
   const byId = (id: string): Measurement | undefined => file.measurements.find((m) => m.config === id);
   const m30 = byId('master-30');
   const m60 = byId('master-60');
@@ -473,13 +500,18 @@ export function renderReport(file: MeasurementFile): string {
     '',
     '## Số đo',
     '',
-    '| Cấu hình | Độ phân giải | fps | Khung | Tường | Mã hoá thuần | Khung/s | So thời gian thực | Dung lượng | Đỉnh RSS |',
+    '| Cấu hình | Độ phân giải | fps | Khung | Tường | Trừ nền giải mã | Khung/s | So thời gian thực | Dung lượng | Đỉnh RSS |',
     '|---|---|---|---|---|---|---|---|---|---|',
     ...file.measurements.map((m) => `| ${row(m, file)} |`),
     '',
-    'Cột **mã hoá thuần** là giây tường trừ đi lượt `decode-*` cùng tần số khung. Bộ đo lặp một',
-    'clip nguồn 20 giây cho đủ thời lượng, nên mỗi lượt phải giải mã lại clip đó; cột này tách',
-    'phần giải mã ra thay vì để nó nằm lẫn trong tổng.',
+    'Cột **trừ nền giải mã** là giây tường trừ đi lượt `decode-*` cùng tần số khung. Bộ đo lặp',
+    'một clip nguồn 20 giây cho đủ thời lượng, nên mỗi lượt phải giải mã lại clip đó; cột này',
+    'tách phần giải mã ra thay vì để nó nằm lẫn trong tổng.',
+    '',
+    '⚠️ Ở hai hàng `proof-*` phần còn lại **không** phải mã hoá thuần: bản proof còn hạ độ phân',
+    'giải bằng `scale=…:flags=lanczos`, mà lượt nền chạy ở `1920x1080` không có bước đó. Với hai',
+    'hàng `master-*` — hai hàng mà quyết định 30/60 đứng trên — độ phân giải trùng đúng lượt nền,',
+    'nên ở đó phép trừ cho ra chi phí mã hoá thật.',
     '',
   ];
 
@@ -497,9 +529,9 @@ export function renderReport(file: MeasurementFile): string {
       `| Giây tường | ${minutes(m30.wallSeconds)} | ${minutes(m60.wallSeconds)} | **${fixed(timeRatio, 2)}×** |`,
       ...(encodeRatio === null
         ? []
-        : [`| Mã hoá thuần | ${minutes(e30 as number)} | ${minutes(e60 as number)} | **${fixed(encodeRatio, 2)}×** |`]),
+        : [`| Trừ nền giải mã | ${minutes(e30 as number)} | ${minutes(e60 as number)} | **${fixed(encodeRatio, 2)}×** |`]),
       `| Dung lượng bản master | ${fixed(mb(m30.bytes), 0)} MB | ${fixed(mb(m60.bytes), 0)} MB | **${fixed(sizeRatio, 2)}×** |`,
-      `| Số khung phải sinh (việc của xưởng \`visual\`) | ${m30.frames.toLocaleString('vi-VN')} | ${m60.frames.toLocaleString('vi-VN')} | **2,00×** |`,
+      `| Số khung phải sinh (việc của xưởng \`visual\`) | ${m30.frames.toLocaleString('vi-VN')} | ${m60.frames.toLocaleString('vi-VN')} | **${fixed(ratio(m60.frames, m30.frames), 2)}×** |`,
       '',
       `**Gấp đôi số khung KHÔNG làm gấp đôi chi phí dựng: tỷ lệ đo được là ${fixed(timeRatio, 2)}×.**`,
       'Lý do nằm trong chính số đo: ở 30fps mỗi khung đắt hơn' +
@@ -508,8 +540,10 @@ export function renderReport(file: MeasurementFile): string {
       'chuyển động phải tìm xa hơn. Hai hiệu ứng ngược chiều nhau và triệt tiêu một phần.',
       '',
       '⚠️ **Tỷ lệ này chỉ nói về phần dựng.** Phần **sinh khung** — việc của xưởng `visual`,',
-      'đo ở mục `V-002` — đúng là tuyến tính theo số khung, tức là **2,00×**. Tổng chi phí một',
-      'tập là tổng hai phần, nên đừng lấy một mình tỷ lệ ở đây làm tỷ lệ của cả tập.',
+      'đo ở mục `V-002` — theo **mô hình** thì tuyến tính theo số khung, tức là bằng đúng tỷ lệ',
+      'số khung ở hàng cuối bảng trên. Đó là mô hình, **chưa đo** (bất biến I6: con số hiển thị',
+      'có nguồn **hoặc** có mô hình — đây là vế sau). Tổng chi phí một tập là tổng hai phần, nên',
+      'đừng lấy một mình tỷ lệ ở đây làm tỷ lệ của cả tập.',
       '',
     );
   }
@@ -522,16 +556,38 @@ export function renderReport(file: MeasurementFile): string {
     lines.push(
       '## Ngân sách phút Actions cho phần dựng',
       '',
-      'Một tập giao gồm **một** bản master cộng **một** bản proof. Actions làm tròn **lên**',
-      'theo từng phút cho mỗi job, và `ubuntu-latest` có hệ số 1×.',
+      'Một tập giao gồm **một** bản master cộng **một** bản proof. Actions làm tròn **lên** theo',
+      'từng phút **cho mỗi job**, và `ubuntu-latest` có hệ số 1×. Bảng dưới giả định cả hai bản',
+      'dựng trong **một** job (đúng như `ops/workflows/render-trial.yml` đang làm), nên làm tròn',
+      'một lần trên tổng. Tách thành hai job thì hoá đơn cao hơn — hàng thứ ba cho số đó.',
       '',
       '| | 30fps | 60fps |',
       '|---|---|---|',
-      `| Giây tường, master + proof | ${fixed(s30, 0)} s | ${fixed(s60, 0)} s |`,
-      `| Phút Actions mỗi tập | **${actionsMinutes(s30)}** | **${actionsMinutes(s60)}** |`,
-      `| Phút Actions cho 4 tập mỗi tháng | ${actionsMinutes(s30) * 4} | ${actionsMinutes(s60) * 4} |`,
+      `| Giây tường, master + proof | ${fixed(s30, 1)} s | ${fixed(s60, 1)} s |`,
+      `| Phút Actions mỗi tập, **một** job | **${actionsMinutes(s30)}** | **${actionsMinutes(s60)}** |`,
+      `| — nếu tách hai job | ${actionsMinutes(m30.wallSeconds) + actionsMinutes(p30.wallSeconds)} | ${actionsMinutes(m60.wallSeconds) + actionsMinutes(p60.wallSeconds)} |`,
       `| Dung lượng master mỗi tập | ${fixed(scaleToEpisode(mb(m30.bytes), file.measuredDurationMs, file.episodeDurationMs), 0)} MB | ${fixed(scaleToEpisode(mb(m60.bytes), file.measuredDurationMs, file.episodeDurationMs), 0)} MB |`,
+      ...(cadence === null
+        ? []
+        : [
+            `| Phút Actions cho **${cadence.perMonth}** tập mỗi tháng | ${actionsMinutes(s30) * cadence.perMonth} | ${actionsMinutes(s60) * cadence.perMonth} |`,
+            `| Dung lượng master mỗi tháng | ${fixed((scaleToEpisode(mb(m30.bytes), file.measuredDurationMs, file.episodeDurationMs) * cadence.perMonth) / 1024, 1)} GB | ${fixed((scaleToEpisode(mb(m60.bytes), file.measuredDurationMs, file.episodeDurationMs) * cadence.perMonth) / 1024, 1)} GB |`,
+          ]),
       '',
+      ...(cadence === null
+        ? [
+            '⚠️ **Không dựng được dòng ngân sách tháng:** channel pack không khai pha nào bằng số ở',
+            '`cadencePerMonth`. Ghi cứng một con số ở đây là vi phạm bất biến **I6** (mọi con số hiển',
+            'thị có nguồn hoặc có mô hình), nên dòng đó bị bỏ thay vì đoán.',
+            '',
+          ]
+        : [
+            `Nhịp ra tập đọc từ \`packs/channels/${CHANNEL}/channel.json\`, khoá \`cadencePerMonth.${cadence.phase}\``,
+            `= **${cadence.perMonth}** tập/tháng. Lấy **trần** mà pack khai, không lấy pha hiện tại: ngân sách`,
+            'tính theo pha thấp thì xanh cho tới đúng lúc hết quota. Pha nào khai bằng chữ thay vì bằng số',
+            'thì bị bỏ qua — đoán một con số cho nó là bịa.',
+            '',
+          ]),
       'Chỉ là **phần dựng**. Phần **sinh khung** của xưởng `visual` (đo ở mục `V-002`) cộng',
       'thêm vào, và theo hình dạng đường ống thì đó mới là phần lớn — nhưng con số của nó',
       'thuộc `V-002`, không thuộc bộ đo này, nên ở đây không chép lại. Ngân sách **G5** phải',
@@ -555,7 +611,20 @@ export function renderReport(file: MeasurementFile): string {
     '  thuộc mục `visual/V-002` (chỉ số 4–6 của WP-003), và nó là việc của mắt người, không',
     '  phải của bộ đo. **Quyết định fps phải đọc cả hai**: bảng ở đây nói 60fps đắt bao nhiêu,',
     '  `V-002` nói 30fps có giật hay không. Chọn theo một mình bảng này là chọn thiếu một nửa.',
+    '- **Một mẫu cho mỗi cấu hình, không có độ lệch.** Mỗi cấu hình chạy đúng **một** lượt trên',
+    '  một container dùng chung, nên mọi tỷ lệ ở trên đứng trên hai số đơn lẻ và',
+    '  `measurements.json` không nói nhiễu là bao nhiêu. Đủ để phân biệt 1,5× với 2×; **không**',
+    '  đủ để phân biệt 1,48× với 1,55×. Muốn chặt hơn thì chạy lại vài lượt rồi so.',
     '- **Chưa có phút Actions thật.** Xem cảnh báo ở đầu file.',
+    '',
+    '## ⚠️ `fpsAllowed` là `[30, 60]` — nhưng đường ống chạy 30fps',
+    '',
+    '`workshops/visual/src/index.ts` lấy `limits.fpsAllowed?.[0]`, tức là **phần tử đầu mảng**.',
+    'Nên giữ `[30, 60]` **không** có nghĩa là "chưa chọn": mặc định đang chạy là **30fps**, chọn',
+    'bằng thứ tự mảng chứ không bằng bằng chứng. Giữ cả hai nghĩa là **giữ quyền đổi**.',
+    '',
+    'Hệ quả phải biết: nếu `V-002` kết luận 30fps giật, thì mọi thứ sinh ra trong lúc chờ đã ở',
+    '30fps. Đó là lý do `A-001` dán số rồi mở `🤖 [QĐ]` ngay, thay vì để câu hỏi treo im lặng.',
     '',
   );
   return `${lines.join('\n')}\n`;
@@ -580,7 +649,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const src = arg('from') ?? join(outDir, 'measurements.json');
     const dst = arg('to') ?? join(root, 'docs', 'assembly', 'render-trial.md');
     const parsed = JSON.parse(readFileSync(src, 'utf8')) as MeasurementFile;
-    writeFileSync(dst, renderReport(parsed));
+    // Nhịp ra tập đọc từ channel pack lúc DỰNG BÁO CÁO, và cố ý KHÔNG nằm
+    // trong `measurements.json`: nó là cấu hình, không phải số đo. Trộn hai
+    // thứ vào một file sẽ đóng băng một giá trị cấu hình cũ bên trong một file
+    // tự khai là kết quả đo.
+    const cadence = peakCadence(
+      loadChannelPack(root, CHANNEL)['cadencePerMonth'] as Record<string, unknown> | undefined,
+    );
+    writeFileSync(dst, renderReport(parsed, cadence));
     process.stdout.write(`Ghi ${dst} từ ${src}\n`);
     process.exit(0);
   }

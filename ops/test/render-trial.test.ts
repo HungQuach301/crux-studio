@@ -5,7 +5,7 @@
  * tập đầy đủ; đặt nó vào `pnpm check` sẽ biến mỗi lượt CI thành một lượt
  * render, tức là đốt đúng thứ tài nguyên mà giả định **G5** đang lo.
  *
- * Bốn chỗ được khoá ở đây đều là chỗ hỏng **im lặng** — sai mà vẫn ra một
+ * Những chỗ được khoá ở đây đều là chỗ hỏng **im lặng** — sai mà vẫn ra một
  * con số trông hợp lý:
  *
  * 1. `streamLoopFlag` lệch một đơn vị → ffmpeg dừng sớm, lượt đo ra một tập
@@ -15,6 +15,14 @@
  *    bị gán cho bộ mã hoá.
  * 4. `encodeArgs` ở cấu hình 30fps mà nhân đôi khung thay vì lấy mẫu thưa →
  *    60fps rẻ giả tạo, và cả quyết định 30/60 nghiêng theo.
+ * 5. Tỷ lệ 60/30 **đảo chiều** → báo cáo nói 60fps rẻ hơn 30fps.
+ * 6. Một con số trong báo cáo **ghi cứng** thay vì tính ra, trong một file tự
+ *    khai là "được sinh ra" — nên người đọc tin là nó dựng lại được.
+ * 7. Nhịp ra tập ghi cứng thay vì đọc từ channel pack → bảng ngân sách lệch
+ *    đúng theo tỷ số giữa số bịa và số thật (bất biến I6).
+ *
+ * Điểm 5, 6 và 7 do vòng soát chéo tìm ra: bản đầu của chính file này để cả
+ * ba fail-open.
  */
 
 import { test } from 'node:test';
@@ -28,6 +36,7 @@ import {
   encodeOnlySeconds,
   frameCount,
   mb,
+  peakCadence,
   ratio,
   renderReport,
   scaleToEpisode,
@@ -109,6 +118,13 @@ test('sceneFilter giữ đủ bốn thứ làm số đo không rẻ giả tạo'
   assert.match(filter, /drawgrid=/); // lưới mảnh
   assert.match(filter, /drawbox=.*sin\(t\/7/); // cột đổi liên tục
   assert.match(filter, /^.*crop=1920:1080:x='.*sin\(t\/11\)/m); // máy quay trôi
+  // Chữ cạnh sắc là nguồn tốn bit thứ năm, và nó từng KHÔNG được khoá: bỏ hết
+  // drawtext thì bitrate rơi, số đo rẻ giả tạo, mà cả 18 bài vẫn xanh.
+  assert.match(filter, /drawtext=.*fontfile=/);
+  assert.ok(
+    (filter.match(/drawtext=/g) ?? []).length >= 4,
+    'cảnh mẫu phải còn đủ chữ — bỏ bớt là làm số đo rẻ giả tạo',
+  );
   // Máy quay phải trôi trên khung LÀM VIỆC lớn hơn khung ra, nếu không thì
   // `crop` không còn chỗ để trôi và mọi khung đứng yên.
   assert.match(filter, /gradients=s=2560x1440/);
@@ -175,12 +191,16 @@ function fullFile(measuredMs: number): MeasurementFile {
     measuredDurationMs: measuredMs,
     source: { seconds: 20, fps: 60, bytes: 9_277_814, wallSeconds: 60 },
     measurements: [
-      sample({ config: 'decode-30', kind: 'decode', fps: 30, wallSeconds: 2, bytes: 0 }),
-      sample({ config: 'decode-60', kind: 'decode', fps: 60, wallSeconds: 4, bytes: 0 }),
-      sample({ config: 'master-30', fps: 30, wallSeconds: 860, bytes: 320 * 1024 * 1024 }),
-      sample({ config: 'master-60', fps: 60, wallSeconds: 1190, bytes: 400 * 1024 * 1024 }),
-      sample({ config: 'proof-30', kind: 'proof', fps: 30, wallSeconds: 230, bytes: 26 * 1024 * 1024 }),
-      sample({ config: 'proof-60', kind: 'proof', fps: 60, wallSeconds: 265, bytes: 32 * 1024 * 1024 }),
+      // Số trong fixture cố ý chọn để BỐN tỷ lệ mà báo cáo in ra đều KHÁC
+      // nhau: giây tường 1,50× · trừ nền 1,31× · dung lượng 1,25× · số khung
+      // 2,00×. Cho hai tỷ lệ trùng giá trị là mở lại đúng lỗ hổng cũ — một
+      // `assert.match` trên cả file được hàng này thoả mãn thay cho hàng kia.
+      sample({ config: 'decode-30', kind: 'decode', fps: 30, frames: 37_800, wallSeconds: 60, bytes: 0 }),
+      sample({ config: 'decode-60', kind: 'decode', fps: 60, frames: 75_600, wallSeconds: 240, bytes: 0 }),
+      sample({ config: 'master-30', fps: 30, frames: 37_800, wallSeconds: 860, bytes: 320 * 1024 * 1024 }),
+      sample({ config: 'master-60', fps: 60, frames: 75_600, wallSeconds: 1290, bytes: 400 * 1024 * 1024 }),
+      sample({ config: 'proof-30', kind: 'proof', fps: 30, frames: 37_800, wallSeconds: 230, bytes: 26 * 1024 * 1024 }),
+      sample({ config: 'proof-60', kind: 'proof', fps: 60, frames: 75_600, wallSeconds: 265, bytes: 32 * 1024 * 1024 }),
     ],
   };
 }
@@ -191,13 +211,60 @@ test('renderReport nói rõ đã dựng tập đầy đủ hay chỉ một phầ
   assert.match(partial, /⚠️ \*\*một phần\*\*/);
 });
 
-test('renderReport dán tỷ lệ 60/30 đo được, không dán 2×', () => {
+test('renderReport dán tỷ lệ 60/30 đúng chiều, khoá RIÊNG từng hàng', () => {
   const report = renderReport(fullFile(EPISODE_MS));
-  // 1190 / 860 = 1.38
-  assert.match(report, /\*\*1\.38×\*\*/);
-  // và nói rõ phần sinh khung MỚI là phần tuyến tính theo số khung.
-  assert.match(report, /\*\*2,00×\*\*/);
+  // Assert theo DÒNG, không theo chuỗi trôi nổi trong cả file. Bản trước khoá
+  // `/\*\*1\.38×\*\*/` trên toàn báo cáo, mà fixture khi đó cho hai hàng cùng
+  // ra 1.38 — nên đảo chiều tỷ lệ giây tường vẫn xanh: hàng "trừ nền" thoả
+  // mãn assert thay cho hàng "giây tường". Đó là con số headline của cả mục.
+  assert.match(report, /\| Giây tường \|.*\*\*1\.50×\*\*/);
+  assert.match(report, /\| Trừ nền giải mã \|.*\*\*1\.31×\*\*/);
+  // Chiều phải đúng: 60fps đắt HƠN, nên mọi tỷ lệ chi phí > 1.
+  for (const line of report.split('\n')) {
+    const m = /^\| (Giây tường|Trừ nền giải mã) \|.*\*\*([0-9.]+)×\*\*/.exec(line);
+    if (m !== null) assert.ok(Number(m[2]) > 1, `tỷ lệ đảo chiều: ${line}`);
+  }
+  // Tỷ lệ số khung phải TÍNH ra, không ghi cứng.
+  assert.match(report, /\| Số khung phải sinh.*\*\*2\.00×\*\*/);
   assert.match(report, /KHÔNG làm gấp đôi chi phí dựng/);
+});
+
+test('renderReport: tỷ lệ số khung tính từ measurements, không ghi cứng', () => {
+  const file = fullFile(EPISODE_MS);
+  const m60 = file.measurements.find((m) => m.config === 'master-60');
+  m60!.frames = 50_000;
+  const report = renderReport(file);
+  // 50.000 / 37.800 = 1,32 — nếu tỷ lệ còn ghi cứng thì vẫn in ra 2,00×.
+  assert.match(report, /\| Số khung phải sinh.*\*\*1\.32×\*\*/);
+});
+
+test('renderReport lấy nhịp ra tập từ channel pack, không ghi cứng', () => {
+  const file = fullFile(EPISODE_MS);
+  const withCadence = renderReport(file, { phase: 'phase2', perMonth: 10 });
+  assert.match(withCadence, /\*\*10\*\* tập mỗi tháng/);
+  assert.match(withCadence, /cadencePerMonth\.phase2/);
+  // Không có pack thì BỎ TRỐNG, không đoán một con số (I6).
+  const without = renderReport(file, null);
+  assert.match(without, /Không dựng được dòng ngân sách tháng/);
+  assert.ok(!/tập mỗi tháng \(`us-personal-finance`/.test(without));
+});
+
+test('peakCadence lấy TRẦN, bỏ qua pha khai bằng chữ', () => {
+  assert.deepEqual(peakCadence({ phase1: 0, phase2: 10, phase3: 'bằng tốc độ Thesis Engine' }), {
+    phase: 'phase2',
+    perMonth: 10,
+  });
+  assert.deepEqual(peakCadence({ a: 4, b: 12, c: 8 }), { phase: 'b', perMonth: 12 });
+  // Không pha số nào → null, để báo cáo bỏ trống thay vì đoán.
+  assert.equal(peakCadence({ phase1: 0, phase3: 'chữ' }), null);
+  assert.equal(peakCadence(undefined), null);
+});
+
+test('renderReport nói rõ đường ống đang chạy fpsAllowed[0], không phải "chưa chọn"', () => {
+  const report = renderReport(fullFile(EPISODE_MS));
+  assert.match(report, /fpsAllowed\?\.\[0\]|fpsAllowed\?\.\[0\]|fpsAllowed/);
+  assert.match(report, /đường ống chạy 30fps/);
+  assert.match(report, /giữ quyền đổi/);
 });
 
 test('renderReport luôn mang cảnh báo phút Actions chưa đo được', () => {
