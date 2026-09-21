@@ -8,15 +8,20 @@
  * "phần phụ thuộc" sẽ trôi khỏi thực tế đúng vào lúc cần nó nhất: lúc một
  * giả định vừa hoá ra sai và phải liệt kê ngay cái gì bị ảnh hưởng.
  *
- * Bốn việc:
+ * Năm việc:
  * 1. Mỗi mã trong bảng tổng có một mục đầy đủ ở dưới, và ngược lại.
  * 2. Mỗi mục có đủ bảy phần bắt buộc.
  * 3. Mọi file trong "Phần phụ thuộc" tồn tại, VÀ thật sự nhắc tới mã đó.
  * 4. Mỗi giả định có một mục `VF-<mã>` trong backlog làn verify.
+ * 5. Mục nào khai `**Kiểm tự động:**` thì mã bài kiểm đó phải có thật trong
+ *    `ops/scripts/recheck-assumptions.ts` (mục `I-003`). Không có luật này
+ *    thì sổ khai một bài kiểm đã bị đổi tên hay xoá mà vẫn xanh — hỏng mà
+ *    mọi chỉ báo đều xanh, đúng nhóm Z trong `ops/known-failures.md`.
  */
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { AUTO_CHECK_IDS } from './recheck-assumptions.ts';
 
 const root = process.cwd();
 const ledgerPath = join(root, 'docs', 'assumptions.md');
@@ -102,6 +107,15 @@ for (const [code, body] of sections) {
   // 4 · Có mục kiểm trong backlog làn verify.
   if (!verifyBacklog.includes(`VF-${code}`)) {
     problems.push(`${code}: thiếu mục \`VF-${code}\` trong ops/lanes/verify/backlog.md.`);
+  }
+
+  // 5 · Bài kiểm tự động được khai phải tồn tại.
+  const autoCheck = /\*\*Kiểm tự động:\*\*\s*`([^`]+)`/.exec(body)?.[1]?.trim();
+  if (autoCheck && !AUTO_CHECK_IDS.includes(autoCheck)) {
+    problems.push(
+      `${code}: khai bài kiểm tự động \`${autoCheck}\` nhưng ops/scripts/recheck-assumptions.ts không đăng ký mã đó. ` +
+        `Các mã đang có: ${AUTO_CHECK_IDS.join(', ')}.`,
+    );
   }
 }
 
