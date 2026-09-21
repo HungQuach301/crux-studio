@@ -21,6 +21,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   OPEN_BOX,
+  HOLD_MARKERS,
+  hasHoldMarker,
+  hasRevertCommit,
   parseBacklog,
   hasCompletionCommit,
   classify,
@@ -50,17 +53,30 @@ const BACKLOG = [
   '- deps: —',
   '- status: ready',
   '',
+  '### D-005 · Mục chặn bằng LỜI, không bằng ký hiệu',
+  '- deps: —',
+  '- status: review',
+  '- tiêu chí xong:',
+  '  - **Kiểm bằng chạy thật:** xác nhận thông báo tới điện thoại. Mục này chỉ đóng khi có',
+  '    xác nhận đó, không đóng khi PR merge.',
+  '',
+  '### D-006 · Mục đã merge rồi bị revert',
+  '- deps: —',
+  '- status: review',
+  '',
 ].join('\n');
 
 test('parseBacklog: tách đúng mã mục, status và ô còn treo', () => {
   const items = parseBacklog(BACKLOG);
   assert.deepEqual(
-    items.map((i) => [i.id, i.status, i.hasOpenBox]),
+    items.map((i) => [i.id, i.status, i.hasHoldMarker]),
     [
       ['D-001', 'review', false],
       ['D-002', 'review', true],
       ['D-003', 'review', false],
       ['D-004', 'ready', false],
+      ['D-005', 'review', true],
+      ['D-006', 'review', false],
     ],
   );
 });
@@ -100,24 +116,66 @@ test('hasCompletionCommit: sai làn thì không khớp', () => {
 });
 
 test('classify: chưa merge thì luôn unmerged, kể cả khi thân mục sạch', () => {
-  assert.equal(classify({ id: 'D-003', status: 'review', hasOpenBox: false, statusLine: 2 }, false), 'unmerged');
+  assert.equal(classify({ id: 'D-003', status: 'review', hasHoldMarker: false, statusLine: 2 }, false), 'unmerged');
 });
 
 test('classify: đã merge mà còn ô ⬜ thì held, không stale', () => {
-  assert.equal(classify({ id: 'D-002', status: 'review', hasOpenBox: true, statusLine: 2 }, true), 'held');
+  assert.equal(classify({ id: 'D-002', status: 'review', hasHoldMarker: true, statusLine: 2 }, true), 'held');
 });
 
 test('classify: đã merge và thân mục sạch thì stale', () => {
-  assert.equal(classify({ id: 'D-001', status: 'review', hasOpenBox: false, statusLine: 2 }, true), 'stale');
+  assert.equal(classify({ id: 'D-001', status: 'review', hasHoldMarker: false, statusLine: 2 }, true), 'stale');
 });
 
-test('reviewFindings: chỉ soát mục đang review, và phân đúng ba nhóm', () => {
-  const subjects = ['[demo] D-001 — xong (#1)', '[demo] D-002 — xong phần chính (#2)'];
+test('reviewFindings: chỉ soát mục đang review, và phân đúng các nhóm', () => {
+  const subjects = [
+    'Revert "[demo] D-006 — xong (#6)"',
+    '[demo] D-006 — xong (#6)',
+    '[demo] D-005 — xong (#5)',
+    '[demo] D-001 — xong (#1)',
+    '[demo] D-002 — xong phần chính (#2)',
+  ];
   assert.deepEqual(reviewFindings('demo', BACKLOG, subjects), [
     { lane: 'demo', id: 'D-001', verdict: 'stale' },
     { lane: 'demo', id: 'D-002', verdict: 'held' },
     { lane: 'demo', id: 'D-003', verdict: 'unmerged' },
+    { lane: 'demo', id: 'D-005', verdict: 'held' },
+    { lane: 'demo', id: 'D-006', verdict: 'unmerged' },
   ]);
+});
+
+test('HOLD_MARKERS: bắt các câu chặn bằng LỜI, không chỉ ô ⬜', () => {
+  // Bốn ca thật trên `main` mà vòng soát chéo bắt được: P-011, P-013, P-016, I-002.
+  assert.equal(hasHoldMarker('Mục này chỉ đóng khi có xác nhận đó, không đóng khi PR merge.'), true);
+  assert.equal(hasHoldMarker('mục này chỉ chuyển `done` khi một lần chạy routine đi trọn một mục'), true);
+  assert.equal(hasHoldMarker('**Còn treo, ngoài phạm vi cơ chế:** hiển thị PR xung đột'), true);
+  assert.equal(hasHoldMarker('**Chưa kiểm bằng chạy thật:** routine chưa gọi tool này'), true);
+  assert.equal(hasHoldMarker(`còn ô ${OPEN_BOX} thôi`), true);
+});
+
+test('HOLD_MARKERS: "Chưa làm, cố ý" KHÔNG phải dấu treo — đó là loại trừ phạm vi', () => {
+  // Ca thật: `I-003` đóng được dù có câu này.
+  assert.equal(hasHoldMarker('**Chưa làm, cố ý:** lệnh không nằm trong `pnpm check`.'), false);
+});
+
+test('HOLD_MARKERS: mục bình thường không dính dấu treo nào', () => {
+  assert.equal(hasHoldMarker('- deps: —\n- status: review\n- tiêu chí xong: có test và CI xanh'), false);
+  assert.ok(HOLD_MARKERS.length >= 5);
+});
+
+test('hasRevertCommit: mục bị revert thì không còn tính là đã xong', () => {
+  const subjects = ['Revert "[demo] D-006 — xong (#6)"', '[demo] D-006 — xong (#6)'];
+  assert.equal(hasRevertCommit('demo', 'D-006', subjects), true);
+  assert.equal(hasRevertCommit('demo', 'D-001', subjects), false);
+});
+
+test('classify: mục không đọc được status ra unknown, không bị lọc đi im lặng', () => {
+  assert.equal(
+    classify({ id: 'D-009', status: '', hasHoldMarker: false, statusLine: null }, true),
+    'unknown',
+  );
+  const findings = reviewFindings('demo', '### D-009 · Không có status\n- deps: —\n', []);
+  assert.deepEqual(findings, [{ lane: 'demo', id: 'D-009', verdict: 'unknown' }]);
 });
 
 test('applyFix: chỉ đổi dòng status của đúng mục được nêu', () => {

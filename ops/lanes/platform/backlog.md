@@ -133,7 +133,7 @@ Chủ dự án cấp phép toàn bộ cho mọi phiên và routine, và chỉ nh
 
 - deps: —
 - risk: medium
-- status: done
+- status: review
 - nguồn: chỉ dẫn của chủ dự án trong phiên 2026-09-21; giả định **G16**
 - tiêu chí xong:
   - Bỏ hẳn khối `ask` khỏi `.claude/settings.json`.
@@ -154,7 +154,7 @@ Dự phòng của KF-005 hiện đang ở dạng ghi chú ("giữ cả hai bên"
 
 - deps: —
 - risk: medium
-- status: done
+- status: review
 - nguồn: giả định **G17** (`sai`); `ops/known-failures.md` KF-002 và KF-005; CHARTER mục 7
 - tiêu chí xong:
   - ✅ Cơ chế đối chiếu-và-giải viết thành tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-resolve.ts`. Gộp `ontoRef` vào HEAD; xung đột thì đối chiếu bằng `git diff --numstat` với tổ tiên chung ở CẢ hai bên trước khi quyết, đúng luật KF-002 "đối chiếu, không đoán".
@@ -309,7 +309,7 @@ DoD Đợt 0 đòi "một cảnh báo thử của watchdog tới được điệ
 
 - deps: —
 - risk: low
-- status: done
+- status: review
 - nguồn: `ops/known-failures.md` KF-004; CHARTER 2.4; giả định G2
 - tiêu chí xong:
   - `watchdog.yml` và `main-ci.yml` đặt `@HungQuach301` **ngay trong thân issue** chúng mở, không chờ `notify.yml`. Một `@nhắc` trong thân issue sinh thông báo của chính GitHub, không cần workflow thứ hai nào chạy.

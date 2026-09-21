@@ -20,7 +20,7 @@ Tín hiệu của rủi ro R12 (độ phức tạp tự phình to): số file co
 
 - deps: —
 - risk: low
-- status: done
+- status: review
 - nguồn: CHARTER 6.7; phụ lục P3 bước 3
 - tiêu chí xong:
   - ✅ Một lệnh tính: số file code / số mục `done`, số lần revert, tỷ lệ `main` xanh — `ops/scripts/update-metrics.ts`.
@@ -241,7 +241,7 @@ nhận được mục nào: cả ba mục `ready` của làn `integration` (`I-0
 `review` trong chính PR của nó. Nhưng **không bước nào** trong P1, P2 hay P3 đặt nó sang `done` sau khi
 PR merge — phụ lục P3 bước 2 ("Dọn dẹp") chỉ đóng PR nháp bỏ quá 72 giờ và tạo lại lockfile.
 
-Hệ quả đo được trên `main` ở `61fb084`: **13 mục** có PR đã merge mà vẫn `review`. Chỉ hai mục trong cả
+Hệ quả đo được trên `main` ở `61fb084`: **15 mục** có PR đã merge mà vẫn `review`. Chỉ hai mục trong cả
 repo ở `done`, và cả hai được sửa tay trong một PR khác (`P-008` ở `bc48f6e`, `VF-G18` trong PR của
 `I-004`). Mọi mục có `deps` vì thế đứng chờ vĩnh viễn, và làn `integration` — **ưu tiên số một** —
 là làn chết đói nặng nhất.
@@ -259,18 +259,35 @@ là làn chết đói nặng nhất.
     với commit trên `main`, và phân loại mỗi mục thành đúng một trong ba nhóm — `stale` (nên chuyển
     `done`), `held` (cố ý giữ `review`), `unmerged` (chưa thấy commit hoàn thành).
   - Luật phải **thận trọng theo hướng an toàn**: chỉ `stale` khi có commit `[<lane>] <id> — …` trên
-    `main` **và** thân mục không còn ô `⬜` nào. Mục còn `⬜` là mục cố ý giữ `review` — `VF-G2` ghi
-    thẳng "giữ mục này `review`, không `done`, cho tới khi…". Đoán sai theo hướng này chỉ để lại một
-    mục chờ thêm một nhịp; đoán sai theo hướng kia mở khoá một `deps` chưa thật sự xong.
-  - Test, gồm test âm: mục còn `⬜` không bị chuyển; mục không có commit hoàn thành không bị chuyển;
-    commit nhắc `id` trong ngoặc mà không đúng dạng tiêu đề (`… (KF-005, P-015)`) không tính là hoàn thành.
+    `main`, **không** có commit `Revert` nào của nó, **và** thân mục không còn dấu treo nào.
+    Dấu treo gồm **cả ký hiệu lẫn lời văn** (`HOLD_MARKERS`): ô `⬜`, và các câu "không đóng khi PR
+    merge", "chỉ chuyển `done` khi…", "chỉ đóng khi…", "Chưa kiểm bằng chạy thật", "Còn treo".
+    Đoán sai theo hướng này chỉ để lại một mục chờ thêm một nhịp, và mục đó vẫn hiện ra ở nhóm
+    `held`; đoán sai theo hướng kia mở khoá một `deps` chưa thật sự xong, và không gì bắt được.
+  - Mục không đọc được `status` (thụt lề sai, tiêu đề trần) ra nhóm `unknown` — **không** bị lọc đi
+    im lặng, vì một mục biến mất khỏi báo cáo đúng là nhóm lỗi Z mà mục này chữa.
+  - Test, gồm test âm: mục chặn bằng lời không bị chuyển; mục còn `⬜` không bị chuyển; mục đã bị
+    revert không bị chuyển; mục không có commit hoàn thành không bị chuyển; commit nhắc `id` trong
+    ngoặc mà không đúng dạng tiêu đề (`… (KF-005, P-015)`) không tính là hoàn thành; "Chưa làm, cố ý"
+    (`I-003`) **không** phải dấu treo — đó là loại trừ phạm vi có chủ ý.
   - `pnpm backlog:status` báo cáo, `--fix` ghi lại file. **Không** đưa vào `pnpm check`: ngay sau khi
     một PR merge, mục của nó còn `review` trong đúng một nhịp — cổng cứng ở đó sẽ làm `main` đỏ sau
     **mỗi** lần merge, tự tạo ra nhóm lỗi mới.
-  - Chạy `--fix` một lần trong chính PR này, và gỡ hai dòng ghim `P-018`/`P-016` ở `ops/lanes/priority.md`
-    đúng như file đó tự dặn ("Gỡ dòng này khi … chuyển `done`").
+  - Chạy `--fix` một lần trong chính PR này, và gỡ dòng ghim `P-018` ở `ops/lanes/priority.md` đúng như
+    file đó tự dặn ("Gỡ dòng này khi … chuyển `done`"). Dòng ghim `P-016` **giữ lại**: `P-016` chưa
+    `done`, và PR #39 vẫn `aborted-ineligible` năm lượt liên tiếp.
   - Nối vào phụ lục P3 bước 2 là **việc của lượt sau**, cố ý tách ra: PR #43 đang mở và đang sửa
     CHARTER, nên chạm CHARTER ở đây là tự tạo xung đột cho hàng đợi tuần tự.
+
+- vòng soát chéo (subagent, ngữ cảnh sạch) — điểm chặn đã sửa, ghi lại vì nó là bằng chứng cho chính
+  luật của mục này:
+  - **Bốn mục bị lật nhầm sang `done`** ở vòng đầu (`P-011`, `P-013`, `P-016`, `I-002`) vì luật lúc đó
+    chỉ đọc ô `⬜`, trong khi thân bốn mục đó chặn bằng **lời**: "mục này chỉ đóng khi có xác nhận đó,
+    không đóng khi PR merge". Ba trong bốn là **cổng** — `P-011` chặn DoD Đợt 0, `P-013` là cổng của
+    `G16`, `P-016` là cổng của hàng đợi merge. Đã trả cả bốn về `review` và mở rộng luật sang lời văn.
+  - Bằng chứng lịch sử cho cùng điểm đó: trên `main` có **hai** commit `[platform] P-018 — …` (#25 chỉ
+    "nhận chỉ dẫn vào backlog", #26 mới thực hiện) — tiêu đề đúng dạng **không** đảm bảo mục đã xong.
+  - Ca **revert** và ca **mục không đọc được `status`** cũng do vòng soát nêu; cả hai nay có luật và test.
 
 - cặn còn lại, khai trước thay vì để tự phát hiện:
   - ⬜ **`platform/P-015`** đã vào `main` thật (PR `#13`), nhưng tiêu đề commit là
@@ -280,3 +297,5 @@ là làn chết đói nặng nhất.
     `ready`. Chuyển `P-015` sang `done` là việc đọc tay một lần, không phải việc của máy.
   - ⬜ Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (xem trên). Tới khi đó, tool phải được
     gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
+  - ⬜ `I-001` ghi ngưỡng bỏ PR nháp là **72 giờ**, trong khi CHARTER phụ lục P1 bước 3 và CLAUDE.md
+    mục 2 ghi **24 giờ**. Lệch này có từ trước mục `I-010`, không sửa ở đây để không trộn phạm vi.

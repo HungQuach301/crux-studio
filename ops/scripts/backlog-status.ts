@@ -7,7 +7,7 @@
  * `ops/lanes/README.md` định nghĩa `deps` là "các mục phải `done` trước".
  * Phụ lục P1 bước 7 đặt mục sang `review` trong chính PR của nó. Nhưng
  * **không bước nào** trong P1, P2 hay P3 đặt nó sang `done` sau khi PR
- * merge. Kết quả đo trên `main` ở `61fb084`: 13 mục đã merge còn nằm
+ * merge. Kết quả đo trên `main` ở `61fb084`: **15** mục đã merge còn nằm
  * `review`, và mọi mục có `deps` đứng chờ vĩnh viễn — kể cả ba mục `ready`
  * của làn `integration`, làn ưu tiên số một.
  *
@@ -18,12 +18,12 @@
  * Hai luật thiết kế, cả hai đều là chỗ dễ làm sai:
  *
  * 1. **Thận trọng theo đúng một hướng.** Chỉ coi một mục là `stale` (nên
- *    chuyển `done`) khi có commit tiêu đề `[<lane>] <id> — …` trên `main`
- *    VÀ thân mục không còn ô `⬜` nào. Ô `⬜` là quy ước sẵn có của repo cho
- *    "còn treo": `VF-G2` ghi thẳng "giữ mục này `review`, không `done`, cho
- *    tới khi…", `VF-G7`, `VF-G11`, `P-017` cùng dạng. Đoán sai theo hướng
- *    giữ lại chỉ tốn thêm một nhịp; đoán sai theo hướng kia mở khoá một
- *    `deps` chưa thật sự xong, và cái đó không có gì bắt được.
+ *    chuyển `done`) khi có commit tiêu đề `[<lane>] <id> — …` trên `main`,
+ *    KHÔNG có commit `Revert` nào của nó, VÀ thân mục không còn dấu treo nào
+ *    (`HOLD_MARKERS` — cả ký hiệu `⬜` lẫn lời văn). Đoán sai theo hướng giữ
+ *    lại chỉ tốn thêm một nhịp và vẫn in ra ở nhóm `held`; đoán sai theo
+ *    hướng kia mở khoá một `deps` chưa thật sự xong, và cái đó không có gì
+ *    bắt được.
  *
  * 2. **Không phải cổng của `pnpm check`.** Ngay sau khi một PR merge, mục
  *    của nó còn `review` trong đúng một nhịp — đó là trạng thái ĐÚNG, không
@@ -48,25 +48,61 @@ import { join } from 'node:path';
 /** Ô "còn treo" — quy ước sẵn có của backlog cho phần chưa xong. */
 export const OPEN_BOX = '⬜';
 
+/**
+ * Dấu hiệu "mục này CHƯA được đóng, kể cả khi PR đã merge".
+ *
+ * Ô `⬜` **không** phải quy ước duy nhất, và tin rằng nó là duy nhất đã suýt
+ * làm hỏng đúng cái mà tool này sinh ra để bảo vệ: vòng soát chéo bắt được
+ * bốn mục (`P-011`, `P-013`, `P-016`, `I-002`) bị lật sang `done` trong khi
+ * chính thân mục ghi thẳng bằng lời — "mục này chỉ đóng khi có xác nhận đó,
+ * **không đóng khi PR merge**". Ba trong bốn mục đó là **cổng**: `P-011`
+ * chặn DoD Đợt 0, `P-013` là cổng của giả định `G16`, `P-016` là cổng của
+ * hàng đợi merge. Lật chúng thành `done` là mở khoá một `deps` chưa thật sự
+ * xong — đúng hướng sai mà không có gì bắt được.
+ *
+ * Vì vậy luật đọc **cả lời lẫn ký hiệu**. Thà giữ lại nhầm một mục đã xong
+ * (tốn một nhịp, và `held` được in ra để người đọc thấy) còn hơn mở khoá
+ * nhầm một mục chưa xong.
+ *
+ * Cố ý KHÔNG nằm trong danh sách: "Chưa làm, cố ý" (`I-003`) — đó là loại
+ * trừ phạm vi có chủ ý, không phải phần còn treo.
+ */
+export const HOLD_MARKERS: readonly string[] = [
+  OPEN_BOX,
+  'không đóng khi pr merge',
+  'chỉ chuyển `done`',
+  'chỉ đóng khi',
+  'chưa kiểm bằng chạy thật',
+  'còn treo',
+];
+
 export type ItemVerdict =
-  /** Có commit hoàn thành trên `main`, không còn ô `⬜` → nên chuyển `done`. */
+  /** Có commit hoàn thành trên `main`, thân mục không còn dấu treo → nên chuyển `done`. */
   | 'stale'
-  /** Có commit hoàn thành nhưng còn ô `⬜` → cố ý giữ `review`. */
+  /** Có commit hoàn thành nhưng thân mục còn dấu treo → cố ý giữ `review`. */
   | 'held'
-  /** Chưa thấy commit hoàn thành → PR chưa merge, `review` là đúng. */
-  | 'unmerged';
+  /** Chưa thấy commit hoàn thành, hoặc đã bị revert → `review` là đúng. */
+  | 'unmerged'
+  /** Mục không đọc được `status` — in ra chứ không bỏ qua im lặng. */
+  | 'unknown';
 
 export interface BacklogItem {
   id: string;
   status: string;
-  /** Thân mục còn ít nhất một ô `⬜`. */
-  hasOpenBox: boolean;
+  /** Thân mục còn ít nhất một dấu treo — xem `HOLD_MARKERS`. */
+  hasHoldMarker: boolean;
   /** Dòng `- status: …`, hoặc `null` nếu mục không khai `status`. */
   statusLine: number | null;
 }
 
-const HEADING = /^###\s+(\S+)\s/;
+const HEADING = /^###\s+(\S+)/;
 const STATUS = /^-\s*status:\s*(\S+)\s*$/;
+
+/** Thân mục có dấu treo nào không. So không phân biệt hoa thường. */
+export function hasHoldMarker(body: string): boolean {
+  const lowered = body.toLowerCase();
+  return HOLD_MARKERS.some((marker) => lowered.includes(marker));
+}
 
 /**
  * Tách `ops/lanes/<lane>/backlog.md` thành các mục.
@@ -101,7 +137,7 @@ export function parseBacklog(content: string): BacklogItem[] {
     return {
       id: start.id,
       status,
-      hasOpenBox: body.some((line) => line.includes(OPEN_BOX)),
+      hasHoldMarker: hasHoldMarker(body.join('\n')),
       statusLine,
     };
   });
@@ -125,9 +161,26 @@ export function hasCompletionCommit(lane: string, id: string, subjects: readonly
   return subjects.some((subject) => pattern.test(subject));
 }
 
+/**
+ * Mục đã merge rồi bị revert vẫn còn tiêu đề commit gốc trong `git log`, nên
+ * `hasCompletionCommit` một mình sẽ nói "đã xong". CLAUDE.md mục 13 ("`main`
+ * đỏ thì revert ngay") làm ca này có thật, không phải giả định.
+ *
+ * Luật cố ý thô và lệch về hướng an toàn: thấy **bất cứ** commit `Revert`
+ * nào nhắc tới tiêu đề của mục thì coi như chưa xong, không xét thứ tự thời
+ * gian. Mục được revert rồi làm lại sẽ bị giữ thêm một nhịp và hiện ra ở
+ * nhóm `unmerged` để người đọc gỡ tay — rẻ hơn nhiều so với mở khoá một
+ * `deps` đã bị revert khỏi `main`.
+ */
+export function hasRevertCommit(lane: string, id: string, subjects: readonly string[]): boolean {
+  const marker = `[${lane}] ${id} `;
+  return subjects.some((subject) => subject.startsWith('Revert ') && subject.includes(marker));
+}
+
 export function classify(item: BacklogItem, merged: boolean): ItemVerdict {
+  if (item.statusLine === null) return 'unknown';
   if (!merged) return 'unmerged';
-  return item.hasOpenBox ? 'held' : 'stale';
+  return item.hasHoldMarker ? 'held' : 'stale';
 }
 
 export interface StatusFinding {
@@ -136,18 +189,27 @@ export interface StatusFinding {
   verdict: ItemVerdict;
 }
 
-/** Soát một làn: chỉ các mục đang ở `review` mới có gì để nói. */
+/**
+ * Soát một làn.
+ *
+ * Mục đang ở `review` là mục có gì để nói. Cộng thêm mục **không đọc được
+ * `status`** — nó ra nhóm `unknown` chứ không bị lọc đi im lặng, vì một mục
+ * thụt lề sai biến mất khỏi báo cáo là đúng nhóm lỗi Z mà tool này chữa.
+ */
 export function reviewFindings(
   lane: string,
   content: string,
   subjects: readonly string[],
 ): StatusFinding[] {
   return parseBacklog(content)
-    .filter((item) => item.status === 'review')
+    .filter((item) => item.status === 'review' || item.statusLine === null)
     .map((item) => ({
       lane,
       id: item.id,
-      verdict: classify(item, hasCompletionCommit(lane, item.id, subjects)),
+      verdict: classify(
+        item,
+        hasCompletionCommit(lane, item.id, subjects) && !hasRevertCommit(lane, item.id, subjects),
+      ),
     }));
 }
 
@@ -231,6 +293,7 @@ function main(): void {
         stale: by('stale'),
         held: by('held'),
         unmerged: by('unmerged'),
+        unknown: by('unknown'),
         fixed: fix ? by('stale') : [],
         backlogUpdated: written,
       },
