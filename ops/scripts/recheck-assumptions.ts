@@ -777,17 +777,22 @@ export function judgeWorkerFleet(collected: RoutineRuns): CheckOutcome {
   if (workers.length <= PLAN_B_WORKERS) {
     return {
       verdict: 'sai',
-      observed: `Chỉ quan sát được ${workers.length} worker (${workers.join(', ') || 'không có'}) — đội đã tụt về mức dự phòng Plan B.`,
+      observed: `Chỉ quan sát được ${workers.length} worker (${workers.join(', ') || 'không có'}) — đội đã tụt về số worker của Plan B (${PLAN_B_WORKERS}).`,
       evidence: [
         ...evidence,
         `Sổ G1 và phụ lục P1 đang ghi cấu hình ≥ ${PLAN_B_WORKERS + 1} worker; quan sát không còn đỡ được con số đó.`,
+        'Việc cần làm là sửa con số trong phụ lục P1 cho khớp hiện trạng, KHÔNG phải kết luận gì về vế "tài khoản có Projects" — hai thứ đó không suy ra nhau.',
       ],
     };
   }
 
   return {
     verdict: 'khớp',
-    observed: `Quan sát được ${workers.length} worker đang chạy thật (${workers.join(', ')}) — cấu hình ≥ ${PLAN_B_WORKERS + 1} worker, không phải dự phòng Plan B.`,
+    // KHÔNG viết "không phải Plan B": Plan B có hai vế ("chỉ dùng routines"
+    // và "2 worker"), và quan sát này chỉ bác được vế sau — thứ đo được
+    // chính là các routine `crux-worker-<N>`. Xem `docs/assumptions.md` mục
+    // `G1`; vòng soát chéo đã bắt đúng chỗ nới nghĩa này một lần.
+    observed: `Quan sát được ${workers.length} worker đang chạy thật (${workers.join(', ')}) — cấu hình ≥ ${PLAN_B_WORKERS + 1} worker, nhiều hơn số worker của Plan B (${PLAN_B_WORKERS}).`,
     evidence,
   };
 }
