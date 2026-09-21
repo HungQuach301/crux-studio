@@ -95,7 +95,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 - **Nội dung:** trần số lần chạy routine mỗi ngày đủ cho 2–3 worker theo phụ lục P1, cộng hai routine `crux-digest` và `crux-integrator`.
 - **Nguồn:** chưa có con số.
 - **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · CHARTER phụ lục P1 · mặc định M5
+- **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · `CLAUDE.md` mục 16 · CHARTER phụ lục P1 · mặc định M5
 - **Cách kiểm:** sau lượt chạy đầu tiên, mở `claude.ai/code/routines` và **đọc số lượt còn lại trong ngày**. Chỉ chủ dự án làm được.
 - **Dự phòng:** giãn nhịp chạy, hoặc giảm số worker. Backlog không đổi, chỉ chậm lại.
 - **Trạng thái:** giao làn `verify`, mục `VF-G3`.

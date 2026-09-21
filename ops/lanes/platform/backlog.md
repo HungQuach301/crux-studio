@@ -102,12 +102,22 @@ Chỉ dẫn 5 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: issue #17, chỉ dẫn 5
 - **cửa merge: `automerge-delayed`** — sửa `CLAUDE.md`. Chạy `node ops/invariants.protected-area.ts` để xác nhận.
 - tiêu chí xong:
   - Thêm luật vào `CLAUDE.md`: routine và phiên **không tự đặt vòng chờ** (`/loop`, hẹn giờ đánh thức). Việc chưa xong thì **kết thúc lượt**, để lượt chạy theo lịch kế tiếp làm tiếp.
   - Nói rõ vì sao: một lượt chạy nằm chờ vẫn tiêu lượt chạy trong ngày (`G3`) mà không làm gì, và nó giấu việc chưa xong khỏi bản tin.
+- **Đã làm** (PR `#56`): `CLAUDE.md` mục **16 · Vòng chờ — routine và phiên không tự đặt**. Thêm mục mới ở cuối
+  thay vì chèn giữa, để không đánh số lại 16 mục đang có — mọi chỗ trong repo trỏ tới "CLAUDE.md mục N" vẫn đúng.
+  Luật cấm cả ba dạng đã thấy (`/loop`, hẹn giờ đánh thức, `sleep` đợi CI/reviewer/`automerge.yml`/chủ dự án),
+  và nêu đủ hai lý do của tiêu chí xong: tiêu một lượt chạy trong ngày (`G3`) mà không làm gì, và giấu việc chưa
+  xong khỏi bản tin — lượt chưa kết thúc thì chưa có báo cáo, chưa có PR khỏi nháp, chưa có gì cho bản tin đọc.
+  Vạch ranh giới cho chỗ dễ đọc nhầm: chờ **bên trong một lệnh đang làm việc thật** (`pnpm check`, `git push`
+  thử lại khi lỗi mạng) không phải vòng chờ.
+- **Truy vết giả định:** `docs/assumptions.md` mục `G3` nay liệt kê `CLAUDE.md` mục 16 ở cột *Phần phụ thuộc*.
+  Không phải trang trí: `pnpm assumptions` kiểm đúng chiều đó, nên nếu `VF-G3` đo ra G3 **sai** thì mục 16
+  hiện ngay trong danh sách phần bị ảnh hưởng (CHARTER 11.1 luật 1) thay vì phải tìm bằng mắt.
 
 
 ### P-017 · Chế độ vận hành 1–2 lần mỗi ngày — quyết định `D-C06`

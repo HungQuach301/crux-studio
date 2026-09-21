@@ -234,3 +234,15 @@ Chủ dự án trả lời chậm nhất một nhịp worker, vì routine không
 - Đọc log thì gọi `readRunLogs` của kernel, đừng tự `cat` rồi tự sắp: thứ tự dòng trong file không mang nghĩa (`merge=union` không xếp theo thời gian), và quên sắp theo `at` là số tiền ra sai mà không gì đỏ.
 - Ngân sách học tới cổng Mốc 3: khoảng 600–900 USD chi phí API, theo CHARTER mục 8.
 - Asset đầu tiên trở đi ghi `ops/license-ledger.md`: nguồn, điều khoản, dùng thương mại được không, giao lại cho khách hàng được không.
+
+## 16. Vòng chờ — routine và phiên không tự đặt
+
+Mục `P-021`, chỉ dẫn 5 của chủ dự án trên issue bản tin #17.
+
+- Routine và phiên **không tự đặt vòng chờ**: không `/loop`, không hẹn giờ đánh thức, không `sleep` để đợi CI chạy xong, đợi reviewer, đợi `automerge.yml` merge, hay đợi chủ dự án trả lời.
+- Việc chưa xong thì **kết thúc lượt**. Push phần đã làm, ghi rõ trong báo cáo 5 dòng (mục 8) đang dừng ở đâu và bước tiếp theo là gì, rồi để **lượt chạy theo lịch kế tiếp** làm tiếp. Việc đã push thì lần chạy sau làm tiếp được (mục 2).
+- Vì sao, hai lý do đều đo được:
+  - Một lượt nằm chờ **vẫn tiêu một lượt chạy trong ngày** (giả định **G3** — trần số lần chạy routine mỗi ngày) mà không làm gì. Đó là thứ đắt nhất trong ngày bị dùng để ngồi im.
+  - Nó **giấu việc chưa xong khỏi bản tin**. Lượt chưa kết thúc thì chưa có báo cáo, chưa có PR chuyển khỏi nháp, chưa có dòng nào cho bản tin sáng đọc — nên chỗ kẹt không xuất hiện ở hộp quyết định duy nhất (mục 14). Đúng nhóm **Z** của `ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh.
+- Luật này nói rộng ra cho mọi kiểu chờ. Phụ lục P1 bước 8 đã dặn riêng cho chờ quyết định — "đừng chờ trong cùng một lần chạy; thoát, lần chạy sau đọc câu trả lời" — mục này là cùng một luật, áp cho cả CI, reviewer và hàng đợi merge.
+- Chờ **bên trong một lệnh đang làm việc thật** không phải vòng chờ: `pnpm check` chạy vài phút, `git push` thử lại khi lỗi mạng (mục 2), một lệnh build đang chạy. Phân biệt bằng câu hỏi: lượt chạy đang làm việc, hay đang đợi người khác làm?
