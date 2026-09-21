@@ -59,10 +59,17 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G7 · Điều khoản TTS, stock, font, bản đồ
 - deps: —
 - risk: high
-- status: ready
+- status: parked
 - kiểm: đọc điều khoản từng nhà cung cấp, trích dẫn kèm ngày đọc.
 - dự phòng nếu sai: đổi nhà cung cấp.
 - ghi chú: cùng việc với AU-001 nhưng ở góc sổ giả định; kết quả ghi vào `ops/license-ledger.md`.
+- ✅ **Nhóm font xong, 2026-09-21:** đọc văn bản giấy phép **gốc** đi kèm gói font (`package/LICENSE` của `@fontsource/inter@5.3.0`, `registry.npmjs.org`). SIL OFL 1.1 điều 5: video đã dựng là "document created using the Font Software" nên không kéo theo nghĩa vụ nào — thương mại `được`, giao cho khách hàng B2B `được`. Giao **file font** là ca khác, có điều kiện. Dòng sổ và trích nguyên văn ở `ops/license-ledger.md`.
+- ⬜ **`parked` — ba nhóm còn lại không kiểm được từ phiên cloud.** Chính sách mạng của environment chặn mọi trang điều khoản của TTS, ảnh/video stock và bản đồ (13 đích thử, tất cả `000`; công cụ đọc web trả `EGRESS_BLOCKED`). Bảng đo kèm giờ UTC ở `ops/license-ledger.md`.
+
+  Đây **không** phải chữ ký lỗi lặp lần thứ ba (CLAUDE.md mục 13) mà là một chỗ chặn cứng ở lần thử đầu: không có cách nào bên trong repo đi vòng qua nó, và lách chính sách mạng là việc agent không được làm. Gỡ chặn cần chủ dự án — issue `🤖 [QĐ]` của mục này nêu ba phương án.
+
+  **Không** hạ chuẩn bằng đoạn trích của máy tìm kiếm: đó là tóm tắt của bên thứ ba, đúng loại bằng chứng mà luật đầu file này loại bỏ.
+- hệ quả: `AU-001` của làn `audio` vẫn chặn, và `voice.commercialLicenseVerified` giữ `false`. Làn `audio` không đứng chờ được thì nhận mục khác — `irreversible` và chỗ chặn chỉ chặn nhánh việc của nó (CHARTER 2.3).
 
 ### VF-G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 - deps: —
