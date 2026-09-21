@@ -62,11 +62,13 @@ export function buildReport(rows: Row[]): string {
   }
 
   const host = base.host;
-  const peakMb = Math.max(...rows.map((r) => r.peakRssBytes));
+  const peakBytes = Math.max(...rows.map((r) => r.peakRssBytes));
   const slowdown = base.msPerFrame / still.msPerFrame;
   const renderMin = base.wallMs / 60000;
 
-  const m1 = peakMb < host.totalMemBytes * 0.8;
+  // "Không hết bộ nhớ" đọc chặt hơn một chút: còn cách trần ít nhất 20%,
+  // để kết luận không phụ thuộc vào việc runner lúc đó rỗi hay bận.
+  const m1 = peakBytes < host.totalMemBytes * 0.8;
   const m2 = renderMin <= LIMIT_RENDER_MIN;
   const m3 = slowdown <= LIMIT_SLOWDOWN;
 
@@ -102,7 +104,7 @@ export function buildReport(rows: Row[]): string {
   p();
   p('| # | Chỉ số | Ngưỡng | Đo được | Kết |');
   p('|---|---|---|---|---|');
-  p(`| 1 | Bộ nhớ đỉnh khi render canvas 6000×3400 | không hết bộ nhớ | **${mb(peakMb)} MB** đỉnh RSS cả cây tiến trình, trên ${mb(host.totalMemBytes)} MB | ${verdict(m1)} |`);
+  p(`| 1 | Bộ nhớ đỉnh khi render canvas 6000×3400 | không hết bộ nhớ | **${mb(peakBytes)} MB** đỉnh RSS cả cây tiến trình, trên ${mb(host.totalMemBytes)} MB | ${verdict(m1)} |`);
   p(`| 2 | Thời gian render 5.400 khung ở 1 worker | ≤ ${LIMIT_RENDER_MIN} phút | **${min(base.wallMs)} phút** | ${verdict(m2)} |`);
   p(`| 3 | Chậm hơn render tĩnh cùng số khung | ≤ ${LIMIT_SLOWDOWN}× | **${slowdown.toFixed(2)}×** (${one(base.msPerFrame)} so với ${one(still.msPerFrame)} ms/khung) | ${verdict(m3)} |`);
   p(`| 4 | Chuyển động 30fps **không** mờ | clip xem được | \`base-30-noblur.mp4\`, ${min(base.wallMs)} phút render | ${verdict(null)} |`);
