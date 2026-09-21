@@ -283,3 +283,61 @@ test('recentMainCommits NÉM khi ref không có — mảng rỗng ở đây cho 
 test('ref cục bộ của một PR dựng từ số PR, không từ tên nhánh', () => {
   assert.equal(prHeadRef(56), 'refs/remotes/pr/56');
 });
+
+// ── Năm chỗ soát chéo (ngữ cảnh sạch) bắt được, mỗi chỗ một bài ──────────
+
+test('clockFrozen so nhãn KHÔNG phân biệt hoa thường — cùng cách decideMerge chuẩn hoá', () => {
+  // Nhãn GitHub giữ nguyên chữ hoa nhưng chỉ duy nhất theo kiểu không phân
+  // biệt hoa thường. So thẳng thì một nhãn gõ `AutoMerge` làm mất đúng dòng
+  // cảnh báo "đồng hồ chờ không chạy".
+  const [row] = conflictRows(
+    [
+      {
+        number: 1,
+        title: 'x',
+        labels: ['AutoMerge-Delayed'],
+        origin: { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true },
+      },
+    ],
+    NOW,
+  );
+  assert.equal(row!.clockFrozen, true);
+});
+
+test('mốc kẹt ở TƯƠNG LAI: kẹp về 0 và BÁO cờ lệch đồng hồ, không in số giờ âm', () => {
+  const [row] = conflictRows(
+    [
+      {
+        number: 7,
+        title: 'x',
+        labels: [],
+        origin: { sha: 'a', committedAt: '2026-09-22T04:00:00Z', exact: true },
+      },
+    ],
+    NOW,
+  );
+  assert.equal(row!.hoursStuck, 0);
+  assert.equal(row!.clockSkew, true);
+  assert.doesNotMatch(renderConflictRow(row!), /-\d/);
+  assert.match(renderConflictRow(row!), /TƯƠNG LAI/);
+});
+
+test('mốc kẹt bình thường thì KHÔNG bật cờ lệch đồng hồ', () => {
+  const [row] = conflictRows(
+    [{ number: 8, title: 'x', labels: [], origin: { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true } }],
+    NOW,
+  );
+  assert.equal(row!.clockSkew, false);
+  assert.doesNotMatch(renderConflictRow(row!), /TƯƠNG LAI/);
+});
+
+test('recentMainCommits NÉM khi git thoát 0 nhưng không cho commit nào', () => {
+  // `git log main:shared.txt` (một blob) và `--max-count=0` đều thoát 0 và
+  // in rỗng. Trả `[]` ở đây cho ra "0 PR xung đột" trên bản tin — nhóm Z.
+  const root = makeRepo();
+  try {
+    assert.throws(() => recentMainCommits(root, 'main', 0), /không cho commit nào/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

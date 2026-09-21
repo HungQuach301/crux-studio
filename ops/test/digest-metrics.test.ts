@@ -26,6 +26,7 @@ import {
   needOwnerCount,
   openPrRows,
   parkedItems,
+  probeOrigins,
   renderDigestMetrics,
   rollupState,
   type GhPr,
@@ -415,6 +416,22 @@ test('P-007 · không truyền kết quả gộp thử thì conflicts là null, 
     writeFileSync(join(root, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · x\n- status: ready\n');
     const metrics = collectMetrics(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, NOW);
     assert.equal(metrics.conflicts, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-007 · dò xung đột hỏng thì bản tin rơi về CHƯA DÒ, KHÔNG chết cả bản tin', () => {
+  // `measureConflicts` ném khi `git fetch` hụt. Để nó ném ra khỏi `main()`
+  // thì bản tin mất luôn "Cần anh quyết", chi phí, `parked` — một tính năng
+  // mới hạ một tính năng đang chạy (`CLAUDE.md` mục 14, "Một hộp duy nhất").
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-noremote-'));
+  try {
+    const snapshot = { mergedPrs: [], openPrs: [pr(1, 'claude/platform/P-001')], decisionIssues: [] };
+    // `root` không phải kho git và không có remote `origin` → `git fetch` hỏng.
+    assert.equal(probeOrigins(root, snapshot, []), null);
+    // `--no-conflicts` cũng ra `null`, nhưng không đi qua git lần nào.
+    assert.equal(probeOrigins(root, snapshot, ['--no-conflicts']), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

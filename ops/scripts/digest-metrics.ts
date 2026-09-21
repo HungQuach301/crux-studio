@@ -386,10 +386,12 @@ export function collectMetrics(
   const total = sumCostUsd(logLines);
   const cost24h = sumCostUsd(linesSince(logLines, since));
 
-  // Mục `P-007`. Chỉ PR **đã dò ra mốc** mới vào mục xung đột; PR không có
-  // khoá trong `origins` là PR chưa dò, và nó không được lặng lẽ tính là
-  // sạch — nên nó cũng không vào mục này, mà số PR mở ở mục trên vẫn đủ để
-  // thấy chênh lệch.
+  // Mục `P-007`. Chỉ PR **đã dò ra mốc** mới vào mục xung đột. Hai ca rơi
+  // ra ngoài và cả hai đều đúng: khoá có mà giá trị `null` là PR gộp sạch;
+  // khoá vắng hẳn là PR chưa dò. Ca thứ hai không xảy ra ở đường đang
+  // dùng — `measureConflicts` đặt khoá cho MỌI số PR — nhưng bên gọi có
+  // thể đưa vào một map dựng tay, nên bộ lọc phải chịu được cả hai. Số PR
+  // ở mục "PR đang mở" ngay trên vẫn đủ để thấy chênh lệch.
   const conflicts =
     origins === null
       ? null
@@ -458,6 +460,36 @@ function readSnapshotFile(path: string): GithubSnapshot {
   return parsed as GithubSnapshot;
 }
 
+/**
+ * Mốc kẹt của mục `P-007`, đo bằng gộp thử — và **không bao giờ kéo cả bản
+ * tin xuống theo nếu hỏng**.
+ *
+ * `measureConflicts` ném khi `git fetch` hụt (mất mạng, một PR từ fork, một
+ * `refs/pull/<n>/head` không nạp được). Để nó ném ra khỏi `main()` thì bản
+ * tin **không in được dòng nào** — mất luôn "Cần anh quyết", chi phí, mục
+ * `parked`. Một tính năng mới hạ được một tính năng đang chạy là cái giá
+ * không đáng, và nó đánh thẳng vào "Một hộp duy nhất" (`CLAUDE.md` mục 14).
+ *
+ * Nên hỏng thì rơi về `null`, tức bản tin in `CHƯA DÒ` — đường mà chính
+ * mục này thiết kế ra, và trước đây chỉ tới được khi **người** gõ
+ * `--no-conflicts`. Lý do hỏng đi ra `stderr`: rơi về `CHƯA DÒ` mà không
+ * nói vì sao thì lượt sau không biết phải sửa gì.
+ */
+export function probeOrigins(root: string, snapshot: GithubSnapshot, argv: readonly string[]): ConflictOrigins | null {
+  if (argv.includes('--no-conflicts')) return null;
+  try {
+    return measureConflicts(
+      root,
+      snapshot.openPrs.map((pr) => pr.number),
+    );
+  } catch (error) {
+    process.stderr.write(
+      `Không dò được PR xung đột, bản tin sẽ in CHƯA DÒ: ${(error as Error).message}\n`,
+    );
+    return null;
+  }
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   const githubIndex = argv.indexOf('--github');
@@ -480,11 +512,7 @@ function main(): void {
   // `note` của log. `--no-conflicts` cho lượt chạy không có kho git đầy đủ
   // — và khi đó bản tin in `CHƯA DÒ`, không in `0`.
   const root = process.cwd();
-  const origins = argv.includes('--no-conflicts')
-    ? null
-    : measureConflicts(root, snapshot.openPrs.map((pr) => pr.number));
-
-  const metrics = collectMetrics(root, snapshot, new Date(), origins);
+  const metrics = collectMetrics(root, snapshot, new Date(), probeOrigins(root, snapshot, argv));
 
   process.stdout.write(argv.includes('--json') ? `${JSON.stringify(metrics, null, 2)}\n` : renderDigestMetrics(metrics));
 }

@@ -104,6 +104,12 @@ export function conflictOrigin(probes: readonly CommitProbe[]): ConflictOrigin |
  * Số giờ giữa hai mốc ISO, làm tròn hai chữ số. Ném khi một mốc không đọc
  * được: bản tin là nơi con số đi thẳng tới chủ dự án, và `NaN` giờ ở đó
  * trông y hệt một PR vừa mới kẹt.
+ *
+ * **Cả hai mốc phải mang offset múi giờ.** `Date.parse` đọc một chuỗi
+ * không có offset (`2026-09-21T15:00:00`) là **giờ địa phương**, nên cùng
+ * một đầu vào ra hai con số khác nhau tuỳ `TZ` của runner. Đường đang dùng
+ * an toàn — `git log --format=%cI` luôn kèm offset — nhưng đó là ràng buộc
+ * ngầm, nên khai ra ở đây.
  */
 export function hoursBetween(from: string, to: string): number {
   const start = Date.parse(from);
@@ -128,10 +134,21 @@ export interface ConflictRow {
   number: number;
   title: string;
   labels: string[];
-  /** Số giờ đã xung đột. `null` khi không dò được mốc (cửa sổ dò hết mà vẫn chưa có commit sạch nào để neo). */
+  /**
+   * Số giờ đã xung đột. `null` khi bên gọi không đưa được mốc nào
+   * (`origin: null`) — cửa sổ dò rỗng chẳng hạn. Cửa sổ dò **hết** mà vẫn
+   * toàn xung đột thì vẫn ra số, kèm `exact: false`.
+   */
   hoursStuck: number | null;
   /** `false` khi `hoursStuck` chỉ là cận dưới — xem `ConflictOrigin.exact`. */
   exact: boolean;
+  /**
+   * Mốc kẹt nằm ở **tương lai** so với `now`: đồng hồ của runner lệch so
+   * với mốc commit. Số giờ được kẹp về 0 chứ **không** in số âm, nhưng cờ
+   * này phải nổi lên — "kẹt -10 giờ" trên bản tin thì người đọc mất niềm
+   * tin vào cả mục, còn kẹp im lặng thì che mất một cái đồng hồ đang sai.
+   */
+  clockSkew: boolean;
   /**
    * PR mang nhãn tự merge mà đang xung đột: đồng hồ 12 giờ của nó **không
    * chạy**, nên nó không bao giờ tự tới hạn. Đây là đúng hình dạng B7 —
@@ -152,13 +169,21 @@ export interface ConflictRow {
 export function conflictRows(inputs: readonly ConflictInput[], now: string): ConflictRow[] {
   const rows = inputs.map((input) => {
     const labels = [...input.labels];
+    const raw = input.origin === null ? null : hoursBetween(input.origin.committedAt, now);
     return {
       number: input.number,
       title: input.title,
       labels,
-      hoursStuck: input.origin === null ? null : hoursBetween(input.origin.committedAt, now),
+      hoursStuck: raw === null ? null : Math.max(raw, 0),
       exact: input.origin?.exact ?? false,
-      clockFrozen: labels.some((label) => (AUTO_MERGE_LABELS as readonly string[]).includes(label)),
+      clockSkew: raw !== null && raw < 0,
+      // So không phân biệt hoa thường, cùng cách `decideMerge` chuẩn hoá
+      // `input.labels`. Nhãn GitHub giữ nguyên chữ hoa nhưng chỉ duy nhất
+      // theo kiểu không phân biệt hoa thường, nên một nhãn gõ `AutoMerge`
+      // mà so thẳng sẽ làm mất đúng dòng cảnh báo này.
+      clockFrozen: labels.some((label) =>
+        (AUTO_MERGE_LABELS as readonly string[]).includes(label.toLowerCase()),
+      ),
     };
   });
 
@@ -179,6 +204,7 @@ export function renderConflictRow(row: ConflictRow): string {
   } else {
     parts.push(`xung đột, kẹt ${row.exact ? '' : 'ít nhất '}${row.hoursStuck.toFixed(2)} giờ`);
   }
+  if (row.clockSkew) parts.push('⚠️ mốc kẹt nằm ở TƯƠNG LAI — đồng hồ lệch, số giờ kẹp về 0');
   if (row.clockFrozen) parts.push('đồng hồ chờ KHÔNG chạy khi đang xung đột (CHARTER 3.3)');
   if (row.labels.length > 0) parts.push(row.labels.join(', '));
   parts.push(row.title);
@@ -202,7 +228,7 @@ export function recentMainCommits(cwd: string, ref = 'origin/main', depth = PROB
   if (result.error !== undefined || result.status !== 0) {
     throw new Error(`Không đọc được lịch sử \`${ref}\`: ${result.error?.message ?? result.stderr}`);
   }
-  return result.stdout
+  const commits = result.stdout
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
@@ -210,6 +236,15 @@ export function recentMainCommits(cwd: string, ref = 'origin/main', depth = PROB
       const [sha, committedAt] = line.split('\t');
       return { sha: sha!, committedAt: committedAt! };
     });
+
+  // `git log` thoát 0 và in RỖNG cho một ref trỏ vào thứ không phải commit
+  // (`main:file.txt`), và cho `depth = 0`. Trả `[]` ở đây thì mọi PR ra
+  // `origin: null` và bản tin in "0 PR xung đột" — đúng nhóm Z mà chú thích
+  // ngay trên đang cảnh báo, nên chặn tại chỗ.
+  if (commits.length === 0) {
+    throw new Error(`\`${ref}\` không cho commit nào (depth=${depth}) — không dò được mốc kẹt.`);
+  }
+  return commits;
 }
 
 /**
