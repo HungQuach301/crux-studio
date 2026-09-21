@@ -9,6 +9,10 @@
 > | `WP-009` | mục backlog `topic/T-001` |
 > | `WP-014` | mục backlog `topic/T-008` |
 > | `data-series.json` | `packs/channels/us-personal-finance/data-series.json` — **chưa có**, do mục `topic/T-003` tạo |
+>
+> **Một điều bảng dưới KHÔNG nói** (ghi chú của Crux, không có trong spec): đây là danh sách
+> trắng theo **nhà cung cấp**, không phải bằng chứng rằng từng chuỗi cụ thể tồn tại và lấy
+> được. Việc ghép từng tham số của từng đề tài với một mã chuỗi cụ thể là mục `topic/T-001`.
 
 ## Danh sách trắng
 
@@ -104,11 +108,3 @@ lượt máy bất đồng.
 
 Danh sách mã chuỗi cụ thể mà adapter được phép lấy nằm ở `data-series.json` trong cùng thư
 mục. Adapter **không** được lấy chuỗi ngoài danh sách đó.
-
-## Một điều bảng trên KHÔNG nói
-
-Bảng này là **danh sách trắng theo nhà cung cấp**, không phải bằng chứng rằng từng chuỗi cụ
-thể tồn tại và lấy được. Việc ghép từng tham số của từng đề tài với một mã chuỗi cụ thể là
-mục `topic/T-001`, và `T-001` **chưa làm được**: phiên cloud hiện không nối được tới trang
-của bất kỳ nhà cung cấp nào ở nhóm 1 và 2 (đo ngày 2026-09-21; xem issue `#36`). Tới khi bức
-tường mạng đó được gỡ, không ô nào trong bảng của `T-001` được điền từ trí nhớ.

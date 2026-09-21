@@ -154,3 +154,28 @@ là một cảnh báo không ai đọc.
     `ls-remote` hoặc `fetch` hỏng → `broken`.
   - Test cho cả hai nhánh, dựng kho bare thật.
   - Ghi lại trong `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
+
+### I-008 · Fixture của sáu xưởng còn nhúng bản sao Channel Pack của Đợt 0
+
+Tìm ra trong vòng soát của `topic/T-002`, chưa chặn gì và chưa làm đỏ gì.
+
+`workshops/<tên>/fixtures/input.json` của cả sáu xưởng nhúng một **bản sao** channel pack, và bản sao
+đó là bản tối thiểu của Đợt 0: còn `pillars: ["thresholds","tradeoffs","timing"]`, còn câu `$note`
+"bản đầy đủ … được làn `topic` chuyển vào đây ở Đợt 1" — câu đó nay đã sai, `T-002` đã chuyển xong.
+
+Không có gì đỏ vì fixture chạy độc lập và tập vàng không nhúng pack (`inputsHashOf` chỉ băm con trỏ
+artifact đầu vào, không băm pack). Đó đúng là lý do nó nguy hiểm về sau: bản sao lệch bản thật mà
+mọi chỉ báo vẫn xanh — cùng họ với nhóm **Z** trong `ops/known-failures.md`.
+
+Sửa ở làn `integration` chứ không ở `topic`: sáu file này thuộc sáu làn khác nhau, gom vào một mục
+chéo làn rẻ hơn sáu PR.
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: vòng soát `topic/T-002` (PR `#38`), phát hiện 4
+- tiêu chí xong:
+  - Quyết được một trong hai hướng, và ghi lý do: fixture **đọc** pack thật lúc dựng, hay fixture giữ
+    bản sao nhưng có một kiểm so bản sao với `packs/channels/<slug>/channel.json`.
+  - Kiểm đó nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường.
+  - Sáu fixture khớp pack thật, hoặc khai rõ trường nào cố ý khác và vì sao.

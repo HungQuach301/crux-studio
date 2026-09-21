@@ -6,6 +6,12 @@
 > **Bảng dưới chưa phải giấy phép sản xuất.** Nó khai đề tài và tham số cần quét, không khai
 > nguồn. Việc ghép từng tham số với một nguồn cụ thể là mục `topic/T-001`, và luật ở
 > `data-sources.md` nhóm 3 chặn: đề tài nào còn tham số chưa có nguồn thì không được sản xuất.
+>
+> **Ghi chú của Crux, không có trong khối `topic-map.md` của spec** — lấy từ khối `WP-009`
+> (spec dòng ~3024) và từ bảng điều kiện dừng (spec dòng ~1808): bốn đề tài **1, 2, 6, 8**
+> đúng là bốn đề tài mà `data-sources.md` nhóm 3 đã biết trước là thiếu nguồn, trong khi điều
+> kiện dừng của `T-001` là "**quá** 4 trong 12 đề tài không đủ nguồn thì dừng". Nghĩa là bảng
+> này đã **sát ngưỡng dừng** ngay từ đầu, chưa trừ hao gì.
 
 ## Nguyên tắc chọn đề tài ở giai đoạn đầu
 
@@ -36,10 +42,6 @@ Thứ tự đã sắp để không hai tập liên tiếp cùng trụ.
 | 10 | Bao nhiêu tháng quỹ dự phòng thì đồng tiết kiệm tiếp theo thua đồng trả nợ? | debt | Lãi suất nợ, xác suất mất thu nhập |
 | 11 | Mua điểm lãi suất khi vay mua nhà: giữ nhà bao lâu thì hoà vốn? | housing | Giá điểm, chênh lãi, thời gian giữ |
 | 12 | Ở mức chênh lãi suất nào thì trả nợ theo lãi cao thắng trả nợ theo dư nợ nhỏ quá một kỳ trả? | debt | Chênh lãi giữa các khoản, số khoản |
-
-Bốn đề tài **1, 2, 6, 8** là bốn đề tài mà `data-sources.md` nhóm 3 đã biết trước là thiếu
-nguồn. Con số đó đáng nhớ vì điều kiện dừng của `T-001` là "quá 4 trong 12 đề tài không đủ
-nguồn thì dừng" — tức là bảng này đang **sát ngưỡng dừng** ngay từ đầu, chưa trừ hao gì.
 
 ## Sau 12 tập
 
