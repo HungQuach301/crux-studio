@@ -75,16 +75,27 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - kiểm: tra điều kiện AdSense và nghĩa vụ thuế hiện hành.
 - dự phòng nếu sai: mở `🤖 [QĐ]`.
+- ✅ **Đọc nguồn chính thức 2026-09-21** (lượt `crux-worker-1`), G8 chuyển `suy luận` → **`tài liệu nói vậy`**. Không khai cao hơn: theo thang độ tin cậy ở đầu `docs/assumptions.md`, `đã kiểm một phần` đòi **chạy thật trong một ngữ cảnh**, mà chưa ngữ cảnh nào của đường tiền được chạy. Kết quả đầy đủ kèm URL nguồn và ngày truy cập ở `docs/assumptions.md` mục `G8`; ba điểm chính:
+  - **Nhận tiền được.** Bảng phương thức thanh toán của chính AdSense xếp Việt Nam vào nhóm dùng **Check** và **Wire** (EFT và Hyperwallet **không** mở cho Việt Nam). Ngưỡng chi trả **100 USD**, phát hành giữa ngày 21 và 26 hằng tháng.
+  - **⚠️ Mỹ giữ lại 30%, và không giảm được.** Người ngoài Mỹ khai đủ thông tin thuế mà không có quyền lợi hiệp định thì bị khấu trừ **30%** doanh thu từ người xem ở Mỹ. Hiệp định thuế Mỹ–Việt **đã ký 07/07/2015 nhưng chưa có hiệu lực** (kết luận suy ra từ hai nguồn, không nguồn nào nói thẳng câu đó) — IRS không liệt kê Việt Nam trong danh sách hiệp định đang hiệu lực, còn US Treasury đăng văn bản kèm đúng ghi chú "đăng khi ký, trước khi phê chuẩn và có hiệu lực". Kênh đầu tiên nhắm người xem Mỹ nên khoản này chạm gần như toàn bộ doanh thu — số cho CHARTER mục 8, đọc từ nguồn chứ không ước lượng.
+  - **Nộp thuế ở Việt Nam có đường rõ ràng.** Cá nhân sáng tạo nội dung số: **GTGT 5% + TNCN 2%** trên doanh thu; ngưỡng không phải nộp thuế nay là **1 tỷ đồng/năm** (NĐ 141/2026/NĐ-CP), không còn là 100 triệu của Thông tư 40/2021. Dưới ngưỡng chỉ phải **thông báo doanh thu** chậm nhất 31/01 năm sau; trên ngưỡng thì khai và nộp từ quý vượt ngưỡng.
+- ⬜ **Còn treo, không chặn Đợt 0/1 — chặn ở Mốc 8:** chưa đọc toàn văn NĐ 68/2026/NĐ-CP và NĐ 141/2026/NĐ-CP dù `vanban.chinhphu.vn` nối được; chưa chạy thật đầu cuối (mở tài khoản và nhận một lần chuyển tiền cần danh tính chủ dự án và cần đã có doanh thu); chưa kiểm ngân hàng Việt Nam nhận chuyển khoản USD cho cá nhân và thủ tục ngoại hối; **chưa kiểm 30% đã bị Mỹ giữ có được trừ vào thuế Việt Nam không** — không có hiệp định đang hiệu lực nên rủi ro đánh thuế hai lần là thật; chưa kiểm doanh thu AdSense trên website (khác YouTube) có cùng cách xử lý không.
+- ghi chú về phương pháp: mục này **không** bị bức tường mạng của issue `#36` chặn nữa. Đo bằng chạy thật đầu lượt (`15:41Z`): `support.google.com` 200 · `adsense.google.com` 302 · `policies.google.com` 200 · `www.irs.gov` 200 · `luatvietnam.vn` 200. Mọi domain đã truy cập ghi ở `ops/network-domains.md` (chỉ dẫn 2 của chủ dự án trên issue bản tin #50).
 
 ### VF-G9 · Thuê người soát bản địa và giao việc qua link
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - kiểm: tìm ít nhất hai kênh tuyển thực tế và một cách giao việc không cần tài khoản.
-- dự phòng nếu sai: mở `🤖 [QĐ]`. Rủi ro A4: vai "người ngoài" nhận việc qua link, có thời hạn phản hồi.
+- dự phòng nếu sai: mở `🤖 [QĐ]`. Rủi ro A4: vai "người ngoài" nhận việc qua link, có thời hạn phản hồi. Lượt kiểm 2026-09-21 **không** làm G9 sai, nên chưa phải mở.
+- nguồn: `docs/assumptions.md` mục `G9`; `ops/network-domains.md`; rủi ro A4; CHARTER mục 8 (ngân sách)
+- ✅ **Hai kênh tuyển, đọc trang gốc của chính hai tổ chức, 2026-09-21:** **EFA** (Editorial Freelancers Association, `www.the-efa.org/hiring/`) — *"There is no charge to use the Member Directory or Job List"*, non-member dùng được, đăng tin ở `/hiring/job-submission-form/`, tin lên trong ~48 giờ, và họ **từ chối tin trả thấp** (*"We do not post low-paying or nonpaying jobs…"*); **ACES** (The Society for Editing, `aceseditors.org/resources/job-board`) — *"a free service to the editing community"*, form ở `members.aceseditors.org/add-a-job-posting` có sẵn ô **Link to Apply** và **Email to Apply**, không đòi đăng nhập. Hai trang của chính ACES lệch nhau về hạn tin (60 ngày ở trang job-board, 30 ngày ở trang form) — ghi cả hai, không chọn hộ. Bảng giá EFA 2026 (khảo sát 11/2025–giữa 01/2026, >1.100 hội viên) ở `docs/assumptions.md` mục `G9`: copyediting 33,00–75,00 USD/giờ, proofreading 29,00–75,00 USD/giờ (hai dòng này là **min–max gộp qua 19 dòng con**, khai rõ tại chỗ), fact-checking 50,00–60,00 USD/giờ (đọc thẳng một dòng, không gộp).
+- ✅ **Cách giao việc, đo bằng `curl` không xác thực trong chính lượt chạy:** link tới nội dung **công khai** (`raw.githubusercontent.com/github/gitignore/main/Node.gitignore`) trả **200** kèm 2.189 byte nội dung thật — người ngoài đọc được, không cần tài khoản. **Ngược chiều:** cả trang repo lẫn raw của `HungQuach301/crux-studio` trả **404** (repo private), kể cả khi ép rỗng header `Authorization`. Nên **"gửi link repo" KHÔNG phải một cách giao việc** — phải xuất bản riêng phần cần soát, mà xuất bản ra ngoài là CHARTER 2.3 nhóm 2, `irreversible`: agent không tự làm.
+- ⬜ **Còn treo:** chưa đăng tin và chưa ai nhận việc (đăng tin là cam kết trả tiền cho người thật — `irreversible` nhóm 1), nên độ tin cậy dừng ở `đã kiểm một phần`; chưa dựng và chưa chạy thử biểu mẫu trả lời nào; `upwork.com`, `fiverr.com`, `proz.com`, `atanet.org`, `contentwriters.com` trả **403** với egress của sandbox — là chặn bot phía họ, **không** nói gì về trình duyệt của chủ dự án.
+- ⬜ **Phát hiện đáng một mục `platform` sau này:** mọi đường trả lời không cần tài khoản đều đổ vào hộp thư hoặc biểu mẫu của chủ dự án; không có đường nào để agent đọc phản hồi mà không qua người. Đúng nút cổ chai **A4**, và đánh thẳng vào thước đo "thời gian của anh" (CHARTER 1.3, mặc định M8). Mục này chỉ ghi nhận.
 
 ### VF-G10 · Phiên cloud có ghi được `.github/workflows` không
 - deps: —
