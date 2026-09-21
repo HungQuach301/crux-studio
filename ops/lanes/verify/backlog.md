@@ -100,10 +100,15 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G10 · Phiên cloud có ghi được `.github/workflows` không
 - deps: —
 - risk: low
-- status: ready
+- status: parked
 - kiểm: trong một nhánh vứt đi, thử ghi một file vào `.github/workflows/` và push. **Không merge.**
 - dự phòng nếu đúng như giả định: giữ nguyên cơ chế sync và PAT.
 - nếu ghi được ổn định: có thể gỡ bỏ cơ chế sync và PAT, **thông qua một quyết định riêng** — không tự gỡ.
+- ⬜ **`parked` — bài kiểm này agent không chạy được, và không phải vì thiếu thời gian.** Chính cách kiểm ("ghi một file vào `.github/workflows/`") là việc mà **hai** nguồn thẩm quyền cấm tuyệt đối: phụ lục P1 của CHARTER ("Tuyệt đối không: … sửa `.github/`") và `CLAUDE.md` mục 4. Lớp chặn máy cũng đang sống: đo lại trong chính lượt worker `crux-worker-2` 2026-09-21 22:3xZ, một lệnh **đọc** vô hại (`cat .github/workflows/ci.yml | head -3`) đã bị `.claude/hooks/guard.mjs` chặn với đúng câu *"CHẶN — Agent không ghi vào .github/ (CHARTER 3.2, giả định G10)"*. Đi vòng qua hook bằng công cụ khác (API GitHub thay cho Bash) là **lách lớp chặn**, đúng thứ `CLAUDE.md` mục 3 gọi tên; không làm.
+- ⬜ **Dữ liệu gián tiếp, ghi cho đủ chứ không dùng làm kết luận:** trong toàn bộ lịch sử `main` tới `c7179c6`, đúng **2** commit thật sự ghi vào `.github/` và cả hai do `crux-sync` (workflow sync, dùng `WORKFLOW_SYNC_TOKEN`) — không một commit nào của phiên agent. Đó là **hệ quả của chính lệnh cấm**, không phải bằng chứng về quyền của nền tảng. G10 vẫn ở độ tin cậy `tài liệu nói vậy`.
+- vì sao `parked` chứ không phải `ready`: để `ready` thì mọi lượt worker đều nhận mục này ở bước 3 rồi dừng ở đúng chỗ cũ mà không ai thấy — đúng nhóm lỗi **Z** (hỏng mà không gì đỏ). Đây **không** phải chữ ký lỗi lặp lần thứ ba (`CLAUDE.md` mục 13) mà là một chỗ chặn cứng nhìn ra được ngay ở lần thử đầu.
+- hệ quả: **không chặn làn nào.** Dự phòng "giữ nguyên cơ chế sync và PAT" đang chạy thật và không phụ thuộc câu trả lời; biết G10 đúng hay sai chỉ mở đường **gỡ** cơ chế đó, mà chính dòng trên đã ghi là "không tự gỡ". Giá trị của bài kiểm vì thế thấp, còn giá của nó là nới một lớp chặn (CHARTER 2.3 nhóm 5).
+- mở lại thành `ready` khi: có câu trả lời cho issue `🤖 [QĐ]` của mục này (chủ dự án tự chạy bài kiểm, hoặc duyệt một ngoại lệ hẹp có thời hạn trong `guard.mjs` bằng PR `owner-merge`). Lời hứa "tôi sẽ đề xuất riêng" về G10 nằm ở issue #5 từ 2026-09-20 và chưa lượt nào thực hiện — issue của mục này là việc đó.
 
 ### VF-G11 · Hook và luật deny có hiệu lực trong routine và thread không
 - deps: —
