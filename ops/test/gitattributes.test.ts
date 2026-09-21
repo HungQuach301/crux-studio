@@ -16,7 +16,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { listLogFiles } from '@crux/kernel';
 
 interface Rule {
   pattern: string;
@@ -36,7 +37,30 @@ function rules(): Rule[] {
 }
 
 /** Những file append-only mà mỗi dòng độc lập và thứ tự dòng không mang nghĩa. */
-const APPEND_ONLY = ['ops/logs/*.jsonl', 'docs/visual/calibration-log.jsonl'];
+const APPEND_ONLY = ['ops/logs/*.jsonl', 'ops/logs/**/*.jsonl', 'docs/visual/calibration-log.jsonl'];
+
+/**
+ * Một đường dẫn (tương đối gốc repo) có khớp một mẫu `.gitattributes` không.
+ * Chỉ hiểu đúng hai hình dạng repo đang dùng: mẫu một tầng (một dấu sao
+ * trước phần mở rộng) và mẫu mọi tầng con (hai dấu sao rồi một dấu sao),
+ * cộng đường dẫn nguyên văn. Cố ý hẹp: một matcher glob đầy đủ ở đây sẽ
+ * tự nó thành thứ cần kiểm.
+ */
+function matches(pattern: string, path: string): boolean {
+  if (pattern === path) return true;
+  const deep = pattern.match(/^(.*)\/\*\*\/\*(\.[A-Za-z0-9]+)$/);
+  if (deep) {
+    const [, dir, ext] = deep;
+    return path.startsWith(`${dir}/`) && path.endsWith(ext!) && path.slice(dir!.length + 1).includes('/');
+  }
+  const flat = pattern.match(/^(.*)\/\*(\.[A-Za-z0-9]+)$/);
+  if (flat) {
+    const [, dir, ext] = flat;
+    const rest = path.startsWith(`${dir}/`) ? path.slice(dir!.length + 1) : null;
+    return rest !== null && rest.endsWith(ext!) && !rest.includes('/');
+  }
+  return false;
+}
 
 test('KF-005 · mọi file append-only đều được khai `merge=union`', () => {
   const declared = rules();
@@ -61,12 +85,26 @@ test('KF-005 · KHÔNG file Markdown nào được khai `merge=union`', () => {
   }
 });
 
-test('KF-005 · mọi file log đang có đều nằm dưới một luật union', () => {
-  // Bắt trường hợp một làn mới ghi log vào chỗ mà luật không phủ.
-  const logsDir = join(process.cwd(), 'ops', 'logs');
+test('KF-005 · mọi file log ĐANG CÓ TRÊN ĐĨA đều nằm dưới một luật union', () => {
+  // Bắt trường hợp một làn mới ghi log vào chỗ mà luật không phủ. Từ
+  // `D-C04`, log nằm ở `ops/logs/<lane>/<id>.jsonl` — mẫu một tầng
+  // `ops/logs/*.jsonl` KHÔNG khớp file nào trong số đó, nên bài kiểm này
+  // phải đi từ file thật chứ không từ danh sách mẫu.
+  const root = process.cwd();
+  const logsDir = join(root, 'ops', 'logs');
   assert.ok(existsSync(logsDir), 'thiếu ops/logs/');
-  const covered = rules().some(
-    (r) => r.pattern === 'ops/logs/*.jsonl' && r.attrs.includes('merge=union'),
-  );
-  assert.ok(covered, 'luật `ops/logs/*.jsonl merge=union` không còn — mọi log của mọi làn mất lớp tự giải');
+
+  const unionPatterns = rules()
+    .filter((r) => r.attrs.includes('merge=union'))
+    .map((r) => r.pattern);
+
+  const files = listLogFiles(logsDir).map((path) => relative(root, path).split(sep).join('/'));
+  assert.ok(files.length > 0, 'không thấy file log nào dưới ops/logs/ — bài kiểm này sẽ xanh giả');
+
+  for (const file of files) {
+    assert.ok(
+      unionPatterns.some((pattern) => matches(pattern, file)),
+      `\`${file}\` không nằm dưới luật union nào — log đó mất lớp tự giải`,
+    );
+  }
 });

@@ -2,11 +2,12 @@
 /**
  * `pnpm run:episode -- --episode <id>` — chạy trọn một tập qua sáu xưởng,
  * ghi artifact vào `episodes/<channel>/<id>/<workshop>/artifact.json` và ghi
- * một dòng log có `costUsd` vào `ops/logs/<lane>.jsonl` (bất biến I8).
+ * một dòng log có `costUsd` vào `ops/logs/<lane>/<id>.jsonl` (bất biến I8,
+ * quyết định `D-C04`). Đơn vị phân vùng là **mục**: ở đây mã tập đóng vai
+ * mã mục, nên hai tập chạy song song không chạm cùng một file.
  */
 
-import { writeArtifact, appendRunLog, deriveEpisodeState, systemClock } from '@crux/kernel';
-import { join } from 'node:path';
+import { writeArtifact, appendRunLog, runLogPath, deriveEpisodeState, systemClock } from '@crux/kernel';
 import { runEpisode } from './pipeline.ts';
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -29,7 +30,7 @@ const result = await runEpisode({ root, episodeId, channel, ...(at ? { at } : {}
 for (const name of result.order) {
   const artifact = result.artifacts[name];
   const path = writeArtifact(root, artifact);
-  appendRunLog(join(root, 'ops', 'logs', `${name}.jsonl`), {
+  appendRunLog(runLogPath(root, name, episodeId), {
     at: artifact.createdAt,
     lane: name,
     kind: 'stage',
@@ -42,7 +43,7 @@ for (const name of result.order) {
 }
 
 const state = deriveEpisodeState(result.artifacts, result.order);
-appendRunLog(join(root, 'ops', 'logs', 'integration.jsonl'), {
+appendRunLog(runLogPath(root, 'integration', episodeId), {
   at: at ?? systemClock.now(),
   lane: 'integration',
   kind: 'lane',

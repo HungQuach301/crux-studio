@@ -61,7 +61,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 - Thấy PR đang mở cho một mục thì **không nhận lại** mục đó. Ngoại lệ: PR nháp không có commit mới quá 24 giờ thì coi như bỏ.
 - Commit sớm và thường xuyên, push sau mỗi bước có ý nghĩa. Phiên có thể dừng bất cứ lúc nào; việc đã push thì lần chạy sau làm tiếp được.
 - `git push -u origin <branch>`. Lỗi mạng thì thử lại tối đa 4 lần, giãn 2s/4s/8s/16s.
-- Xong việc: chạy `pnpm check`, cập nhật backlog (`status: review`) và `ops/logs/<lane>.jsonl` **trong cùng PR đó**, rồi chuyển PR khỏi trạng thái nháp.
+- Xong việc: chạy `pnpm check`, cập nhật backlog (`status: review`) và `ops/logs/<lane>/<id>.jsonl` **trong cùng PR đó**, rồi chuyển PR khỏi trạng thái nháp.
 - Gắn nhãn theo **cửa merge** (CHARTER mục 3, quyết định `D-C06`). **Không đoán** — chạy lệnh ở mục 1 và lấy trường `gate`:
 
   | `gate` | Nhãn | Chuyện gì xảy ra |
@@ -155,7 +155,7 @@ Tám luật này do máy thực thi. Không lách, không tắt, không thêm ng
 | I5 | Máy không công khai video | Contract release v0 khoá `visibility: "private"` |
 | I6 | Mọi con số hiển thị có nguồn hoặc có mô hình | `claimIds` trong contract, Fact & Risk Pass |
 | I7 | Nội dung không đáng tin được cô lập | Mục 5 ở trên |
-| I8 | Mọi lần chạy ghi một dòng log có `costUsd` | `ops/logs/<lane>.jsonl`, append-only |
+| I8 | Mọi lần chạy ghi một dòng log có `costUsd` | `ops/logs/<lane>/<id>.jsonl` — một file cho mỗi mục, append-only (`D-C04`) |
 
 **Vùng bảo vệ, hai mức (D-C06).**
 
@@ -180,7 +180,7 @@ Vi phạm thì ghi vào báo cáo và cân nhắc tách PR, không dừng việc
 kernel/            phong bì artifact, contract v0, kiểu dữ liệu, tiện ích. Trung tính thể loại và kênh
 workshops/<tên>/   sáu xưởng: topic, editorial, visual, audio, assembly, release
 packs/genres/      cấu hình theo thể loại        packs/channels/   cấu hình theo kênh
-ops/               lanes, logs, workflows (staging), scripts, golden, known-failures, metrics
+ops/               lanes, logs (`logs/<lane>/<id>.jsonl`), workflows (staging), scripts, golden, known-failures, metrics
 episodes/<channel>/<id>/<workshop>/   artifact văn bản; mỗi xưởng chỉ ghi vùng của mình
 docs/spec/  docs/decisions/  docs/assumptions.md
 ```
@@ -230,6 +230,7 @@ Chủ dự án trả lời chậm nhất một nhịp worker, vì routine không
 ## 15. Chi phí
 
 - Code **không** chứa logic "dừng vì chi phí" hay "dừng vì thời gian". Điều tiết chỉ ở cửa vào: không mở mục hay tập mới.
-- Mỗi lần chạy stage và mỗi lần chạy làn ghi một dòng vào `ops/logs/<lane>.jsonl`, có `costUsd` (bất biến I8). File append-only, phân vùng theo làn nên hai làn không đụng nhau.
+- Mỗi lần chạy stage và mỗi lần chạy làn ghi một dòng vào `ops/logs/<lane>/<id>.jsonl`, có `costUsd` (bất biến I8). File append-only, **một file cho mỗi mục** (`D-C04`) nên hai PR không bao giờ chạm cùng một file.
+- Đọc log thì gọi `readRunLogs` của kernel, đừng tự `cat` rồi tự sắp: thứ tự dòng trong file không mang nghĩa (`merge=union` không xếp theo thời gian), và quên sắp theo `at` là số tiền ra sai mà không gì đỏ.
 - Ngân sách học tới cổng Mốc 3: khoảng 600–900 USD chi phí API, theo CHARTER mục 8.
 - Asset đầu tiên trở đi ghi `ops/license-ledger.md`: nguồn, điều khoản, dùng thương mại được không, giao lại cho khách hàng được không.

@@ -20,7 +20,14 @@ import {
   formatStabilityRow,
   updateArchitectureTable,
   updateStabilityTable,
+  sumCostUsd,
+  linesInWindow,
+  budgetPercent,
+  formatCostRow,
+  updateCostTable,
+  BUDGET_LOW_USD,
 } from '../scripts/update-metrics.ts';
+import type { RunLogLine } from '@crux/kernel';
 
 test('isCodeFile: .ts tính, .test.ts không tính', () => {
   assert.equal(isCodeFile('ops/scripts/update-metrics.ts'), true);
@@ -243,4 +250,59 @@ test('updateArchitectureTable + updateStabilityTable: cùng hoạt động trên
   // Dòng đặt chỗ ("— | — | — | —") của bảng ổn định đã bị THAY, không còn (khác bảng kiến trúc — đó là nhật ký, cái này là trạng thái).
   assert.doesNotMatch(updated, /\| — \| — \| — \| — \|/);
   assert.match(updated, /## Phần khác$/);
+});
+
+
+// --- Bảng "Chi phí" — bất biến I8 sau quyết định `D-C04` ---
+
+function logLine(at: string, costUsd: number): RunLogLine {
+  return { at, lane: 'platform', kind: 'lane', ref: 'platform/P-018', status: 'ok', durationMs: 0, costUsd };
+}
+
+test('sumCostUsd: cộng và làm tròn sai số dấu phẩy động', () => {
+  assert.equal(sumCostUsd([]), 0);
+  assert.equal(sumCostUsd([logLine('2026-09-21T00:00:00.000Z', 0.1), logLine('2026-09-21T01:00:00.000Z', 0.2)]), 0.3);
+  assert.equal(sumCostUsd([logLine('2026-09-21T00:00:00.000Z', 12.5), logLine('2026-09-21T01:00:00.000Z', 7.25)]), 19.75);
+});
+
+test('linesInWindow: nửa khoảng [since, until), dùng để tính chi phí 24 giờ', () => {
+  const lines = [
+    logLine('2026-09-20T23:00:00.000Z', 1),
+    logLine('2026-09-21T00:00:00.000Z', 2),
+    logLine('2026-09-21T12:00:00.000Z', 4),
+  ];
+  const picked = linesInWindow(lines, '2026-09-21T00:00:00.000Z', '2026-09-21T12:00:00.000Z');
+  assert.deepEqual(picked.map((l) => l.costUsd), [2]);
+  assert.equal(sumCostUsd(picked), 2);
+});
+
+test('budgetPercent: lấy cận dưới của ngân sách học, ngân sách 0 thì không chia', () => {
+  assert.equal(BUDGET_LOW_USD, 600);
+  assert.equal(budgetPercent(0), 0);
+  assert.equal(budgetPercent(300), 50);
+  assert.equal(budgetPercent(480), 80);
+  assert.equal(budgetPercent(10, 0), 0);
+});
+
+test('updateCostTable: mỗi ngày một dòng, chạy lại trong ngày thì ghi đè', () => {
+  const content = [
+    '## Chi phí',
+    '',
+    '| Ngày | Chi phí 24h | Tích luỹ | % ngân sách học |',
+    '|---|---|---|---|',
+    '| 2026-09-20 | 0 | 0 | 0% |',
+    '',
+  ].join('\n');
+
+  const once = updateCostTable(content, '2026-09-21', 1.5, 1.5);
+  assert.ok(once.includes('| 2026-09-21 | 1.5 | 1.5 | 0% |'));
+  assert.ok(once.includes('| 2026-09-20 | 0 | 0 | 0% |'), 'dòng ngày cũ phải ở lại — bảng này là nhật ký');
+
+  const twice = updateCostTable(once, '2026-09-21', 2, 2);
+  assert.equal(twice.split('2026-09-21').length - 1, 1, 'chạy lại trong cùng ngày không được thêm dòng thứ hai');
+  assert.ok(twice.includes('| 2026-09-21 | 2 | 2 | 0% |'));
+});
+
+test('formatCostRow: phần trăm ngân sách tính từ chi phí TÍCH LUỸ', () => {
+  assert.deepEqual(formatCostRow('2026-09-21', 30, 300), ['2026-09-21', '30', '300', '50%']);
 });

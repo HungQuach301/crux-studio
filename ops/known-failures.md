@@ -222,6 +222,14 @@ Nói gọn: KF-002 là lỗi của **hình dạng nhánh**, KF-005 là lỗi c�
 
   **Chưa kiểm:** GitHub có áp dụng `.gitattributes` khi nó tự tính "nhánh này có xung đột không" trên trang PR hay không. Nếu không, biểu ngữ xung đột vẫn hiện, nhưng lệnh `git merge` ở phía worker vẫn tự giải được — mà đó mới là chỗ tốn công. Kiểm bằng chạy thật ở lần PR song song kế tiếp.
 
+- **Đã sửa tận gốc, 2026-09-21 (quyết định `D-C04`, mục `P-018`):** log phân vùng **tới mức mục** — `ops/logs/<lane>/<id>.jsonl`. Hai PR trong cùng một làn không còn chạm cùng một file, nên nguyên nhân gốc ở trên — "đơn vị tranh chấp là dòng cuối file, và mọi PR trong làn đều ghi vào đúng đó" — không còn đúng. Union không bị gỡ: nó xuống làm **lớp phòng thủ thứ hai**, cho trường hợp còn lại là hai lần chạy cùng ghi vào **một** mục.
+
+  **Giới hạn đã đo của lớp phòng thủ thứ hai** — phải đọc kèm, vì nó quyết định ai được dựa vào cái gì:
+
+  1. **Luật chỉ có tác dụng khi nhánh đã mang sẵn nó TRƯỚC lần gộp.** Git đọc `.gitattributes` ở trạng thái trước khi gộp, nên luật do `main` mang tới không áp cho chính lần gộp mang nó tới (G17, đã kiểm bằng chạy thật và ghi trạng thái `sai`).
+  2. **GitHub có dùng `.gitattributes` khi tự tính `mergeable` trên trang PR hay không thì vẫn chưa biết** — câu hỏi còn mở ở `VF-G17`. `D-C04` làm nó **bớt quan trọng** (log không còn là chỗ sinh xung đột) chứ không trả lời nó.
+  3. Union **không** xếp theo thời gian và **không** khử trùng lặp — hai giới hạn đã đo ở trên, vẫn đúng. Vì vậy `readRunLogs` của kernel sắp theo `at` cho mọi bên đọc.
+
 - **Máy chặn từ nay:** `ops/test/gitattributes.test.ts` khoá luật union cho từng file append-only đang có, và khoá luôn chiều ngược lại — **không** file Markdown nào được nhận `merge=union`. Union trên Markdown sẽ trộn hai mục thành một mục hỏng mà vẫn merge được: đó là nhóm Z, hỏng mà không gì đỏ.
 
 ### Rà nốt: còn file dùng chung nào khác
@@ -230,12 +238,12 @@ Union chỉ cứu được file mà **thứ tự dòng không mang nghĩa**. V�
 
 | File | Xung đột khi nào | Union có cứu được không | Cách tránh |
 |---|---|---|---|
-| `ops/logs/<lane>.jsonl` | Hai PR cùng làn cùng thêm một dòng cuối. **Chế độ chạy bình thường** | ✅ Có — đã đặt | Đã xong. Bên đọc phải tự sắp theo `at` |
+| `ops/logs/<lane>/<id>.jsonl` | ~~Hai PR cùng làn cùng thêm một dòng cuối~~ — hết, từ `D-C04`: mỗi mục một file. Còn lại: hai lần chạy cùng ghi vào **một** mục | ✅ Có — union vẫn đặt, làm lớp thứ hai | Đã xong. Bên đọc gọi `readRunLogs`, nó sắp theo `at` sẵn |
 | `docs/visual/calibration-log.jsonl` | Hai lần hiệu chuẩn song song | ✅ Có — đã đặt | Đã xong |
 | `ops/lanes/<lane>/backlog.md` | **Hai chỗ**: (a) hai PR cùng thêm mục mới ở đầu file — đã xảy ra ở PR #11; (b) hai PR cùng đổi `status` của hai mục nằm sát nhau | ❌ **Không.** Union sẽ lồng hai mục vào nhau, sinh một mục vô nghĩa mà git vẫn coi là merge thành công | Thêm mục mới ở **cuối file**, mỗi mục là một khối tự đủ cách nhau một dòng trống. Việc này không làm xung đột biến mất, nó làm xung đột **an toàn**: hai khối ở cuối, giải bằng cách giữ cả hai, không bao giờ mất chữ của ai. Số mục **nhận trước** ở dòng log để hai worker không cùng lấy một số |
 | `ops/known-failures.md` | Hai PR cùng thêm một mục `KF-00N` ngay trước phần "Cách thêm một mục" | ❌ Không | Chuyển phần "Cách thêm một mục" lên **đầu file**, để mục mới luôn nối vào cuối. Vẫn có thể xung đột, nhưng luôn là "hai khối ở cuối", giải được trong một phút |
 | `docs/assumptions.md` | **Hai chỗ cho mỗi lần thêm**: một dòng trong bảng tổng ở đầu, một mục đầy đủ ở dưới. Hai PR cùng thêm giả định là xung đột ở cả hai | ❌ Không | Mã `G<N>` **nhận trước** trong backlog làn `verify` trước khi viết, để hai worker không cùng lấy một mã. Mục đầy đủ luôn nối vào cuối, trước dấu `---` cuối. `pnpm assumptions` đã bắt được trường hợp bảng và mục lệch nhau, nên một lần giải sai sẽ đỏ chứ không im lặng |
-| `ops/metrics.md` | Hai làn cùng cập nhật số tổng | ❌ Không | **Đừng viết tay.** File này là số **dẫn xuất** từ `ops/logs/**`; mục `P-005` sinh nó bằng script. Số dẫn xuất mà chép tay thì ngoài xung đột còn sai lặng lẽ |
+| `ops/metrics.md` | Hai làn cùng cập nhật số tổng | ❌ Không | **Đừng viết tay.** File này là số **dẫn xuất** từ `ops/logs/**`; `ops/scripts/update-metrics.ts` (mục `I-002`) sinh nó bằng lệnh, kể cả bảng chi phí từ `D-C04`. Số dẫn xuất mà chép tay thì ngoài xung đột còn sai lặng lẽ |
 | `pnpm-lock.yaml` | Hai PR cùng đổi phụ thuộc | ❌ Không | CHARTER mục 7 đã chốt: làn `integration` tạo lại lockfile. Không giải tay |
 | `ops/labels.json` | Hai PR cùng thêm nhãn | ❌ Không (JSON, không phải một-dòng-một-bản-ghi) | Hiếm, và diff nhỏ. Giải tay, giữ cả hai nhãn |
 

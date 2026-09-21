@@ -19,11 +19,18 @@
  * dấu vết của một lần `main` từng đỏ sau đó. Tỷ lệ xanh = (số merge − số
  * revert) / số merge. Revert nhận diện bằng đúng quy ước nhánh mà phụ lục
  * P3 bước 1 dùng khi mở PR revert: `claude/integration/revert-<sha>`.
+ *
+ * Bảng "Chi phí" đọc log theo bất biến I8. Từ quyết định `D-C04`, log nằm
+ * ở `ops/logs/<lane>/<id>.jsonl` — nhiều file, và thứ tự dòng trong file
+ * KHÔNG mang nghĩa (`merge=union` không xếp theo thời gian). Việc gom và
+ * sắp theo `at` nằm trong `readRunLogs` của kernel, nên ở đây không có
+ * chỗ nào để quên nó.
  */
 
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, relative } from 'node:path';
+import { readRunLogs, type RunLogLine } from '@crux/kernel';
 
 // --- Đếm file code / mục `done` — thuần, không gọi mạng ---
 
@@ -202,6 +209,37 @@ export function formatStabilityRow(rangeLabel: string, merged: number, reverts: 
   return [rangeLabel, String(merged), String(reverts), green === null ? `— ${note}` : `${green}% (${note})`];
 }
 
+/**
+ * Cận DƯỚI của ngân sách học (CHARTER mục 8: khoảng 600–900 USD tới cổng
+ * Mốc 3). Cùng con số mà `ops/workflows/watchdog.yml` dùng cho ngưỡng 80%:
+ * đo sớm một nhịp rẻ hơn đo muộn một nhịp.
+ */
+export const BUDGET_LOW_USD = 600;
+
+export function sumCostUsd(lines: readonly RunLogLine[]): number {
+  const total = lines.reduce((sum, line) => sum + (line.costUsd ?? 0), 0);
+  // Cộng số thực dồn sai số; log là nguồn tính tiền nên làm tròn về 4 chữ số.
+  return Math.round(total * 10_000) / 10_000;
+}
+
+/** Các dòng có `at` trong nửa khoảng `[since, until)`. */
+export function linesInWindow(lines: readonly RunLogLine[], since: string, until: string): RunLogLine[] {
+  return lines.filter((line) => line.at >= since && line.at < until);
+}
+
+export function budgetPercent(spent: number, budget: number = BUDGET_LOW_USD): number {
+  if (budget <= 0) return 0;
+  return Math.round((spent / budget) * 100);
+}
+
+export function formatCostRow(date: string, cost24h: number, total: number): string[] {
+  return [date, String(cost24h), String(total), `${budgetPercent(total)}%`];
+}
+
+export function updateCostTable(content: string, date: string, cost24h: number, total: number): string {
+  return upsertTableRow(content, '## Chi phí', 0, date, formatCostRow(date, cost24h, total));
+}
+
 export function updateArchitectureTable(
   content: string,
   date: string,
@@ -290,6 +328,12 @@ function main(): void {
   const today = formatDate(new Date());
   const rangeLabel = `${startDate} → ${today}`;
 
+  // Bất biến I8: chi phí tích luỹ và chi phí 24 giờ, gom từ mọi file log.
+  const logLines = readRunLogs(join(root, 'ops', 'logs'));
+  const totalCost = sumCostUsd(logLines);
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const cost24h = sumCostUsd(linesInWindow(logLines, dayAgo, new Date(Date.now() + 1).toISOString()));
+
   const metricsPath = join(root, 'ops', 'metrics.md');
   let content = readFileSync(metricsPath, 'utf8');
 
@@ -310,10 +354,12 @@ function main(): void {
       : `${totalReverts} lần revert trên ${totalMerged} lần merge`,
   );
 
+  content = updateCostTable(content, today, cost24h, totalCost);
+
   writeFileSync(metricsPath, content, 'utf8');
 
   process.stdout.write(
-    `${JSON.stringify({ date: today, codeFiles, doneItems, totalMerged, totalReverts, rangeLabel }, null, 2)}\n`,
+    `${JSON.stringify({ date: today, codeFiles, doneItems, totalMerged, totalReverts, rangeLabel, logLines: logLines.length, cost24h, totalCost }, null, 2)}\n`,
   );
 }
 
