@@ -38,6 +38,18 @@ khi danh sách ổn định, dán thẳng cột *Domain* vào đề xuất `Cust
 | `quochoi.vn` | cơ sở dữ liệu văn bản của Quốc hội | `VF-G8` | 2026-09-21 | 200 |
 | `luatvietnam.vn` | đối chứng khi đo khả năng nối tới nguồn luật | `VF-G8` | 2026-09-21 | 200 |
 | `www.gdt.gov.vn` · `gdt.gov.vn` | cổng Cục Thuế — **không nối được** trong lượt đo | `VF-G8` | 2026-09-21 | 000 |
+| `www.the-efa.org` | Editorial Freelancers Association: trang *Hire a Freelancer*, *Job List*, bảng giá 2026, form đăng tin | `VF-G9` | 2026-09-21 | 200 |
+| `community.the-efa.org` | cổng hội viên EFA — danh bạ hội viên | `VF-G9` | 2026-09-21 | 200 |
+| `aceseditors.org` | ACES — The Society for Editing: trang *Job Board* | `VF-G9` | 2026-09-21 | 200 |
+| `members.aceseditors.org` | form đăng tin tuyển của ACES | `VF-G9` | 2026-09-21 | 200 |
+| `raw.githubusercontent.com` | đo "người ngoài đọc được link không cần tài khoản": nội dung công khai **200** kèm 2.189 byte; repo private `crux-studio` **404** | `VF-G9` | 2026-09-21 | 200 (công khai) · 404 (private) |
+| `github.com` | như trên, trang repo private `crux-studio` khi không xác thực | `VF-G9` | 2026-09-21 | 404 |
+| `api.github.com` | thử liệt kê gist công khai — **bị chính proxy của phiên chặn**, không phải GitHub: *"sessions are bound to their configured repositories"* | `VF-G9` | 2026-09-21 | 403 |
+| `support.google.com` | Google Forms, *Publish & share your form with responders* — quyền "anyone with a link" | `VF-G9` | 2026-09-21 | 200 |
+| `www.upwork.com` · `www.fiverr.com` · `www.proz.com` · `www.atanet.org` · `contentwriters.com` | sàn freelance và hội dịch thuật — **chặn bot phía họ**, máy chủ có trả lời | `VF-G9` | 2026-09-21 | 403 |
+| `www.reddit.com` | `r/forhire` — `curl` nối được, nhưng công cụ đọc web của phiên từ chối tên miền này | `VF-G9` | 2026-09-21 | 200 (`curl`) |
+| `www.craigslist.org` · `newyork.craigslist.org` | mục *gigs* — chỉ đo nối được, không đọc nội dung | `VF-G9` | 2026-09-21 | 200 · 301 |
+| `www.linkedin.com` · `www.freelancer.com` · `www.guru.com` · `www.peopleperhour.com` · `www.textbroker.com` · `tally.so` · `formspree.io` · `docs.google.com` | chỉ đo nối được ở bước chọn kênh, **không** dùng làm nguồn cho kết luận nào | `VF-G9` | 2026-09-21 | 200 · 200 · 200 · 200 · 202 · 200 · 200 · 302 |
 | `thuvienphapluat.vn` | cơ sở dữ liệu luật của bên thứ ba — **không dùng làm nguồn kết luận** (làn `verify` loại bằng chứng tóm tắt của bên thứ ba) | `VF-G8` | 2026-09-21 | 403 |
 
 ## Chưa có trong danh sách, nhưng sẽ có
