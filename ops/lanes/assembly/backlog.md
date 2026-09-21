@@ -33,6 +33,12 @@ Siết `fpsAllowed` lúc này là chốt bằng một nửa bằng chứng, và 
 chủ dự án chứ không cho bộ đo. Theo `D-C06` đây là quyết định `reversible`, nên việc phải làm **ngay** là
 dán số và nói rõ còn thiếu gì — không phải đứng chờ, và cũng không phải đoán nốt nửa kia.
 
+⚠️ **Nhưng "giữ cả hai" KHÔNG trung lập, và chỗ này phải nói thẳng** (vòng soát chéo bắt được):
+`workshops/visual/src/index.ts` lấy `limits.fpsAllowed?.[0]` — **phần tử đầu mảng**. Nên đường ống
+**đang chạy 30fps rồi**, chọn bằng thứ tự mảng chứ không bằng bằng chứng. Giữ `[30, 60]` nghĩa là
+**giữ quyền đổi**, không phải "chưa chọn". Nếu `V-002` kết luận 30fps giật thì mọi thứ sinh ra trong
+khoảng chờ đã ở 30fps — đó là lý do mục này dán số và mở `[QĐ]` ngay thay vì để câu hỏi treo im lặng.
+
 **Số đo đáng chú ý:** gấp đôi số khung **không** làm gấp đôi chi phí dựng. Ở 30fps mỗi khung đắt hơn, vì
 bỏ bớt khung làm chuyển động giữa hai khung liền nhau lớn hơn và bộ dự đoán chuyển động phải tìm xa hơn.
 Hai hiệu ứng ngược chiều triệt tiêu một phần. Con số chính xác nằm trong `docs/assembly/render-trial.md`;

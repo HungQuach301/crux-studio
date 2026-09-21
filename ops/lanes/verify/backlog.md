@@ -46,6 +46,11 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - risk: high
 - status: ready
 - kiểm: đo phút Actions của một lần render thử (dùng kết quả V-002 và A-001).
+- **việc cụ thể còn lại, làm được ngay sau khi PR của `A-001` merge:** chạy `ops/workflows/render-trial.yml`
+  (`workflow_dispatch`, `config: all`) rồi dán **phút Actions tính tiền** từ step summary vào `docs/assumptions.md` G5.
+  Đây là mảnh mà `A-001` để ⬜: giây tường đã đo trên container phiên cloud, nhưng con số hoá đơn chỉ runner
+  thật trả lời được, và workflow chỉ có hiệu lực sau khi `sync-workflows` chép sang `.github/` (**G10**).
+  Ghi ở đây để nó có chỗ đậu — `A-001` sẽ `done`, `A-003` thì `deps: A-001`, nên không mục nào khác ôm mảnh này.
 - dự phòng nếu sai: đưa vào ngân sách, hoặc dùng runner khác.
 
 ### VF-G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ

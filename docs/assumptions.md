@@ -124,7 +124,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
   | Chi phí **sinh khung** một tập đầy đủ | `V-002` | ⬜ chưa |
   | **Phút Actions tính tiền** trên runner thật | `ops/workflows/render-trial.yml` | ⬜ chỉ chạy được sau khi PR của `A-001` merge (G10) |
 
-  **Số đã có, phần dựng, container 4 nhân / 16 GB cùng cấu hình `ubuntu-latest`:** một bản master cộng một bản proof mất **18 phút** giây tường ở 30fps và **25 phút** ở 60fps; bản master nặng **311 MB** (30fps) và **393 MB** (60fps). Gấp đôi số khung chỉ làm chi phí dựng tăng **1,48×**, không phải 2×.
+  **Số đã có, phần dựng, container 4 nhân / 16 GB cùng cấu hình `ubuntu-latest`:** một bản master cộng một bản proof mất **1.024 giây tường** ở 30fps và **1.440 giây** ở 60fps, tức **18** và **25** phút Actions sau khi làm tròn lên (đừng lẫn hai đơn vị — 18 và 25 là *phút hoá đơn*, không phải giây tường quy ra phút). Bản master nặng **311 MB** (30fps) và **393 MB** (60fps). Ở nhịp trần mà channel pack khai (`cadencePerMonth.phase2` = 10 tập/tháng): **180** so với **250** phút Actions mỗi tháng. Gấp đôi số khung chỉ làm chi phí dựng tăng **1,48×**, không phải 2×.
 
   ⚠️ **Đừng lấy một mình con số này làm ngân sách G5** — nó chưa có phần sinh khung, mà theo hình dạng đường ống thì phần đó mới lớn. Ngân sách đủ chỉ có sau khi `V-002` xong.
 

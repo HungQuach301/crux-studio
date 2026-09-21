@@ -20,6 +20,10 @@ on:
         description: 'Ghi đè thời lượng mỗi lượt dựng, tính bằng ms — để đo thử rẻ trước khi chạy đủ một tập'
         required: false
         default: ''
+      upload-master:
+        description: 'Tải cả hai bản master lên artifact (~700 MB). Mặc định KHÔNG — xem ghi chú trong file.'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -58,14 +62,21 @@ jobs:
       - name: Ghi mốc thời gian bắt đầu
         run: echo "TRIAL_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
+      # Input đi qua `env:` chứ không nội suy thẳng vào thân `run:`. Chỉ chủ
+      # dự án dispatch được và workflow này không thấy secret nào, nên rủi ro
+      # thấp — nhưng `${{ }}` ghép thẳng vào bash là đúng hình dạng
+      # script-injection, và `pnpm lint:workflows` không bắt được nó.
       - name: Dựng
+        env:
+          TRIAL_CONFIG: ${{ inputs.config }}
+          TRIAL_DURATION_MS: ${{ inputs.duration-ms }}
         run: |
           args="--out render-trial-out"
-          if [ "${{ inputs.config }}" != "all" ] && [ -n "${{ inputs.config }}" ]; then
-            args="$args --config ${{ inputs.config }}"
+          if [ "$TRIAL_CONFIG" != "all" ] && [ -n "$TRIAL_CONFIG" ]; then
+            args="$args --config $TRIAL_CONFIG"
           fi
-          if [ -n "${{ inputs.duration-ms }}" ]; then
-            args="$args --duration-ms ${{ inputs.duration-ms }}"
+          if [ -n "$TRIAL_DURATION_MS" ]; then
+            args="$args --duration-ms $TRIAL_DURATION_MS"
           fi
           echo "node ops/scripts/render-trial.ts $args"
           node ops/scripts/render-trial.ts $args
@@ -102,6 +113,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "elapsed=${elapsed}s minutes=${minutes}"
 
+      # Hai bản master cộng lại ~700 MB, và mp4 gần như không nén thêm được.
+      # Tải chúng lên mặc định sẽ làm chính bài đo G5 ăn mất phần "dung lượng
+      # artifact" mà G5 đang đo — nên mặc định chỉ lấy số đo cộng hai bản proof
+      # (~54 MB), còn master phải xin tường minh.
+      - name: Dọn bản master khi không cần tải lên
+        if: ${{ inputs.upload-master != 'true' }}
+        run: |
+          rm -f render-trial-out/master-*.mp4 render-trial-out/source.mp4
+          echo "bỏ bản master và clip nguồn khỏi artifact (upload-master != true)"
+
       # Nhị phân không commit (CHARTER 5.3) — clip đi ra qua artifact.
       - name: Gói kết quả
         if: always()
@@ -113,4 +134,4 @@ jobs:
             render-trial-out/measurements.json
             render-trial-out/render-trial.md
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
