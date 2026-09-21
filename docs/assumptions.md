@@ -50,13 +50,15 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G9 | Thuê được người soát bản địa và giao việc qua link | **`đã kiểm một phần`** — nửa "giao việc qua link" chạy thật; nửa "thuê được người" chưa | hai kênh tuyển có thật, **trang của chính họ ghi là miễn phí cho bên thuê** (EFA, ACES) · link tới repo private **không** dùng được · xuất bản ra ngoài là `irreversible` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
 | G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** phần routine; thread chưa | lớp thứ hai vẫn giữ | `VF-G11` |
-| G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | `tài liệu nói vậy` | dự phòng đã viết sẵn | `VF-G12` |
+| G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | **`đã kiểm`** — ruleset `protect-main` đang bật thật trên repo này | **dự phòng không cần dùng** · 5 tên check nay chịu tải | `VF-G12` |
 | G13 | GitHub Actions gọi được API trigger `/fire` của routine | `tài liệu nói vậy` | hoãn tới Đợt 1 | `VF-G13` |
 | G14 | Commit của routine và thread có trailer `Claude-Session` | **`đã kiểm một phần`** | CI chỉ cảnh báo | `VF-G14` |
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | theo từng mục | `parked` | `VF-G15` |
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
+
+**`G12` đã kiểm xong ngày 2026-09-21** (mục `VF-G12`): ruleset `protect-main` đang bật thật, `main` trả `protected: true`, và `automerge.yml` vẫn merge được bằng `GITHUB_TOKEN` sau khi bật. Dự phòng không phải dùng, nhưng **không gỡ**. Đổi lại, năm **tên** status check nay chịu tải — xem mục `G12`.
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G7`, `G14`) đã kiểm được một phần — cũng ở dưới; `G2` và `G14` ngay trong Đợt 0. `G7` là ca đáng chú ý nhất: phần chưa kiểm không phải vì chưa ai làm, mà vì **phiên cloud không ra được các trang điều khoản** (mục `VF-G7`). `G11` đã kiểm **xong** phần routine ngày 2026-09-21, mục `VF-G11`.
 
@@ -315,11 +317,29 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 
 - **Nội dung:** bật ruleset bảo vệ nhánh trên repo private cần gói trả phí.
 - **Nguồn:** tài liệu GitHub về gói. Chính sách này đã thay đổi vài lần, nên **cần kiểm lại bằng chạy thật** chứ không đọc lại tài liệu.
-- **Độ tin cậy:** `tài liệu nói vậy`
-- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/lanes/platform/backlog.md` (P-006) · `ops/lanes/verify/backlog.md`
-- **Cách kiểm:** thử bật ruleset trên chính repo này với 4 status check `check`, `secret-scan`, `fix-has-test`, `protected-area`, và xem GitHub đòi gì. Miễn phí. Chỉ chủ dự án làm được.
-- **Dự phòng — đã viết sẵn:** không bật ruleset; dựa vào `automerge.yml` cộng hook. **Ruleset là lớp thứ hai của I2, không phải lớp duy nhất** — `automerge.yml` đã chỉ merge khi CI xanh, và nó chạy theo định nghĩa trên `main`.
-- **Trạng thái:** giao làn `verify` mục `VF-G12`. Hỏi trong issue `🤖 [QĐ]`.
+- **Độ tin cậy:** **`đã kiểm`** (2026-09-21, mục `VF-G12`).
+- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/lanes/platform/backlog.md` (P-006) · `ops/lanes/verify/backlog.md` · `ops/scripts/required-checks.ts` · `ops/test/required-checks.test.ts` · `ops/workflows/ci.yml`
+- **Cách kiểm:** thử bật ruleset trên chính repo này với 4 status check `check`, `secret-scan`, `fix-has-test`, `protected-area`, và xem GitHub đòi gì. Miễn phí. Chỉ chủ dự án làm được. **Đã thực hiện** — chủ dự án bật và báo kết quả trên issue bản tin `#50` lúc `2026-09-21T14:01:21Z`.
+
+  **Bằng chứng đo lại từ phía agent, 2026-09-21 20:16Z — không đọc lại lời chủ dự án, mà gọi API và xem cái đang chạy:**
+
+  | Phép đo | Kết quả |
+  |---|---|
+  | Liệt kê nhánh qua API GitHub, đọc cờ `protected` | `main` → **`protected: true`**; cả 52 nhánh `claude/*` → `false` |
+  | Số check run trên head của một PR bất kỳ | **5/5**, đúng năm tên: `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` |
+  | `automerge.yml` có còn merge được bằng `GITHUB_TOKEN` sau khi bật ruleset không | **Có.** PR `#52` merge lúc `14:44:01Z` với `merged_by: github-actions[bot]` — sau mốc bật ruleset. Từ mốc đó tới `20:15Z` có **17** PR vào `main`, tất cả qua `automerge.yml`, không lần nào chủ dự án phải bấm |
+
+- **Kết luận, nói đúng phạm vi đo được:** câu hỏi mà mục này thật sự cần trả lời — *có bật được ruleset trên repo private này không* — là **có**, và ruleset đang chạy với năm check. Vế "cần gói GitHub Pro" **không đo được từ phía agent** (trang thanh toán nằm ngoài tầm nhìn) và **không còn chịu tải**: nó chỉ dùng để quyết định có dựa vào ruleset hay không, mà câu đó nay đã có câu trả lời bằng chạy thật.
+- **Dự phòng — đã viết sẵn, nay không cần dùng:** không bật ruleset; dựa vào `automerge.yml` cộng hook. Giữ nguyên, không gỡ: **ruleset là lớp thứ hai của I2, không phải lớp duy nhất** — `automerge.yml` đã chỉ merge khi CI xanh, và nó chạy theo định nghĩa trên `main`. Ruleset tắt đi thì I2 vẫn còn lớp dưới.
+- **Điều mới chịu tải kể từ khi ruleset bật — và nó nặng hơn chính giả định gốc:** năm **tên** status check nay là hợp đồng giữa một cấu hình **ngoài repo** (Settings → Rules) và `ops/workflows/ci.yml` **trong repo**. Đổi tên, gộp hay xoá một trong năm job đó là một thay đổi mà `pnpm check` vẫn xanh, CI của chính PR đó vẫn xanh, PR merge đẹp — rồi ruleset đứng chờ một tên không còn ai sinh ra, nên **mọi** PR sau đó kẹt ở `mergeable_state: "blocked"` và `automerge.yml` không merge được gì. Nhóm lỗi **Z**, và là ca nhóm Z khoá được cả nhà máy.
+
+  Hai lớp giữ chỗ đó, theo đúng luật "kiểm ở chỗ rẻ nhất":
+
+  1. **Máy chặn:** `ops/scripts/required-checks.ts` giữ danh sách năm tên, `ops/test/required-checks.test.ts` đối chiếu với tên job thật trong `ci.yml`. Đo bằng phá thật: đổi `name: protected-area` thành `name: protected` → **đúng một bài đỏ**, chỉ tên đó; khôi phục → xanh. Bài kiểm **không** sửa được ruleset, nó chỉ bảo đảm hỏng hóc lộ ra **trước** khi PR merge.
+  2. **Luật:** đổi danh sách đó là quyết định **`irreversible`** — CHARTER 2.3 **nhóm 8**, theo chỉ dẫn của chủ dự án trên issue `#50`. Phải mở `🤖 [QĐ]` để chủ dự án cập nhật ruleset **trước**, vì chỉ chủ dự án vào được trang Settings.
+
+  Một điểm dễ hiểu nhầm, đã kiểm: `trailer-warn` là **luật mềm** (CHARTER mục 4, `CLAUDE.md` mục 6) mà nay nằm trong danh sách check bắt buộc. Nó **không** vì thế thành luật cứng — bước chạy của job khai `continue-on-error: true` nên job luôn kết luận `success` dù có bao nhiêu commit thiếu trailer. Cái ruleset đòi là *job có chạy và có kết luận*, không phải *không có cảnh báo nào*. Nên mục 6 của `CLAUDE.md` vẫn đúng nguyên văn.
+- **Trạng thái:** **đã kiểm**, mục `VF-G12` đóng. Không mở `🤖 [QĐ]` — không có gì để hỏi: câu hỏi đã có câu trả lời, và hệ quả của nó là `reversible` nên làm ngay theo CHARTER 2.3.
 
 ## G13 · Actions gọi được API trigger `/fire` của routine
 

@@ -5,6 +5,13 @@
 # main. Agent không ghi .github/ (CHARTER 3.2, giả định G10).
 #
 # Tên các job dưới đây LÀ tên status check dùng để bật ruleset.
+#
+# Giả định G12: ruleset `protect-main` đang bật thật và đòi ĐÚNG năm tên
+# job dưới đây — `check`, `secret-scan`, `fix-has-test`, `protected-area`,
+# `trailer-warn`. Đổi tên, gộp hay xoá một trong năm job đó khoá `main`
+# mà không gì đỏ, nên nó là quyết định `irreversible` (CHARTER 2.3 nhóm 8)
+# và `ops/test/required-checks.test.ts` canh chiều lệch giữa file này với
+# danh sách trong `ops/scripts/required-checks.ts`.
 name: ci
 
 on:

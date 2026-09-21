@@ -205,7 +205,7 @@ docs/spec/  docs/decisions/  docs/assumptions.md
 
 Mở issue `🤖 [QĐ] <tóm tắt>`, nhãn `decision` cộng `reversible` **hoặc** `irreversible`. Thân issue đúng năm phần: Bối cảnh (≤5 dòng) · Phương án A/B(/C) kèm hệ quả · Khuyến nghị · Nếu anh chưa trả lời thì điều gì xảy ra · Cách trả lời.
 
-**Chỉ bảy nhóm sau là `irreversible`** (CHARTER 2.3, quyết định `D-C06`) — agent chờ trả lời:
+**Chỉ tám nhóm sau là `irreversible`** (CHARTER 2.3) — agent chờ trả lời:
 
 1. Chi tiền, hoặc cam kết chi định kỳ.
 2. Mọi thứ công khai ra ngoài.
@@ -214,6 +214,7 @@ Mở issue `🤖 [QĐ] <tóm tắt>`, nhãn `decision` cộng `reversible` **ho�
 5. Nới lớp chặn: phần `deny` trong `.claude/settings.json`, hoặc `.claude/hooks/guard.mjs`.
 6. Xoá dữ liệu không có bản sao.
 7. Cổng Mốc 3, và cổng gu hình.
+8. Đổi tên, gộp hoặc xoá một trong năm job mà ruleset `protect-main` đòi — `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn`. Chỉ chủ dự án sửa được ruleset, mà ruleset chờ một tên không còn ai sinh ra thì **mọi** PR kẹt ở `blocked`, kể cả PR revert. Danh sách: `ops/scripts/required-checks.ts`; máy canh: `ops/test/required-checks.test.ts` (giả định **G12**).
 
 **Mọi thứ khác là `reversible`:** làm theo khuyến nghị **ngay**, ghi lại trong issue và trong bản tin, không đứng chờ. Chủ dự án phủ quyết trong 24 giờ bằng comment `hoàn tác #N` trên issue bản tin; hoàn tác ở lượt chạy kế tiếp.
 
