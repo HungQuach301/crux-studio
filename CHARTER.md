@@ -703,8 +703,10 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Ghi lại những gì đọc được vào bản tin hôm nay, mục "Đã nhận câu trả lời", để worker xử lý ở lượt sau.
 
 2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang xung đột với main kèm
-   số giờ kẹt và số lượt `aborted-ineligible` liên tiếp (mục P-022, đọc `ops/logs/platform/P-016.jsonl`
-   bằng `readRunLogs`); PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
+   số giờ kẹt và số lượt `aborted-ineligible` liên tiếp (mục P-022, đọc **các dòng bước 0** bằng `readRunLogs`
+   trên cả `ops/logs` — từ mục `P-023` chúng nằm ở `ops/logs/integration/step0-*.jsonl`, một file mỗi lượt, cộng
+   các dòng cũ còn lại ở `ops/logs/platform/P-016.jsonl`; đừng neo vào một tên file);
+   PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3.
 
@@ -721,8 +723,9 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      Mỗi PR automerge-delayed một dòng: link · còn mấy giờ · chạm gì trong vùng bảo vệ.
      Nói rõ: không làm gì thì nó tự vào main; muốn giữ lại thì comment "dừng" ngay trên PR đó.
      PR nào đang xung đột (mục P-022): thay "còn mấy giờ" bằng "xung đột, kẹt <giờ> giờ" — đồng hồ 12
-     giờ không chạy khi đang xung đột. Từ lượt `aborted-ineligible` liên tiếp thứ 3 trở đi (đọc
-     `ops/logs/platform/P-016.jsonl` bằng `readRunLogs`, đừng tự `cat`), thêm "· N lượt liên tiếp không
+     giờ không chạy khi đang xung đột. Từ lượt `aborted-ineligible` liên tiếp thứ 3 trở đi (đọc các dòng bước 0
+     bằng `readRunLogs` trên cả `ops/logs` — `ops/logs/integration/step0-*.jsonl` từ mục `P-023`, cộng các dòng
+     cũ ở `ops/logs/platform/P-016.jsonl` — đừng tự `cat` và đừng neo vào một tên file), thêm "· N lượt liên tiếp không
      tự giải được" ngay trên dòng đó, để nó không im lặng như đã từng xảy ra (nhóm Z). PR mang nhãn
      `owner-merge` mà cũng vướng ca này thì thêm cùng dạng dòng ngay dưới các dòng `automerge-delayed`,
      ghi rõ nhãn `owner-merge` để phân biệt — mục này không đợi cổng merge nào để đáng được thấy.
@@ -780,9 +783,20 @@ Làn integration của Crux Studio.
       merge được. PR có nhãn `automerge-delayed` thì gộp bình thường, nhưng nhớ: gộp tạo commit mới, nên CI chạy lại
       và ĐỒNG HỒ CHỜ 12 GIỜ ĐẶT LẠI (CHARTER 3.3). Ghi điều đó vào ghi chú để bản tin nói đúng số giờ còn lại.
       Integrator không bao giờ tự merge PR nào (bất biến I4).
-   d. Ghi một dòng vào `ops/logs/platform/P-016.jsonl` (bất biến I8): số PR đã giải, số PR bỏ lại kèm giờ kẹt của từng PR,
-      trong trường `note`. Đây là nguồn cho `ops/metrics.md` (mục P-005, chưa xây) và cho bản tin ngày liệt kê PR xung
-      đột (mục P-007, chưa xây) — tới khi hai mục đó xong, dòng log này là nơi duy nhất giữ số giờ kẹt.
+   d. Ghi một dòng vào **file của LƯỢT CHẠY này** (bất biến I8; mục `P-023`):
+      `ops/logs/integration/step0-<YYYY-MM-DDTHHMMSSZ>-<routine>.jsonl`. Đường dẫn do `step0LogPath(root, at, runner)`
+      của kernel sinh ra và `ref` do `step0LogRef(at, runner)` sinh ra — **đừng tự ghép tên file**, một chỗ sinh ra nó
+      thì mọi routine mới cùng một hình dạng. Làn luôn là `integration`, kể cả khi lượt này là một worker: hàng đợi
+      merge là việc của làn `integration` (CHARTER mục 7).
+      Nội dung: số PR đã giải, số PR bỏ lại kèm giờ kẹt của từng PR, trong trường `note`. Đây là nguồn cho
+      `ops/metrics.md` (mục P-005, chưa xây) và cho bản tin ngày liệt kê PR xung đột (mục P-007, chưa xây) —
+      tới khi hai mục đó xong, dòng log này là nơi duy nhất giữ số giờ kẹt.
+
+      **Vì sao một file cho mỗi lượt, không phải một file mang mã mục** (`KF-009`): bước 0 không phải một mục, nó là
+      một lượt chạy, nên `D-C04` không phủ nó và mọi lượt dồn vào `ops/logs/platform/P-016.jsonl`. Một dòng vào `main`
+      là mọi PR đang mở có dòng riêng trong file ấy xung đột ngay phía GitHub — đo được: 7 PR lúc 04:05 giờ VN
+      2026-09-22, rồi 8 PR ở lượt kế tiếp. Dòng **cũ** trong `P-016.jsonl` ở lại nguyên, log append-only; bên đọc
+      gọi `readRunLogs` trên cả `ops/logs` nên tự thấy cả hai chỗ.
 
 Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
 mỗi ngày, như trước khi đổi nhịp):

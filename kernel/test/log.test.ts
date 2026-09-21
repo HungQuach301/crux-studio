@@ -29,6 +29,13 @@ import {
   readRunLogs,
   runLogPath,
   sortByAt,
+  isStep0LogId,
+  step0LogId,
+  step0LogPath,
+  step0LogRef,
+  STEP0_LOG_LANE,
+  STEP0_LOG_PREFIX,
+  misfiledLogLines,
   type RunLogLine,
 } from '../src/log.ts';
 
@@ -208,4 +215,89 @@ test('rollup · dòng tổng hợp giữ được cờ qua một vòng ghi–đ�
   const lines = readRunLogs(join(root, 'ops', 'logs'));
   assert.equal(lines.filter((l) => l.rollup === true).length, 1);
   assert.equal(lines.filter((l) => l.rollup !== true).length, 1);
+});
+
+// ── Mục `P-023` · log bước 0 tách theo LƯỢT CHẠY ────────────────────────
+
+test('P-023 · hai lượt bước 0 không bao giờ chạm cùng một file', () => {
+  const a = step0LogId('2026-09-21T21:39:22Z', 'crux-worker-1');
+  const b = step0LogId('2026-09-21T21:39:23Z', 'crux-worker-1');
+  const c = step0LogId('2026-09-21T21:39:22Z', 'crux-worker-2');
+
+  assert.equal(a, 'step0-2026-09-21T213922Z-crux-worker-1');
+  assert.notEqual(a, b, 'lệch một giây phải cho hai file khác nhau');
+  assert.notEqual(a, c, 'hai routine cùng giây phải cho hai file khác nhau');
+
+  // Đây là toàn bộ lý do mục này tồn tại: trước `P-023` cả ba lượt trên
+  // cùng ghi vào `ops/logs/platform/P-016.jsonl`.
+  assert.equal(new Set([a, b, c]).size, 3);
+});
+
+test('P-023 · mã log bước 0 hợp lệ cho tên file, và `at` được chuẩn hoá về UTC', () => {
+  assert.ok(isSafeLogId(step0LogId('2026-09-21T21:39:22.481Z', 'crux-integrator')));
+
+  // Mili giây bị bỏ: hai lần ghi trong cùng một giây của CÙNG một lượt
+  // phải nối vào cùng một file, không tách ra hai file.
+  assert.equal(
+    step0LogId('2026-09-21T21:39:22.481Z', 'crux-worker-1'),
+    step0LogId('2026-09-21T21:39:22.902Z', 'crux-worker-1'),
+  );
+
+  // Cùng mốc viết ở hai múi giờ phải cho CÙNG một mã. Quên chuẩn hoá là
+  // dòng của một lượt nằm rải ở hai file — nhóm Z, không gì đỏ.
+  assert.equal(
+    step0LogId('2026-09-22T04:39:22+07:00', 'crux-worker-1'),
+    step0LogId('2026-09-21T21:39:22Z', 'crux-worker-1'),
+  );
+});
+
+test('P-023 · đầu vào bậy bị CHẶN, không được làm tròn thành mã gần đúng', () => {
+  assert.throws(() => step0LogId('không-phải-mốc-thời-gian', 'crux-worker-1'), /không đọc được/);
+  assert.throws(() => step0LogId('2026-09-21T21:39:22Z', '../../etc/passwd'), /Tên routine không hợp lệ/);
+  assert.throws(() => step0LogId('2026-09-21T21:39:22Z', ''), /Tên routine không hợp lệ/);
+  assert.throws(() => step0LogId('2026-09-21T21:39:22Z', 'a/b'), /Tên routine không hợp lệ/);
+  assert.throws(() => step0LogId('2026-09-21T21:39:22Z', '.hidden'), /Tên routine không hợp lệ/);
+});
+
+test('P-023 · đường dẫn, `ref` và `lane` khớp nhau — `misfiledLogLines` phải im', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-step0-'));
+  const at = '2026-09-21T21:39:22Z';
+  const path = step0LogPath(root, at, 'crux-worker-1');
+
+  assert.equal(
+    path,
+    join(root, 'ops', 'logs', 'integration', 'step0-2026-09-21T213922Z-crux-worker-1.jsonl'),
+  );
+  assert.equal(STEP0_LOG_LANE, 'integration');
+  assert.equal(step0LogRef(at, 'crux-worker-1'), `integration/${step0LogId(at, 'crux-worker-1')}`);
+
+  appendRunLog(path, {
+    at,
+    lane: STEP0_LOG_LANE,
+    kind: 'lane',
+    ref: step0LogRef(at, 'crux-worker-1'),
+    status: 'ok',
+    durationMs: 0,
+    costUsd: 0,
+    note: 'bước 0: 8 giải, 0 bỏ lại',
+  });
+
+  // Luật đường dẫn và luật `ref` phải là MỘT. Lệch nhau thì dòng ghi ra
+  // hợp lệ theo bên này và sai theo bên kia, và chỉ một trong hai đỏ.
+  assert.deepEqual(misfiledLogLines(join(root, 'ops', 'logs')), []);
+
+  // Và bên đọc thấy nó qua `readRunLogs` như mọi dòng khác — không cần
+  // ai biết tên file.
+  assert.deepEqual(readRunLogs(join(root, 'ops', 'logs')).map((l) => l.ref), [
+    step0LogRef(at, 'crux-worker-1'),
+  ]);
+});
+
+test('P-023 · `isStep0LogId` lọc đúng, kể cả ca gần giống', () => {
+  assert.equal(STEP0_LOG_PREFIX, 'step0');
+  assert.ok(isStep0LogId(step0LogId('2026-09-21T21:39:22Z', 'crux-worker-1')));
+  assert.ok(!isStep0LogId('P-016'), 'mã mục cũ không phải mã lượt');
+  assert.ok(!isStep0LogId('step0'), 'thiếu gạch nối thì không phải mã lượt');
+  assert.ok(!isStep0LogId('P3-run-2026-09-21T21'), 'hình dạng cũ không được tính là mã lượt');
+  assert.ok(!isStep0LogId('step0-../x'), 'tiền tố đúng nhưng mã không an toàn thì vẫn phải sai');
 });
