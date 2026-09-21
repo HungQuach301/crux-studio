@@ -110,6 +110,56 @@ function tail(text: string, lines = 12): string {
 }
 
 /**
+ * Cổng kiểm lockfile của mục `I-006`: **cài thật** bằng
+ * `pnpm install --frozen-lockfile` trên cây vừa gộp — đúng lệnh CI chạy ở
+ * bước cài đặt.
+ *
+ * Vì sao không dùng lại cổng `--lockfile-only --frozen-lockfile` ở cuối
+ * `regenerateLockfile`: đã **đo**, hai cổng không bắt cùng một thứ. Trên
+ * một lockfile gộp sạch mà mất một khối `packages:` (ca tái hiện của
+ * `I-006`, xem `ops/test/integrator-clean-merge-lockfile.test.ts`):
+ *
+ * | Lệnh | Kết quả |
+ * |---|---|
+ * | `pnpm install --lockfile-only --frozen-lockfile` | **xanh**, mã 0 |
+ * | `pnpm install --frozen-lockfile` | **đỏ**, `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY` |
+ *
+ * `--lockfile-only` chỉ đối chiếu specifier của `importers` với các
+ * manifest; nó không đi hỏi từng phép phân giải có thật sự nằm trong
+ * `packages:` hay không. Đúng nhóm lỗi Z: cổng rẻ hơn thì xanh, và cái đỏ
+ * chỉ lộ ra ở CI của người khác.
+ *
+ * Giới hạn ghi trước, không đoán giữa chừng: cổng này **cài thật**, nên một
+ * lần chạy không ra được mạng (hoặc registry hỏng) cũng cho đỏ. Hướng sai
+ * của nó là an toàn — bên gọi huỷ gộp và giao lại cho người, chứ không đẩy
+ * một lockfile chưa kiểm được lên. Nguyên văn đầu ra của `pnpm` đi kèm
+ * trong `reason` để người đọc phân biệt được hai ca.
+ */
+export function verifyLockfileInstall(cwd: string, options: RegenerateOptions = {}): RegenerateResult {
+  const pnpm = options.pnpmCommand ?? 'pnpm';
+  const verify = spawnSync(pnpm, ['install', '--frozen-lockfile', '--ignore-scripts'], {
+    cwd,
+    encoding: 'utf8',
+  });
+  if (verify.error) {
+    return {
+      ok: false,
+      reason: `pnpm install --frozen-lockfile không chạy được: ${verify.error.message}`,
+    };
+  }
+  if (verify.status !== 0) {
+    return {
+      ok: false,
+      ineligible: true,
+      reason: `pnpm install --frozen-lockfile đỏ trên cây vừa gộp (mã ${verify.status}): ${tail(
+        `${verify.stdout ?? ''}\n${verify.stderr ?? ''}`,
+      )}`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
  * Ghi đè `lockfilePath` (đường dẫn tương đối trong `cwd`) bằng bản `pnpm`
  * sinh ra từ các manifest ĐANG CÓ TRONG CÂY LÀM VIỆC.
  *
