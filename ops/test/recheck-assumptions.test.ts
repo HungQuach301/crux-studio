@@ -27,6 +27,11 @@ import {
   type CommitTrailerInfo,
 } from '../scripts/recheck-assumptions.ts';
 
+/** Không gọi `gh` thật trong test — mọi lời gọi `collectCommits` dưới đây tự khai nhánh nào đang có PR mở. */
+function openBranches(...branches: string[]): () => Set<string> {
+  return () => new Set(branches);
+}
+
 const LEDGER_MAU = `# Sổ
 
 ## G14 · Trailer
@@ -103,6 +108,22 @@ test('isToolCommit chỉ nhận đúng message do máy sinh, không nhận commi
   assert.ok(isToolCommit('Merge branch \'main\' into claude/topic/T-001'));
   assert.ok(!isToolCommit('topic: T-001 — bản đồ đề tài'));
   assert.ok(!isToolCommit('Gộp hai mô hình định lượng vào một bảng'), 'commit việc thật có chữ "Gộp" vẫn là của agent');
+});
+
+test('I-012 · isToolCommit nhận thêm commit sync-workflows và merge tay "Gộp main vào <nhánh>"', () => {
+  // Quan sát thật, lượt crux-integrator 2026-09-22 02:05 (thân mục I-012).
+  assert.ok(isToolCommit('chore: sync workflows from ops/workflows [skip ci]'));
+  assert.ok(isToolCommit('Gộp main vào claude/integration/I-009'));
+  assert.ok(isToolCommit('Gộp origin/main vào claude/verify/VF-G11'));
+  assert.ok(isToolCommit('Gộp main (920146f) vào V-001 — không xung đột'), 'sha ngắn kèm sau "main" vẫn phải nhận');
+  assert.ok(
+    !isToolCommit('Gộp hai mô hình định lượng vào một bảng'),
+    'mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ "Gộp … vào" nói chung',
+  );
+  assert.ok(
+    !isToolCommit('chore: sync workflows nhưng viết tay, không phải Action'),
+    'phải khớp đúng tiền tố sinh bởi Action, không khớp mọi câu có chữ "sync workflows"',
+  );
 });
 
 test('G14 khớp khi mọi commit của agent đều mang trailer', () => {
@@ -286,7 +307,7 @@ function initRepoCoSquash(): { root: string; repo: string } {
 test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash trên main', () => {
   const { root, repo } = initRepoCoSquash();
   try {
-    const commits = collectCommits(repo);
+    const commits = collectCommits(repo, 14, openBranches('claude/topic/T-002'));
     assert.equal(commits.length, 1, 'chỉ commit chưa vào main mới được tính');
     assert.match(commits[0]!.subject, /T-002/);
     assert.equal(commits[0]!.hasSessionTrailer, true);
@@ -296,6 +317,140 @@ test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash 
     );
     // Và kết luận cuối cùng phải là `khớp`, không phải `sai` như bản đầu.
     assert.equal(judgeTrailerEvidence(commits).verdict, 'khớp');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Mục `I-012`, hình dạng đã quan sát thật (lượt `crux-integrator`
+ * 2026-09-22 02:05): `origin/claude/platform/P-009` còn ref trên remote dù
+ * PR `#9` đã squash-merge từ lâu — nhánh mang cả ba commit gốc của CHÍNH
+ * chủ dự án (trước cả CLAUDE.md), không có trailer và KHÔNG THỂ có trailer.
+ * Trước bản sửa này, `collectCommits` cứ thấy ref là quét, nên G14 báo
+ * `sai` mãi mãi cho một nhánh sẽ không bao giờ được sửa.
+ *
+ * Dựng đúng hình dạng đó: một nhánh KHÔNG có PR mở (mô phỏng bằng
+ * `openBranches` không liệt kê nó) mang commit thiếu trailer, đứng cạnh một
+ * nhánh CÓ PR mở mang toàn commit đủ trailer. `collectCommits` phải bỏ hẳn
+ * nhánh đầu, và G14 phải ra `khớp` — không phải vì commit thiếu trailer
+ * biến mất, mà vì nó chưa từng nằm trong phạm vi quét.
+ */
+function initRepoCoNhanhStale(): { root: string; repo: string } {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-stale-branch-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  mkdirSync(repo, { recursive: true });
+  initBare(bare);
+
+  const git = gitIn(repo);
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'user.email', 'test@example.invalid']);
+  git(['config', 'user.name', 'Test']);
+  git(['config', 'commit.gpgsign', 'false']);
+  git(['remote', 'add', 'origin', bare]);
+
+  writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+  git(['add', '.']);
+  git(['commit', '-q', '-m', 'goc']);
+  git(['push', '-q', '-u', 'origin', 'main']);
+
+  // Nhánh stale: PR đã merge (squash) từ lâu, ref vẫn còn trên remote,
+  // KHÔNG có PR mở. Commit của chính chủ dự án, qua giao diện web — không
+  // trailer, và đúng như vậy theo thiết kế (CLAUDE.md mục 5 chỉ ràng buộc
+  // commit của agent).
+  git(['checkout', '-q', '-b', 'claude/platform/P-009']);
+  writeFileSync(join(repo, 'p009.txt'), 'chu du an\n', 'utf8');
+  git(['add', '.']);
+  git(['commit', '-q', '-m', 'Initial commit']);
+  git(['push', '-q', 'origin', 'claude/platform/P-009']);
+
+  // Nhánh sống: PR đang mở, commit của agent, đủ trailer.
+  git(['checkout', '-q', 'main']);
+  git(['checkout', '-q', '-b', 'claude/topic/T-005']);
+  writeFileSync(join(repo, 't005.txt'), 'viec dang lam\n', 'utf8');
+  git(['add', '.']);
+  git([
+    'commit',
+    '-q',
+    '-m',
+    'topic: T-005 — việc đang làm\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_song',
+  ]);
+  git(['push', '-q', 'origin', 'claude/topic/T-005']);
+
+  return { root, repo };
+}
+
+test('I-012 · nhánh đã squash-merge còn sót trên remote (không PR mở) bị loại khỏi phạm vi quét G14', () => {
+  const { root, repo } = initRepoCoNhanhStale();
+  try {
+    // Chỉ claude/topic/T-005 còn PR mở — claude/platform/P-009 không được liệt kê.
+    const commits = collectCommits(repo, 14, openBranches('claude/topic/T-005'));
+    assert.equal(commits.length, 1, 'chỉ nhánh còn PR mở mới được quét');
+    assert.match(commits[0]!.subject, /T-005/);
+    assert.ok(
+      !commits.some((c) => c.subject.includes('Initial commit')),
+      'commit của nhánh stale (không PR mở) không được lọt vào, dù nó thiếu trailer thật',
+    );
+    assert.equal(
+      judgeTrailerEvidence(commits).verdict,
+      'khớp',
+      'G14 không được kêu oan cho một nhánh đã xong việc và sẽ không bao giờ được sửa',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-012 · phép lọc nhánh còn PR mở KHÔNG nuốt tín hiệu thật — commit thiếu trailer trên nhánh sống vẫn ra `sai`', () => {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-nhanh-song-thieu-trailer-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  try {
+    mkdirSync(repo, { recursive: true });
+    initBare(bare);
+
+    const git = gitIn(repo);
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.invalid']);
+    git(['config', 'user.name', 'Test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    git(['remote', 'add', 'origin', bare]);
+    writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'goc']);
+    git(['push', '-q', '-u', 'origin', 'main']);
+
+    // Nhánh CÓ PR mở, đúng hình dạng `7fc292a` trong thân mục I-012: commit
+    // của agent, thiếu trailer thật — tín hiệu G14 phải bắt được.
+    git(['checkout', '-q', '-b', 'claude/integration/I-099']);
+    writeFileSync(join(repo, 'b.txt'), 'viec that\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'integration: bước 0 của P3 — thiếu trailer thật']);
+    git(['push', '-q', 'origin', 'claude/integration/I-099']);
+
+    const commits = collectCommits(repo, 14, openBranches('claude/integration/I-099'));
+    assert.equal(commits.length, 1);
+    assert.equal(commits[0]!.hasSessionTrailer, false);
+    assert.equal(
+      judgeTrailerEvidence(commits).verdict,
+      'sai',
+      'nhánh còn PR mở không được phép trốn sau phép lọc mới',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-012 · mọi nhánh khớp đều hết PR mở: collectCommits trả rỗng, KHÔNG ném', () => {
+  const { root, repo } = initRepoCoNhanhStale();
+  try {
+    // Không nhánh nào còn PR mở — cả hai đã xong việc (merge hoặc đóng).
+    const commits = collectCommits(repo, 14, openBranches());
+    assert.deepEqual(commits, []);
+    const outcome = judgeTrailerEvidence(commits);
+    assert.equal(outcome.verdict, 'khớp');
+    assert.equal(outcome.observedNothing, true, 'phải in ◦ chưa quan sát được, không phải ⚠ broken');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -455,7 +610,7 @@ test('I-005 · origin/main cục bộ cũ KHÔNG được làm commit squash l�
       git(['update-ref', '-d', ref]);
     }
 
-    const commits = collectCommits(repo);
+    const commits = collectCommits(repo, 14, openBranches('claude/topic/T-003'));
     assert.ok(
       !commits.some((c) => c.subject.includes('(#99)')),
       'commit squash đã vào main không được lọt vào phạm vi quét chỉ vì origin/main cục bộ cũ',

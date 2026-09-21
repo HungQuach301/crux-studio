@@ -191,6 +191,18 @@ export function isToolCommit(subject: string): boolean {
   if (/^Gộp .*\(integrator[,)]/.test(subject)) return true;
   // Message mặc định do chính git sinh khi gộp.
   if (/^Merge (branch|remote-tracking branch|commit) /.test(subject)) return true;
+  // Mục `I-012`: commit của workflow `sync-workflows` (chép `ops/workflows/**`
+  // sang `.github/workflows/`, CLAUDE.md mục 4) — máy sinh, không đi qua agent.
+  if (/^chore: sync workflows from ops\/workflows\b/.test(subject)) return true;
+  // Mục `I-012`: merge tay "Gộp main vào <nhánh>" / "Gộp origin/main vào
+  // <nhánh>" (agent tự gõ message thay vì để git sinh mặc định, ví dụ khi
+  // nhận PR ở phụ lục P1 bước 2 ca `aborted-ineligible`). Cùng bản chất cơ
+  // học với hai luật trên — chỉ nối lịch sử, không phải nội dung — nhưng mốc
+  // neo là "main"/"origin/main" đứng NGAY sau "Gộp", không phải chữ
+  // "Gộp … vào" nói chung: nới rộng hơn thế biến danh sách trắng thành danh
+  // sách đen trá hình, và trật đúng ca `isToolCommit(!"Gộp hai mô hình định
+  // lượng vào một bảng")` ở test bên dưới.
+  if (/^Gộp (origin\/)?main(\s*\([0-9a-f]{4,40}\))? vào /.test(subject)) return true;
   return false;
 }
 
@@ -360,10 +372,40 @@ export function listRemoteClaudeBranches(root: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+export interface GhOpenPr {
+  headRefName: string;
+}
+
 /**
- * Commit trên các nhánh `origin/claude/*` mà **chưa vào `main`**, trong
- * `days` ngày gần nhất. Xem chú thích của `judgeTrailerEvidence` về lý do
- * loại `main` ra: squash làm mất trailer, không phải agent làm mất.
+ * Tên nhánh (`headRefName`) của mọi PR đang **mở** — không phải `merged`,
+ * không phải `closed`. Mục `I-012`: đây là "câu hỏi trả lời được" mà
+ * `collectCommits` dùng để tách nhánh còn sống khỏi nhánh đã squash-merge
+ * còn sót trên remote (xem chú thích của `collectCommits`).
+ *
+ * Dùng `gh` như `ops/scripts/update-metrics.ts` (`fetchMergedPrs`) đã dùng —
+ * cùng một quy ước gọi lệnh trong repo, không phải cách mới. `gh` hỏng
+ * (thiếu quyền, chưa đăng nhập) thì NÉM, không nuốt: bên gọi (`collectCommits`
+ * rồi `main()`) đã có đường xếp lỗi này vào `broken`, và một danh sách nhánh
+ * sống sai (vì im lặng coi như rỗng) sẽ làm G14 báo nhầm cả hai chiều.
+ */
+export function fetchOpenPrBranches(): Set<string> {
+  const result = spawnSync(
+    'gh',
+    ['pr', 'list', '--state', 'open', '--json', 'headRefName', '--limit', '500'],
+    { encoding: 'utf8' },
+  );
+  if (result.status !== 0) {
+    throw new Error(`gh pr list thất bại: ${result.stderr || result.stdout}`);
+  }
+  const prs = JSON.parse(result.stdout) as GhOpenPr[];
+  return new Set(prs.map((pr) => pr.headRefName));
+}
+
+/**
+ * Commit trên các nhánh `origin/claude/*` **còn sống** mà **chưa vào
+ * `main`**, trong `days` ngày gần nhất. Xem chú thích của
+ * `judgeTrailerEvidence` về lý do loại `main` ra: squash làm mất trailer,
+ * không phải agent làm mất.
  *
  * Rỗng ở `for-each-ref` cục bộ sau fetch không tự nó là một quan sát — nó có
  * thể là "kho không có nhánh nào" hoặc "clone chưa kéo nhánh nào về", và
@@ -373,8 +415,30 @@ export function listRemoteClaudeBranches(root: string): string[] {
  * KHÔNG rỗng (fetch cục bộ lệch với remote) hoặc chính `ls-remote` lỗi thì
  * ném, để `main()` xếp vào `broken` và làm `process.exitCode = 1` — chưa
  * quét được phải kêu, không được im lặng thành `◦ chưa quan sát được`.
+ *
+ * Mục `I-012`: một ref `refs/remotes/origin/claude/*` tồn tại KHÔNG có
+ * nghĩa nhánh đó còn sống. GitHub merge kiểu **squash** (đã quan sát thật ở
+ * `judgeTrailerEvidence`) để lại nguyên xi lịch sử của nhánh đã merge đứng
+ * mãi mãi ngoài `main` — commit squash mang nội dung, không mang SHA cũ.
+ * Quan sát thật (lượt `crux-integrator` 2026-09-22 02:05): 10/14 commit
+ * "thiếu trailer" nằm trên đúng MỘT nhánh vậy, `claude/platform/P-009`
+ * (PR `#9` đã merge, nhánh chưa xoá) — kể cả ba commit của CHÍNH chủ dự án
+ * từ trước khi CLAUDE.md tồn tại. Phạm vi quét vì thế phải bớt lại còn
+ * nhánh có PR **mở**: phụ lục P1 bước 4 luôn mở PR nháp ngay lúc tạo nhánh,
+ * nên một nhánh không còn PR mở là nhánh đã xong việc (PR đã merge/đóng)
+ * hoặc chưa từng qua bước 4 — cả hai đều ngoài phạm vi G14.
+ *
+ * Đây KHÔNG phải nới `isToolCommit` cho tới khi hết đỏ (CLAUDE.md mục 13,
+ * "vá sản phẩm"): `isToolCommit` xét TỪNG COMMIT theo message, còn phép lọc
+ * này xét TỪNG NHÁNH theo trạng thái PR — thu hẹp đúng phạm vi "commit của
+ * agent, trên nhánh còn sống" mà tiêu chí xong `I-012` đòi, không phải thêm
+ * chữ ký để nhận diện commit đã có.
  */
-export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
+export function collectCommits(
+  root: string,
+  days = 14,
+  openPrBranches: () => Set<string> = fetchOpenPrBranches,
+): CommitTrailerInfo[] {
   fetchScanInputs(root);
 
   const refs = git(root, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/claude/'])
@@ -394,12 +458,24 @@ export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
     );
   }
 
+  // I-012: giữ lại đúng nhánh còn PR mở. `ref` có dạng
+  // `refs/remotes/origin/claude/<lane>/<id>`; `headRefName` của `gh pr list`
+  // là `claude/<lane>/<id>` — bỏ đúng tiền tố remote, không đoán phần còn lại.
+  const openBranches = openPrBranches();
+  const liveRefs = refs.filter((ref) => openBranches.has(ref.replace(/^refs\/remotes\/origin\//, '')));
+
+  if (liveRefs.length === 0) {
+    // Mọi nhánh khớp đều đã hết PR mở (merge hoặc đóng) — quan sát hợp lệ,
+    // không phải lỗi: không còn gì của agent, trên nhánh còn sống, để quét.
+    return [];
+  }
+
   const format = ['%H', '%s', '%(trailers:key=Claude-Session,valueonly=true)'].join(FIELD);
   const raw = git(root, [
     'log',
     `--since=${days}.days.ago`,
     `--format=${format}${RECORD}`,
-    ...refs,
+    ...liveRefs,
     '^refs/remotes/origin/main',
   ]);
 
