@@ -33,7 +33,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, appendFileSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { formatLogLine, step0LogPath, step0LogRef, STEP0_LOG_LANE, type RunLogLine } from '@crux/kernel';
 
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
@@ -211,27 +211,51 @@ test('P-023 · dòng CŨ trong `P-016.jsonl` không bị chuyển đi và không
  */
 test('P-023 · không file code nào neo vào một đường dẫn log bước 0 cố định', async () => {
   const { readdirSync } = await import('node:fs');
-  const roots = [join(process.cwd(), 'ops', 'scripts'), join(process.cwd(), 'kernel', 'src')];
+  // Phạm vi quét phải trùng với lời bài kiểm tự khai. Vòng soát chéo bắt
+  // đúng ba chỗ lọt ở bản đầu: quét không đệ quy (`ops/scripts/sub/x.ts`
+  // lọt), thiếu `ops/*.ts` và `ops/workflows/` (`ops/invariants.*` lọt),
+  // và regex chỉ khớp tên file CŨ (neo vào tên file MỚI lọt — đúng chiều
+  // hỏng mà mục này lo nhất).
+  const roots = [
+    join(process.cwd(), 'ops', 'scripts'),
+    join(process.cwd(), 'ops', 'workflows'),
+    join(process.cwd(), 'ops'),
+    join(process.cwd(), 'kernel', 'src'),
+  ];
+  const CODE = /\.(ts|mjs|js|yml|yaml)$/;
+  // Bất kỳ đường dẫn log bước 0 cố định nào — cũ (`P-016`) hoặc mới (`step0`).
+  const HARDCODED = /ops\/logs\/[^'"`\s]*(step0|P-016)[^'"`\s]*\.jsonl/;
+
   const offenders: string[] = [];
+  const seen = new Set<string>();
   let scanned = 0;
 
   for (const root of roots) {
-    for (const name of readdirSync(root)) {
-      if (!name.endsWith('.ts')) continue;
+    for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
+      if (!entry.isFile() || !CODE.test(entry.name)) continue;
+      const full = join(entry.parentPath ?? root, entry.name);
+      // `node_modules` là phụ thuộc, không phải code của repo — và workspace
+      // này nối `@crux/kernel` vào đó bằng symlink, nên quét nó là quét lại
+      // chính mình dưới bảy đường dẫn khác nhau.
+      if (full.includes(`${sep}node_modules${sep}`)) continue;
+      // Bài kiểm ĐƯỢC PHÉP nhắc tên file: đó là việc của chúng (ca âm của
+      // chính bài này dựng đúng hình dạng cũ).
+      if (full.includes(`${sep}ops${sep}test${sep}`)) continue;
+      if (seen.has(full)) continue; // `ops/` lồng `ops/scripts/` — đừng đếm hai lần
+      seen.add(full);
       scanned += 1;
-      const text = readFileSync(join(root, name), 'utf8');
-      // `kernel/src/log.ts` được phép nhắc tên file cũ trong phần giải
-      // thích vì nó LÀ chỗ định nghĩa luật mới; nó không đọc file nào.
-      if (name === 'log.ts') continue;
-      if (/logs\/[a-z]+\/P-016\.jsonl/.test(text)) offenders.push(join(root, name));
+      // `kernel/src/log.ts` được phép nhắc tên file trong phần giải thích:
+      // nó LÀ chỗ định nghĩa luật, và nó không đọc file nào.
+      if (full.endsWith(join('kernel', 'src', 'log.ts'))) continue;
+      if (HARDCODED.test(readFileSync(full, 'utf8'))) offenders.push(full);
     }
   }
 
-  assert.ok(scanned > 10, `chỉ quét được ${scanned} file — bài kiểm này sẽ xanh giả`);
+  assert.ok(scanned > 30, `chỉ quét được ${scanned} file — bài kiểm này sẽ xanh giả`);
   assert.deepEqual(
     offenders,
     [],
-    `file code còn neo vào đường dẫn log bước 0 cũ: ${offenders.join(', ')}. ` +
+    `file code còn neo vào một đường dẫn log bước 0 cố định: ${offenders.join(', ')}. ` +
       'Dùng readRunLogs trên cả ops/logs, hoặc step0LogPath của kernel.',
   );
 });

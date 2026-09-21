@@ -107,10 +107,12 @@ export function runLogPath(root: string, lane: LaneName, id: string): string {
  * nó là **một lượt chạy** — nên `D-C04` không phủ nó: mọi lượt của mọi
  * routine cùng dồn vào một mã mục (`P-016`), tức là cùng **một file**.
  *
- * Hậu quả đã đo, không suy (`KF-009`): một dòng bước 0 vào `main` là mọi PR
- * đang mở có dòng riêng trong file ấy **xung đột ngay** phía GitHub, vì
- * GitHub không áp `merge=union` khi tự tính `mergeable`, còn `automerge.yml`
- * thì nghe phía GitHub. Lượt integrator 04:05 giờ VN 2026-09-22 thấy 7 PR
+ * Hậu quả đã đo, không suy (giả định **G17**, trạng thái `sai`; `KF-009`):
+ * `merge=union` trong `.gitattributes` KHÔNG làm xung đột file log biến mất
+ * trong vận hành thật, vì GitHub không áp luật đó khi tự tính `mergeable`.
+ * Một dòng bước 0 vào `main` vì thế là mọi PR
+ * đang mở có dòng riêng trong file ấy **xung đột ngay** phía GitHub — và
+ * `automerge.yml` nghe đúng phía đó. Lượt integrator 04:05 giờ VN 2026-09-22 thấy 7 PR
  * cùng đứng lại vì **một** dòng; lượt `crux-worker-1` 21:39Z sau đó thấy 8.
  * Vòng này tự lặp mỗi lượt và nó nuốt đúng thứ `P-016` sinh ra để xoá.
  *
@@ -138,6 +140,24 @@ export const STEP0_LOG_PREFIX = 'step0';
 const SAFE_RUNNER = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**
+ * `at` phải khai múi giờ tường minh: `Z` hoặc `±HH:MM`.
+ *
+ * `Date.parse('2026-09-21T21:39:22')` — không có ký hiệu múi giờ — được đọc
+ * theo **giờ địa phương của máy đang chạy**. Đo thật: cùng chuỗi đó cho
+ * `step0-2026-09-21T213922Z-…` với `TZ=UTC` và
+ * `step0-2026-09-21T143922Z-…` với `TZ=Asia/Ho_Chi_Minh`, tức đúng múi giờ
+ * vận hành của dự án. Ở đây tên file **chính là danh tính của lượt chạy**,
+ * nên lệch 7 tiếng không phải sai sót thẩm mỹ: hai lượt khác nhau có thể
+ * mang tên trùng, và một lượt mang tên khai sai giờ.
+ *
+ * `appendRunLog` chuẩn hoá `at` nên dòng bên trong vẫn đúng — chỉ tên file
+ * sai. Đúng nhóm Z: không gì đỏ. Vì vậy chặn ở đây, không chuẩn hoá ngầm.
+ * Năm phải đúng bốn chữ số, vì mọi phép cắt chuỗi dưới đây neo vào độ rộng
+ * đó (`toISOString` cho `±YYYYYY` với năm ngoài khoảng đó).
+ */
+const AT_WITH_ZONE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
+/**
  * Mã log của **một lượt** bước 0: `step0-<YYYY-MM-DDTHHMMSSZ>-<routine>`.
  *
  * Mốc thời gian tới **giây** cộng tên routine: hai lượt đụng nhau chỉ khi
@@ -152,6 +172,12 @@ const SAFE_RUNNER = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export function step0LogId(at: string, runner: string): string {
   if (!SAFE_RUNNER.test(runner) || runner.includes('..')) {
     throw new Error(`Tên routine không hợp lệ cho tên file log: ${JSON.stringify(runner)}`);
+  }
+  if (!AT_WITH_ZONE.test(at)) {
+    throw new Error(
+      `\`at\` của dòng bước 0 phải khai múi giờ tường minh (Z hoặc ±HH:MM) và năm bốn chữ số: ${JSON.stringify(at)}. ` +
+        'Thiếu múi giờ thì tên file đi theo giờ địa phương của máy đang chạy.',
+    );
   }
   // `normalizeAt` cho `YYYY-MM-DDTHH:MM:SS.sssZ`; bỏ `:` (tên file không
   // nhận) và phần mili giây, còn `YYYYMMDDTHHMMSSZ`. Rồi chèn lại hai gạch

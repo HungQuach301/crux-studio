@@ -251,8 +251,24 @@ test('P-023 · mã log bước 0 hợp lệ cho tên file, và `at` được chu
   );
 });
 
+test('P-023 · `at` KHÔNG khai múi giờ bị chặn — nếu không tên file đi theo máy', () => {
+  // `Date.parse('2026-09-21T21:39:22')` đọc theo giờ ĐỊA PHƯƠNG của máy.
+  // Đo thật: cùng chuỗi đó cho `…T213922Z…` với TZ=UTC và `…T143922Z…` với
+  // TZ=Asia/Ho_Chi_Minh — đúng múi giờ vận hành của dự án. Tên file ở đây
+  // là danh tính của lượt chạy, nên lệch 7 tiếng là hai lượt trùng tên.
+  assert.throws(() => step0LogId('2026-09-21T21:39:22', 'crux-worker-1'), /phải khai múi giờ/);
+  assert.throws(() => step0LogId('2026-09-21', 'crux-worker-1'), /phải khai múi giờ/);
+  // Năm ngoài bốn chữ số: mọi phép cắt chuỗi neo vào độ rộng đó.
+  assert.throws(() => step0LogId('+010000-01-01T00:00:00Z', 'crux-worker-1'), /phải khai múi giờ/);
+  assert.throws(() => step0LogId('-000001-01-01T00:00:00Z', 'crux-worker-1'), /phải khai múi giờ/);
+
+  // Và các dạng CÓ khai múi giờ vẫn đi qua, gồm cả `+0700` không dấu hai chấm.
+  assert.equal(step0LogId('2026-09-22T04:39:22+0700', 'crux-worker-1'), 'step0-2026-09-21T213922Z-crux-worker-1');
+  assert.equal(step0LogId('2026-09-21T21:39:22Z', 'crux-worker-1'), 'step0-2026-09-21T213922Z-crux-worker-1');
+});
+
 test('P-023 · đầu vào bậy bị CHẶN, không được làm tròn thành mã gần đúng', () => {
-  assert.throws(() => step0LogId('không-phải-mốc-thời-gian', 'crux-worker-1'), /không đọc được/);
+  assert.throws(() => step0LogId('không-phải-mốc-thời-gian', 'crux-worker-1'), /phải khai múi giờ/);
   assert.throws(() => step0LogId('2026-09-21T21:39:22Z', '../../etc/passwd'), /Tên routine không hợp lệ/);
   assert.throws(() => step0LogId('2026-09-21T21:39:22Z', ''), /Tên routine không hợp lệ/);
   assert.throws(() => step0LogId('2026-09-21T21:39:22Z', 'a/b'), /Tên routine không hợp lệ/);
