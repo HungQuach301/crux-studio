@@ -4,6 +4,47 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-016 · Integrator tự gộp `main` vào PR xung đột — **ưu tiên CAO NHẤT của làn**
+> Mục này đứng **trên** P-009, P-010, P-014. Lý do: cả ba mục kia làm nhà máy **đúng hơn**, mục này làm nhà máy **chạy được**. Một hàng đợi merge bị kẹt thì ba mục kia cũng không tới đích.
+
+Giả định **G17** đã `sai` bằng chạy thật: `.gitattributes` với `merge=union` **không** làm xung đột biến mất. Nó chỉ cứu các lần gộp sau khi nhánh đã mang sẵn luật, và nó không nói gì về trạng thái `mergeable` GitHub tính. Trong một ngày, ba PR (#10, #11, #13) đều phải giải tay — PR #11 phải giải **hai lần**.
+
+Dự phòng của KF-005 hiện đang ở dạng ghi chú ("giữ cả hai bên"). Mục này biến nó thành cơ chế chạy thật.
+
+**Vì sao đây là vấn đề cấu trúc, không phải xui:** hàng đợi merge là **tuần tự** (CHARTER mục 7). **Mỗi lần merge vào `main` làm mọi PR đang mở chạm file dùng chung trở thành xung đột.** Với N PR mở, một lần merge sinh tới N−1 xung đột. Đây là bậc hai theo số PR, nên nó **xấu đi đúng lúc nhà máy chạy nhanh lên** — ngược hẳn với thứ ta muốn.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: giả định **G17** (`sai`); `ops/known-failures.md` KF-002 và KF-005; CHARTER mục 7
+- tiêu chí xong:
+  - Routine `crux-integrator` liệt kê mọi PR đang mở có `mergeable_state` là xung đột, và với **mỗi** PR đó: gộp `main` vào nhánh, giải xung đột theo luật **giữ cả hai bên** của KF-002 và KF-005, chạy `pnpm check`, và **chỉ push khi xanh**.
+  - **Giới hạn tự giải, khai trước chứ không đoán giữa chừng:** chỉ tự giải khi **không bên nào xoá hay sửa dòng của bên kia** — tức là thuần cộng thêm. Hễ có một dòng bị xoá hay bị sửa ở cả hai bên thì **dừng, không đoán**, và đưa PR đó vào bản tin.
+  - PR không tự giải được thì vào bản tin ngày, kèm **số giờ đã kẹt** tính từ lúc `mergeable_state` chuyển sang xung đột, xếp giảm dần. Kẹt lâu nhất nằm trên cùng.
+  - `pnpm check` đỏ sau khi gộp thì **không push**, và PR đó cũng vào bản tin — đỏ sau khi gộp là tín hiệu thật, không được nuốt.
+  - **Không bao giờ** `--ours`, `--theirs`, rebase hay force-push. Chỉ commit merge (CHARTER cấm force-push lên nhánh của người khác).
+  - Không đụng PR có nhãn `owner-merge`… **trừ** việc gộp `main`: gộp không làm thay đổi ý nghĩa của PR, nó chỉ giữ cho PR merge được. Ranh giới: integrator **không bao giờ merge** PR nào, kể cả PR `automerge` (bất biến I4, CHARTER 3.3).
+  - Mỗi lần chạy ghi một dòng vào `ops/logs/platform.jsonl` có `costUsd` (bất biến I8), kèm số PR đã giải và số PR bỏ lại.
+
+#### Nhịp chạy: **mỗi giờ**, không phải mỗi ngày
+
+Một ngày một lần là **quá chậm**, và lý do là số học chứ không phải cảm tính:
+
+| | Một ngày một lần | Mỗi giờ |
+|---|---|---|
+| Thời gian một PR nằm kẹt | Tới 24 giờ | Tới 1 giờ |
+| Số lần merge xảy ra trong lúc kẹt | Với 2–3 worker, nhiều lần — mỗi lần lại sinh thêm một lớp xung đột chồng lên | Thường 0–1 |
+| Xung đột phải giải | Nhiều lớp dồn lại, khó và dễ sai | Một lớp, thuần cộng thêm, máy giải được |
+| Hệ quả | Hàng đợi tuần tự đứng im gần trọn một ngày | Hàng đợi chảy |
+
+Điểm quyết định nằm ở dòng thứ ba: **xung đột dồn lại thì đắt hơn tổng các xung đột lẻ**, đúng như bài học số 2 của KF-002 ("gộp ngay sau mỗi lần PR dưới merge, không đợi"). Gộp muộn thì không còn nhớ vì sao mỗi bên viết thế, và phần "máy tự giải được" co lại đúng lúc cần nó nhất.
+
+**Nhịp đúng về mặt nguyên lý là theo sự kiện — chạy ngay sau mỗi lần merge vào `main`**, vì merge chính là thứ sinh ra xung đột. Nhưng cái đó cần API trigger của routine, tức giả định **G13**, đang `tài liệu nói vậy` và đã hoãn sang Đợt 1 (mục `P-002`). Mỗi giờ là xấp xỉ rẻ nhất của "theo sự kiện" mà **không** phải chờ G13.
+
+- ghi chú kỹ thuật, phải xử trước khi viết code:
+  - **Ai push quyết định CI có chạy lại không.** Push bằng `GITHUB_TOKEN` **không** kích hoạt workflow (giả định G2, KF-004). Nếu một workflow đứng ra gộp và push, `ci` sẽ không chạy lại trên SHA mới, `automerge` sẽ không thấy CI xanh trên đúng SHA sắp merge, và PR kẹt theo một kiểu khác — lần này **không có gì đỏ**, đúng nhóm Z. Vì vậy mục này giao cho **routine integrator** (một phiên agent, dùng danh tính chủ dự án) chứ không cho một workflow. D-C01 chỉ cho hai PAT, nên không được tạo PAT thứ ba để lách.
+  - Nếu sau này vẫn muốn làm bằng workflow: phải giải xong bài toán CI chạy lại trước, và **viết ra cách giải**, không để ngỏ.
+
 ### P-015 · File dùng chung trong một làn không được sinh xung đột ở mỗi PR — **ưu tiên cao**
 `ops/logs/platform.jsonl` xung đột **hai lần trong một ngày** (PR #10 và #11). Cả hai PR đều base `main` — tức là đã làm đúng luật của KF-002 — và vẫn xung đột, vì nguyên nhân khác hẳn: nhiều PR cùng ghi vào **một file dùng chung**. Xem **KF-005**.
 
