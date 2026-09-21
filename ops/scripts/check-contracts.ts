@@ -25,7 +25,7 @@ import {
   unsupportedKeywords,
   type WorkshopName,
 } from '@crux/kernel';
-import { fixtureInputProblems } from './check-fixtures.ts';
+import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -119,5 +119,5 @@ if (problems.length > 0) {
 
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
-    `${WORKSHOPS.length} fixture input.json nạp pack từ packs/.\n`,
+    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/.\n`,
 );

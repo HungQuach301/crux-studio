@@ -18,10 +18,14 @@
  *
  * Thiếu fixture cũng là một vấn đề, không phải một lần bỏ qua im lặng: một
  * xưởng không có `input.json` thì mọi kiểm ở đây thành rỗng mà vẫn xanh
- * (`ops/known-failures.md` nhóm Z, cách 3).
+ * (`ops/known-failures.md` nhóm Z, cách 3). Cùng lý do đó, kiểm quét **mọi**
+ * file `--input` trong `fixtures/`, không chỉ `input.json`: thêm một fixture
+ * thứ hai mà nó không được quét cũng là một chỗ lệch mà không gì đỏ. File
+ * `*.artifact.json` không thuộc đây — `check-contracts.ts` validate chúng
+ * theo contract của xưởng.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { WORKSHOPS, readInputFile } from '@crux/kernel';
 
@@ -66,29 +70,56 @@ export function inputFileProblems(root: string, path: string, label: string): st
   return problems;
 }
 
-/** Soát fixture `input.json` của cả sáu xưởng. */
+/**
+ * Mọi file `--input` của một xưởng. `*.artifact.json` không thuộc đây.
+ *
+ * Trả về cả tên xưởng để dòng vấn đề gọi đúng tên file mà người đọc thấy
+ * trong repo, không phải đường dẫn tuyệt đối.
+ */
+export function fixtureInputFiles(
+  root: string,
+  workshop: string,
+): readonly { path: string; label: string }[] {
+  const dir = join(root, 'workshops', workshop, 'fixtures');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .sort()
+    .filter((file) => file.endsWith('.json') && !file.endsWith('.artifact.json'))
+    .map((file) => ({ path: join(dir, file), label: `Fixture ${workshop}/${file}` }));
+}
+
+/** Soát mọi file `--input` trong `fixtures/` của cả sáu xưởng. */
 export function fixtureInputProblems(root: string): string[] {
   const problems: string[] = [];
   for (const workshop of WORKSHOPS) {
-    const path = fixtureInputPath(root, workshop);
-    if (!existsSync(path)) {
+    if (!existsSync(fixtureInputPath(root, workshop))) {
       problems.push(
         `Xưởng ${workshop} không có fixtures/input.json, nên không kiểm được gì ` +
           `(CHARTER 5.4: mỗi xưởng có bộ fixture riêng).`,
       );
       continue;
     }
-    problems.push(...inputFileProblems(root, path, `Fixture ${workshop}/input.json`));
+    for (const { path, label } of fixtureInputFiles(root, workshop)) {
+      problems.push(...inputFileProblems(root, path, label));
+    }
   }
   return problems;
 }
 
+/** Số file `--input` đã soát — con số để in ra, không phải để suy ra. */
+export function fixtureInputCount(root: string): number {
+  return WORKSHOPS.reduce((total, workshop) => total + fixtureInputFiles(root, workshop).length, 0);
+}
+
 const isMain = process.argv[1]?.endsWith('check-fixtures.ts') === true;
 if (isMain) {
-  const problems = fixtureInputProblems(process.cwd());
+  const root = process.cwd();
+  const problems = fixtureInputProblems(root);
   if (problems.length > 0) {
     process.stderr.write(`Fixture có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
     process.exit(1);
   }
-  process.stdout.write(`Fixture ok: ${WORKSHOPS.length} file input.json nạp pack từ packs/.\n`);
+  process.stdout.write(
+    `Fixture ok: ${fixtureInputCount(root)} file --input nạp pack từ packs/.\n`,
+  );
 }

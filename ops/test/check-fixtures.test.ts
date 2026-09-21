@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { WORKSHOPS } from '@crux/kernel';
 import { fixtureInputProblems, inputFileProblems } from '../scripts/check-fixtures.ts';
 
 const SLUG = 'us-personal-finance';
@@ -134,6 +135,45 @@ test('artifact đầu vào khai bối cảnh lệch pack thì ĐỎ — bản sa
 test('fixture khai channel không có trong packs/ thì ĐỎ', () => {
   const problems = problemsFor({ episodeId: 'ep-0001-stub', channel: 'khong-co', upstream: {} });
   assert.equal(problems.length, 1, problems.join('\n'));
+});
+
+test('fixture THỨ HAI trong cùng thư mục cũng bị quét — không có file nào lọt', () => {
+  const { root } = makeRoot(undefined);
+  try {
+    const clean = {
+      episodeId: 'ep-0001-stub',
+      channel: SLUG,
+      genre: GENRE,
+      locale: 'en-US',
+      upstream: {},
+    };
+    for (const workshop of WORKSHOPS) {
+      const dir = join(root, 'workshops', workshop, 'fixtures');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'input.json'), JSON.stringify(clean));
+    }
+    assert.deepEqual(fixtureInputProblems(root), []);
+
+    // Một file `--input` thứ hai, mang bản sao pack. Kiểm chỉ nhìn
+    // `input.json` sẽ XANH ở đây, và đó đúng là nhóm Z.
+    writeFileSync(
+      join(root, 'workshops', 'topic', 'fixtures', 'input-thu-hai.json'),
+      JSON.stringify({ ...clean, packs: { channel: STALE_CHANNEL_COPY } }),
+    );
+    const problems = fixtureInputProblems(root);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /input-thu-hai\.json/);
+
+    // `*.artifact.json` không phải file `--input`: check-contracts.ts
+    // validate chúng theo contract, nên kiểm này phải bỏ qua.
+    writeFileSync(
+      join(root, 'workshops', 'topic', 'fixtures', 'brief.artifact.json'),
+      JSON.stringify({ khong: 'phai input' }),
+    );
+    assert.equal(fixtureInputProblems(root).length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('xưởng thiếu fixtures/input.json thì ĐỎ, không phải bỏ qua im lặng (nhóm Z)', () => {
