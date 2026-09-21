@@ -19,7 +19,7 @@ Quyết định này ràng buộc cả làn `visual` lẫn ngân sách phút Act
     với `ubuntu-latest`), nhưng con số hoá đơn phải do runner thật trả lời. `ops/workflows/render-trial.yml`
     làm đúng việc đó và **chỉ chạy được sau khi PR này merge** rồi `sync-workflows` chép sang `.github/`
     (CHARTER 3.2, giả định **G10**). Chạy nó là việc của lượt kế tiếp, không phải một mục mới.
-  - ✅ **Đã mở `🤖 [QĐ]`** với hai phương án và số đo kèm theo.
+  - ✅ **Đã mở `🤖 [QĐ]`** với hai phương án và số đo kèm theo: issue #92 (nhãn `decision` + `reversible`).
   - ⬜ **`fpsAllowed` giữ nguyên `[30, 60]`, cố ý.** Xem ghi chú dưới.
 
 **Vì sao không tự chốt fps ở đây.** Quyết định fps đứng trên **hai** phép đo, và mục này chỉ có một:

@@ -43,7 +43,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
-| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
+| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | **`đã kiểm một phần`** — nửa **dựng** đã đo trên một tập đầy đủ; nửa **sinh khung** và phút Actions thật thì chưa | số đo có ở `A-001`; chờ `V-002` và chờ chạy `render-trial.yml` sau merge | `VF-G5`, `A-001` |
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
@@ -112,11 +112,21 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G5 · Quota phút Actions và dung lượng artifact đủ cho việc render
 
 - **Nội dung:** quota phút Actions và dung lượng lưu artifact của gói hiện tại đủ để render một tập ~36.000 khung, cộng proof render.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md`
-- **Cách kiểm:** spike canvas (`V-002`) và thử nghiệm engine dựng (`A-001`) đều **đo phút Actions thật** cho một đoạn mẫu, rồi ngoại suy. Không tốn tiền API, chỉ tốn phút Actions của chính lần đo.
+- **Độ tin cậy:** **`đã kiểm một phần`** — nửa **dựng** đã chạy thật trên một tập đầy đủ (2026-09-21, mục `A-001`); nửa **sinh khung** (`V-002`) và con số phút Actions **tính tiền** thì chưa.
+- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md` · `ops/scripts/render-trial.ts` · `ops/workflows/render-trial.yml` · `docs/assembly/render-trial.md`
+- **Cách kiểm:** spike canvas (`V-002`) và thử nghiệm engine dựng (`A-001`) đều **đo phút Actions thật**, rồi ngoại suy. Không tốn tiền API, chỉ tốn phút Actions của chính lần đo.
 - **Dự phòng:** đưa chi phí vào ngân sách học, hoặc chuyển sang runner khác. Nếu sai nặng, chốt 30fps thay vì 60fps ở `A-001`.
-- **Trạng thái:** giao làn `verify`, mục `VF-G5`. **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh.
+- **Trạng thái:** **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh. Ba mảnh, đo riêng:
+
+  | Mảnh | Ai đo | Trạng thái |
+  |---|---|---|
+  | Chi phí **dựng** một tập đầy đủ (21 phút, cả hai fps) | `A-001` | ✅ đo xong 2026-09-21 — `docs/assembly/render-trial.md` |
+  | Chi phí **sinh khung** một tập đầy đủ | `V-002` | ⬜ chưa |
+  | **Phút Actions tính tiền** trên runner thật | `ops/workflows/render-trial.yml` | ⬜ chỉ chạy được sau khi PR của `A-001` merge (G10) |
+
+  **Số đã có, phần dựng, container 4 nhân / 16 GB cùng cấu hình `ubuntu-latest`:** một bản master cộng một bản proof mất **18 phút** giây tường ở 30fps và **25 phút** ở 60fps; bản master nặng **311 MB** (30fps) và **393 MB** (60fps). Gấp đôi số khung chỉ làm chi phí dựng tăng **1,48×**, không phải 2×.
+
+  ⚠️ **Đừng lấy một mình con số này làm ngân sách G5** — nó chưa có phần sinh khung, mà theo hình dạng đường ống thì phần đó mới lớn. Ngân sách đủ chỉ có sau khi `V-002` xong.
 
 ## G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
 

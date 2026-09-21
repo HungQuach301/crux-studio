@@ -1,0 +1,98 @@
+{
+  "at": "2026-09-21T23:40:00.335Z",
+  "host": {
+    "cores": 4,
+    "ramMb": 16096,
+    "node": "v22.22.2",
+    "platform": "linux-x64",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "episodeDurationMs": 1260000,
+  "measuredDurationMs": 1260000,
+  "source": {
+    "seconds": 20,
+    "fps": 60,
+    "bytes": 9332327,
+    "wallSeconds": 59.59
+  },
+  "measurements": [
+    {
+      "config": "decode-30",
+      "kind": "decode",
+      "fps": 30,
+      "resolution": "1920x1080",
+      "frames": 37800,
+      "durationMs": 1260000,
+      "wallSeconds": 101.15,
+      "peakRssMb": 117.5,
+      "bytes": 0,
+      "framesPerSecond": 373.69,
+      "realtimeFactor": 12.456
+    },
+    {
+      "config": "decode-60",
+      "kind": "decode",
+      "fps": 60,
+      "resolution": "1920x1080",
+      "frames": 75600,
+      "durationMs": 1260000,
+      "wallSeconds": 107.1,
+      "peakRssMb": 121.1,
+      "bytes": 0,
+      "framesPerSecond": 705.87,
+      "realtimeFactor": 11.764
+    },
+    {
+      "config": "master-30",
+      "kind": "master",
+      "fps": 30,
+      "resolution": "1920x1080",
+      "frames": 37800,
+      "durationMs": 1260000,
+      "wallSeconds": 783.69,
+      "peakRssMb": 617.6,
+      "bytes": 326273549,
+      "framesPerSecond": 48.23,
+      "realtimeFactor": 1.608
+    },
+    {
+      "config": "master-60",
+      "kind": "master",
+      "fps": 60,
+      "resolution": "1920x1080",
+      "frames": 75600,
+      "durationMs": 1260000,
+      "wallSeconds": 1156.24,
+      "peakRssMb": 623.9,
+      "bytes": 412141645,
+      "framesPerSecond": 65.38,
+      "realtimeFactor": 1.09
+    },
+    {
+      "config": "proof-30",
+      "kind": "proof",
+      "fps": 30,
+      "resolution": "960x540",
+      "frames": 37800,
+      "durationMs": 1260000,
+      "wallSeconds": 240.16,
+      "peakRssMb": 198.3,
+      "bytes": 26468071,
+      "framesPerSecond": 157.39,
+      "realtimeFactor": 5.246
+    },
+    {
+      "config": "proof-60",
+      "kind": "proof",
+      "fps": 60,
+      "resolution": "960x540",
+      "frames": 75600,
+      "durationMs": 1260000,
+      "wallSeconds": 283.93,
+      "peakRssMb": 203.6,
+      "bytes": 30689405,
+      "framesPerSecond": 266.27,
+      "realtimeFactor": 4.438
+    }
+  ]
+}
