@@ -39,7 +39,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 | Mã | Giả định | Độ tin cậy | Trạng thái | Mục kiểm |
 |---|---|---|---|---|
-| G1 | Tài khoản có Claude Code Projects | `suy luận` | giao làn `verify` | `VF-G1` |
+| G1 | Tài khoản có Claude Code Projects | **`đã kiểm một phần`** | đội worker đo được ≥ 3, vế "có Projects" vẫn cần chủ dự án | `VF-G1` |
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
@@ -68,11 +68,31 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 - **Nội dung:** tài khoản của chủ dự án có tính năng Claude Code Projects, nên thread do Project khởi chạy được song song với routine.
 - **Nguồn:** chưa có. Đây là suy luận từ mô tả sản phẩm.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · CHARTER phụ lục P1 (số worker và nhịp chạy)
+- **Độ tin cậy:** **`đã kiểm một phần`** (2026-09-21, mục `VF-G1`) — xem phần tách hai vế ngay dưới.
+- **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · `ops/scripts/recheck-assumptions.ts` · CHARTER phụ lục P1 (số worker và nhịp chạy)
 - **Cách kiểm:** mở `claude.ai/code`, xem có tạo được Project không. **Chỉ chủ dự án làm được** — agent không thấy trang cấu hình tài khoản.
 - **Dự phòng:** Plan B — chỉ dùng routines. Nhịp chạy chuyển sang cấu hình mặc định của P1: 2 worker, preset hourly. Không mất gì về mặt kiến trúc, chỉ chậm hơn.
-- **Trạng thái:** giao làn `verify`, mục `VF-G1`. Hỏi trong issue `🤖 [QĐ]` về các giả định cần chủ dự án.
+
+**Giả định này có hai vế, và chỉ một vế kiểm được từ trong repo.** Tách ra vì gộp lại thì vế đo được bị vế không đo được giữ mãi ở `suy luận`:
+
+| Vế | Kiểm được từ repo? | Trạng thái |
+|---|---|---|
+| (a) Tài khoản **có tính năng** Claude Code Projects | **không** — trang cấu hình tài khoản | vẫn `suy luận`, hỏi ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) |
+| (b) **Hệ quả vận hành** mà phụ lục P1 treo lên G1: chạy được cấu hình 3 worker hay phải lùi về Plan B 2 worker | **có** — `ops/logs/**` (bất biến I8) | **đã kiểm, 2026-09-21** |
+
+- **Bằng chứng cho vế (b), 2026-09-21 (lượt `crux-worker-2`), đo từ `ops/logs/**`, không đọc tài liệu:** **ba** worker chạy thật trong cửa sổ quan sát — `crux-worker-1` (4 lượt), `crux-worker-2` (7 lượt), `crux-worker-3` (5 lượt) — cộng `crux-integrator` 13 lượt với nhịp **~1 giờ** (11 trên 12 khoảng cách nằm trong 0,9–1,1 giờ). Tức là **cấu hình 3 worker đang chạy, dự phòng Plan B chưa phải dùng tới**; phần "2 worker" của Plan B không mô tả hiện trạng.
+- **Giới hạn của bằng chứng, khai trước:**
+  1. Con số là **cận dưới, không phải số đúng**. Phụ lục P1 bước 3 bảo worker không nhận được mục nào thì in `idle` và kết thúc **không commit gì** — lượt đó không để lại dòng log. Khoảng cách 7,0 / 5,0 / 4,1 giờ giữa các lượt quan sát được gần như chắc chắn là các lượt `idle` không ghi gì, chứ không phải routine đứng im.
+  2. Vì (1), **nhịp thật của từng worker không chốt được** từ log. Chốt được đúng một điều: có ít nhất ba worker, và chúng chạy ở độ phân giải giờ chứ không phải 3 giờ một lượt như phụ lục P1 mô tả cho cấu hình 3 worker.
+  3. Quan sát này **không** chứng minh vế (a). Ba routine hourly rời nhau cho đúng cùng một quan sát. Nó chỉ nói cấu hình đang chạy là cấu hình nào, và đó đúng là thứ phụ lục P1 cần biết.
+- **Kiểm tự động:** `worker-fleet-cadence` — đọc `ops/logs/**` bằng `readRunLogs` của kernel (không tự `cat`: thứ tự dòng trong file không mang nghĩa), gom các dòng log nhắc tên routine thành từng **lượt** (hai dòng cách nhau quá 50 phút là hai lượt), rồi đếm số worker rời nhau trong cửa sổ 7 ngày tính lùi từ dòng log **mới nhất**.
+
+  Cửa sổ neo vào dòng log mới nhất chứ không vào `now`: neo vào `now` thì một bản clone cũ, hoặc một tuần repo nằm yên, tự đẩy bài kiểm sang `sai` vì một lý do chẳng dính gì tới G1.
+
+  Chiều kết luận hẹp có chủ đích, theo đúng giới hạn (1) ở trên: **≥ 3 worker → `khớp`** (cấu hình 3 worker còn sống); **1–2 worker mà cửa sổ vẫn có dòng nhắc routine → `sai`** (đội đã tụt về Plan B, phụ lục P1 và sổ đang ghi một cấu hình không còn tồn tại); **không dòng nào nhắc routine → `◦ chưa quan sát được`, không phải `khớp`** — tên routine nằm trong `note` dạng văn xuôi, nên đổi quy ước ghi `note` phải ra "chưa quan sát được", không được ra "vẫn ổn". Đây là cùng bài học fail-open của danh sách trắng `isToolCommit` ở mục `G14`.
+
+  Thiếu hẳn thư mục `ops/logs/` thì bài kiểm **ném lỗi** và ra `⚠ … KHÔNG CHẠY ĐƯỢC` (mục `I-005`), không ra `◦`: `listLogFiles` của kernel trả mảng rỗng cho thư mục không tồn tại, nên nếu không chặn thì "chưa quét được" in ra y hệt "quét rồi không thấy gì".
+- **Trạng thái:** vế (b) **đã kiểm** bằng chạy thật và nay có bài kiểm hồi quy chạy lại mỗi thứ Hai. Vế (a) vẫn giao làn `verify` mục `VF-G1` và vẫn chờ chủ dự án ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) (mở từ 2026-09-20, chưa có câu trả lời).
 
 ## G2 · `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci`
 
