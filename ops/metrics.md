@@ -9,6 +9,7 @@ Tín hiệu của rủi ro **R12** (độ phức tạp tự phình to) và **B1*
 | Ngày | File code | Mục `done` | File / mục | Ghi chú |
 |---|---|---|---|---|
 | 2026-09-20 | 26 | 0 | — | Đợt 0, T1 và T2. Chưa có mục backlog nào `done`. |
+| 2026-09-21 | 35 | 1 | 35 | Đếm bằng `find . -name node_modules -prune -o -name '*.ts' -print \| grep -v '\.test\.ts\$' \| wc -l` trên `origin/main` (15fbf32). Tín hiệu nhiễu: 14 PR đã merge nhưng chỉ 5 mục backlog ở `status: review` và 1 ở `done` — phần lớn việc đã xong chưa được chuyển trạng thái cuối, nên tỷ lệ này đang đo "code / mục đã chuyển done", không phải "code / mục đã xong việc". `pnpm assumptions` + `pnpm check` xanh trên `main` (142 test, replay khớp snapshot). Chưa có lệnh tự động ghi dòng này — `I-002` (`ops/lanes/integration/backlog.md`) vẫn `ready`. |
 
 Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩa là một mục đã đẻ ra nhiều code hơn giá trị nó mang lại — đó là lúc gọi routine integrator dọn dẹp.
 
@@ -16,7 +17,7 @@ Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩ
 
 | Tuần | Lần merge | Lần revert | Tỷ lệ `main` xanh |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-09-20 → 2026-09-21 | 14 | 0 | 100% (`pnpm check` xanh mỗi lần đo, không lần nào phải revert) |
 
 ## Thước đo quá trình xây (CHARTER 1.3)
 
@@ -37,3 +38,4 @@ Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩ
 | Ngày | Chi phí 24h | Tích luỹ | % ngân sách học |
 |---|---|---|---|
 | 2026-09-20 | 0 | 0 | 0% |
+| 2026-09-21 | 0 | 0 | 0% |
