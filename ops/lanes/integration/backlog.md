@@ -74,3 +74,15 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
   - ✅ 10 test trong `ops/test/integrator-lockfile.test.ts`: git thật, workspace pnpm thật, `pnpm` thật, và
     fixture không gọi mạng (mọi phụ thuộc là `workspace:*`). Kiểm bằng đột biến: gỡ đường lockfile ra thì
     4 test đỏ.
+
+### I-005 · Lockfile gộp **sạch** mà vẫn lệch manifest
+Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ phủ ca lockfile **xung đột**. Khi git gộp lockfile sạch, integrator không đụng tới nó — nhưng "merge được" không đồng nghĩa "đúng": git ghép hunk theo dòng, không hiểu YAML, nên về lý thuyết nó ghép ra một lockfile lệch với manifest sau khi gộp. Local `pnpm check` **không** bắt được: nó không chạy `pnpm install --frozen-lockfile` (CI mới chạy). Nghĩa là integrator báo "xanh, đã push" rồi CI mới đỏ — đúng nhóm lỗi Z.
+
+- deps: I-004
+- risk: low
+- status: ready
+- nguồn: phát hiện khi làm `I-004`; CHARTER mục 7; KF-005
+- tiêu chí xong:
+  - **Kiểm trước, dựa vào sau (CHARTER 11.1):** trước khi viết gì, dựng bằng chạy thật một ca git gộp lockfile **sạch** mà kết quả lệch manifest. Không dựng được thì ghi lại là không tái hiện được và đóng mục — không xây cơ chế cho một lỗi chưa ai thấy.
+  - Nếu tái hiện được: sau mỗi lần gộp có chạm `pnpm-lock.yaml`, integrator chạy `pnpm install --frozen-lockfile`; đỏ thì tạo lại lockfile bằng `ops/scripts/integrator-lockfile.ts` (đã có sẵn) rồi kiểm lại, thay vì push một PR chắc chắn đỏ ở CI.
+  - Test tái hiện đi kèm, theo luật `fix` của bất biến I2.
