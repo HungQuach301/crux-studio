@@ -556,7 +556,7 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
   - **(d)** Mô hình nào không tìm được ca kiểm độc lập thì mở [QĐ] với hai lựa chọn: thuê chuyên gia viết (theo D-18 điểm 4), hoặc bỏ mô hình đó.
 
 - **M8 · Chế độ vận hành 1–2 lần mỗi ngày, tổng không quá 15 phút** (D-C06). Chủ dự án xuất hiện tối đa hai lần mỗi ngày, và mọi việc cần anh nằm trong **một** chỗ: bản tin sáng. Ba cơ chế giữ mặc định này:
-  - danh sách `irreversible` thu về bảy nhóm (2.3);
+  - danh sách `irreversible` thu về tám nhóm hẹp (2.3);
   - vùng bảo vệ chia hai mức, phần lớn thành `automerge-delayed` (mục 3);
   - `notify.yml` chỉ @nhắc cho bản tin và bốn loại cảnh báo khẩn (2.4).
 
@@ -692,7 +692,7 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`:
    open → automerge · automerge-delayed → automerge-delayed · owner-merge → owner-merge cộng issue 🤖 [QĐ].
    CI gắn lại nhãn theo đúng luật đó, nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
-8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn bảy nhóm; mọi thứ khác làm ngay theo khuyến nghị.
+8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn tám nhóm; mọi thứ khác làm ngay theo khuyến nghị.
    Câu trả lời của chủ dự án có thể nằm trên issue [QĐ] HOẶC trên issue bản tin, dạng "#19 A, #14 B" — đọc cả hai chỗ.
    Cùng một chữ ký lỗi gặp lần thứ 3: gắn parked, mở [QĐ], kết thúc.
 9. Kết thúc bằng tóm tắt 5 dòng: mục; đã làm; kiểm tra (dán kết quả thật); link PR; rủi ro và chi phí.

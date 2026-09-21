@@ -54,6 +54,16 @@ export const CI_WORKFLOW = join('ops', 'workflows', 'ci.yml');
  * nhận `- name:` của step, vốn thụt sâu hơn và mở đầu bằng gạch đầu dòng.
  * Một parser đoán mò ở đây nguy hiểm hơn là không có: nó sẽ trả về một tập
  * tên nghe hợp lý mà sai, và bài kiểm sẽ xanh nhầm.
+ *
+ * Hình dạng YAML hợp lệ mà nó **không** đọc được (block scalar `name: >-`,
+ * khối `jobs:` thụt khác 2 dấu cách) đều làm bài kiểm **đỏ oan** — chặn một
+ * PR vô hại. Đó là hướng hỏng đã chọn: đỏ oan tốn một vòng sửa, còn xanh oan
+ * khoá `main`.
+ *
+ * ⚠️ Một lối **xanh oan** chưa với tới, ghi ra thay vì để tự phát hiện: thêm
+ * `strategy.matrix` vào một trong năm job thì GitHub đổi tên check thành
+ * `check (…)` trong khi hàm này vẫn trả `check`. `ci.yml` hiện không có
+ * `strategy:`/`matrix:` nào, nên chưa phải việc phải làm ngay.
  */
 export function ciJobNames(source: string): string[] {
   const lines = source.split('\n');
@@ -92,7 +102,12 @@ export function ciJobNames(source: string): string[] {
 
     const name = /^ {4}name:\s*(.+?)\s*$/.exec(line);
     if (name !== null && currentJob !== null && currentName === null) {
-      currentName = name[1]!.replace(/^['"]|['"]$/g, '');
+      const raw = name[1]!;
+      // Giá trị có nháy: lấy nguyên phần trong nháy, vì chú thích chỉ bắt đầu
+      // SAU nháy đóng và bên trong nháy thì `#` là ký tự thường.
+      const quoted = /^(['"])(.*?)\1/.exec(raw);
+      currentName =
+        quoted !== null ? quoted[2]! : raw.replace(/\s+#.*$/, '').trim();
     }
   }
   flush();

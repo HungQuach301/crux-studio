@@ -7,8 +7,10 @@
  * ruleset đứng chờ một tên check không còn ai sinh ra, và **mọi** PR sau đó
  * kẹt ở `blocked`. Nhóm Z, và là ca nhóm Z khoá được cả nhà máy.
  *
- * Ba ca âm dưới đây (đổi tên, xoá, gộp) đều đã đo là **đỏ** khi phá, và xanh
- * trở lại khi khôi phục.
+ * Mọi ca âm ở đây đều đã đo là **đỏ** khi phá và xanh trở lại khi khôi phục:
+ * đổi tên một job · xoá hẳn một job · gộp hai job · và ca nguy hiểm nhất, đổi
+ * tên **đồng bộ** ở cả `ci.yml` lẫn `REQUIRED_CHECKS` — ca duy nhất mà hai
+ * bên khớp nhau trong repo còn ruleset ở Settings thì đứng yên.
  */
 
 import { test } from 'node:test';
@@ -32,9 +34,27 @@ test('ci.yml sinh ra đủ năm check mà ruleset protect-main đòi', () => {
   );
 });
 
-test('danh sách REQUIRED_CHECKS không có tên trùng và không rỗng', () => {
-  assert.equal(REQUIRED_CHECKS.length, 5, 'ruleset protect-main bật đúng 5 check');
-  assert.equal(new Set(REQUIRED_CHECKS).size, REQUIRED_CHECKS.length);
+/**
+ * Bài kiểm này neo danh sách vào **chuỗi literal**, không vào `ci.yml`.
+ *
+ * Nó bịt lối hỏng nguy hiểm nhất mà mọi bài kiểm khác ở đây bỏ lọt: một lần
+ * "dọn dẹp" đổi tên job **đồng bộ** ở cả `ci.yml` lẫn `REQUIRED_CHECKS`. Hai
+ * bên khớp nhau, `missingRequiredChecks` trả mảng rỗng, mọi chỉ báo xanh —
+ * còn ruleset ở Settings thì đứng yên chờ tên cũ, và `main` khoá lại.
+ *
+ * Vì vậy lời báo lỗi ở đây phải nói thẳng việc phải làm: sửa bài kiểm này
+ * cho hết đỏ là đúng cách tự khoá `main`.
+ */
+test('REQUIRED_CHECKS đúng năm chuỗi mà chủ dự án đã bật trong ruleset', () => {
+  assert.deepEqual(
+    [...REQUIRED_CHECKS],
+    ['check', 'secret-scan', 'fix-has-test', 'protected-area', 'trailer-warn'],
+    'Danh sách này là bản sao của cấu hình ở Settings → Rules, nơi chỉ chủ dự án ' +
+      'vào được. ĐỪNG sửa nó cho hết đỏ: đổi tên, gộp hay xoá một trong năm check ' +
+      'là quyết định irreversible (CHARTER 2.3 nhóm 8). Mở 🤖 [QĐ] để chủ dự án ' +
+      'cập nhật ruleset TRƯỚC, rồi mới đổi ci.yml và dòng này.',
+  );
+  assert.equal(new Set(REQUIRED_CHECKS).size, REQUIRED_CHECKS.length, 'không có tên trùng');
 });
 
 test('ciJobNames lấy tên check theo đúng luật của GitHub', () => {
@@ -91,4 +111,18 @@ test('ca âm: gộp hai job thành một thì bài kiểm đỏ ở cả hai tê
     .replace(/^ {4}name: check$/m, '    name: check-and-scan')
     .replace(/^ {4}name: secret-scan$/m, '    name: check-and-scan');
   assert.deepEqual(newlyMissing(broken).sort(), ['check', 'secret-scan']);
+});
+
+test('ciJobNames không nuốt chú thích cuối dòng vào tên check', () => {
+  const source = [
+    'jobs:',
+    '  a:',
+    '    name: check # cổng chính',
+    '  b:',
+    "    name: 'secret-scan'  # có nháy, chú thích sau nháy đóng",
+    '  c:',
+    '    name: "tên # có dấu thăng bên trong nháy"',
+    '',
+  ].join('\n');
+  assert.deepEqual(ciJobNames(source), ['check', 'secret-scan', 'tên # có dấu thăng bên trong nháy']);
 });

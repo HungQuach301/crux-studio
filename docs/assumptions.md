@@ -321,15 +321,20 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 - **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/lanes/platform/backlog.md` (P-006) · `ops/lanes/verify/backlog.md` · `ops/scripts/required-checks.ts` · `ops/test/required-checks.test.ts` · `ops/workflows/ci.yml`
 - **Cách kiểm:** thử bật ruleset trên chính repo này với 4 status check `check`, `secret-scan`, `fix-has-test`, `protected-area`, và xem GitHub đòi gì. Miễn phí. Chỉ chủ dự án làm được. **Đã thực hiện** — chủ dự án bật và báo kết quả trên issue bản tin `#50` lúc `2026-09-21T14:01:21Z`.
 
-  **Bằng chứng đo lại từ phía agent, 2026-09-21 20:16Z — không đọc lại lời chủ dự án, mà gọi API và xem cái đang chạy:**
+  **Bằng chứng, 2026-09-21 20:16Z. Cột "nguồn" là phần quan trọng nhất của bảng này** — trang Settings → Rules nằm ngoài tầm nhìn của agent, nên không phải dòng nào ở đây cũng là phép đo, và trộn hai loại vào một nhãn "đo từ phía agent" là đúng thứ bất biến **I6** cấm:
 
-  | Phép đo | Kết quả |
-  |---|---|
-  | Liệt kê nhánh qua API GitHub, đọc cờ `protected` | `main` → **`protected: true`**; cả 52 nhánh `claude/*` → `false` |
-  | Số check run trên head của một PR bất kỳ | **5/5**, đúng năm tên: `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` |
-  | `automerge.yml` có còn merge được bằng `GITHUB_TOKEN` sau khi bật ruleset không | **Có.** PR `#52` merge lúc `14:44:01Z` với `merged_by: github-actions[bot]` — sau mốc bật ruleset. Từ mốc đó tới `20:15Z` có **17** PR vào `main`, tất cả qua `automerge.yml`, không lần nào chủ dự án phải bấm |
+  | Khẳng định | Nguồn | Kết quả |
+  |---|---|---|
+  | `main` được bảo vệ | **đo được** — liệt kê nhánh qua API GitHub, đọc cờ `protected` | `main` → **`protected: true`**; mọi nhánh `claude/*` → `false` (52 nhánh tại thời điểm đo) |
+  | Ruleset tên **`protect-main`**, và nó đòi **đúng năm tên** `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` | **lời chủ dự án, có nguồn** — issue bản tin `#50`, comment `2026-09-21T14:01:21Z`, mục 3 | Không xác minh lại được từ phía agent. Cờ `protected` bật cả với branch protection cổ điển, nên nó **không** chứng minh có một ruleset tên đó với đúng danh sách đó |
+  | `ci.yml` **sinh ra** đủ năm job mang đúng năm tên đó | **đo được** — số check run trên head của mọi PR đang mở | **5/5**, đúng năm tên. Đây là bằng chứng về `ci.yml`, **không** phải bằng chứng về ruleset: hai mệnh đề độc lập nhau, và chỗ nối chúng là lời chủ dự án ở hàng trên |
+  | `automerge.yml` còn merge được bằng `GITHUB_TOKEN` sau khi bật ruleset | **đo được** | **Có.** PR `#52` merge lúc `14:44:01Z` với `merged_by: github-actions[bot]` — sau mốc bật. Từ mốc đó tới `20:15Z` có **17** PR vào `main`, tất cả qua `automerge.yml`, không lần nào chủ dự án phải bấm |
 
-- **Kết luận, nói đúng phạm vi đo được:** câu hỏi mà mục này thật sự cần trả lời — *có bật được ruleset trên repo private này không* — là **có**, và ruleset đang chạy với năm check. Vế "cần gói GitHub Pro" **không đo được từ phía agent** (trang thanh toán nằm ngoài tầm nhìn) và **không còn chịu tải**: nó chỉ dùng để quyết định có dựa vào ruleset hay không, mà câu đó nay đã có câu trả lời bằng chạy thật.
+- **Kết luận, tách làm hai vế đúng theo bảng trên:**
+  - *`main` được bảo vệ, và lớp bảo vệ đó không cản `automerge.yml`* — **đo được**. Đây là điều mục `VF-G12` thật sự cần, và nó đủ để thôi dựa vào phương án dự phòng.
+  - *Lớp bảo vệ đó là ruleset `protect-main` đòi đúng năm tên* — **lời chủ dự án, nguồn `#50`**. Đủ để hành động theo (chủ dự án là người duy nhất thấy trang đó), nhưng ghi đúng là lời chứ không phải phép đo.
+
+  Vế "cần gói GitHub Pro" **không đo được từ phía agent** (trang thanh toán nằm ngoài tầm nhìn) và **không còn chịu tải**: nó chỉ dùng để quyết định có dựa vào ruleset hay không, mà câu đó nay đã trả lời được bằng vế thứ nhất.
 - **Dự phòng — đã viết sẵn, nay không cần dùng:** không bật ruleset; dựa vào `automerge.yml` cộng hook. Giữ nguyên, không gỡ: **ruleset là lớp thứ hai của I2, không phải lớp duy nhất** — `automerge.yml` đã chỉ merge khi CI xanh, và nó chạy theo định nghĩa trên `main`. Ruleset tắt đi thì I2 vẫn còn lớp dưới.
 - **Điều mới chịu tải kể từ khi ruleset bật — và nó nặng hơn chính giả định gốc:** năm **tên** status check nay là hợp đồng giữa một cấu hình **ngoài repo** (Settings → Rules) và `ops/workflows/ci.yml` **trong repo**. Đổi tên, gộp hay xoá một trong năm job đó là một thay đổi mà `pnpm check` vẫn xanh, CI của chính PR đó vẫn xanh, PR merge đẹp — rồi ruleset đứng chờ một tên không còn ai sinh ra, nên **mọi** PR sau đó kẹt ở `mergeable_state: "blocked"` và `automerge.yml` không merge được gì. Nhóm lỗi **Z**, và là ca nhóm Z khoá được cả nhà máy.
 
