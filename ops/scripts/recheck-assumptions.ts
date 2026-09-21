@@ -639,6 +639,20 @@ export interface RoutineRuns {
  *    `observedNothing` (dấu `◦`), **không** ra `khớp` — tức là nó im lặng
  *    thành "chưa quan sát được", không im lặng thành "vẫn ổn". Đây là cùng
  *    bài học fail-open của `isToolCommit` ở trên.
+ * 3. **Một dòng log tính cho ĐÚNG MỘT routine: tên xuất hiện đầu tiên.**
+ *    Đây không phải chi tiết vụn — bản đầu đếm *mọi* tên nhắc tới trong
+ *    `note`, và nó sai ngay ở dòng log đầu tiên mà chính mục `VF-G1` ghi:
+ *    dòng đó **kể lại** số lượt của cả bốn routine, nên nó tự tính thành
+ *    một lượt cho từng routine và thổi cả bốn con số lên. Báo cáo của
+ *    worker nhắc tên routine khác là chuyện bình thường (bước 0 của phụ
+ *    lục P3 luôn nhắc `crux-integrator`), nên lỗi này sẽ lặp lại mãi.
+ *
+ *    Luật "tên đầu tiên" khớp quy ước `note` đang dùng thật — dòng log mở
+ *    bằng chính routine viết nó (`Lượt worker crux-worker-1 …`,
+ *    `… (phụ lục P1 bước 3-4, routine crux-worker-3)`) — và nó sai theo
+ *    chiều **an toàn**: nó chỉ có thể làm phép đếm NHỎ đi, tức là chỉ có
+ *    thể đẩy bài kiểm về phía `sai`, không bao giờ che được một đội đã tụt
+ *    về Plan B.
  *
  * Cửa sổ neo vào dòng log **mới nhất** chứ không vào `now`: một lần chạy lại
  * trên bản clone cũ phải cho đúng kết quả như lúc nó được ghi, nếu không thì
@@ -657,13 +671,13 @@ export function collectRoutineRuns(lines: readonly RunLogLine[]): RoutineRuns {
   let mentions = 0;
   for (const row of stamped) {
     if (row.at < floor) continue;
-    const found = new Set(row.note.match(ROUTINE_MENTION) ?? []);
-    if (found.size > 0) mentions += 1;
-    for (const name of found) {
-      let bucket = seen.get(name);
-      if (bucket === undefined) seen.set(name, (bucket = new Set()));
-      bucket.add(row.at);
-    }
+    // CHỈ tên routine ĐẦU TIÊN trong `note` — xem `authorOfLine` dưới đây.
+    const author = row.note.match(ROUTINE_MENTION)?.[0];
+    if (author === undefined) continue;
+    mentions += 1;
+    let bucket = seen.get(author);
+    if (bucket === undefined) seen.set(author, (bucket = new Set()));
+    bucket.add(row.at);
   }
 
   const gap = RUN_CLUSTER_MINUTES * 60 * 1000;

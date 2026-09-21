@@ -643,7 +643,7 @@ Giao diện web chỉ có các mốc lịch có sẵn: hourly, daily, weekdays, 
 - **Nếu Project tạo được routine với cron:** dùng 3 worker, mỗi worker chạy 3 giờ một lần, lệch nhau 1 giờ.
 - **Sau lượt chạy đầu tiên:** mở `claude.ai/code/routines` xem số lượt chạy còn lại trong ngày, rồi thêm hoặc bớt worker cho phù hợp.
 
-**Đo được, 2026-09-21 (mục `VF-G1`, giả định `G1`) — cấu hình đang chạy thật là 3 worker.** Ba dòng trên viết ra lúc chưa ai đo; nay `ops/logs/**` cho con số: `crux-worker-1`, `crux-worker-2`, `crux-worker-3` đều có lượt thật, cộng `crux-integrator` nhịp ~1 giờ. Hai chỗ phải đọc đúng:
+**Đo được, 2026-09-21 (mục `VF-G1`, giả định `G1`) — cấu hình đang chạy thật là 3 worker.** Ba dòng trên viết ra lúc chưa ai đo; nay `ops/logs/**` cho con số: `crux-worker-1` (4 lượt), `crux-worker-2` (8 lượt), `crux-worker-3` (5 lượt) đều có lượt thật, cộng `crux-integrator` 13 lượt nhịp trung vị 1,0 giờ. Hai chỗ phải đọc đúng:
 
 - Đội đang ở **cấu hình 3 worker**, không phải mặc định 2 worker. Phương án dự phòng Plan B của `G1` chưa phải dùng tới.
 - Nhịp thật **không** phải "3 giờ một lần, lệch nhau 1 giờ" như dòng thứ hai mô tả — các lượt quan sát được nằm ở độ phân giải giờ. Nhưng log **đếm thiếu**: worker ra `idle` không commit gì (bước 3 của prompt dưới đây), nên mọi con số là **cận dưới**. Chốt được "ít nhất ba worker"; **không** chốt được nhịp chính xác của từng worker, và đừng viết số nhịp vào đây như thể đã chốt.

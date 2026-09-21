@@ -742,6 +742,32 @@ test('G1 gom nhiều dòng log của CÙNG một lượt thành một lượt', 
   assert.deepEqual(collected.runs.get('crux-worker-2')?.length, 1);
 });
 
+test('G1 · một dòng log tính cho ĐÚNG MỘT routine — dòng kể lại routine khác không thổi số', () => {
+  // Lỗi thật, đo được ngay trên dòng log đầu tiên của chính mục VF-G1: báo
+  // cáo của worker kể lại số lượt của cả bốn routine, nên bản đầu (đếm mọi
+  // tên nhắc tới) tính dòng ấy thành một lượt cho TỪNG routine. Bước 0 của
+  // phụ lục P3 luôn nhắc `crux-integrator`, nên lỗi này lặp lại mãi.
+  const collected = collectRoutineRuns([
+    logLine(
+      '2026-09-21T21:00:00.000Z',
+      'Lượt crux-worker-2: bước 0 gọi crux-integrator; đo được crux-worker-1 4 lượt, crux-worker-3 5 lượt.',
+    ),
+  ]);
+  assert.deepEqual([...collected.runs.keys()], ['crux-worker-2'], 'chỉ routine viết dòng log mới được tính');
+  assert.equal(collected.mentions, 1);
+});
+
+test('G1 · luật "tên đầu tiên" sai theo chiều AN TOÀN — không che được đội đã tụt về Plan B', () => {
+  // Hai worker thật, nhưng mỗi dòng log đều kể thêm hai tên khác. Nếu đếm
+  // mọi tên thì ra 4 worker và bài kiểm kết luận `khớp` — đúng ca hỏng mà
+  // nó phải bắt. Với luật "tên đầu tiên" thì vẫn ra `sai`.
+  const noisy = [
+    ...runsOf('crux-worker-1', 4).map((line) => ({ ...line, note: `${line.note} So với crux-worker-3 và crux-integrator.` })),
+    ...runsOf('crux-worker-2', 4).map((line) => ({ ...line, note: `${line.note} So với crux-worker-3 và crux-integrator.` })),
+  ];
+  assert.equal(judgeWorkerFleet(collectRoutineRuns(noisy)).verdict, 'sai');
+});
+
 test('G1 · dòng log ngoài cửa sổ 7 ngày không được tính', () => {
   const collected = collectRoutineRuns([
     logLine('2026-09-01T00:00:00.000Z', 'Lượt crux-worker-1 cũ.'),
