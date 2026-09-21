@@ -112,6 +112,10 @@ function initWorkspace(): string {
 
   writeFileSync(join(dir, '.gitignore'), 'node_modules/\n', 'utf8');
   writeFileSync(join(dir, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n", 'utf8');
+  // File append-only kiểu `ops/logs/**`: bài kiểm đường union dưới đây cần
+  // một file có tổ tiên chung thật, để đây là ca sửa/sửa chứ không phải
+  // thêm/thêm với base rỗng.
+  writeFileSync(join(dir, 'shared.log'), 'goc\n', 'utf8');
   writeManifest(dir, 'root', false);
   for (const name of ['a', 'm', 'n', 'z']) {
     const pkg = join(dir, 'packages', name);
@@ -235,6 +239,77 @@ test('`I-006`: cổng vẫn đỏ sau khi tạo lại thì huỷ gộp, không c
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test('`I-006`: cổng cũng chạy ở đường union, khi lockfile gộp sạch mà file khác vướng', () => {
+  const dir = initWorkspace();
+  try {
+    // Một file append-only (kiểu `ops/logs/**`) xung đột thuần cộng thêm ở
+    // cả hai bên — đúng ca mà đường union sinh ra để giải. Lockfile thì
+    // gộp SẠCH và lệch, y như bài tái hiện ở trên. Trước mục `I-006`,
+    // đường union chỉ kiểm lockfile khi CHÍNH NÓ xung đột, nên ca này —
+    // lockfile không nằm trong danh sách xung đột — đi thẳng qua.
+    git(dir, ['checkout', '-qb', 'feature']);
+    writeFileSync(join(dir, 'shared.log'), 'goc\nfeature\n', 'utf8');
+    writeManifest(join(dir, 'packages', 'a'), 'pkg-a', true);
+    pnpmLockOnly(dir);
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-qm', 'feature: log + pkg-a thêm vend']);
+
+    git(dir, ['checkout', '-q', 'main']);
+    writeFileSync(join(dir, 'shared.log'), 'goc\nmain\n', 'utf8');
+    writeManifest(join(dir, 'packages', 'z'), 'pkg-z', false);
+    pnpmLockOnly(dir);
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-qm', 'main: log + pkg-z bỏ vend']);
+
+    git(dir, ['checkout', '-q', 'feature']);
+    const result = resolveAdditiveMerge(dir, 'main');
+
+    assert.equal(result.outcome, 'resolved', `mong đợi resolved, nhận: ${JSON.stringify(result)}`);
+    assert.deepEqual(result.files, ['shared.log'], 'ca cần kiểm là ca lockfile KHÔNG nằm trong danh sách xung đột');
+    assert.deepEqual(result.lockfileRegenerated, ['pnpm-lock.yaml']);
+
+    // Union giữ cả hai bên của file append-only, và lockfile đã qua cổng.
+    const log = readFileSync(join(dir, 'shared.log'), 'utf8');
+    assert.match(log, /feature/);
+    assert.match(log, /main/);
+    assert.equal(verifyLockfileInstall(dir).ok, true);
+    assert.equal(git(dir, ['status', '--porcelain']).trim(), '');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('`I-006`: lần gộp XOÁ lockfile thì không cài thật, và cây vẫn sạch', () => {
+  // Hồi quy tìm ra ở vòng soát chéo: `pnpm install` không thấy lockfile sẽ
+  // TỰ SINH một bản mới rồi thoát 0. Chạy cổng ở ca này tức là hồi sinh
+  // đúng file mà một bên vừa cố ý xoá, và để lại một cây bẩn — lượt gộp
+  // kế tiếp sẽ ra `aborted-error` "cây làm việc không sạch".
+  const dir = initWorkspace();
+  try {
+    git(dir, ['checkout', '-qb', 'feature']);
+    writeFileSync(join(dir, 'README.md'), 'feature\n', 'utf8');
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-qm', 'feature: README']);
+
+    git(dir, ['checkout', '-q', 'main']);
+    git(dir, ['rm', '-q', 'pnpm-lock.yaml']);
+    git(dir, ['commit', '-qm', 'main: bỏ pnpm-lock.yaml']);
+
+    git(dir, ['checkout', '-q', 'feature']);
+    const result = resolveAdditiveMerge(dir, 'main');
+
+    assert.equal(result.outcome, 'clean', JSON.stringify(result));
+    assert.equal(result.lockfileRegenerated, undefined);
+    assert.equal(
+      git(dir, ['status', '--porcelain']).trim(),
+      '',
+      'cổng đã cài thật và sinh lại lockfile mà một bên vừa xoá',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

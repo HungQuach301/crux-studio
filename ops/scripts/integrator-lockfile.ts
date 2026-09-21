@@ -140,6 +140,12 @@ export function verifyLockfileInstall(cwd: string, options: RegenerateOptions = 
   const verify = spawnSync(pnpm, ['install', '--frozen-lockfile', '--ignore-scripts'], {
     cwd,
     encoding: 'utf8',
+    // Cùng cái bẫy mà `GIT_MAX_BUFFER` của `integrator-resolve.ts` mô tả:
+    // vượt trần 1 MiB mặc định thì Node giết tiến trình (`SIGTERM`,
+    // `ENOBUFS`) và cổng này ra đỏ vì `maxBuffer`, không vì lockfile. Cổng
+    // của `I-004` in ít nên chưa lộ; cổng này **cài thật**, và một repo có
+    // phụ thuộc thật in vượt 1 MiB rất sớm.
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (verify.error) {
     return {

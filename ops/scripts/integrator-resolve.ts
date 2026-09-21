@@ -36,7 +36,7 @@
 
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -138,6 +138,14 @@ function showOrEmpty(cwd: string, ref: string, file: string): string {
  * (ví dụ `origin/main`). Không bao giờ sửa `cwd` khi trả về
  * `aborted-ineligible` hoặc `aborted-error` — merge luôn được `--abort`
  * trước khi hàm trả về, nên cây làm việc quay lại đúng trạng thái ban đầu.
+ *
+ * Một ngoại lệ đã đo, ghi ra để bên gọi không bất ngờ: cổng lockfile của
+ * mục `I-006` **cài thật**, nên nó ghi vào `node_modules/` theo cây vừa
+ * gộp — kể cả ở những lượt kết thúc bằng `--abort`, khi cây đó không còn
+ * tồn tại nữa. `node_modules/` nằm trong `.gitignore` nên `git status` vẫn
+ * sạch và không có gì lọt vào commit, nhưng `pnpm check` chạy ngay sau một
+ * lượt huỷ sẽ đứng trên `node_modules` của cây đã huỷ; chạy
+ * `pnpm install --frozen-lockfile` trước nếu điều đó quan trọng.
  */
 export function resolveAdditiveMerge(
   cwd: string,
@@ -227,11 +235,22 @@ function guardLockfileAfterMerge(cwd: string, options: RegenerateOptions): Lockf
     };
   }
 
+  // Lần gộp XOÁ lockfile (một bên bỏ pnpm, đổi vị trí workspace) thì không
+  // có gì để kiểm — và cổng này **cài thật**, mà `pnpm install` không thấy
+  // lockfile sẽ thoát 0 sau khi TỰ SINH một bản mới. Đã đo: chạy cổng ở ca
+  // này để lại một `pnpm-lock.yaml` untracked, tức hồi sinh đúng file mà
+  // một bên vừa cố ý xoá, và làm bẩn cây làm việc — trái hợp đồng ghi
+  // trong docstring của `resolveAdditiveMerge` và làm lượt gộp kế tiếp ra
+  // `aborted-error` "cây làm việc không sạch". Đi tiếp như trước mục
+  // `I-006`: không lockfile thì không có lockfile nào lệch manifest.
+  const present = lockfiles.filter((lock) => existsSync(join(cwd, lock)));
+  if (present.length === 0) return { repaired: [] };
+
   const first = verifyLockfileInstall(cwd, options);
   if (first.ok) return { repaired: [] };
 
   const repaired: string[] = [];
-  for (const lock of lockfiles) {
+  for (const lock of present) {
     const seed = gitOrThrow(cwd, ['show', `MERGE_HEAD:${lock}`]);
     const regenerated = regenerateLockfile(cwd, lock, seed, options);
     if (!regenerated.ok) {
@@ -252,12 +271,19 @@ function guardLockfileAfterMerge(cwd: string, options: RegenerateOptions): Lockf
   const second = verifyLockfileInstall(cwd, options);
   if (!second.ok) {
     git(cwd, ['merge', '--abort']);
+    // `ineligible` phân biệt hai ca mà bản tin đọc khác nhau: cổng CHẠY
+    // xong và nói lockfile còn lệch (`aborted-ineligible`, cần người) so
+    // với cổng KHÔNG chạy được (`aborted-error`, lỗi kỹ thuật). Gộp hai ca
+    // vào một câu là nói sai nguyên nhân cho người đọc.
     return {
       repaired: [],
       aborted: {
-        outcome: 'aborted-ineligible',
+        outcome: second.ineligible === true ? 'aborted-ineligible' : 'aborted-error',
         files: lockfiles,
-        reason: `lockfile vẫn lệch manifest SAU KHI đã tạo lại: ${second.reason}`,
+        reason:
+          second.ineligible === true
+            ? `lockfile vẫn lệch manifest SAU KHI đã tạo lại: ${second.reason}`
+            : `không kiểm lại được lockfile sau khi tạo lại: ${second.reason}`,
       },
     };
   }
