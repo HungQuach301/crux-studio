@@ -63,14 +63,19 @@ export function buildReport(rows: Row[]): string {
 
   const host = base.host;
   const peakBytes = Math.max(...rows.map((r) => r.peakRssBytes));
-  const slowdown = base.msPerFrame / still.msPerFrame;
+  // Hai tỷ số, cố ý giữ cả hai. Tỷ số tổng là thứ WP-003 hỏi, nhưng tổng
+  // bị chi phối bởi thời gian CHỤP khung — phần không liên quan gì tới máy
+  // quay — và phần đó dao động vài phần trăm giữa các lần chạy. Tỷ số riêng
+  // phần vẽ mới là chi phí thật của "máy quay di chuyển".
+  const slowdownTotal = base.msPerFrame / still.msPerFrame;
+  const slowdownScene = (base.sceneMs / base.frames) / (still.sceneMs / still.frames);
   const renderMin = base.wallMs / 60000;
 
   // "Không hết bộ nhớ" đọc chặt hơn một chút: còn cách trần ít nhất 20%,
   // để kết luận không phụ thuộc vào việc runner lúc đó rỗi hay bận.
   const m1 = peakBytes < host.totalMemBytes * 0.8;
   const m2 = renderMin <= LIMIT_RENDER_MIN;
-  const m3 = slowdown <= LIMIT_SLOWDOWN;
+  const m3 = Math.max(slowdownTotal, slowdownScene) <= LIMIT_SLOWDOWN;
 
   const lines: string[] = [];
   const p = (s = ''): void => { lines.push(s); };
@@ -106,7 +111,7 @@ export function buildReport(rows: Row[]): string {
   p('|---|---|---|---|---|');
   p(`| 1 | Bộ nhớ đỉnh khi render canvas 6000×3400 | không hết bộ nhớ | **${mb(peakBytes)} MB** đỉnh RSS cả cây tiến trình, trên ${mb(host.totalMemBytes)} MB | ${verdict(m1)} |`);
   p(`| 2 | Thời gian render 5.400 khung ở 1 worker | ≤ ${LIMIT_RENDER_MIN} phút | **${min(base.wallMs)} phút** | ${verdict(m2)} |`);
-  p(`| 3 | Chậm hơn render tĩnh cùng số khung | ≤ ${LIMIT_SLOWDOWN}× | **${slowdown.toFixed(2)}×** (${one(base.msPerFrame)} so với ${one(still.msPerFrame)} ms/khung) | ${verdict(m3)} |`);
+  p(`| 3 | Chậm hơn render tĩnh cùng số khung | ≤ ${LIMIT_SLOWDOWN}× | **${slowdownTotal.toFixed(2)}×** tính cả đường ống (${one(base.msPerFrame)} so với ${one(still.msPerFrame)} ms/khung) · **${slowdownScene.toFixed(2)}×** tính riêng phần vẽ (${one(base.sceneMs / base.frames)} so với ${one(still.sceneMs / still.frames)} ms/khung) | ${verdict(m3)} |`);
   p(`| 4 | Chuyển động 30fps **không** mờ | clip xem được | \`base-30-noblur.mp4\`, ${min(base.wallMs)} phút render | ${verdict(null)} |`);
   p(`| 5 | Chuyển động 30fps **có** mờ | clip xem được | \`blur-30.mp4\`, ${min(blur.wallMs)} phút render, ${blur.config.blurSamples} mẫu/khung | ${verdict(null)} |`);
   p(`| 6 | Chuyển động 60fps **không** mờ | clip xem được | \`hi-60-noblur.mp4\`, ${min(hi.wallMs)} phút render | ${verdict(null)} |`);
@@ -142,9 +147,19 @@ export function buildReport(rows: Row[]): string {
   p('phải "cắt cảnh rời thay vì máy quay di chuyển" — tức là **không** phải viết lại');
   p('`motion-grammar`, `visual-quality-bar`, `layouts.json` và prompt dựng cảnh.');
   p();
-  p(`**Máy quay di chuyển đắt hơn máy quay đứng yên ${slowdown.toFixed(2)}×**, dưới ngưỡng ${LIMIT_SLOWDOWN}×.`);
-  p('Chênh lệch này gần như nằm trọn ở phần vẽ: cảnh đứng yên cho trình duyệt tái dùng được');
-  p('khung đã hợp thành, còn máy quay trôi thì mỗi khung là một vùng cắt khác.');
+  p(`**Máy quay di chuyển đắt hơn máy quay đứng yên ${slowdownScene.toFixed(2)}× ở phần vẽ**, và`);
+  p(`${slowdownTotal.toFixed(2)}× nếu tính cả đường ống — cả hai đều dưới ngưỡng ${LIMIT_SLOWDOWN}×.`);
+  p();
+  if (slowdownTotal <= 1) {
+    p('**Tỷ số tổng nhỏ hơn 1, và đó không phải là "máy quay di chuyển rẻ hơn đứng yên".** Nó là');
+    p('dấu hiệu tỷ số tổng đo sai thứ cần đo: thời gian chụp khung chiếm phần lớn mỗi khung, nó');
+    p('không dính gì tới máy quay, và nó dao động vài phần trăm giữa hai lần chạy — lớn hơn hẳn');
+    p('chênh lệch do máy quay gây ra. Con số đáng tin cho chỉ số 3 là tỷ số **riêng phần vẽ**');
+    p(`(${slowdownScene.toFixed(2)}×), và kết luận không đổi: còn rất xa ngưỡng ${LIMIT_SLOWDOWN}×.`);
+  } else {
+    p('Chênh lệch nằm ở phần vẽ: cảnh đứng yên cho trình duyệt tái dùng được khung đã hợp thành,');
+    p('còn máy quay trôi thì mỗi khung là một vùng cắt khác.');
+  }
   p();
   p('**Điều số đo này KHÔNG nói.** Ba chỗ, khai trước thay vì để tự phát hiện:');
   p();
@@ -161,6 +176,22 @@ export function buildReport(rows: Row[]): string {
   p('3. **Nội dung thật nặng hơn cảnh thử.** Cảnh thử có biểu đồ cột, chữ, lưới và một đoạn');
   p('   morph. Một tập thật có nhiều lớp hơn. Ngoại suy theo số khung thì được, theo độ phức');
   p('   tạp cảnh thì không.');
+  p();
+  p('## Dung lượng artifact — nửa còn lại của G5');
+  p();
+  const perMin = base.clipBytes / (base.frames / base.config.fps / 60);
+  p(`Đoạn mẫu 3 phút ở 30fps không mờ nặng **${(base.clipBytes / 1048576).toFixed(1)} MB**, tức`);
+  p(`khoảng **${(perMin / 1048576).toFixed(1)} MB mỗi phút** ở H.264 CRF 20. Ngoại suy tuyến tính:`);
+  p();
+  p('| Độ dài | Ước dung lượng |');
+  p('|---|---|');
+  for (const mins of [10, 20]) {
+    p(`| ${mins} phút | ~${((perMin * mins) / 1048576).toFixed(0)} MB |`);
+  }
+  p();
+  p(`Đối chứng: cấu hình đứng yên cho clip chỉ ${(still.clipBytes / 1048576).toFixed(1)} MB với CÙNG`);
+  p('số khung — chênh lệch đó chính là cái giá của quy tắc "không khung nào đứng yên". Nó là chi');
+  p('phí lưu trữ có thật, không phải nhiễu đo, và nó thuộc về `G5` cùng với số phút Actions.');
   p();
   p('## Kịch bản nào đã xảy ra (WP-003 mục 7)');
   p();
