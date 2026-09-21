@@ -9,7 +9,7 @@ Phần lớn việc của làn này chạy bằng routine `crux-integrator` (ph�
 ### I-001 · Dọn PR nháp đã bỏ
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: phụ lục P3 bước 2
 - tiêu chí xong:
   - Đóng PR nháp không có commit mới quá 72 giờ, **kèm ghi chú** nói rõ mục đó quay lại hàng đợi.
@@ -33,7 +33,7 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 
 - deps: `docs/assumptions.md`
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER 11.1; phụ lục P3 bước 4
 - tiêu chí xong:
   - ✅ Giả định nào có cách kiểm tự động thì chạy được bằng một lệnh — `pnpm recheck:assumptions`
@@ -54,7 +54,7 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 ### I-004 · Tạo lại lockfile khi xung đột
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER mục 7 (file nóng được phân vùng)
 - tiêu chí xong: lockfile do làn này tạo lại, không phải do làn gây xung đột tự sửa.
   - ✅ Cơ chế là tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-lockfile.ts`, gọi từ
@@ -107,7 +107,7 @@ tức bài kiểm chạy được, chỉ là nó đã bỏ qua một cách lặn
 
 - deps: `I-003`
 - risk: low
-- status: review
+- status: done
 - nguồn: phụ lục P3 bước 4; CLAUDE.md mục 7 ("kiểm bằng chạy thật"); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - Không có ref `origin/claude/*` nào thì bài kiểm ra nhánh **`broken`** (`⚠ … KHÔNG CHẠY ĐƯỢC`,
@@ -172,10 +172,130 @@ chéo làn rẻ hơn sáu PR.
 
 - deps: —
 - risk: low
-- status: ready
+- status: done
 - nguồn: vòng soát `topic/T-002` (PR `#38`), phát hiện 4
 - tiêu chí xong:
   - Quyết được một trong hai hướng, và ghi lý do: fixture **đọc** pack thật lúc dựng, hay fixture giữ
     bản sao nhưng có một kiểm so bản sao với `packs/channels/<slug>/channel.json`.
   - Kiểm đó nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường.
   - Sáu fixture khớp pack thật, hoặc khai rõ trường nào cố ý khác và vì sao.
+- **Đã làm** (PR `#40`): chọn hướng **đọc pack thật**. `readInputFile` của kernel nạp channel pack và
+  genre pack từ `packs/` theo trường `channel`, và ném lỗi nếu file `--input` nhúng khoá `packs` hoặc
+  khai `genre`/`locale` lệch channel pack; sáu fixture bỏ khối `packs`. Lý do chọn hướng này: một nguồn
+  duy nhất thì không còn gì để lệch — kiểm so sánh chỉ báo *sau khi* đã lệch — và một pack đổi không
+  còn phải sửa sáu file thuộc sáu làn, nên không sinh xung đột chéo làn (cùng lý do với `P-015`).
+  Kiểm nằm trong `pnpm contracts` (`ops/scripts/check-fixtures.ts`), mười bốn test trong đó mười hai
+  test âm; làm lệch `locale` thành `en-GB` thì `pnpm contracts` đỏ đúng một dòng. Bản sao genre cũng
+  đã lệch thật — thiếu năm khoá `limits` — nên nó bị bỏ cùng bản sao channel.
+  Vòng soát ngữ cảnh sạch nêu một điểm **chặn** và năm điểm **nên sửa**, đã xử hết trong PR:
+  luật khoá đổi từ "cấm đúng tên `packs`" sang **danh sách cho phép** (bản sao tên `channelPack` hay
+  `limits` trước đó đi qua im lặng); tên xưởng lạ trong `upstream` và `upstream: null` nay đỏ; mỗi
+  artifact đầu vào được validate theo contract — và nó bắt ngay một lỗi thật: `release` fixture thiếu
+  trường bắt buộc `payload.preflight.antiSlide`; `readInputFile` chuyển sang `kernel/src/input.ts` vì
+  nó không còn chỉ phục vụ CLI; bản sao pack thứ bảy trong `workshops/topic/test/stub.test.ts` cũng
+  bỏ. Điểm **chặn**: hàng Z16 ban đầu khai "đã xong" trong khi bản sao artifact trong `upstream` vẫn
+  trôi thật (`assembly←visual` 14 đường dẫn, `release←assembly` 28) — hàng Z16 hạ xuống **một phần**,
+  hai bản sao đó làm mới từ snapshot, và mục **`I-009`** mở để quyết cơ chế nguồn cho chúng.
+
+### I-009 · Artifact trong khối `upstream` của fixture là bản sao tập vàng, và đã trôi
+
+Tìm ra trong vòng soát của `I-008`, đã đo bằng chạy thật.
+
+`I-008` bỏ được bản sao **pack** trong fixture, nhưng khối `upstream` của fixture vẫn là **bản chép**
+của `ops/golden/ep-0001-stub/snapshots/*.json`, và bản chép đó đã lệch:
+
+- `workshops/assembly/fixtures/input.json` ← `visual`: **14** đường dẫn lệch (`hasMotion` của 14 scene).
+- `workshops/release/fixtures/input.json` ← `assembly`: **28** đường dẫn lệch, cộng **thiếu hẳn** trường
+  bắt buộc `payload.preflight.antiSlide` và hai check `motion-coverage`, `longest-static-run`.
+
+`I-008` đã làm mới hai bản sao đó và thêm hai lớp bắt: `readInputFile` validate mỗi artifact đầu vào
+theo contract (bắt được ca **thiếu trường** — chính ca `antiSlide` ở trên), và `pnpm contracts` so bốn
+trường bối cảnh với channel pack. Nhưng **nội dung payload vẫn không bị buộc vào nguồn nào**: một
+bản sao hợp contract mà lệch snapshot vẫn xanh, nên nó trôi lại được. Đúng hàng **Z16** của
+`ops/known-failures.md`, phần chưa phủ.
+
+Quyết định cần ra ở đây không nhỏ, nên nó là một mục riêng chứ không phải phần đuôi của `I-008`:
+buộc fixture bằng snapshot thì mỗi lần `pnpm replay -- --update` phải sửa fixture trong cùng PR, mà
+CHARTER 6.1 đòi PR cập nhật snapshot **không kèm thay đổi nào khác**. Hai luật đó phải được hoà giải
+trước khi viết máy kiểm.
+
+- deps: `I-008`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-008` (PR `#40`); `ops/known-failures.md` hàng Z16; CHARTER 6.1
+- tiêu chí xong:
+  - Chọn và ghi lý do một trong ba: (a) fixture **đọc** snapshot tập vàng lúc chạy, (b) fixture giữ bản
+    sao cộng một kiểm so với snapshot, (c) fixture cố ý độc lập với tập vàng — và khi đó nêu rõ nguồn
+    thật của nó là gì, vì "không có nguồn" là chỗ Z16 sống.
+  - Nếu chọn (a) hoặc (b): hoà giải với CHARTER 6.1 — nói rõ một PR `pnpm replay -- --update` được
+    phép chạm file nào, hoặc sửa 6.1 bằng PR `owner-merge` nếu cần.
+  - Kiểm nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường của một artifact đầu vào.
+
+### I-010 · Mục đã vào `main` mà vẫn nằm `status: review` — không có gì chuyển nó sang `done`
+
+Tìm ra ở lượt `crux-worker-2` ngày 2026-09-21, khi duyệt làn theo `ops/lanes/priority.md` và **không**
+nhận được mục nào: cả ba mục `ready` của làn `integration` (`I-006`, `I-007`, `I-009`) đều bị chặn bởi
+`deps` là mục mà PR **đã merge vào `main`** rồi.
+
+`ops/lanes/README.md` định nghĩa `deps` là "các mục phải `done` trước". Phụ lục P1 bước 7 đặt mục sang
+`review` trong chính PR của nó. Nhưng **không bước nào** trong P1, P2 hay P3 đặt nó sang `done` sau khi
+PR merge — phụ lục P3 bước 2 ("Dọn dẹp") chỉ đóng PR nháp bỏ quá 72 giờ và tạo lại lockfile.
+
+Hệ quả đo được trên `main` ở `61fb084`: **15 mục** có PR đã merge mà vẫn `review`. Chỉ hai mục trong cả
+repo ở `done`, và cả hai được sửa tay trong một PR khác (`P-008` ở `bc48f6e`, `VF-G18` trong PR của
+`I-004`). Mọi mục có `deps` vì thế đứng chờ vĩnh viễn, và làn `integration` — **ưu tiên số một** —
+là làn chết đói nặng nhất.
+
+Đây đúng **nhóm lỗi Z** của `ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh. CI xanh, PR merge
+đẹp, backlog đọc vẫn hợp lệ — chỉ có hàng đợi việc là cạn, và cách duy nhất nó lộ ra là một worker
+đọc tay từng `deps`. Tỉ lệ tự phát hiện hiện tại: 0.
+
+- deps: —
+- risk: low
+- status: review
+- nguồn: `ops/lanes/README.md` (định nghĩa `deps`); CHARTER phụ lục P1 bước 7, P3 bước 2; `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - `ops/scripts/backlog-status.ts`: đối chiếu mọi mục `status: review` trong `ops/lanes/*/backlog.md`
+    với commit trên `main`, và phân loại mỗi mục thành đúng một trong ba nhóm — `stale` (nên chuyển
+    `done`), `held` (cố ý giữ `review`), `unmerged` (chưa thấy commit hoàn thành).
+  - Luật phải **thận trọng theo hướng an toàn**: chỉ `stale` khi có commit `[<lane>] <id> — …` trên
+    `main`, **không** có commit `Revert` nào của nó, **và** thân mục không còn dấu treo nào.
+    Dấu treo gồm **cả ký hiệu lẫn lời văn** (`HOLD_MARKERS`): ô `⬜`, và các câu "không đóng khi PR
+    merge", "chỉ chuyển `done` khi…", "chỉ đóng khi…", "Chưa kiểm bằng chạy thật", "Còn treo".
+    Đoán sai theo hướng này chỉ để lại một mục chờ thêm một nhịp, và mục đó vẫn hiện ra ở nhóm
+    `held`; đoán sai theo hướng kia mở khoá một `deps` chưa thật sự xong, và không gì bắt được.
+  - Mục không đọc được `status` (thụt lề sai, tiêu đề trần) ra nhóm `unknown` — **không** bị lọc đi
+    im lặng, vì một mục biến mất khỏi báo cáo đúng là nhóm lỗi Z mà mục này chữa.
+  - Test, gồm test âm: mục chặn bằng lời không bị chuyển; mục còn `⬜` không bị chuyển; mục đã bị
+    revert không bị chuyển; mục không có commit hoàn thành không bị chuyển; commit nhắc `id` trong
+    ngoặc mà không đúng dạng tiêu đề (`… (KF-005, P-015)`) không tính là hoàn thành; "Chưa làm, cố ý"
+    (`I-003`) **không** phải dấu treo — đó là loại trừ phạm vi có chủ ý.
+  - `pnpm backlog:status` báo cáo, `--fix` ghi lại file. **Không** đưa vào `pnpm check`: ngay sau khi
+    một PR merge, mục của nó còn `review` trong đúng một nhịp — cổng cứng ở đó sẽ làm `main` đỏ sau
+    **mỗi** lần merge, tự tạo ra nhóm lỗi mới.
+  - Chạy `--fix` một lần trong chính PR này, và gỡ dòng ghim `P-018` ở `ops/lanes/priority.md` đúng như
+    file đó tự dặn ("Gỡ dòng này khi … chuyển `done`"). Dòng ghim `P-016` **giữ lại**: `P-016` chưa
+    `done`, và PR #39 vẫn `aborted-ineligible` năm lượt liên tiếp.
+  - Nối vào phụ lục P3 bước 2 là **việc của lượt sau**, cố ý tách ra: PR #43 đang mở và đang sửa
+    CHARTER, nên chạm CHARTER ở đây là tự tạo xung đột cho hàng đợi tuần tự.
+
+- vòng soát chéo (subagent, ngữ cảnh sạch) — điểm chặn đã sửa, ghi lại vì nó là bằng chứng cho chính
+  luật của mục này:
+  - **Bốn mục bị lật nhầm sang `done`** ở vòng đầu (`P-011`, `P-013`, `P-016`, `I-002`) vì luật lúc đó
+    chỉ đọc ô `⬜`, trong khi thân bốn mục đó chặn bằng **lời**: "mục này chỉ đóng khi có xác nhận đó,
+    không đóng khi PR merge". Ba trong bốn là **cổng** — `P-011` chặn DoD Đợt 0, `P-013` là cổng của
+    `G16`, `P-016` là cổng của hàng đợi merge. Đã trả cả bốn về `review` và mở rộng luật sang lời văn.
+  - Bằng chứng lịch sử cho cùng điểm đó: trên `main` có **hai** commit `[platform] P-018 — …` (#25 chỉ
+    "nhận chỉ dẫn vào backlog", #26 mới thực hiện) — tiêu đề đúng dạng **không** đảm bảo mục đã xong.
+  - Ca **revert** và ca **mục không đọc được `status`** cũng do vòng soát nêu; cả hai nay có luật và test.
+
+- cặn còn lại, khai trước thay vì để tự phát hiện:
+  - ⬜ **`platform/P-015`** đã vào `main` thật (PR `#13`), nhưng tiêu đề commit là
+    `platform: file log dùng chung … (KF-005, P-015)` — không đúng dạng `[<lane>] <id> — …`, nên tool
+    xếp nó vào `unmerged` và **không** đụng tới. Đây là lựa chọn có chủ ý: nới luật khớp để vớt ca này
+    sẽ vớt luôn `P-014` (commit `platform: rà soát … (P-014)`), mà `P-014` **chưa** xong — nó vẫn
+    `ready`. Chuyển `P-015` sang `done` là việc đọc tay một lần, không phải việc của máy.
+  - ⬜ Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (xem trên). Tới khi đó, tool phải được
+    gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
+  - ⬜ `I-001` ghi ngưỡng bỏ PR nháp là **72 giờ**, trong khi CHARTER phụ lục P1 bước 3 và CLAUDE.md
+    mục 2 ghi **24 giờ**. Lệch này có từ trước mục `I-010`, không sửa ở đây để không trộn phạm vi.

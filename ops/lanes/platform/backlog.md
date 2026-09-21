@@ -11,7 +11,7 @@ Bất biến **I8** hiện cho mỗi **làn** một file log, nhưng hai **mục
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - nguồn: issue #14 (câu trả lời của chủ dự án, 2026-09-21); issue bản tin #17; CHARTER mục 3 (I8) và mục 7
 - **cửa merge: `owner-merge`** — sửa CHARTER mục 3 là nhóm `irreversible` thứ 4 (CLAUDE.md mục 14). Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
 - tiêu chí xong:
@@ -31,7 +31,7 @@ Lỗ hổng nằm ở chỗ **"cần người" không phải một trạng thái
 
 - deps: —
 - risk: low
-- status: ready
+- status: done
 - nguồn: PR #26 (bốn lượt `aborted-ineligible`, 2026-09-21); CHARTER phụ lục P1 bước 2 và phụ lục P3 bước 0; CHARTER mục 7 (hàng đợi merge tuần tự)
 - **cửa merge:** chạy `node ops/invariants.protected-area.ts` — mục này sửa CHARTER phụ lục P1/P3 (mục khác mục 1 và 3) nên nhiều khả năng là `automerge-delayed`. Đừng đoán, chạy.
 - tiêu chí xong:
@@ -42,6 +42,36 @@ Lỗ hổng nằm ở chỗ **"cần người" không phải một trạng thái
   - **Bước 0 của P3 (phụ lục P3)** ghi kèm, cho mỗi PR bỏ lại: tên nhánh, **làn sở hữu**, số lượt `aborted-ineligible` liên tiếp, và số giờ kẹt. Không có mấy số đó thì lượt sau không biết việc này đã bỏ lại mấy lần.
   - **Nhịp tim, không chỉ là luật trên giấy** (nhóm Z trong `ops/known-failures.md`): một PR `aborted-ineligible` quá **N** lượt liên tiếp phải nổi lên bản tin ngày ở mục "Cần anh quyết" hoặc trong cảnh báo của `watchdog`. Luật mà không có ai đếm thì nó im lặng đúng lúc cần kêu — và lần này đã im lặng bốn lượt.
   - Test khoá phần suy ra làn từ tên nhánh và phần chọn PR phải nhận, **kèm test âm**: một PR `aborted-ineligible` mà bị bỏ qua thì bài kiểm phải đỏ.
+- **Đã làm:** `ops/scripts/pr-triage.ts` — `laneFromBranch` (suy làn từ `claude/<lane>/<id>`, `null` cho
+  dạng khác, kể cả nhánh log-only `claude/<tên-ngẫu-nhiên>` của integrator) và `pickPrToHandle` (chọn đúng
+  một PR theo ba lý do CI đỏ / comment chưa xử lý / `aborted-ineligible`, xếp theo đúng thứ tự đó, cùng
+  điều kiện chống giẫm chân `ANTI_COLLISION_HOURS = 2` cho cả ba); 16 test, `ops/test/pr-triage.test.ts`,
+  kèm test âm (chống giẫm chân chặn cả ca mới; PR không đủ điều kiện ra `null`; đoạn nhánh không khớp tên
+  làn thật thì không suy đại). Phụ lục P1 bước 2, phụ lục P3 bước 0b/0d, phụ lục P2 bước 2 và mục "Đang
+  chờ merge" của CHARTER.md, cộng `ops/lanes/priority.md` mục "Ngoại lệ đứng trên bảng này" đã cập nhật
+  theo đúng cơ chế trên.
+
+  **Một lựa chọn khác tiêu chí xong viết chữ nữa, có lý do (soát chéo ngữ cảnh sạch nêu ra, đã bổ sung
+  ngay trong PR):** bullet "Ai nhận" gốc muốn worker của **làn sở hữu PR** đi trước, chỉ rơi xuống "worker
+  bất kỳ" khi làn đó không có worker rảnh ở lượt kế tiếp. `pickPrToHandle` KHÔNG làm hai tầng đó — mọi
+  worker đủ điều kiện nhận PR ngay, làn chỉ để ghi log. Lý do: hệ thống này không có worker gắn với một
+  làn cụ thể (phụ lục P1 mở bằng "Bạn là worker `<N>`", mọi worker duyệt mọi làn qua cùng
+  `ops/lanes/priority.md`), nên không có cách nào để biết "làn X có worker rảnh ở lượt kế tiếp không" mà
+  nhường. Phần việc bullet đó THẬT SỰ cần — không giải mù, phải đọc PR để biết nó định làm gì — vẫn giữ
+  nguyên trong phụ lục P1 bước 2.
+
+  **Một lựa chọn khác tiêu chí xong viết chữ, có lý do:** nhịp tim đặt trong mục **"Đang chờ merge"**
+  của bản tin (không phải "Cần anh quyết") — mục đó dành cho quyết định `irreversible` cần chủ dự án trả
+  lời trong một issue `[QĐ]` (CHARTER 2.5); một PR kẹt xung đột không phải một quyết định, chỉ là một
+  trạng thái cần thấy được, và PR `automerge-delayed` vốn đã có dòng riêng ở đúng mục đó. PR `owner-merge`
+  vướng cùng ca thì thêm dòng cùng dạng, ghi rõ nhãn để phân biệt — không đợi cổng merge nào để đáng
+  được thấy. Không dựng `watchdog` riêng cho việc này: mục `P-020` đã mở để làm watchdog, gộp vào đây là
+  lấn phạm vi một mục khác.
+
+  **Việc PR #39 cần được nhận theo đúng luật vừa viết** để lại cho lượt chạy sau: luật mới này chỉ có
+  hiệu lực sau khi PR này merge (`automerge-delayed`, 12 giờ CI xanh) — áp dụng nó ngay trong PR đang viết
+  ra nó sẽ là "làm theo luật chưa tồn tại", ngược với cách CHARTER vẫn vận hành (quyết định có hiệu lực từ
+  lúc merge, không hồi tố).
 
 ### P-019 · Bản tin thêm mục "Tiến độ", và đếm lượt chạy routine
 Chỉ dẫn 3 của chủ dự án trên issue bản tin #17 (2026-09-21).

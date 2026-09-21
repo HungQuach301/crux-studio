@@ -3,14 +3,16 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Sáu việc:
+ * Bảy việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
  * 3. Phong bì giữ đủ các trường của CHARTER 5.2, không thừa không thiếu.
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
- * 5. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
- * 6. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
+ * 5. Fixture `input.json` nạp pack từ `packs/` và không mang bản sao cấu
+ *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008`).
+ * 6. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
+ * 7. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -29,6 +31,7 @@ import {
   visualTokensSchema,
   type WorkshopName,
 } from '@crux/kernel';
+import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -114,7 +117,10 @@ if (existsSync(goldenRoot)) {
   }
 }
 
-// 5 · layouts.json của mỗi genre pack đã tồn tại (mục V-001). Genre nào
+// 5 · Fixture input.json không mang bản sao cấu hình
+problems.push(...fixtureInputProblems(root));
+
+// 6 · layouts.json của mỗi genre pack đã tồn tại (mục V-001). Genre nào
 // chưa có layouts.json thì bỏ qua — chưa tới lượt genre đó, không phải lỗi.
 let genresChecked = 0;
 const genresDir = join(root, 'packs', 'genres');
@@ -130,7 +136,7 @@ if (existsSync(genresDir)) {
   }
 }
 
-// 6 · visual-tokens.json của mỗi channel pack (mục V-001).
+// 7 · visual-tokens.json của mỗi channel pack (mục V-001).
 let channelsChecked = 0;
 const channelsDir = join(root, 'packs', 'channels');
 if (existsSync(channelsDir)) {
@@ -152,5 +158,6 @@ if (problems.length > 0) {
 
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
+    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/, ` +
     `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json.\n`,
 );

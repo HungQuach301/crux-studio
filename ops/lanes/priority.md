@@ -4,8 +4,7 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 
 | # | Làn | Vì sao ở vị trí này |
 |---|---|---|
-| **0a** | **`platform` · chỉ mục `P-018`** | **Ghim, chủ dự án chỉ định.** Trên issue bản tin #17 (2026-09-21) anh viết "Ưu tiên cao nhất: thực hiện D-C04", và đã trả lời **B** cho issue #14. Từ nay có 3 worker song song nên xung đột ở file log sẽ tăng nếu chưa làm. PR này là `owner-merge` — chỉ chủ dự án merge. Gỡ dòng này khi `P-018` chuyển `done`. |
-| **0b** | **`platform` · chỉ mục `P-016`** | **Ghim tạm thời.** Hàng đợi merge tuần tự đang phải giải tay ở mọi PR, nên nó chặn mọi làn khác — không làn nào tới được `main` mà không đi qua đó. Gỡ dòng này khi `P-016` chuyển `done`; phần còn lại của làn `platform` vẫn ở vị trí 7. |
+| **0** | **`platform` · chỉ mục `P-016`** | **Ghim tạm thời.** Hàng đợi merge tuần tự đang phải giải tay ở mọi PR, nên nó chặn mọi làn khác — không làn nào tới được `main` mà không đi qua đó. Gỡ dòng này khi `P-016` chuyển `done`; phần còn lại của làn `platform` vẫn ở vị trí 7. |
 | 1 | `integration` | `main` đỏ chặn mọi làn khác. Revert trước, làm việc mới sau. |
 | 2 | `verify` | Kiểm trước, dựa vào sau (CHARTER 11.1 luật 2). Một giả định sai được phát hiện muộn đắt hơn mọi thứ trong bảng này. |
 | 3 | `topic` | Ưu tiên số một của Đợt 1 theo CHARTER mục 10. Cổng Mốc 3 là cổng quan trọng nhất, và nó nằm trọn trong làn này. Trượt cổng đó thì dự án dừng. |
@@ -19,6 +18,10 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 
 ## Ngoại lệ đứng trên bảng này
 
+> **Dòng ghim `P-018` đã được gỡ ngày 2026-09-21** (mục `I-010`): `P-018` đã `done` — PR #26 merge thật, tiêu chí xong đạt — và chính dòng đó dặn "gỡ dòng này khi `P-018` chuyển `done`".
+>
+> Dòng ghim `P-016` **vẫn còn**, và hai dòng ghim cũ `0a`/`0b` gộp lại thành một dòng `0`. Lý do giữ: `P-016` **chưa** `done`. Thân mục ghi rõ "chưa kiểm bằng chạy thật … không tự chuyển `done` ở đây", và lý do ghim vẫn đúng theo số đo — `ops/logs/platform/P-016.jsonl` ghi PR #39 ra `aborted-ineligible` **năm lượt liên tiếp**. Gỡ ghim lúc này là gỡ tín hiệu trong khi tắc nghẽn còn nguyên.
+
 Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt bảng:
 
 0. **Bước 0 của phụ lục P3** — giải xung đột merge cho hàng đợi. Chạy ở đầu **mọi** lượt worker, trước cả hai mục dưới đây.
@@ -26,8 +29,15 @@ Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt
 
 1. PR đang mở có CI đỏ, và chưa có worker nào đang xử lý (không có commit mới trong 2 giờ).
 2. PR đang mở có comment chưa xử lý, cùng điều kiện trên.
+3. PR mà lượt bước 0 gần nhất của phụ lục P3 trả `aborted-ineligible`, cùng điều kiện trên (mục `P-022`).
+   Integrator đã làm hết phần của nó và bị cấm giải tay (phụ lục P3 bước 0b); "cần người" phải có người
+   nhận, không rơi vào khoảng trống giữa integrator và worker. Worker nhận không cần cùng làn với PR — chỉ
+   cần đọc PR để biết nó định làm gì rồi giải xung đột bằng phán đoán, khác bước 0 mang tính cơ học.
 
-Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Lý do: một PR đỏ nằm đó chặn hàng đợi merge, và hàng đợi merge là tuần tự.
+Ba lý do trên xếp theo đúng thứ tự liệt kê khi nhiều PR cùng đủ điều kiện (CI đỏ thắng, vì đã có tiêu chí
+xong và nhãn `fix` gắn sẵn). `ops/scripts/pr-triage.ts` (hàm `pickPrToHandle`) là cơ chế quyết định, đừng
+tự suy bằng lời. Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Lý do: một PR kẹt nằm đó chặn hàng
+đợi merge, và hàng đợi merge là tuần tự.
 
 ## Điều tiết
 
