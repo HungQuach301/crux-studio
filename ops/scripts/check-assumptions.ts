@@ -8,15 +8,20 @@
  * "phần phụ thuộc" sẽ trôi khỏi thực tế đúng vào lúc cần nó nhất: lúc một
  * giả định vừa hoá ra sai và phải liệt kê ngay cái gì bị ảnh hưởng.
  *
- * Bốn việc:
+ * Năm việc:
  * 1. Mỗi mã trong bảng tổng có một mục đầy đủ ở dưới, và ngược lại.
  * 2. Mỗi mục có đủ bảy phần bắt buộc.
  * 3. Mọi file trong "Phần phụ thuộc" tồn tại, VÀ thật sự nhắc tới mã đó.
  * 4. Mỗi giả định có một mục `VF-<mã>` trong backlog làn verify.
+ * 5. Mục nào khai `**Kiểm tự động:**` thì mã bài kiểm đó phải có thật trong
+ *    `ops/scripts/recheck-assumptions.ts` (mục `I-003`). Không có luật này
+ *    thì sổ khai một bài kiểm đã bị đổi tên hay xoá mà vẫn xanh — hỏng mà
+ *    mọi chỉ báo đều xanh, đúng nhóm Z trong `ops/known-failures.md`.
  */
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { AUTO_CHECKS, AUTO_CHECK_IDS } from './recheck-assumptions.ts';
 
 const root = process.cwd();
 const ledgerPath = join(root, 'docs', 'assumptions.md');
@@ -62,6 +67,8 @@ const REQUIRED_PARTS = [
 const CONFIDENCE = ['đã kiểm', 'đã kiểm một phần', 'tài liệu nói vậy', 'suy luận', 'sai'];
 
 let dependencyCount = 0;
+/** Mã bài kiểm → giả định đã khai nó. Dùng để bắt chiều ngược ở cuối. */
+const declaredChecks = new Map<string, string>();
 
 for (const [code, body] of sections) {
   for (const part of REQUIRED_PARTS) {
@@ -102,6 +109,38 @@ for (const [code, body] of sections) {
   // 4 · Có mục kiểm trong backlog làn verify.
   if (!verifyBacklog.includes(`VF-${code}`)) {
     problems.push(`${code}: thiếu mục \`VF-${code}\` trong ops/lanes/verify/backlog.md.`);
+  }
+
+  // 5 · Bài kiểm tự động được khai phải tồn tại, VÀ phải là bài kiểm của
+  // đúng giả định này. `recheck-assumptions.ts` tìm bài kiểm theo `id`, nên
+  // khai nhầm mã sang giả định khác thì nó chạy bài kiểm của G khác dưới tên
+  // G này, và issue `[QĐ]` liệt kê phần phụ thuộc của nhầm giả định.
+  const autoCheck = /\*\*Kiểm tự động:\*\*\s*`([^`]+)`/.exec(body)?.[1]?.trim();
+  if (autoCheck) {
+    declaredChecks.set(autoCheck, code);
+    const check = AUTO_CHECKS.find((candidate) => candidate.id === autoCheck);
+    if (!check) {
+      problems.push(
+        `${code}: khai bài kiểm tự động \`${autoCheck}\` nhưng ops/scripts/recheck-assumptions.ts không đăng ký mã đó. ` +
+          `Các mã đang có: ${AUTO_CHECK_IDS.join(', ')}.`,
+      );
+    } else if (check.code !== code) {
+      problems.push(
+        `${code}: khai bài kiểm \`${autoCheck}\`, nhưng bài kiểm đó là của ${check.code}, không phải của ${code}.`,
+      );
+    }
+  }
+}
+
+// 5b · Chiều ngược: một bài kiểm đăng ký mà không mục nào khai thì nó KHÔNG
+// BAO GIỜ chạy, và không ai báo. Đúng dạng "sổ và code trôi khỏi nhau" mà
+// luật 5 sinh ra để ngăn — chặn cả hai chiều thì mới kín.
+for (const check of AUTO_CHECKS) {
+  if (!declaredChecks.has(check.id)) {
+    problems.push(
+      `Bài kiểm \`${check.id}\` (${check.code}) có trong ops/scripts/recheck-assumptions.ts nhưng không mục nào ` +
+        'trong sổ khai nó, nên nó không bao giờ chạy. Thêm `**Kiểm tự động:**` vào mục tương ứng, hoặc bỏ bài kiểm.',
+    );
   }
 }
 
