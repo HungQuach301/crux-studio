@@ -15,10 +15,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, cpSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WORKSHOPS } from '@crux/kernel';
+import { WORKSHOPS, parseRunLogs, type RunLogLine } from '@crux/kernel';
 import { parseRunWorkshopArgs, missingUpstream } from '../scripts/run-workshop.ts';
 import { definitionFor } from '../scripts/pipeline.ts';
 
@@ -200,5 +201,105 @@ test('P-004 · chú thích đầu file khai đúng đầu vào mà xưởng đó
         `${name}: chú thích thiếu đầu vào ${upstream}`,
       );
     }
+  }
+});
+
+// ── Bất biến I8, kiểm bằng CHẠY THẬT ─────────────────────────────────────
+//
+// Vòng soát của chính mục này tìm ra khoảng trống: mọi bài kiểm ở trên đều
+// đọc *văn bản* (tham số, file YAML), nên tắt hẳn lời gọi `appendRunLog`
+// trong `run-workshop.ts` vẫn cho `pnpm check` xanh. Một bất biến mà không
+// bài kiểm nào chạm vào thì nó là lời hứa, không phải luật — và đó đúng là
+// nhóm lỗi Z mà mục này nói nó đi sửa.
+//
+// Vì vậy bốn bài dưới đây gọi script như GitHub Actions gọi nó: một tiến
+// trình con, một `--root` riêng, rồi ĐẾM dòng trong file log.
+
+const SCRIPT = join(process.cwd(), 'ops', 'scripts', 'run-workshop.ts');
+
+function sandbox(): string {
+  const root = mkdtempSync(join(tmpdir(), 'crux-i8-'));
+  cpSync(join(process.cwd(), 'packs'), join(root, 'packs'), { recursive: true });
+  return root;
+}
+
+function run(root: string, argv: readonly string[]) {
+  const result = spawnSync(process.execPath, [SCRIPT, '--root', root, ...argv], {
+    encoding: 'utf8',
+  });
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+function logLines(root: string, workshop: string, episode: string): RunLogLine[] {
+  const path = join(root, 'ops', 'logs', workshop, `${episode}.jsonl`);
+  if (!existsSync(path)) return [];
+  return parseRunLogs([readFileSync(path, 'utf8')]);
+}
+
+test('I8 · lần chạy THÀNH CÔNG để lại đúng một dòng có costUsd', () => {
+  const root = sandbox();
+  try {
+    const result = run(root, ['--workshop', 'topic', '--episode', 'ep-i8']);
+    assert.equal(result.status, 0, result.stderr);
+
+    const lines = logLines(root, 'topic', 'ep-i8');
+    assert.equal(lines.length, 1, `phải đúng 1 dòng, đang có ${lines.length}`);
+    assert.equal(lines[0]!.status, 'ok');
+    assert.equal(lines[0]!.ref, 'ep-i8/topic');
+    assert.equal(typeof lines[0]!.costUsd, 'number');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I8 · lần chạy HỎNG vì thiếu artifact đầu vào vẫn để lại một dòng', () => {
+  const root = sandbox();
+  try {
+    const result = run(root, ['--workshop', 'editorial', '--episode', 'ep-i8']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Chạy trước: pnpm run:workshop -- --workshop topic/);
+
+    const lines = logLines(root, 'editorial', 'ep-i8');
+    assert.equal(lines.length, 1, `phải đúng 1 dòng, đang có ${lines.length}`);
+    assert.equal(lines[0]!.status, 'failed');
+    assert.equal(typeof lines[0]!.costUsd, 'number');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I8 · lần chạy hỏng vì nạp pack cũng để lại một dòng, không rơi ra ngoài', () => {
+  const root = sandbox();
+  try {
+    const result = run(root, [
+      '--workshop',
+      'topic',
+      '--episode',
+      'ep-i8',
+      '--channel',
+      'khong-co-that',
+    ]);
+    assert.equal(result.status, 1);
+
+    const lines = logLines(root, 'topic', 'ep-i8');
+    assert.equal(lines.length, 1, `phải đúng 1 dòng, đang có ${lines.length}`);
+    assert.equal(lines[0]!.status, 'failed');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I8 · mã tập dạng đường dẫn thì dừng ở cửa, không ghi ra ngoài ops/logs', () => {
+  const root = sandbox();
+  try {
+    const result = run(root, ['--workshop', 'topic', '--episode', '../../escaped']);
+    // Thoát 2 = lỗi tham số: chưa chạy gì nên chưa có gì để ghi. Khác hẳn
+    // thoát 1 ở ba bài trên, nơi lần chạy đã bắt đầu.
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /Mã tập không hợp lệ/);
+    assert.equal(existsSync(join(root, 'ops', 'logs')), false, 'không được tạo vùng log nào');
+    assert.equal(existsSync(join(root, '..', 'escaped.jsonl')), false, 'ghi lọt ra ngoài --root');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

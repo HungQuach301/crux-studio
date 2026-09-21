@@ -162,13 +162,6 @@ async function main(): Promise<void> {
     );
   }
 
-  const { upstream, missing } = missingUpstream(
-    args.root,
-    args.channel,
-    args.episode,
-    definition.consumes,
-  );
-
   const logLine = (status: 'ok' | 'failed', at: string, costUsd: number, note?: string) => {
     appendRunLog(runLogPath(args.root, args.workshop, args.episode), {
       at,
@@ -183,24 +176,38 @@ async function main(): Promise<void> {
   };
 
   // Bất biến I8 nói "MỌI lần chạy", không nói "mọi lần chạy thành công".
-  // Một lần chạy hỏng vẫn tốn tiền và vẫn phải để lại dòng của nó.
-  if (missing.length > 0) {
-    const first = missing[0]!;
-    logLine('failed', clock.now(), cassette.costUsd, `thiếu artifact đầu vào: ${missing.join(', ')}`);
-    process.stderr.write(
-      `Xưởng ${args.workshop} cần artifact của ${missing.join(', ')} nhưng chưa có trong ` +
-        `episodes/${args.channel}/${args.episode}/.\n` +
-        `Chạy trước: pnpm run:workshop -- --workshop ${first} --episode ${args.episode}\n`,
-    );
-    process.exit(1);
-  }
-
-  const channelPack = loadChannelPack(args.root, args.channel);
-  const genrePack = loadGenrePack(args.root, channelPack.genre);
-
-  let artifact;
+  // Một lần chạy hỏng vẫn tốn tiền và vẫn phải để lại dòng của nó — nên
+  // TOÀN BỘ phần còn lại nằm trong một `try`, không chỉ riêng lời gọi xưởng.
+  // Nạp pack hỏng, hay `writeArtifact` hỏng SAU khi xưởng đã chạy xong, đều
+  // là "chạy mà không để lại dòng nào" nếu để chúng ngoài `try`.
   try {
-    artifact = await runWorkshop(
+    const { upstream, missing } = missingUpstream(
+      args.root,
+      args.channel,
+      args.episode,
+      definition.consumes,
+    );
+
+    if (missing.length > 0) {
+      const first = missing[0]!;
+      logLine(
+        'failed',
+        clock.now(),
+        cassette.costUsd,
+        `thiếu artifact đầu vào: ${missing.join(', ')}`,
+      );
+      process.stderr.write(
+        `Xưởng ${args.workshop} cần artifact của ${missing.join(', ')} nhưng chưa có trong ` +
+          `episodes/${args.channel}/${args.episode}/.\n` +
+          `Chạy trước: pnpm run:workshop -- --workshop ${first} --episode ${args.episode}\n`,
+      );
+      process.exit(1);
+    }
+
+    const channelPack = loadChannelPack(args.root, args.channel);
+    const genrePack = loadGenrePack(args.root, channelPack.genre);
+
+    const artifact = await runWorkshop(
       definition,
       { upstream, packs: { channel: channelPack, genre: genrePack } },
       {
@@ -213,20 +220,20 @@ async function main(): Promise<void> {
         impl: args.impl,
       },
     );
+
+    const path = writeArtifact(args.root, artifact);
+    logLine(artifact.status === 'ok' ? 'ok' : 'failed', artifact.createdAt, artifact.costUsd);
+
+    process.stdout.write(
+      `${args.workshop} (impl ${args.impl}) → ${path}\n` +
+        `status ${artifact.status} · costUsd ${artifact.costUsd} · log ${runLogPath('.', args.workshop, args.episode)}\n`,
+    );
+    if (artifact.status !== 'ok') process.exit(1);
   } catch (error) {
     logLine('failed', clock.now(), cassette.costUsd, (error as Error).message.slice(0, 300));
     process.stderr.write(`Xưởng ${args.workshop} hỏng: ${(error as Error).message}\n`);
     process.exit(1);
   }
-
-  const path = writeArtifact(args.root, artifact);
-  logLine(artifact.status === 'ok' ? 'ok' : 'failed', artifact.createdAt, artifact.costUsd);
-
-  process.stdout.write(
-    `${args.workshop} (impl ${args.impl}) → ${path}\n` +
-      `status ${artifact.status} · costUsd ${artifact.costUsd} · log ${runLogPath('.', args.workshop, args.episode)}\n`,
-  );
-  if (artifact.status !== 'ok') process.exit(1);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
