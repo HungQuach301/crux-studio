@@ -16,16 +16,20 @@ import {
   AUTO_CHECKS,
   AUTO_CHECK_IDS,
   collectCommits,
+  collectRoutineRuns,
   formatDecisionIssue,
   isToolCommit,
   judgeTrailerEvidence,
   judgeUnionRuns,
+  judgeWorkerFleet,
   listRemoteClaudeBranches,
   parseLedger,
+  readFleetLogs,
   runUnionExperiment,
   type CheckReport,
   type CommitTrailerInfo,
 } from '../scripts/recheck-assumptions.ts';
+import type { RunLogLine } from '@crux/kernel';
 
 /** Không gọi `gh` thật trong test — mọi lời gọi `collectCommits` dưới đây tự khai nhánh nào đang có PR mở. */
 function openBranches(...branches: string[]): () => Set<string> {
@@ -673,5 +677,119 @@ test('I-005 · lệnh thật in ⚠ KHÔNG CHẠY ĐƯỢC cho G14, không in �
     assert.match(run.stdout, /G17/, 'một bài kiểm hỏng không được nuốt các bài kiểm còn lại');
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+
+// ───────────────────────────────── G1 · đội worker đang chạy thật ──
+
+/** Dòng log tối thiểu — chỉ `at` và `note` có nghĩa với bài kiểm G1. */
+function logLine(at: string, note: string): RunLogLine {
+  return { at, lane: 'platform', kind: 'lane', ref: 'platform/P-000', status: 'ok', durationMs: 0, costUsd: 0, note };
+}
+
+/** N lượt của một routine, cách nhau `gapHours`, bắt đầu từ `2026-09-21T00:00:00Z`. */
+function runsOf(name: string, count: number, gapHours = 1): RunLogLine[] {
+  const base = Date.parse('2026-09-21T00:00:00.000Z');
+  return Array.from({ length: count }, (_, index) =>
+    logLine(new Date(base + index * gapHours * 3600000).toISOString(), `Lượt ${name} nhận mục.`),
+  );
+}
+
+test('G1 khớp khi quan sát được ba worker rời nhau — cấu hình 3 worker còn sống', () => {
+  const outcome = judgeWorkerFleet(
+    collectRoutineRuns([...runsOf('crux-worker-1', 3), ...runsOf('crux-worker-2', 3), ...runsOf('crux-worker-3', 3)]),
+  );
+  assert.equal(outcome.verdict, 'khớp');
+  assert.ok(!outcome.observedNothing);
+  assert.match(outcome.observed, /3 worker/);
+});
+
+test('G1 SAI khi đội tụt về hai worker — đó là kịch bản hỏng thật mà bài kiểm phải bắt', () => {
+  const outcome = judgeWorkerFleet(collectRoutineRuns([...runsOf('crux-worker-1', 4), ...runsOf('crux-worker-2', 4)]));
+  assert.equal(outcome.verdict, 'sai');
+  assert.match(outcome.observed, /Plan B/);
+});
+
+test('G1 phân biệt "không có gì để quan sát" với "đã quan sát và thấy đúng"', () => {
+  // Có dòng log, nhưng không dòng nào nhắc tên routine — ví dụ khi quy ước
+  // ghi `note` đổi. Phải ra `◦`, KHÔNG được ra `khớp`: ra `khớp` thì một bài
+  // kiểm không bao giờ quan sát được gì trông y hệt một bài kiểm luôn xanh.
+  const outcome = judgeWorkerFleet(collectRoutineRuns([logLine('2026-09-21T00:00:00.000Z', 'Chạy tập ep-0001-stub.')]));
+  assert.equal(outcome.observedNothing, true);
+  assert.notEqual(outcome.verdict, 'sai');
+});
+
+test('G1 · `crux-integrator` KHÔNG được tính vào đội worker', () => {
+  // Nếu tính nhầm thì hai worker cộng integrator ra 3, và bài kiểm bỏ lọt
+  // đúng ca nó phải bắt.
+  const outcome = judgeWorkerFleet(
+    collectRoutineRuns([...runsOf('crux-worker-1', 3), ...runsOf('crux-worker-2', 3), ...runsOf('crux-integrator', 9)]),
+  );
+  assert.equal(outcome.verdict, 'sai');
+  assert.ok(outcome.evidence.some((line) => line.includes('crux-integrator')), 'integrator vẫn phải hiện trong bằng chứng');
+});
+
+test('G1 gom nhiều dòng log của CÙNG một lượt thành một lượt', () => {
+  // Một lượt worker ghi nhiều dòng (bước 0, rồi mục nhận được). Đếm từng
+  // dòng thành một lượt sẽ thổi phồng số lượt và làm nhịp đo được vô nghĩa.
+  const at = '2026-09-21T10:00:00.000Z';
+  const later = '2026-09-21T10:20:00.000Z';
+  const collected = collectRoutineRuns([
+    logLine(at, 'Lượt crux-worker-2 bước 0.'),
+    logLine(later, 'Lượt crux-worker-2 nhận mục.'),
+  ]);
+  assert.deepEqual(collected.runs.get('crux-worker-2')?.length, 1);
+});
+
+test('G1 · dòng log ngoài cửa sổ 7 ngày không được tính', () => {
+  const collected = collectRoutineRuns([
+    logLine('2026-09-01T00:00:00.000Z', 'Lượt crux-worker-1 cũ.'),
+    logLine('2026-09-02T00:00:00.000Z', 'Lượt crux-worker-2 cũ.'),
+    logLine('2026-09-21T00:00:00.000Z', 'Lượt crux-worker-3 mới.'),
+  ]);
+  assert.deepEqual([...collected.runs.keys()], ['crux-worker-3']);
+});
+
+test('G1 · cửa sổ neo vào dòng log MỚI NHẤT, không vào `now`', () => {
+  // Quan sát cũ nhiều tháng vẫn phải cho đúng kết luận như lúc nó được ghi —
+  // neo vào `now` thì mọi dòng rơi ra ngoài cửa sổ và bài kiểm ra "chưa quan
+  // sát được" cho một bản clone hoàn toàn bình thường.
+  //
+  // `observedNothing` phải được khẳng định RIÊNG, không gộp vào phép so
+  // `verdict`: cả hai ca đều trả `verdict: 'khớp'`, nên chỉ so `verdict` thì
+  // bài kiểm này xanh cả khi cửa sổ neo sai — đúng nhóm lỗi Z mà chính mục
+  // `G1` lên án, và bản đầu của test này đã dính (đo bằng phép phá thật).
+  const old = ['crux-worker-1', 'crux-worker-2', 'crux-worker-3'].map((name, index) =>
+    logLine(`2024-01-0${index + 1}T00:00:00.000Z`, `Lượt ${name}.`),
+  );
+  const outcome = judgeWorkerFleet(collectRoutineRuns(old));
+  assert.ok(!outcome.observedNothing, 'phải quan sát được, không được rơi ra ngoài cửa sổ');
+  assert.equal(outcome.verdict, 'khớp');
+  assert.match(outcome.observed, /3 worker/);
+});
+
+test('G1 · thiếu hẳn ops/logs/ thì NÉM LỖI, không trả rỗng (mục I-005)', () => {
+  // `listLogFiles` của kernel trả [] cho thư mục không tồn tại. Không chặn
+  // thì "chưa quét được" in ra y hệt "quét rồi không thấy gì".
+  const root = mkdtempSync(join(tmpdir(), 'crux-fleet-'));
+  try {
+    assert.throws(() => readFleetLogs(root), /không có thư mục/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('G1 · readFleetLogs đọc được khi ops/logs/ có thật', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-fleet-'));
+  try {
+    mkdirSync(join(root, 'ops', 'logs', 'platform'), { recursive: true });
+    writeFileSync(
+      join(root, 'ops', 'logs', 'platform', 'P-000.jsonl'),
+      `${JSON.stringify(logLine('2026-09-21T00:00:00.000Z', 'Lượt crux-worker-1.'))}\n`,
+    );
+    assert.equal(readFleetLogs(root).length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
