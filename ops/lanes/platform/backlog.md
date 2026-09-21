@@ -22,6 +22,27 @@ Bất biến **I8** hiện cho mỗi **làn** một file log, nhưng hai **mục
   - Bên đọc log (`ops/scripts/update-metrics.ts` và mọi nơi khác) gom nhiều file và **sắp theo `at`**, không tin thứ tự dòng.
   - Đóng issue #14 sau khi PR merge.
 
+### P-022 · `aborted-ineligible` là việc của làn sở hữu PR, ở lượt chạy kế tiếp — **ưu tiên cao**
+Khi `ops/scripts/integrator-resolve.ts` trả `aborted-ineligible`, tool đã làm đúng: có xoá dòng ở một bên thì nó không tự giải, và phụ lục P3 bước 0b cấm thử `--ours`/`--theirs`/sửa tay. Nhưng **sau đó không ai nhận việc**. Bước 0 chạy ở đầu mọi lượt worker chỉ *ghi nhận* "1 bỏ lại, cần người", rồi worker đi duyệt backlog như thường.
+
+Kết quả đã đo được trên PR #26: **bốn lượt** `aborted-ineligible` liên tiếp (07:14, 07:23, 08:08, 08:11Z), cùng một `reason`, PR kẹt hơn một giờ, và nó là mục **ghim ưu tiên cao nhất**. Hàng đợi merge là tuần tự (CHARTER mục 7), nên một PR kẹt chặn cả hàng đợi — đúng cái giá mà ngoại lệ "CI đỏ" ở phụ lục P1 bước 2 sinh ra để tránh.
+
+Lỗ hổng nằm ở chỗ **"cần người" không phải một trạng thái ai sở hữu**. CI đỏ có: bước 2 giao nó cho worker kế tiếp. `aborted-ineligible` thì không, nên nó rơi vào khoảng trống giữa integrator (đã làm xong phần của mình) và worker (chưa thấy đó là việc của mình).
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: PR #26 (bốn lượt `aborted-ineligible`, 2026-09-21); CHARTER phụ lục P1 bước 2 và phụ lục P3 bước 0; CHARTER mục 7 (hàng đợi merge tuần tự)
+- **cửa merge:** chạy `node ops/invariants.protected-area.ts` — mục này sửa CHARTER phụ lục P1/P3 (mục khác mục 1 và 3) nên nhiều khả năng là `automerge-delayed`. Đừng đoán, chạy.
+- tiêu chí xong:
+  - **Phụ lục P1 bước 2** nhận thêm một ca, ngang giá với CI đỏ: PR đang mở mà lượt bước 0 gần nhất trả `aborted-ineligible` **là việc phải nhận ngay**, trước khi duyệt backlog. Cùng điều kiện chống giẫm chân đang dùng cho CI đỏ (không có commit mới trong 2 giờ).
+  - **Ai nhận:** worker của **làn sở hữu PR** — suy từ tên nhánh `claude/<lane>/<id>`. Không phải integrator: integrator đã làm đúng phần của mình và P3 bước 0b cấm nó giải tay. Không phải "worker bất kỳ": giải xung đột cần biết PR đó định làm gì.
+  - **Làn đó không có worker rảnh ở lượt kế tiếp** thì worker gặp nó **vẫn phải nhận** — thà một worker khác làn giải còn hơn PR nằm chờ. Ghi rõ thứ tự ấy, đừng để nó thành khoảng trống thứ hai.
+  - **`ops/lanes/priority.md`**, mục "Ngoại lệ đứng trên bảng này": thêm ca này cạnh hai ca đang có, để hai nguồn không lệch nhau.
+  - **Bước 0 của P3 (phụ lục P3)** ghi kèm, cho mỗi PR bỏ lại: tên nhánh, **làn sở hữu**, số lượt `aborted-ineligible` liên tiếp, và số giờ kẹt. Không có mấy số đó thì lượt sau không biết việc này đã bỏ lại mấy lần.
+  - **Nhịp tim, không chỉ là luật trên giấy** (nhóm Z trong `ops/known-failures.md`): một PR `aborted-ineligible` quá **N** lượt liên tiếp phải nổi lên bản tin ngày ở mục "Cần anh quyết" hoặc trong cảnh báo của `watchdog`. Luật mà không có ai đếm thì nó im lặng đúng lúc cần kêu — và lần này đã im lặng bốn lượt.
+  - Test khoá phần suy ra làn từ tên nhánh và phần chọn PR phải nhận, **kèm test âm**: một PR `aborted-ineligible` mà bị bỏ qua thì bài kiểm phải đỏ.
+
 ### P-019 · Bản tin thêm mục "Tiến độ", và đếm lượt chạy routine
 Chỉ dẫn 3 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
