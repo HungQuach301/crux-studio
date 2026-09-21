@@ -30,16 +30,16 @@ Dự phòng của KF-005 hiện đang ở dạng ghi chú ("giữ cả hai bên"
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - nguồn: giả định **G17** (`sai`); `ops/known-failures.md` KF-002 và KF-005; CHARTER mục 7
 - tiêu chí xong:
-  - Routine `crux-integrator` liệt kê mọi PR đang mở có `mergeable_state` là xung đột, và với **mỗi** PR đó: gộp `main` vào nhánh, giải xung đột theo luật **giữ cả hai bên** của KF-002 và KF-005, chạy `pnpm check`, và **chỉ push khi xanh**.
-  - **Giới hạn tự giải, khai trước chứ không đoán giữa chừng:** chỉ tự giải khi **không bên nào xoá hay sửa dòng của bên kia** — tức là thuần cộng thêm. Hễ có một dòng bị xoá hay bị sửa ở cả hai bên thì **dừng, không đoán**, và đưa PR đó vào bản tin.
-  - PR không tự giải được thì vào bản tin ngày, kèm **số giờ đã kẹt** tính từ lúc `mergeable_state` chuyển sang xung đột, xếp giảm dần. Kẹt lâu nhất nằm trên cùng.
-  - `pnpm check` đỏ sau khi gộp thì **không push**, và PR đó cũng vào bản tin — đỏ sau khi gộp là tín hiệu thật, không được nuốt.
-  - **Không bao giờ** `--ours`, `--theirs`, rebase hay force-push. Chỉ commit merge (CHARTER cấm force-push lên nhánh của người khác).
-  - Không đụng PR có nhãn `owner-merge`… **trừ** việc gộp `main`: gộp không làm thay đổi ý nghĩa của PR, nó chỉ giữ cho PR merge được. Ranh giới: integrator **không bao giờ merge** PR nào, kể cả PR `automerge` (bất biến I4, CHARTER 3.3).
-  - Mỗi lần chạy ghi một dòng vào `ops/logs/platform.jsonl` có `costUsd` (bất biến I8), kèm số PR đã giải và số PR bỏ lại.
+  - ✅ Cơ chế đối chiếu-và-giải viết thành tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-resolve.ts`. Gộp `ontoRef` vào HEAD; xung đột thì đối chiếu bằng `git diff --numstat` với tổ tiên chung ở CẢ hai bên trước khi quyết, đúng luật KF-002 "đối chiếu, không đoán".
+  - ✅ **Giới hạn tự giải, khai trước chứ không đoán giữa chừng:** chỉ tự giải khi không bên nào xoá hay sửa dòng (numstat deletions = 0 ở cả hai bên) — tức thuần cộng thêm. Có một file không đạt thì `git merge --abort` TOÀN BỘ, không giải một phần. Test âm: `ops/test/integrator-resolve.test.ts` — một bên sửa một dòng gốc thì `outcome: "aborted-ineligible"`, HEAD và working tree không đổi.
+  - ✅ Giải bằng `git merge-file --union` (đúng thuật toán `.gitattributes merge=union` đã kiểm ở KF-005) cho MỌI file xung đột đủ điều kiện, không chỉ file có khai attribute — vá đúng lỗ hổng G17 tìm ra (attribute không tự áp cho chính lần gộp mang nó tới). Test dương xác nhận cả hai dòng thêm còn nguyên, không sót dấu `<<<<<<<`.
+  - ✅ **Không bao giờ** `--ours`, `--theirs`, rebase hay force-push — tool chỉ có hai đường: merge commit thường, hoặc `--abort`. Không có nhánh code nào gọi ba lệnh trên.
+  - ✅ Routine `crux-integrator` (Phụ lục P3 trong CHARTER.md) cập nhật: liệt kê PR `mergeable_state` xung đột theo giờ kẹt giảm dần, gọi tool trên cho từng PR, chạy `pnpm check` + `pnpm replay` sau khi tool báo đã gộp, chỉ push khi xanh, không đụng PR `owner-merge` trừ bước gộp, không tự merge PR nào, ghi một dòng log kèm số đã giải/bỏ lại và giờ kẹt.
+  - **Còn treo, ngoài phạm vi cơ chế:** hiển thị "PR xung đột, giờ kẹt giảm dần" thành một mục riêng trong bản tin ngày là việc của `P-005`/`P-007` (chưa `done`) — tới lúc đó, số giờ kẹt chỉ nằm trong `note` của dòng log `ops/logs/platform.jsonl`, đọc được nhưng chưa được trình bày.
+  - **Chưa kiểm bằng chạy thật:** mục này đổi *chỉ dẫn* của routine (CHARTER.md, vùng bảo vệ) — bản thân routine chưa chạy lại theo bản mới, và **nhịp mỗi giờ cần chủ dự án tự đổi lịch** ở `claude.ai/code/routines` (agent không đổi được). Đây là lý do PR mang nhãn `owner-merge` cộng issue `🤖 [QĐ]` (irreversible, CHARTER 2.3 — "sửa charter" luôn irreversible), không tự chuyển `done` ở đây.
 
 #### Nhịp chạy: **mỗi giờ**, không phải mỗi ngày
 
