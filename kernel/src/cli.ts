@@ -2,15 +2,19 @@
  * CLI chung của một xưởng (CHARTER 5.4): `run --episode <id>` và
  * `run --input <file>`. Viết một lần ở kernel để sáu xưởng không chép lại
  * sáu bản khác nhau.
+ *
+ * Cả hai chế độ nạp pack từ `packs/`, không chế độ nào mang bản sao cấu hình:
+ * `--episode` gọi `loadChannelPack` ngay dưới đây, `--input` đi qua
+ * `readInputFile` ở `input.ts` (mục `integration/I-008`).
  */
 
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Envelope, WorkshopName } from './envelope.ts';
 import { fixedClock, systemClock } from './clock.ts';
 import { Cassette } from './cassette.ts';
 import { readArtifact } from './artifact-store.ts';
 import { loadChannelPack, loadGenrePack } from './packs.ts';
+import { readInputFile } from './input.ts';
 import { runWorkshop, type WorkshopDefinition, type WorkshopInput } from './workshop.ts';
 
 export interface CliArgs {
@@ -61,8 +65,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
 /**
  * Chạy một xưởng từ dòng lệnh. Hai chế độ:
  * - `--episode <id>`: đọc artifact của các xưởng trước trong `episodes/`.
- * - `--input <file>`: đọc một file gom sẵn `{ upstream, packs }` — dùng cho
- *   fixture và cho việc chạy một xưởng độc lập, không cần tập nào tồn tại.
+ * - `--input <file>`: đọc một file khai `{ episodeId, channel, upstream }` —
+ *   dùng cho fixture và cho việc chạy một xưởng độc lập, không cần tập nào
+ *   tồn tại. Pack nạp từ `packs/`, giống chế độ `--episode`.
  */
 export async function runWorkshopCli<P extends object>(
   definition: WorkshopDefinition<P>,
@@ -77,16 +82,9 @@ export async function runWorkshopCli<P extends object>(
   let locale: string;
 
   if (args.input) {
-    const file = JSON.parse(readFileSync(resolve(args.input), 'utf8')) as {
-      episodeId: string;
-      channel: string;
-      genre: string;
-      locale: string;
-      upstream?: Partial<Record<WorkshopName, Envelope>>;
-      packs?: Record<string, unknown>;
-    };
-    ({ episodeId, channel, genre, locale } = file);
-    input = { upstream: file.upstream ?? {}, packs: file.packs ?? {} };
+    const fixture = readInputFile(args.root, args.input);
+    ({ episodeId, channel, genre, locale } = fixture.episode);
+    input = fixture.input;
   } else if (args.episode) {
     episodeId = args.episode;
     channel = args.channel ?? 'us-personal-finance';

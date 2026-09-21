@@ -1,14 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runWorkshop, Cassette, fixedClock, validateArtifact } from '@crux/kernel';
+import { fileURLToPath } from 'node:url';
+import { readInputFile, runWorkshop, Cassette, fixedClock, validateArtifact } from '@crux/kernel';
 import { definition } from '../src/index.ts';
 
-const packs = { genre: { limits: { targetDurationMs: 1_260_000 } } };
+// Pack tới từ `packs/`, không từ một bản sao rút gọn viết trong test này
+// (mục integration/I-008). Ngưỡng đem ra so cũng đọc từ pack, nên một pack
+// đổi làm test này đỏ chứ không làm nó xanh sai.
+const { episode, input: fixture } = readInputFile(
+  fileURLToPath(new URL('../../../', import.meta.url)),
+  fileURLToPath(new URL('../fixtures/input.json', import.meta.url)),
+);
+const packs = fixture.packs;
+const targetDurationMs = (packs['genre'] as { limits: { targetDurationMs: number } }).limits
+  .targetDurationMs;
+
+// `episodeId` KHÔNG phải của fixture: bài kiểm cuối file đo rằng hai tập khác
+// nhau cho đề tài khác nhau, nên tập ở đây phải là một tập khác.
 const ctx = {
+  ...episode,
   episodeId: 'ep-test',
-  channel: 'us-personal-finance',
-  genre: 'data-explainer',
-  locale: 'en-US',
   clock: fixedClock('2026-09-20T00:00:00.000Z'),
   cassette: new Cassette('replay'),
   impl: 'stub' as const,
@@ -17,7 +28,7 @@ const ctx = {
 test('xưởng Đề tài sinh artifact hợp contract v0', async () => {
   const artifact = await runWorkshop(definition, { upstream: {}, packs }, ctx);
   assert.equal(validateArtifact('topic', artifact).valid, true);
-  assert.equal(artifact.payload.targetDurationMs, 1_260_000);
+  assert.equal(artifact.payload.targetDurationMs, targetDurationMs);
 });
 
 test('bất biến I6: mỗi claim có nguồn HOẶC có mô hình, không có lựa chọn thứ ba', async () => {

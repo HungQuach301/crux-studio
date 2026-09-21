@@ -3,12 +3,14 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Bốn việc:
+ * Năm việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
  * 3. Phong bì giữ đủ các trường của CHARTER 5.2, không thừa không thiếu.
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
+ * 5. Fixture `input.json` nạp pack từ `packs/` và không mang bản sao cấu
+ *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008`).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -23,6 +25,7 @@ import {
   unsupportedKeywords,
   type WorkshopName,
 } from '@crux/kernel';
+import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -106,11 +109,15 @@ if (existsSync(goldenRoot)) {
   }
 }
 
+// 5 · Fixture input.json không mang bản sao cấu hình
+problems.push(...fixtureInputProblems(root));
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
 }
 
 process.stdout.write(
-  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ.\n`,
+  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
+    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/.\n`,
 );

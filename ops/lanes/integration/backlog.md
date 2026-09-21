@@ -172,10 +172,61 @@ chéo làn rẻ hơn sáu PR.
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `topic/T-002` (PR `#38`), phát hiện 4
 - tiêu chí xong:
   - Quyết được một trong hai hướng, và ghi lý do: fixture **đọc** pack thật lúc dựng, hay fixture giữ
     bản sao nhưng có một kiểm so bản sao với `packs/channels/<slug>/channel.json`.
   - Kiểm đó nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường.
   - Sáu fixture khớp pack thật, hoặc khai rõ trường nào cố ý khác và vì sao.
+- **Đã làm** (PR `#40`): chọn hướng **đọc pack thật**. `readInputFile` của kernel nạp channel pack và
+  genre pack từ `packs/` theo trường `channel`, và ném lỗi nếu file `--input` nhúng khoá `packs` hoặc
+  khai `genre`/`locale` lệch channel pack; sáu fixture bỏ khối `packs`. Lý do chọn hướng này: một nguồn
+  duy nhất thì không còn gì để lệch — kiểm so sánh chỉ báo *sau khi* đã lệch — và một pack đổi không
+  còn phải sửa sáu file thuộc sáu làn, nên không sinh xung đột chéo làn (cùng lý do với `P-015`).
+  Kiểm nằm trong `pnpm contracts` (`ops/scripts/check-fixtures.ts`), mười bốn test trong đó mười hai
+  test âm; làm lệch `locale` thành `en-GB` thì `pnpm contracts` đỏ đúng một dòng. Bản sao genre cũng
+  đã lệch thật — thiếu năm khoá `limits` — nên nó bị bỏ cùng bản sao channel.
+  Vòng soát ngữ cảnh sạch nêu một điểm **chặn** và năm điểm **nên sửa**, đã xử hết trong PR:
+  luật khoá đổi từ "cấm đúng tên `packs`" sang **danh sách cho phép** (bản sao tên `channelPack` hay
+  `limits` trước đó đi qua im lặng); tên xưởng lạ trong `upstream` và `upstream: null` nay đỏ; mỗi
+  artifact đầu vào được validate theo contract — và nó bắt ngay một lỗi thật: `release` fixture thiếu
+  trường bắt buộc `payload.preflight.antiSlide`; `readInputFile` chuyển sang `kernel/src/input.ts` vì
+  nó không còn chỉ phục vụ CLI; bản sao pack thứ bảy trong `workshops/topic/test/stub.test.ts` cũng
+  bỏ. Điểm **chặn**: hàng Z16 ban đầu khai "đã xong" trong khi bản sao artifact trong `upstream` vẫn
+  trôi thật (`assembly←visual` 14 đường dẫn, `release←assembly` 28) — hàng Z16 hạ xuống **một phần**,
+  hai bản sao đó làm mới từ snapshot, và mục **`I-009`** mở để quyết cơ chế nguồn cho chúng.
+
+### I-009 · Artifact trong khối `upstream` của fixture là bản sao tập vàng, và đã trôi
+
+Tìm ra trong vòng soát của `I-008`, đã đo bằng chạy thật.
+
+`I-008` bỏ được bản sao **pack** trong fixture, nhưng khối `upstream` của fixture vẫn là **bản chép**
+của `ops/golden/ep-0001-stub/snapshots/*.json`, và bản chép đó đã lệch:
+
+- `workshops/assembly/fixtures/input.json` ← `visual`: **14** đường dẫn lệch (`hasMotion` của 14 scene).
+- `workshops/release/fixtures/input.json` ← `assembly`: **28** đường dẫn lệch, cộng **thiếu hẳn** trường
+  bắt buộc `payload.preflight.antiSlide` và hai check `motion-coverage`, `longest-static-run`.
+
+`I-008` đã làm mới hai bản sao đó và thêm hai lớp bắt: `readInputFile` validate mỗi artifact đầu vào
+theo contract (bắt được ca **thiếu trường** — chính ca `antiSlide` ở trên), và `pnpm contracts` so bốn
+trường bối cảnh với channel pack. Nhưng **nội dung payload vẫn không bị buộc vào nguồn nào**: một
+bản sao hợp contract mà lệch snapshot vẫn xanh, nên nó trôi lại được. Đúng hàng **Z16** của
+`ops/known-failures.md`, phần chưa phủ.
+
+Quyết định cần ra ở đây không nhỏ, nên nó là một mục riêng chứ không phải phần đuôi của `I-008`:
+buộc fixture bằng snapshot thì mỗi lần `pnpm replay -- --update` phải sửa fixture trong cùng PR, mà
+CHARTER 6.1 đòi PR cập nhật snapshot **không kèm thay đổi nào khác**. Hai luật đó phải được hoà giải
+trước khi viết máy kiểm.
+
+- deps: `I-008`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-008` (PR `#40`); `ops/known-failures.md` hàng Z16; CHARTER 6.1
+- tiêu chí xong:
+  - Chọn và ghi lý do một trong ba: (a) fixture **đọc** snapshot tập vàng lúc chạy, (b) fixture giữ bản
+    sao cộng một kiểm so với snapshot, (c) fixture cố ý độc lập với tập vàng — và khi đó nêu rõ nguồn
+    thật của nó là gì, vì "không có nguồn" là chỗ Z16 sống.
+  - Nếu chọn (a) hoặc (b): hoà giải với CHARTER 6.1 — nói rõ một PR `pnpm replay -- --update` được
+    phép chạm file nào, hoặc sửa 6.1 bằng PR `owner-merge` nếu cần.
+  - Kiểm nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường của một artifact đầu vào.
