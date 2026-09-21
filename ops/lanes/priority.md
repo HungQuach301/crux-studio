@@ -4,8 +4,6 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 
 | # | Làn | Vì sao ở vị trí này |
 |---|---|---|
-| **0a** | **`platform` · chỉ mục `P-018`** | **Ghim, chủ dự án chỉ định.** Trên issue bản tin #17 (2026-09-21) anh viết "Ưu tiên cao nhất: thực hiện D-C04", và đã trả lời **B** cho issue #14. Từ nay có 3 worker song song nên xung đột ở file log sẽ tăng nếu chưa làm. PR này là `owner-merge` — chỉ chủ dự án merge. Gỡ dòng này khi `P-018` chuyển `done`. |
-| **0b** | **`platform` · chỉ mục `P-016`** | **Ghim tạm thời.** Hàng đợi merge tuần tự đang phải giải tay ở mọi PR, nên nó chặn mọi làn khác — không làn nào tới được `main` mà không đi qua đó. Gỡ dòng này khi `P-016` chuyển `done`; phần còn lại của làn `platform` vẫn ở vị trí 7. |
 | 1 | `integration` | `main` đỏ chặn mọi làn khác. Revert trước, làm việc mới sau. |
 | 2 | `verify` | Kiểm trước, dựa vào sau (CHARTER 11.1 luật 2). Một giả định sai được phát hiện muộn đắt hơn mọi thứ trong bảng này. |
 | 3 | `topic` | Ưu tiên số một của Đợt 1 theo CHARTER mục 10. Cổng Mốc 3 là cổng quan trọng nhất, và nó nằm trọn trong làn này. Trượt cổng đó thì dự án dừng. |
@@ -18,6 +16,8 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 | 10 | `release` | Chưa có gì để phát hành cho tới khi năm làn trên chạy được một tập thật. |
 
 ## Ngoại lệ đứng trên bảng này
+
+> **Hai dòng ghim `0a` (`P-018`) và `0b` (`P-016`) đã được gỡ ngày 2026-09-21** (mục `I-010`): cả hai mục đã `done`, và chính hai dòng đó dặn "gỡ dòng này khi … chuyển `done`". Làn `platform` trở lại vị trí 7.
 
 Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt bảng:
 

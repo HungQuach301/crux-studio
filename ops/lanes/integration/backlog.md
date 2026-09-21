@@ -9,7 +9,7 @@ Phần lớn việc của làn này chạy bằng routine `crux-integrator` (ph�
 ### I-001 · Dọn PR nháp đã bỏ
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: phụ lục P3 bước 2
 - tiêu chí xong:
   - Đóng PR nháp không có commit mới quá 72 giờ, **kèm ghi chú** nói rõ mục đó quay lại hàng đợi.
@@ -20,7 +20,7 @@ Tín hiệu của rủi ro R12 (độ phức tạp tự phình to): số file co
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER 6.7; phụ lục P3 bước 3
 - tiêu chí xong:
   - ✅ Một lệnh tính: số file code / số mục `done`, số lần revert, tỷ lệ `main` xanh — `ops/scripts/update-metrics.ts`.
@@ -33,7 +33,7 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 
 - deps: `docs/assumptions.md`
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER 11.1; phụ lục P3 bước 4
 - tiêu chí xong:
   - ✅ Giả định nào có cách kiểm tự động thì chạy được bằng một lệnh — `pnpm recheck:assumptions`
@@ -54,7 +54,7 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 ### I-004 · Tạo lại lockfile khi xung đột
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER mục 7 (file nóng được phân vùng)
 - tiêu chí xong: lockfile do làn này tạo lại, không phải do làn gây xung đột tự sửa.
   - ✅ Cơ chế là tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-lockfile.ts`, gọi từ
@@ -107,7 +107,7 @@ tức bài kiểm chạy được, chỉ là nó đã bỏ qua một cách lặn
 
 - deps: `I-003`
 - risk: low
-- status: review
+- status: done
 - nguồn: phụ lục P3 bước 4; CLAUDE.md mục 7 ("kiểm bằng chạy thật"); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - Không có ref `origin/claude/*` nào thì bài kiểm ra nhánh **`broken`** (`⚠ … KHÔNG CHẠY ĐƯỢC`,
@@ -172,7 +172,7 @@ chéo làn rẻ hơn sáu PR.
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `topic/T-002` (PR `#38`), phát hiện 4
 - tiêu chí xong:
   - Quyết được một trong hai hướng, và ghi lý do: fixture **đọc** pack thật lúc dựng, hay fixture giữ
@@ -252,7 +252,7 @@ là làn chết đói nặng nhất.
 
 - deps: —
 - risk: low
-- status: claimed
+- status: review
 - nguồn: `ops/lanes/README.md` (định nghĩa `deps`); CHARTER phụ lục P1 bước 7, P3 bước 2; `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - `ops/scripts/backlog-status.ts`: đối chiếu mọi mục `status: review` trong `ops/lanes/*/backlog.md`
@@ -271,3 +271,12 @@ là làn chết đói nặng nhất.
     đúng như file đó tự dặn ("Gỡ dòng này khi … chuyển `done`").
   - Nối vào phụ lục P3 bước 2 là **việc của lượt sau**, cố ý tách ra: PR #43 đang mở và đang sửa
     CHARTER, nên chạm CHARTER ở đây là tự tạo xung đột cho hàng đợi tuần tự.
+
+- cặn còn lại, khai trước thay vì để tự phát hiện:
+  - ⬜ **`platform/P-015`** đã vào `main` thật (PR `#13`), nhưng tiêu đề commit là
+    `platform: file log dùng chung … (KF-005, P-015)` — không đúng dạng `[<lane>] <id> — …`, nên tool
+    xếp nó vào `unmerged` và **không** đụng tới. Đây là lựa chọn có chủ ý: nới luật khớp để vớt ca này
+    sẽ vớt luôn `P-014` (commit `platform: rà soát … (P-014)`), mà `P-014` **chưa** xong — nó vẫn
+    `ready`. Chuyển `P-015` sang `done` là việc đọc tay một lần, không phải việc của máy.
+  - ⬜ Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (xem trên). Tới khi đó, tool phải được
+    gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
