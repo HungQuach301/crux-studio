@@ -221,7 +221,7 @@ trước khi viết máy kiểm.
 
 - deps: `I-008`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-008` (PR `#40`); `ops/known-failures.md` hàng Z16; CHARTER 6.1
 - tiêu chí xong:
   - Chọn và ghi lý do một trong ba: (a) fixture **đọc** snapshot tập vàng lúc chạy, (b) fixture giữ bản
@@ -230,6 +230,46 @@ trước khi viết máy kiểm.
   - Nếu chọn (a) hoặc (b): hoà giải với CHARTER 6.1 — nói rõ một PR `pnpm replay -- --update` được
     phép chạm file nào, hoặc sửa 6.1 bằng PR `owner-merge` nếu cần.
   - Kiểm nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường của một artifact đầu vào.
+- quyết định: **phương án (a)** — fixture **đọc** snapshot tập vàng lúc chạy.
+
+  Lý do chọn (a) chứ không (b) hay (c), theo đúng thứ tự cân nhắc:
+
+  1. **(a) giữ đúng hình dạng đã dùng cho nửa trước của Z16.** `I-008` không thêm phép so bản sao pack
+     với `packs/` — nó **bỏ** bản sao. Một phép so chỉ báo *sau khi* đã lệch; một nguồn duy nhất thì
+     không có gì để lệch. Cùng lỗi, cùng cách chữa.
+  2. **(a) là phương án duy nhất không đụng CHARTER 6.1.** Đây là chỗ khó mà thân mục nêu. Với (b),
+     fixture giữ bản sao nên **mỗi** PR `pnpm replay -- --update` buộc phải sửa kèm sáu file fixture —
+     đúng thứ CLAUDE.md mục 1 và CHARTER 6.1 cấm, và muốn hoà giải thì phải sửa 6.1 bằng PR
+     `owner-merge`. Với (a), fixture tự đi theo snapshot, nên một PR `--update` **chỉ chạm
+     `ops/golden/**`** và không file nào khác. Không cần sửa CHARTER, không cần nới luật.
+  3. **(c) bị loại vì không có nguồn thật để nêu.** Sáu fixture này dựng ra để chạy thử đúng đường chạy
+     của tập vàng; "độc lập" ở đây sẽ là độc lập trên giấy, và thân mục đã nói "không có nguồn" chính là
+     chỗ Z16 sống.
+
+  Hệ quả phụ, ghi để lượt sau khỏi đo lại: luật máy mà hàng **Z13** đề nghị (đỏ khi một PR vừa chạm
+  `ops/golden/**` vừa chạm thứ khác) trước mục này **không dựng được** — nó sẽ đỏ với chính các PR nó
+  phải cho qua. Nay dựng được.
+
+  Khối `upstream` khai thẳng **vẫn giữ** trong kernel: chạy một xưởng độc lập với artifact viết tay là
+  chế độ CHARTER 5.4 nói tới. Luật "fixture trong repo không được chép" nằm ở
+  `ops/scripts/check-fixtures.ts`, nơi biết file nào là fixture của repo — kernel trung tính.
+- đã làm:
+  - `kernel/src/input.ts`: khoá `upstreamFrom` (`{ golden, workshops }`), `goldenSnapshotPath`, và luật
+    **ném ở mọi cách khai sai**. Không nhánh nào trả `upstream` rỗng rồi chạy tiếp: "nạp được 0
+    artifact" và "xưởng này không tiêu thụ gì" trông giống hệt nhau lúc chạy. Xưởng không tiêu thụ gì
+    (`topic`) khai `upstream: {}`, không khai `upstreamFrom` với danh sách rỗng.
+  - `ops/scripts/check-fixtures.ts`: `upstreamCopyProblems` — fixture trong repo khai thẳng `upstream`
+    không rỗng là đỏ. Phép so bối cảnh chuyển sang đọc khối `upstream` **đã dựng xong**, không đọc thô
+    từ file: với `upstreamFrom` thì file không còn gì để đọc thô, mà phép so vẫn cần chạy — nó là thứ
+    bắt một snapshot khai bối cảnh lệch channel pack.
+  - Sáu `workshops/<tên>/fixtures/input.json`: **3959 dòng bản chép đổi thành 6 con trỏ** (77 dòng tổng).
+  - `kernel/test/input.test.ts` (mới, 13 test) và 6 test mới trong `ops/test/check-fixtures.test.ts`.
+- còn treo:
+  - Luật máy của hàng **Z13** vẫn chưa ai dựng — mục này chỉ gỡ thứ chặn nó, không dựng nó. Nếu dựng thì
+    là một mục riêng, và nó nằm trong `ops/workflows/` chứ không phải `pnpm check`.
+  - `upstreamFrom.workshops` khai tay, không suy từ `definition.consumes`. Cố ý: `readInputFile` nhận một
+    đường dẫn file chứ không nhận `definition`, và một fixture khai thừa/thiếu xưởng so với `consumes`
+    hiện chỉ lộ ra qua `inputsHash` của output. Đo được trước khi chữa thì hãy chữa.
 
 ### I-010 · Mục đã vào `main` mà vẫn nằm `status: review` — không có gì chuyển nó sang `done`
 
