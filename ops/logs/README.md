@@ -14,6 +14,8 @@
 - **`merge=union`** (`.gitattributes` ở gốc repo) vẫn còn, làm **lớp phòng thủ thứ hai**: nó cứu trường hợp hai lần chạy cùng ghi vào một mục. Giới hạn đã đo của nó ở `KF-005`.
 - **Append-only.** Không sửa, không xoá dòng đã ghi. Sai thì ghi thêm một dòng đính chính.
 - Một dòng gồm: `at`, `lane`, `kind` (`stage` | `lane`), `ref`, `status`, `durationMs`, `costUsd`, và `note` nếu cần.
+- **`rollup: true`** đánh dấu dòng **tổng hợp**: `costUsd` của nó đã được đếm ở những dòng khác. Một lần `pnpm run:episode` ghi sáu dòng `stage` cộng một dòng `lane` mang đúng tổng của sáu dòng đó, nên cộng hết thì mỗi tập bị tính tiền **hai lần**. `sumCostUsd` bỏ qua dòng có cờ này; dòng vẫn được ghi, vì bất biến I8 đòi mọi lần chạy làn có một dòng.
+- **`at` luôn là UTC.** `appendRunLog` chuẩn hoá lúc ghi và `parseRunLogs` chuẩn hoá lúc đọc. Mọi phép so sánh thời gian ở đây là so **chuỗi**, nên một dòng ghi `+07:00` sẽ xếp sai chỗ và rơi khỏi cửa sổ 24 giờ dù nó nằm trong đó.
 
 `pnpm run:episode` tự ghi một dòng `stage` cho mỗi xưởng và một dòng `lane` cho cả chuỗi, tất cả dưới mã tập. Worker ghi một dòng `lane` cho mỗi mục backlog đã làm, trong cùng PR của mục đó.
 

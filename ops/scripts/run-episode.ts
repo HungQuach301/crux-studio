@@ -7,7 +7,14 @@
  * mã mục, nên hai tập chạy song song không chạm cùng một file.
  */
 
-import { writeArtifact, appendRunLog, runLogPath, deriveEpisodeState, systemClock } from '@crux/kernel';
+import {
+  writeArtifact,
+  appendRunLog,
+  runLogPath,
+  isSafeLogId,
+  deriveEpisodeState,
+  systemClock,
+} from '@crux/kernel';
 import { runEpisode } from './pipeline.ts';
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -22,6 +29,16 @@ const at = arg('at');
 
 if (!episodeId) {
   process.stderr.write('Cần --episode <id>.\n');
+  process.exit(2);
+}
+
+// Kiểm mã tập NGAY, trước khi chạy gì. Mã tập đi thẳng vào tên file log,
+// nên `runLogPath` sẽ ném nếu nó bậy — nhưng lần gọi đầu tiên nằm SAU khi
+// cả sáu xưởng đã chạy xong và artifact đã ghi ra đĩa. Để nó ném ở đó
+// nghĩa là một lần chạy trả tiền thật không để lại dòng `costUsd` nào
+// (bất biến I8), và tiền biến mất khỏi `ops/metrics.md` mà không gì đỏ.
+if (!isSafeLogId(episodeId)) {
+  process.stderr.write(`Mã tập không hợp lệ: ${JSON.stringify(episodeId)}. Chỉ chữ, số, \`.\`, \`-\`, \`_\`.\n`);
   process.exit(2);
 }
 
@@ -51,6 +68,9 @@ appendRunLog(runLogPath(root, 'integration', episodeId), {
   status: state.next === null ? 'ok' : 'failed',
   durationMs: result.durationMs,
   costUsd: state.costUsd,
+  // Dòng TỔNG HỢP: `state.costUsd` là tổng của sáu dòng `stage` ở trên.
+  // Không gắn cờ này thì mỗi tập bị tính tiền hai lần.
+  rollup: true,
   note: `xong ${state.done.length}/${result.order.length} xưởng`,
 });
 

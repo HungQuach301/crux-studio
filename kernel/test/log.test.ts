@@ -24,6 +24,7 @@ import {
   isSafeLogId,
   listLogFiles,
   logIdFromRef,
+  normalizeAt,
   parseRunLogs,
   readRunLogs,
   runLogPath,
@@ -63,6 +64,17 @@ test('runLogPath · mã mục bậy bị chặn, không ghi ra ngoài ops/logs',
   assert.ok(isSafeLogId('ep-0001-stub'));
   assert.ok(isSafeLogId('P3-daily-2026-09-21'));
   assert.ok(!isSafeLogId('-P-018'));
+});
+
+test('logIdFromRef · đoạn đầu được so với MỌI tên làn, không riêng lane truyền vào', () => {
+  // Integrator ghi hộ một mục của làn khác: `lane` là `integration` nhưng
+  // `ref` mang tiền tố `platform`. So với mỗi `lane` thì id ra `platform`,
+  // và P-018, P-019, P-020… dồn hết vào ops/logs/integration/platform.jsonl
+  // — đúng thứ xung đột một-file-dùng-chung mà D-C04 sinh ra để xoá.
+  assert.equal(logIdFromRef('platform/P-018', 'integration'), 'P-018');
+  assert.equal(logIdFromRef('verify/VF-G17', 'platform'), 'VF-G17');
+  // Ref một đoạn và đoạn đó là tên làn: không có mã mục nào để lấy.
+  assert.equal(logIdFromRef('platform', 'platform'), 'unknown');
 });
 
 test('logIdFromRef · cả hai dạng ref đang dùng', () => {
@@ -158,4 +170,42 @@ test('appendRunLog · tự tạo thư mục làn và nối thêm dòng', () => {
   appendRunLog(path, line('2026-09-21T02:00:00.000Z', { lane: 'visual', ref: 'visual/V-003' }));
   assert.equal(readFileSync(path, 'utf8').trim().split('\n').length, 2);
   assert.equal(readRunLogs(join(root, 'ops', 'logs')).length, 2);
+});
+
+
+test('normalizeAt · đưa mọi mốc về UTC so sánh được', () => {
+  // Cùng một thời điểm, hai cách viết. So CHUỖI thì '17:00+07:00' đứng sau
+  // '12:00Z' dù nó xảy ra TRƯỚC — sắp sai và rơi khỏi cửa sổ 24 giờ.
+  assert.equal(normalizeAt('2026-09-21T17:00:00+07:00'), '2026-09-21T10:00:00.000Z');
+  assert.equal(normalizeAt('2026-09-21T10:00:00.000Z'), '2026-09-21T10:00:00.000Z');
+  assert.throws(() => normalizeAt('hôm qua'), /không đọc được/);
+});
+
+test('parseRunLogs · chuẩn hoá `at` và từ chối `costUsd` không phải số', () => {
+  const lech = JSON.stringify({
+    at: '2026-09-21T17:00:00+07:00',
+    lane: 'platform',
+    kind: 'lane',
+    ref: 'platform/P-018',
+    status: 'ok',
+    durationMs: 0,
+    costUsd: 1,
+  });
+  const sau = formatLogLine(line('2026-09-21T11:00:00.000Z', { ref: 'sau' }));
+  // Dòng +07:00 = 10:00Z, phải đứng TRƯỚC dòng 11:00Z.
+  assert.deepEqual(parseRunLogs([`${sau}\n${lech}`]).map((l) => l.ref), ['platform/P-018', 'sau']);
+
+  const chuoi = lech.replace('"costUsd":1', '"costUsd":"1"');
+  assert.throws(() => parseRunLogs([chuoi]), /costUsd` không phải số/);
+});
+
+test('rollup · dòng tổng hợp giữ được cờ qua một vòng ghi–đọc', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-log-'));
+  const path = runLogPath(root, 'integration', 'ep-0001-stub');
+  appendRunLog(path, line('2026-09-21T01:00:00.000Z', { lane: 'integration', ref: 'ep-0001-stub/full-chain', costUsd: 3, rollup: true }));
+  appendRunLog(path, line('2026-09-21T02:00:00.000Z', { lane: 'integration', ref: 'integration/I-004', costUsd: 1 }));
+
+  const lines = readRunLogs(join(root, 'ops', 'logs'));
+  assert.equal(lines.filter((l) => l.rollup === true).length, 1);
+  assert.equal(lines.filter((l) => l.rollup !== true).length, 1);
 });

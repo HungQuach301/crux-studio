@@ -28,6 +28,8 @@ import {
   BUDGET_LOW_USD,
 } from '../scripts/update-metrics.ts';
 import type { RunLogLine } from '@crux/kernel';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 test('isCodeFile: .ts tính, .test.ts không tính', () => {
   assert.equal(isCodeFile('ops/scripts/update-metrics.ts'), true);
@@ -255,8 +257,8 @@ test('updateArchitectureTable + updateStabilityTable: cùng hoạt động trên
 
 // --- Bảng "Chi phí" — bất biến I8 sau quyết định `D-C04` ---
 
-function logLine(at: string, costUsd: number): RunLogLine {
-  return { at, lane: 'platform', kind: 'lane', ref: 'platform/P-018', status: 'ok', durationMs: 0, costUsd };
+function logLine(at: string, costUsd: number, extra: Partial<RunLogLine> = {}): RunLogLine {
+  return { at, lane: 'platform', kind: 'lane', ref: 'platform/P-018', status: 'ok', durationMs: 0, costUsd, ...extra };
 }
 
 test('sumCostUsd: cộng và làm tròn sai số dấu phẩy động', () => {
@@ -307,4 +309,47 @@ test('updateCostTable: mỗi ngày một dòng, chạy lại trong ngày thì gh
 
 test('formatCostRow: phần trăm ngân sách tính từ chi phí TÍCH LUỸ', () => {
   assert.deepEqual(formatCostRow('2026-09-21', 30, 300), ['2026-09-21', '30', '300', '50%']);
+});
+
+
+test('sumCostUsd: BỎ QUA dòng tổng hợp — một tập không được tính tiền hai lần', () => {
+  // Đúng hình dạng `pnpm run:episode` ghi ra: sáu dòng `stage` cộng một
+  // dòng `lane` mang tổng của chúng.
+  const stages = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5].map((c, i) =>
+    logLine(`2026-09-21T0${i}:00:00.000Z`, c, { kind: 'stage', ref: `ep-0001/w${i}` }),
+  );
+  const chain = logLine('2026-09-21T06:00:00.000Z', 3, { ref: 'ep-0001/full-chain', rollup: true });
+
+  assert.equal(sumCostUsd([...stages, chain]), 3, 'tập tốn 3 USD phải ra 3, không phải 6');
+  // Dòng làn của một mục backlog KHÔNG phải tổng hợp — vẫn phải cộng.
+  assert.equal(sumCostUsd([...stages, chain, logLine('2026-09-21T07:00:00.000Z', 2)]), 5);
+});
+
+test('ngân sách: con số trong update-metrics và trong watchdog.yml phải bằng nhau', () => {
+  // Hai nguồn sự thật cho một con số tiền. Không gộp được (workflow không
+  // đọc TypeScript), nên khoá ở đây để lần lệch tiếp theo là ĐỎ, không im.
+  const workflow = readFileSync(join(process.cwd(), 'ops', 'workflows', 'watchdog.yml'), 'utf8');
+  const match = workflow.match(/^\s*BUDGET=(\d+)\s*$/m);
+  assert.ok(match, 'không tìm thấy `BUDGET=` trong ops/workflows/watchdog.yml');
+  assert.equal(
+    Number(match![1]),
+    BUDGET_LOW_USD,
+    'ngân sách trong watchdog.yml lệch với BUDGET_LOW_USD — bản tin và cảnh báo sẽ nói hai điều khác nhau',
+  );
+});
+
+test('budgetPercent: CẮT CỤT, khớp `awk printf "%d"` của watchdog', () => {
+  // 479.9/600 = 79.98% — làm tròn ra 80 (bản tin báo chạm ngưỡng) trong
+  // khi watchdog cắt cụt ra 79 (chưa báo động). Hai số cạnh nhau nói hai
+  // điều khác nhau.
+  assert.equal(budgetPercent(479.9), 79);
+  assert.equal(budgetPercent(485.99), 80);
+  assert.equal(budgetPercent(600), 100);
+});
+
+test('updateCostTable: không tìm thấy bảng thì NÉM, không im lặng trả về nguyên văn', () => {
+  assert.throws(
+    () => updateCostTable('## Mục khác\n\nkhông có bảng nào\n', '2026-09-21', 1, 1),
+    /Không tìm thấy bảng/,
+  );
 });

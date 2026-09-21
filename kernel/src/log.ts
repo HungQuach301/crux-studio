@@ -16,9 +16,9 @@
  * việc của `readRunLogs` dưới đây, không phải việc mỗi bên đọc phải nhớ.
  */
 
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, readdirSync, type Dirent } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { LaneName } from './envelope.ts';
+import { LANES, type LaneName } from './envelope.ts';
 
 export interface RunLogLine {
   at: string;
@@ -28,6 +28,14 @@ export interface RunLogLine {
   status: 'ok' | 'failed' | 'skipped';
   durationMs: number;
   costUsd: number;
+  /**
+   * Dòng **tổng hợp**: `costUsd` của nó đã được đếm ở những dòng khác.
+   * Bên tính tiền phải bỏ qua nó, nếu không một lần chạy tập bị tính hai
+   * lần — sáu dòng `stage` cộng một dòng `lane` mang đúng tổng của sáu
+   * dòng đó (`deriveEpisodeState`). Dòng vẫn được ghi, vì bất biến I8 đòi
+   * mọi lần chạy làn có một dòng; chỉ phép cộng tiền là bỏ qua nó.
+   */
+  rollup?: boolean;
   note?: string;
 }
 
@@ -40,6 +48,7 @@ export function formatLogLine(line: RunLogLine): string {
     status: line.status,
     durationMs: line.durationMs,
     costUsd: line.costUsd,
+    ...(line.rollup === true ? { rollup: true } : {}),
     ...(line.note === undefined ? {} : { note: line.note }),
   });
 }
@@ -63,16 +72,23 @@ export function isSafeLogId(id: string): boolean {
  * tiên không phải tên làn** là đơn vị công việc — với mục backlog thì đó
  * là đoạn sau, với lần chạy tập thì đó là đoạn trước.
  *
+ * Đoạn đầu được so với **mọi** tên làn, không riêng `lane` truyền vào:
+ * một dòng `ref: "platform/P-018"` mà bên gọi đưa `lane: "integration"`
+ * (integrator ghi hộ) vẫn phải ra `P-018`. So với mỗi `lane` thôi thì nó
+ * ra `platform`, và mọi mục của làn đó dồn vào **một** file
+ * `ops/logs/integration/platform.jsonl` — đúng thứ xung đột mà `D-C04`
+ * sinh ra để xoá.
+ *
  * Dùng khi phải chuyển dòng log cũ sang cấu trúc mới, hoặc khi bên gọi chỉ
  * có `ref` trong tay. Bên gọi biết mã mục thì truyền thẳng cho
  * `runLogPath`, đừng đoán lại từ `ref`.
  */
-export function logIdFromRef(ref: string, lane: LaneName): string {
+export function logIdFromRef(ref: string, _lane?: LaneName): string {
   const parts = ref.split('/').filter((part) => part.length > 0);
   if (parts.length === 0) return 'unknown';
-  const first = parts[0] === lane ? parts[1] : parts[0];
-  const id = first ?? parts[0]!;
-  return isSafeLogId(id) ? id : 'unknown';
+  const isLane = (LANES as readonly string[]).includes(parts[0]!);
+  const id = isLane ? parts[1] : parts[0];
+  return id !== undefined && isSafeLogId(id) ? id : 'unknown';
 }
 
 /** Đường dẫn log của một mục: `<root>/ops/logs/<lane>/<id>.jsonl`. */
@@ -83,9 +99,13 @@ export function runLogPath(root: string, lane: LaneName, id: string): string {
   return join(root, 'ops', 'logs', lane, `${id}.jsonl`);
 }
 
+/**
+ * Ghi một dòng. `at` được chuẩn hoá về UTC ngay lúc ghi, để bên đọc không
+ * phải gặp hai dạng mốc thời gian trong cùng một cột.
+ */
 export function appendRunLog(logPath: string, line: RunLogLine): void {
   mkdirSync(dirname(logPath), { recursive: true });
-  appendFileSync(logPath, `${formatLogLine(line)}\n`, 'utf8');
+  appendFileSync(logPath, `${formatLogLine({ ...line, at: normalizeAt(line.at) })}\n`, 'utf8');
 }
 
 /**
@@ -110,25 +130,64 @@ export function parseRunLogs(contents: readonly string[]): RunLogLine[] {
     for (const raw of content.split('\n')) {
       const text = raw.trim();
       if (text.length === 0) continue;
-      lines.push(JSON.parse(text) as RunLogLine);
+      const line = JSON.parse(text) as RunLogLine;
+
+      // `costUsd` phải là SỐ. Một dòng chép tay mang `"costUsd": "0.12"`
+      // biến phép cộng tiền thành nối chuỗi, và ô "Tích luỹ" trong
+      // `ops/metrics.md` thành rác mà không gì đỏ.
+      if (typeof line.costUsd !== 'number' || !Number.isFinite(line.costUsd)) {
+        throw new Error(`Dòng log có \`costUsd\` không phải số: ${text.slice(0, 120)}`);
+      }
+
+      // `at` được chuẩn hoá về UTC. Mọi phép so sánh thời gian ở đây là so
+      // CHUỖI, nên một dòng ghi `2026-09-21T17:00:00+07:00` sẽ xếp sai chỗ
+      // và rơi khỏi cửa sổ 24 giờ dù nó nằm trong đó.
+      line.at = normalizeAt(line.at);
+
+      lines.push(line);
     }
   }
   return sortByAt(lines);
 }
 
-/** Mọi file `.jsonl` dưới một thư mục, kể cả trong thư mục con, đã sắp tên. */
+/**
+ * Đưa `at` về đúng một dạng so sánh được: ISO 8601, UTC, có mili giây.
+ * Không đọc được thì **ném** — một mốc thời gian vô nghĩa trong nguồn tính
+ * tiền phải dừng phép tính, không được lặng lẽ trôi xuống cuối bảng.
+ */
+export function normalizeAt(at: string): string {
+  const ms = Date.parse(at);
+  if (Number.isNaN(ms)) {
+    throw new Error(`Dòng log có \`at\` không đọc được: ${JSON.stringify(at)}`);
+  }
+  return new Date(ms).toISOString();
+}
+
+/**
+ * Mọi file `.jsonl` dưới một thư mục, kể cả trong thư mục con, đã sắp tên.
+ *
+ * Thư mục **chưa tồn tại** thì trả mảng rỗng — đó là trạng thái hợp lệ của
+ * một repo chưa có log. Mọi lỗi khác (gõ nhầm đường dẫn thành một file,
+ * mất quyền đọc) thì **ném**: nuốt chúng cho ra `[]`, và `[]` cho ra chi
+ * phí 0 USD ghi thẳng vào `ops/metrics.md` mà không gì đỏ — nhóm Z.
+ *
+ * `withFileTypes` thay cho `statSync` từng mục: một symlink gãy, hoặc một
+ * file bị xoá giữa lúc đọc thư mục (worker khác đang ghi log song song là
+ * chế độ chạy bình thường), sẽ làm `statSync` ném và giết cả phép đọc.
+ */
 export function listLogFiles(logsDir: string): string[] {
-  let entries: string[];
+  let entries: Dirent[];
   try {
-    entries = readdirSync(logsDir);
-  } catch {
-    return [];
+    entries = readdirSync(logsDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
   }
   const found: string[] = [];
-  for (const entry of entries.sort()) {
-    const full = join(logsDir, entry);
-    if (statSync(full).isDirectory()) found.push(...listLogFiles(full));
-    else if (entry.endsWith('.jsonl')) found.push(full);
+  for (const entry of [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    const full = join(logsDir, entry.name);
+    if (entry.isDirectory()) found.push(...listLogFiles(full));
+    else if (entry.name.endsWith('.jsonl')) found.push(full);
   }
   return found;
 }

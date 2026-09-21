@@ -15,9 +15,13 @@ episodes/**/*.jpg
 # Nhật ký sinh ra từ lần chạy thử cục bộ. Dòng log THẬT của một mục backlog
 # được thêm có chủ ý trong PR của mục đó (bất biến I8), không phải bằng cách
 # commit kết quả của một lần `pnpm run:episode` chạy nháp.
+#
+# Từ `D-C04`, log là `ops/logs/<lane>/<id>.jsonl` — mỗi mục một file, nên
+# danh sách trắng từng file không còn dùng được: mỗi mục mới sẽ phải thêm
+# một dòng, và quên một dòng là mất một dòng log (bất biến I8) mà không gì
+# đỏ. Đảo lại: chỉ bỏ qua log của **lần chạy tập**, thứ duy nhất sinh ra
+# hàng loạt và không thuộc mục backlog nào. `pnpm run:episode` đặt tên file
+# theo mã tập, và mã tập luôn bắt đầu bằng `ep-` (`ops/golden/ep-0001-stub`).
+ops/logs/**/ep-*.jsonl
+# Hình dạng cũ, phòng khi một cây làm việc còn sót file phẳng chưa chuyển.
 ops/logs/*.jsonl
-!ops/logs/integration.jsonl
-!ops/logs/kernel.jsonl
-!ops/logs/platform.jsonl
-!ops/logs/verify.jsonl
-!ops/logs/visual.jsonl

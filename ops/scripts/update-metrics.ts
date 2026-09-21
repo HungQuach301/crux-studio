@@ -211,13 +211,27 @@ export function formatStabilityRow(rangeLabel: string, merged: number, reverts: 
 
 /**
  * Cận DƯỚI của ngân sách học (CHARTER mục 8: khoảng 600–900 USD tới cổng
- * Mốc 3). Cùng con số mà `ops/workflows/watchdog.yml` dùng cho ngưỡng 80%:
- * đo sớm một nhịp rẻ hơn đo muộn một nhịp.
+ * Mốc 3). Lấy cận dưới là chủ ý: đo sớm một nhịp rẻ hơn đo muộn một nhịp.
+ *
+ * ⚠️ Con số này cũng nằm trong `ops/workflows/watchdog.yml` (`BUDGET=600`),
+ * nên nó là **hai nguồn sự thật** cho một con số tiền. Đổi một chỗ mà quên
+ * chỗ kia thì bản tin và cảnh báo nói hai điều khác nhau. Gộp về một chỗ
+ * cần workflow đọc được TypeScript, chưa làm — `ops/test/update-metrics.test.ts`
+ * khoá hai con số phải bằng nhau để lần lệch tiếp theo là đỏ, không phải im.
  */
 export const BUDGET_LOW_USD = 600;
 
+/**
+ * Cộng tiền, **bỏ qua dòng tổng hợp** (`rollup: true`).
+ *
+ * Một lần `pnpm run:episode` ghi sáu dòng `stage` cộng một dòng `lane`
+ * mang đúng tổng của sáu dòng đó. Cộng hết thì mỗi tập bị tính **hai
+ * lần**: tập tốn 3 USD ra 6 USD, và cột "% ngân sách học" cũng gấp đôi.
+ * Hôm nay chưa lộ vì mọi xưởng còn `impl: stub` và `costUsd` đều bằng 0 —
+ * nó sẽ lộ đúng vào lần chạy trả tiền đầu tiên, tức là lúc tệ nhất.
+ */
 export function sumCostUsd(lines: readonly RunLogLine[]): number {
-  const total = lines.reduce((sum, line) => sum + (line.costUsd ?? 0), 0);
+  const total = lines.filter((line) => line.rollup !== true).reduce((sum, line) => sum + line.costUsd, 0);
   // Cộng số thực dồn sai số; log là nguồn tính tiền nên làm tròn về 4 chữ số.
   return Math.round(total * 10_000) / 10_000;
 }
@@ -233,17 +247,40 @@ export function linesSince(lines: readonly RunLogLine[], since: string): RunLogL
   return lines.filter((line) => line.at >= since);
 }
 
+/**
+ * Phần trăm ngân sách, **cắt cụt** chứ không làm tròn.
+ *
+ * `watchdog.yml` tính cùng con số bằng `awk printf "%d"`, tức cắt cụt. Nếu
+ * ở đây làm tròn thì 479.9 USD ra 80% trong bản tin nhưng 79% ở watchdog:
+ * bản tin báo đã chạm ngưỡng trong khi cảnh báo chưa kêu. Hai con số cạnh
+ * nhau nói hai điều khác nhau là cách nhanh nhất làm người đọc thôi tin cả hai.
+ */
 export function budgetPercent(spent: number, budget: number = BUDGET_LOW_USD): number {
   if (budget <= 0) return 0;
-  return Math.round((spent / budget) * 100);
+  return Math.floor((spent / budget) * 100);
 }
 
 export function formatCostRow(date: string, cost24h: number, total: number): string[] {
   return [date, String(cost24h), String(total), `${budgetPercent(total)}%`];
 }
 
+/**
+ * `upsertTableRow` trả về `content` nguyên văn khi không tìm thấy bảng —
+ * im lặng, và đúng chỗ này thì im lặng nghĩa là: ai đó đổi tên mục
+ * `## Chi phí` trong `ops/metrics.md`, bảng chi phí đóng băng ở số cũ mãi
+ * mãi, mà lệnh vẫn exit 0 và vẫn in ra số đúng. Bảng tiền thì không được
+ * phép hỏng kiểu đó, nên ở đây **ném**.
+ */
 export function updateCostTable(content: string, date: string, cost24h: number, total: number): string {
-  return upsertTableRow(content, '## Chi phí', 0, date, formatCostRow(date, cost24h, total));
+  const row = formatCostRow(date, cost24h, total);
+  const updated = upsertTableRow(content, '## Chi phí', 0, date, row);
+  // Kiểm bằng "dòng mới CÓ trong kết quả", không bằng "kết quả khác đầu
+  // vào": chạy lại trong cùng ngày với cùng số liệu cho ra chuỗi y hệt, và
+  // đó là chuyện bình thường, không phải lỗi.
+  if (!updated.includes(serializeRow(row))) {
+    throw new Error('Không tìm thấy bảng dưới mục `## Chi phí` trong ops/metrics.md — bảng chi phí sẽ đóng băng.');
+  }
+  return updated;
 }
 
 export function updateArchitectureTable(

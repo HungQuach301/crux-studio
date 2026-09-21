@@ -35,7 +35,7 @@ Quyết định này ràng buộc cả làn `visual` lẫn ngân sách phút Act
 - nguồn: spec cơ chế 2
 - tiêu chí xong:
   - Số ảnh tĩnh tối thiểu và loại lấy mẫu đọc từ genre pack, không ghi cứng.
-  - Chi phí mỗi lần proof được ghi vào `ops/logs/assembly.jsonl`.
+  - Chi phí mỗi lần proof được ghi vào `ops/logs/assembly/<id>.jsonl` (bất biến I8 theo `D-C04`).
 
 ### A-004 · QA ba lớp ở S15
 - deps: A-003
