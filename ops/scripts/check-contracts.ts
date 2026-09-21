@@ -26,6 +26,11 @@ import {
   type WorkshopName,
 } from '@crux/kernel';
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
+import {
+  allTitleFormulasPackProblems,
+  releaseFormulaProblems,
+  type ReleaseArtifactForFormulaCheck,
+} from './check-title-formulas.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -76,6 +81,7 @@ for (const workshop of WORKSHOPS) {
 
 // 4 · Fixture và snapshot tập vàng
 let checked = 0;
+const releaseFormulaNotes: string[] = [];
 function checkArtifactFile(workshop: WorkshopName, label: string, path: string): void {
   checked += 1;
   const value: unknown = JSON.parse(readFileSync(path, 'utf8'));
@@ -84,6 +90,16 @@ function checkArtifactFile(workshop: WorkshopName, label: string, path: string):
     problems.push(
       `${label} không hợp contract:\n${result.errors.map((e) => `    ${e.path}: ${e.message}`).join('\n')}`,
     );
+    return;
+  }
+  if (workshop === 'release') {
+    const { problems: formulaProblems, notes } = releaseFormulaProblems(
+      root,
+      label,
+      value as ReleaseArtifactForFormulaCheck,
+    );
+    problems.push(...formulaProblems);
+    releaseFormulaNotes.push(...notes);
   }
 }
 
@@ -112,12 +128,24 @@ if (existsSync(goldenRoot)) {
 // 5 · Fixture input.json không mang bản sao cấu hình
 problems.push(...fixtureInputProblems(root));
 
+// 6 · title-formulas.json của mỗi kênh (mục release/R-001) — kênh nào cũng soát, không hardcode tên
+const titleFormulas = allTitleFormulasPackProblems(root);
+problems.push(...titleFormulas.problems);
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
 }
 
+if (releaseFormulaNotes.length > 0) {
+  process.stdout.write(
+    `Ghi nhận, không chặn (impl: stub — nối chặt là việc của release/R-005):\n` +
+      `${releaseFormulaNotes.map((m) => `  - ${m}`).join('\n')}\n`,
+  );
+}
+
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
+    `${titleFormulas.checked} title-formulas.json, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
 );

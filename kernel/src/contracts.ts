@@ -19,6 +19,14 @@ function load(name: string): JsonSchema {
 
 export const envelopeSchema: JsonSchema = load('envelope.schema.json');
 
+/**
+ * Schema của `packs/channels/<slug>/title-formulas.json` (mục `release/R-001`).
+ * KHÔNG phải một trong sáu payload v0 — kernel chỉ biết cách nạp, không biết
+ * nội dung (CHARTER 5.1); `ops/scripts/check-title-formulas.ts` dùng schema
+ * này để kiểm mọi file `title-formulas.json` tìm thấy dưới `packs/channels/`.
+ */
+export const titleFormulasSchema: JsonSchema = load('title-formulas.schema.json');
+
 /** `kind` chuẩn của artifact mà mỗi xưởng sinh ra ở v0. */
 export const ARTIFACT_KIND: Readonly<Record<WorkshopName, string>> = {
   topic: 'topic.brief',
