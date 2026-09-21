@@ -47,7 +47,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
-| G9 | Thuê được người soát bản địa và giao việc qua link | **`đã kiểm một phần`** — nửa "giao việc qua link" chạy thật; nửa "thuê được người" chưa | hai kênh tuyển **có thật và miễn phí** (EFA, ACES) · link tới repo private **không** dùng được · xuất bản ra ngoài là `irreversible` | `VF-G9` |
+| G9 | Thuê được người soát bản địa và giao việc qua link | **`đã kiểm một phần`** — nửa "giao việc qua link" chạy thật; nửa "thuê được người" chưa | hai kênh tuyển có thật, **trang của chính họ ghi là miễn phí cho bên thuê** (EFA, ACES) · link tới repo private **không** dùng được · xuất bản ra ngoài là `irreversible` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
 | G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** phần routine; thread chưa | lớp thứ hai vẫn giữ | `VF-G11` |
 | G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | `tài liệu nói vậy` | dự phòng đã viết sẵn | `VF-G12` |
@@ -214,27 +214,31 @@ Chọn hội nghề nghiệp thay vì sàn freelance chung vì mục này cần 
 |---|---|---|
 | Trang | `www.the-efa.org/hiring/` (đọc 2026-09-21) | `aceseditors.org/resources/job-board` (đọc 2026-09-21) |
 | Chi phí cho bên thuê | *"There is no charge to use the Member Directory or Job List."* | *"ACES offers this job board as a free service to the editing community."* |
-| Cần là hội viên không | **Không** — trang nói rõ non-member dùng được cả hai dịch vụ | Trang form đăng tin không đòi đăng nhập |
+| Cần là hội viên không | **Không đòi** — trang không đặt điều kiện hội viên lên bên thuê. Nhưng trang cũng **không** có câu nào nói thẳng về non-member; kết luận này đọc từ *"There is no charge to use…"* cộng với việc không có rào đăng nhập nào | Trang form đăng tin không đòi đăng nhập |
 | Cách đăng tin | `www.the-efa.org/hiring/job-submission-form/` — *"submitted jobs are typically posted within 48 hours"* | `members.aceseditors.org/add-a-job-posting` |
 | Ô của form | (form dựng bằng JS, không đọc được thô) — trang ghi *"Publication may be delayed if we need to reach out to you for clarification about the rate you are offering"* | Job Title\* · Company\* · Job Location\* · **Link to Apply** · **Email to Apply** · Brief Job Description\* · First/Last Name\* · Email\* |
 | Tin sống bao lâu | không ghi trên trang | **hai trang của chính họ lệch nhau:** trang job-board ghi *"Jobs will be expire after 60 days"*, trang form ghi *"Postings expire after 30 days"* |
 | Người soát liên hệ lại kiểu gì | *"Qualified freelancers will then contact you directly."* | qua ô `Link to Apply` / `Email to Apply` do bên thuê tự điền |
 
-- **EFA từ chối tin trả thấp:** *"We do not post low-paying or nonpaying jobs, jobs that pay by royalty or on spec, internships of any kind, or jobs we suspect may be fraudulent."* Tức muốn dùng kênh này thì **phải trả trong vùng bảng giá dưới đây**, không phải tuỳ ý.
-- **Xem danh sách tin của EFA là quyền lợi hội viên** (*"The EFA Job List is a paid benefit exclusive to EFA members"*). Luồng vì thế là: bên thuê đăng miễn phí → hội viên đọc → hội viên chủ động liên hệ. Bên thuê không cần tài khoản ở bất kỳ bước nào.
+- **EFA từ chối tin trả thấp:** *"We do not post low-paying or nonpaying jobs, jobs that pay by royalty or on spec, internships of any kind, or jobs we suspect may be fraudulent. The EFA reserves the right to reject or remove any job posting for any reason."* (`www.the-efa.org/hiring/`, đọc 2026-09-21). **Họ không nói ngưỡng "low-paying" là bao nhiêu**, và không buộc nó vào bảng giá — bảng giá dưới đây là chỗ duy nhất có số, nên dùng nó làm mốc tham chiếu, chứ EFA không khai đó là ngưỡng.
+- **Xem danh sách tin của EFA là quyền lợi hội viên** (*"The EFA Job List is a paid benefit exclusive to EFA members"* — `www.the-efa.org/job-list/`, đọc 2026-09-21; câu này ở trang khác với trang `/hiring/` dẫn đầu bảng). Luồng vì thế là: bên thuê đăng miễn phí → hội viên đọc → hội viên chủ động liên hệ. Bên thuê không cần tài khoản ở bất kỳ bước nào.
 - **ACES đang chuyển website** và trang job-board ghi tin đang để tạm trên một thư mục Google Drive — ghi lại để lượt sau không tưởng là mình đọc nhầm.
 
-**Bảng giá EFA 2026 — số đọc từ nguồn, không phải ước lượng (bất biến I6)**
+**Bảng giá EFA 2026 — số đọc từ nguồn, kèm một phép gộp được khai rõ (bất biến I6)**
 
-Nguồn: `www.the-efa.org/rates/`, đọc 2026-09-21. Trang tự khai: *"The median rate ranges in the 2026 Rate Chart below are based on data from a survey administered to EFA members from November 2025 through mid-January 2026"*, hơn 1.100 hội viên trả lời về mức giá năm 2025.
+Nguồn: `www.the-efa.org/rates/`, đọc 2026-09-21. Trang tự khai: *"The median rate ranges in the 2026 Rate Chart below are based on data from a survey administered to EFA members from November 2025 through mid-January 2026"*, hơn 1.100 hội viên trả lời về mức giá năm 2025. Trang cũng tự mô tả mình là công cụ *"helps you estimate the cost for your project"* — tức bảng **ước lượng chi phí**, không phải biểu giá bắt buộc.
 
-| Việc | Theo giờ | Theo từ | Theo trang |
+**Mô hình, không phải một ô trong bảng gốc:** bảng `EDITING` của EFA chia Copyediting và Proofreading thành **19 dòng con mỗi nhóm** (Academic humanities/STEM, Fiction, Legal, Medical, Medicolegal, Technical…). Hai dòng đầu dưới đây là **min của cột thấp nhất và max của cột cao nhất qua cả 19 dòng con**, tính bằng máy từ HTML của chính trang, bỏ các ô `n/a` và các ô `$0.00–0.00` (cách trang ghi "không áp dụng"). Dòng Fact-checking thì **đọc thẳng** từ một dòng của bảng `PUBLISHING`, không gộp gì.
+
+| Việc | Theo giờ | Theo từ | Theo trang (250 từ) |
 |---|---|---|---|
-| Copyediting | 33,00–75,00 USD | 2,0–5,0 ¢ | 5,00–12,50 USD |
-| Proofreading | 29,00–65,00 USD | 1,0–4,5 ¢ | 2,50–11,25 USD |
-| Research & Fact-Checking | 60,00–72,50 USD | — | 25,00 USD |
+| Copyediting (gộp 19 dòng con) | 33,00–75,00 USD | 2,0–5,5 ¢ | 5,00–13,75 USD |
+| Proofreading (gộp 19 dòng con) | 29,00–75,00 USD | 1,0–4,5 ¢ | 2,50–11,25 USD |
+| Fact-checking (một dòng, không gộp) | 50,00–60,00 USD | — | 60,00–72,50 USD |
 
-**Hệ quả thẳng vào CHARTER mục 8:** ngân sách học tới cổng Mốc 3 (600–900 USD) là **chi phí API**, chưa có dòng nào cho người soát bản địa. Một lượt soát một kịch bản ~1.500 từ ở mức proofreading rẻ nhất (1,0 ¢/từ) là ~15 USD; ở mức fact-checking theo giờ thì một giờ đã là 60–72,50 USD. Đây là **số đọc từ nguồn**; việc có đưa vào ngân sách hay không là quyết định, không phải phát hiện của mục này.
+Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là **số trang mỗi giờ, không phải tiền**. Căn cột đã kiểm bằng số học trên một dòng khác của cùng bảng: `Indexing → Book` ghi 2,0–2,5 ¢/từ và 5,00–6,25 USD/trang, đúng bằng 250 từ × giá mỗi từ.
+
+**Hệ quả thẳng vào CHARTER mục 8:** ngân sách học tới cổng Mốc 3 (600–900 USD) là **chi phí API**, chưa có dòng nào cho người soát bản địa. Một lượt soát một kịch bản ~1.500 từ ở mức proofreading rẻ nhất (1,0 ¢/từ) là ~15 USD; ở mức fact-checking thì một giờ là 50,00–60,00 USD. Việc có đưa vào ngân sách hay không là quyết định, không phải phát hiện của mục này.
 
 **✅ Cách giao việc không cần tài khoản — nửa đọc đã chạy thật**
 
@@ -256,7 +260,7 @@ Nguồn: `www.the-efa.org/rates/`, đọc 2026-09-21. Trang tự khai: *"The med
 - **Chưa đăng tin, chưa ai nhận việc.** Đây là chỗ giả định thật sự chịu tải và nó chưa được chạm: đăng tin là cam kết trả tiền cho người thật (CHARTER 2.3 nhóm 1, `irreversible`), nên agent không tự làm. Vì vậy độ tin cậy dừng ở `đã kiểm một phần`.
 - **Chưa dựng và chưa chạy thử một biểu mẫu trả lời nào.** Đường (b) ở trên còn là giấy.
 - **Phát hiện ngược hướng mô hình tự trị, đáng một mục backlog `platform`:** mọi đường trả lời không cần tài khoản đang có đều đổ vào **hộp thư hoặc biểu mẫu của chủ dự án**. Không có đường nào để agent đọc phản hồi của người soát mà không qua người. Đó đúng là nút cổ chai **A4**, và nó đánh thẳng vào thước đo "thời gian của anh" (CHARTER 1.3, mặc định **M8**). Mục này chỉ **ghi nhận**; dựng đường phản hồi máy đọc được là việc của làn `platform`.
-- **Bốn kênh không đo được từ phiên cloud này:** `www.upwork.com`, `www.fiverr.com`, `www.proz.com`, `www.atanet.org` đều trả **403** với egress của sandbox. `403` là **máy chủ có trả lời** — tức nối được, và đây là chặn bot phía họ. Nó **không** nói gì về việc chủ dự án mở bằng trình duyệt của mình. Không được đọc thành "không dùng được".
+- **Năm kênh không đo được từ phiên cloud này:** `www.upwork.com`, `www.fiverr.com`, `www.proz.com`, `www.atanet.org`, `contentwriters.com` đều trả **403** với egress của sandbox. `403` là **máy chủ có trả lời** — tức nối được, và đây là chặn bot phía họ. Nó **không** nói gì về việc chủ dự án mở bằng trình duyệt của mình. Không được đọc thành "không dùng được".
 - Không chỗ treo nào ở trên chặn Đợt 0 hay Đợt 1. Chúng chặn ở lúc có kịch bản thật cần soát.
 
 ## G10 · Phiên cloud không ghi được `.github/workflows`
