@@ -9,7 +9,7 @@ Phần lớn việc của làn này chạy bằng routine `crux-integrator` (ph�
 ### I-001 · Dọn PR nháp đã bỏ
 - deps: —
 - risk: low
-- status: claimed
+- status: review
 - nguồn: phụ lục P3 bước 2
 - tiêu chí xong:
   - Đóng PR nháp không có commit mới quá 72 giờ, **kèm ghi chú** nói rõ mục đó quay lại hàng đợi.

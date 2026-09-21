@@ -16,6 +16,7 @@ episodes/**/*.jpg
 # được thêm có chủ ý trong PR của mục đó (bất biến I8), không phải bằng cách
 # commit kết quả của một lần `pnpm run:episode` chạy nháp.
 ops/logs/*.jsonl
+!ops/logs/integration.jsonl
 !ops/logs/kernel.jsonl
 !ops/logs/platform.jsonl
 !ops/logs/verify.jsonl
