@@ -1,18 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { runWorkshop, Cassette, fixedClock, validateArtifact, type Envelope } from '@crux/kernel';
+import { fileURLToPath } from 'node:url';
+import { readInputFile, runWorkshop, Cassette, fixedClock, validateArtifact } from '@crux/kernel';
 import { definition } from '../src/index.ts';
 
-const fixture = JSON.parse(
-  readFileSync(new URL('../fixtures/input.json', import.meta.url), 'utf8'),
-) as { upstream: Record<string, Envelope>; packs: Record<string, unknown> };
+// Pack tới từ `packs/`, không từ một bản sao trong fixture (mục integration/I-008).
+const { episode, input: fixture } = readInputFile(
+  fileURLToPath(new URL('../../../', import.meta.url)),
+  fileURLToPath(new URL('../fixtures/input.json', import.meta.url)),
+);
 
 const ctx = {
-  episodeId: 'ep-0001-stub',
-  channel: 'us-personal-finance',
-  genre: 'data-explainer',
-  locale: 'en-US',
+  ...episode,
   clock: fixedClock('2026-09-20T00:00:00.000Z'),
   cassette: new Cassette('replay'),
   impl: 'stub' as const,
