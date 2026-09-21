@@ -77,6 +77,11 @@ jobs:
           #     hạn (rủi ro B13). Khi đó mọi workflow agent viết vào
           #     ops/workflows/ sẽ IM LẶNG không có hiệu lực — không có gì
           #     đỏ, chỉ là không có gì xảy ra. Đây là lý do nó được canh riêng.
+          # Z9: đây là MỘT trong năm dấu hiệu của watchdog, không phải việc
+          # chính. `gh run list` lỗi vặt (API, quyền, hay workflow chưa từng
+          # chạy) không được phép làm đỏ cả job và nuốt luôn bốn dấu hiệu
+          # còn lại — nhánh `if [ -n "$SYNC" ]` dưới coi rỗng là "không có gì
+          # để báo", không phải "đã kiểm và ổn".
           SYNC=$(gh run list --repo "$REPO" --workflow sync-workflows.yml \
             --limit 1 --json conclusion,createdAt,url \
             --jq '.[0] | select(.) | "\(.conclusion)\t\(.url)"' || true)
