@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -217,26 +217,47 @@ test('mọi mã bài kiểm mà sổ thật đang khai đều có bài kiểm th
  * nhánh — thay vì kiểm bằng dữ liệu dựng sẵn. Đúng bài học G17: bài thử phải
  * tái hiện điều kiện đầu vào của lần chạy thật.
  */
-function initRepoCoSquash(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'recheck-collect-'));
-  const git = (args: string[]) => {
+function initBare(path: string): void {
+  const result = spawnSync('git', ['init', '-q', '--bare', '-b', 'main', path], { encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(`git init --bare: ${result.stderr || result.stdout}`);
+}
+
+function gitIn(dir: string) {
+  return (args: string[]) => {
     const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
     if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr || result.stdout}`);
     return result.stdout;
   };
+}
 
+/**
+ * Kho làm việc có **remote `origin` thật** (một kho bare cạnh bên), không
+ * phải `update-ref` giả. Từ mục `I-005`, `collectCommits` tự
+ * `git fetch origin '+refs/heads/claude/*:…'` trước khi quét, nên một repo
+ * không có remote không còn tái hiện được lần chạy thật.
+ */
+function initRepoCoSquash(): { root: string; repo: string } {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-collect-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  mkdirSync(repo, { recursive: true });
+
+  initBare(bare);
+
+  const git = gitIn(repo);
   git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 'test@example.invalid']);
   git(['config', 'user.name', 'Test']);
   git(['config', 'commit.gpgsign', 'false']);
+  git(['remote', 'add', 'origin', bare]);
 
-  writeFileSync(join(dir, 'a.txt'), 'goc\n', 'utf8');
+  writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
   git(['add', '.']);
   git(['commit', '-q', '-m', 'goc']);
 
   // Commit squash kiểu GitHub: message ghép, nên `Claude-Session` nằm GIỮA
   // message và không còn được git đọc như một trailer.
-  writeFileSync(join(dir, 'a.txt'), 'goc\nmain\n', 'utf8');
+  writeFileSync(join(repo, 'a.txt'), 'goc\nmain\n', 'utf8');
   git(['add', '.']);
   git([
     'commit',
@@ -244,11 +265,11 @@ function initRepoCoSquash(): string {
     '-m',
     '[topic] T-001 — bản đồ đề tài (#42)\n\ntopic: bước một\n\nClaude-Session: https://claude.ai/code/session_cu\n\ntopic: bước hai\n\nCo-Authored-By: Claude <noreply@anthropic.com>',
   ]);
-  git(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+  git(['push', '-q', '-u', 'origin', 'main']);
 
   // Commit agent trên nhánh PR, chưa vào `main`.
-  git(['checkout', '-q', '-b', 'nhanh']);
-  writeFileSync(join(dir, 'a.txt'), 'goc\nmain\nnhanh\n', 'utf8');
+  git(['checkout', '-q', '-b', 'claude/topic/T-002']);
+  writeFileSync(join(repo, 'a.txt'), 'goc\nmain\nnhanh\n', 'utf8');
   git(['add', '.']);
   git([
     'commit',
@@ -256,15 +277,15 @@ function initRepoCoSquash(): string {
     '-m',
     'topic: T-002 — việc đang làm\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_moi',
   ]);
-  git(['update-ref', 'refs/remotes/origin/claude/topic/T-002', 'HEAD']);
+  git(['push', '-q', 'origin', 'claude/topic/T-002']);
 
-  return dir;
+  return { root, repo };
 }
 
 test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash trên main', () => {
-  const dir = initRepoCoSquash();
+  const { root, repo } = initRepoCoSquash();
   try {
-    const commits = collectCommits(dir);
+    const commits = collectCommits(repo);
     assert.equal(commits.length, 1, 'chỉ commit chưa vào main mới được tính');
     assert.match(commits[0]!.subject, /T-002/);
     assert.equal(commits[0]!.hasSessionTrailer, true);
@@ -275,15 +296,182 @@ test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash 
     // Và kết luận cuối cùng phải là `khớp`, không phải `sai` như bản đầu.
     assert.equal(judgeTrailerEvidence(commits).verdict, 'khớp');
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Test tái hiện lỗi của mục `I-005` (bất biến I2).
+ *
+ * Trước bản sửa, `collectCommits` trả `[]` khi không có ref
+ * `origin/claude/*` nào, và `judgeTrailerEvidence([])` in ra
+ * `◦ chưa quan sát được` — giống hệt trường hợp "quét rồi không thấy gì".
+ * Đây là chế độ chạy **mặc định** của cả ba routine (clone của phiên cloud
+ * chỉ fetch `main`), nên bài kiểm G14 của thứ Hai im lặng ở hầu hết các
+ * lượt: nhóm lỗi Z, hỏng mà mọi chỉ báo đều xanh.
+ */
+test('I-005 · không có ref origin/claude/* thì collectCommits NÉM, không trả rỗng', () => {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-khong-ref-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  try {
+    mkdirSync(repo, { recursive: true });
+    initBare(bare);
+
+    const git = gitIn(repo);
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.invalid']);
+    git(['config', 'user.name', 'Test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    git(['remote', 'add', 'origin', bare]);
+    writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'goc']);
+    git(['push', '-q', '-u', 'origin', 'main']);
+
+    // Kho có remote thật, fetch chạy được, nhưng KHÔNG nhánh claude/* nào.
+    assert.throws(
+      () => collectCommits(repo),
+      /CHƯA QUÉT ĐƯỢC/,
+      'rỗng không phải một quan sát — phải ném để main() xếp vào broken',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Test tái hiện lỗi thứ hai của mục `I-005`, tìm ra trong vòng soát — và nó
+ * tệ hơn lỗi đầu, vì nó cho ra **số sai** chứ không phải im lặng.
+ *
+ * Bản sửa đầu chỉ fetch `claude/*`. `refs/remotes/origin/main` của clone thì
+ * đứng yên ở lúc clone, nên commit **squash** của `main` — đã bị bước 0 của
+ * phụ lục P3 gộp vào nhánh PR — lọt qua phép loại `^origin/main`. Commit
+ * squash của GitHub mất trailer `Claude-Session`, nên G14 ra `sai` GIẢ và
+ * `main()` in sẵn thân issue `🤖 [QĐ]`: gọi chủ dự án vì một con số sai.
+ *
+ * Tái hiện đúng hình dạng đó: `origin/main` cục bộ **cũ**, nhánh `claude/*`
+ * trên remote đã mang commit squash mới.
+ */
+test('I-005 · origin/main cục bộ cũ KHÔNG được làm commit squash lọt vào phạm vi quét', () => {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-main-cu-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  try {
+    mkdirSync(repo, { recursive: true });
+    initBare(bare);
+
+    const git = gitIn(repo);
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.invalid']);
+    git(['config', 'user.name', 'Test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    git(['remote', 'add', 'origin', bare]);
+
+    writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'goc']);
+    git(['push', '-q', '-u', 'origin', 'main']);
+    const mainCu = git(['rev-parse', 'HEAD']).trim();
+
+    // Commit của agent trên nhánh PR — có trailer, đúng như G14 đòi.
+    git(['checkout', '-q', '-b', 'claude/topic/T-003']);
+    writeFileSync(join(repo, 'b.txt'), 'nhanh\n', 'utf8');
+    git(['add', '.']);
+    git([
+      'commit',
+      '-q',
+      '-m',
+      'topic: T-003 — việc đang làm\n\nClaude-Session: https://claude.ai/code/session_moi',
+    ]);
+
+    // Commit squash kiểu GitHub vào `main`: KHÔNG có trailer ở khối cuối.
+    git(['checkout', '-q', 'main']);
+    writeFileSync(join(repo, 'c.txt'), 'squash\n', 'utf8');
+    git(['add', '.']);
+    git([
+      'commit',
+      '-q',
+      '-m',
+      '[verify] VF-G9 — một mục đã merge (#99)\n\nverify: bước một\n\nClaude-Session: https://claude.ai/code/session_cu\n\nCo-Authored-By: Claude <noreply@anthropic.com>',
+    ]);
+    git(['push', '-q', 'origin', 'main']);
+
+    // Bước 0 của P3 gộp `main` mới vào nhánh PR rồi push — chuyện xảy ra hằng ngày.
+    git(['checkout', '-q', 'claude/topic/T-003']);
+    git(['merge', '-q', '--no-edit', 'main']);
+    git(['push', '-q', 'origin', 'claude/topic/T-003']);
+
+    // Clone của phiên cloud: `origin/main` đứng yên ở lúc clone, chưa có ref `claude/*` nào.
+    git(['update-ref', 'refs/remotes/origin/main', mainCu]);
+    for (const ref of git(['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/claude/'])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)) {
+      git(['update-ref', '-d', ref]);
+    }
+
+    const commits = collectCommits(repo);
+    assert.ok(
+      !commits.some((c) => c.subject.includes('(#99)')),
+      'commit squash đã vào main không được lọt vào phạm vi quét chỉ vì origin/main cục bộ cũ',
+    );
+    assert.equal(
+      judgeTrailerEvidence(commits).verdict,
+      'khớp',
+      'G14 phải ra khớp — một `sai` giả ở đây đẻ ra một issue [QĐ] giả gửi tới chủ dự án',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-005 · fetch hỏng (không có remote origin) cũng NÉM, không quét tập rỗng', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'recheck-khong-remote-'));
+  try {
+    const git = gitIn(dir);
+    git(['init', '-q', '-b', 'main']);
+    assert.throws(() => collectCommits(dir), /git fetch/);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('collectCommits trả về rỗng khi repo chưa có nhánh claude/ nào, không ném lỗi', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'recheck-collect-trong-'));
+/**
+ * Chạy **lệnh thật** `pnpm recheck:assumptions` trong một cây không có ref
+ * `origin/claude/*`, và đọc đúng thứ routine đọc: bản in.
+ *
+ * Đây là nửa còn lại của tiêu chí xong `I-005`. Hai test trên khoá hành vi
+ * của `collectCommits`; test này khoá **đường đi của lỗi** — `main()` phải
+ * xếp nó vào nhánh `broken` (`⚠ … KHÔNG CHẠY ĐƯỢC`) chứ không phải
+ * `◦ chưa quan sát được`, và phải thoát khác 0. Hai dòng đó nằm cách nhau
+ * một khối try/catch, nên chỉ kiểm hàm thì không chứng minh được gì.
+ */
+test('I-005 · lệnh thật in ⚠ KHÔNG CHẠY ĐƯỢC cho G14, không in ◦ chưa quan sát được', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'recheck-cli-'));
   try {
-    spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
-    assert.deepEqual(collectCommits(dir), []);
+    const git = gitIn(dir);
+    git(['init', '-q', '-b', 'main']);
+
+    mkdirSync(join(dir, 'docs'), { recursive: true });
+    writeFileSync(
+      join(dir, 'docs', 'assumptions.md'),
+      readFileSync(join(process.cwd(), 'docs', 'assumptions.md'), 'utf8'),
+      'utf8',
+    );
+
+    // `process.execPath`, không phải `'node'` trên PATH: script là `.ts` chạy
+    // trực tiếp nên đòi Node ≥ 22.18, và lệch phiên bản cho ra một lỗi đỏ
+    // chẳng liên quan gì tới thứ đang kiểm. Cùng quy ước với các test khác.
+    const run = spawnSync(process.execPath, [join(process.cwd(), 'ops', 'scripts', 'recheck-assumptions.ts')], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    assert.match(run.stdout, /⚠ G14 · `session-trailer-on-branch` · KHÔNG CHẠY ĐƯỢC/);
+    assert.doesNotMatch(run.stdout, /◦ G14/, 'không được in ra như "quét rồi không thấy gì"');
+    assert.notEqual(run.status, 0, 'bài kiểm không chạy được phải thoát khác 0, không im lặng xanh');
+    assert.match(run.stdout, /G17/, 'một bài kiểm hỏng không được nuốt các bài kiểm còn lại');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
