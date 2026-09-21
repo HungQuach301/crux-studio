@@ -36,6 +36,10 @@
  *    `irreversible` được đếm vào "Cần anh quyết" kèm chữ `chưa phân loại`.
  *    Thận trọng theo hướng an toàn: thừa một dòng trên bản tin chỉ tốn vài
  *    giây của chủ dự án, thiếu một dòng thì một nhánh việc nằm chờ vô hạn.
+ * 4. **PR đang xung đột với `main`** (mục `P-007`) có mục riêng, kèm số giờ
+ *    đã xung đột. Không dò được thì mục đó nói `CHƯA DÒ`, không nói `0` —
+ *    một bản tin báo "không PR nào xung đột" trong khi hàng đợi đang tắc là
+ *    đúng rủi ro **B7** mà `P-007` sinh ra để bịt.
  */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
@@ -45,6 +49,13 @@ import { readRunLogs, LANES, type LaneName } from '@crux/kernel';
 import { parseBacklog } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
+import {
+  conflictRows,
+  measureConflicts,
+  renderConflictRow,
+  type ConflictOrigin,
+  type ConflictRow,
+} from './conflict-watch.ts';
 
 // --- Dạng dữ liệu GitHub (đúng dạng `gh … --json` trả về) ---
 
@@ -259,6 +270,13 @@ export interface DigestMetrics {
   since: string;
   merged: MergedGroup[];
   openPrs: OpenPrRow[];
+  /**
+   * PR đang xung đột với `main`, kẹt lâu nhất trước (mục `P-007`).
+   * `null` — **không phải mảng rỗng** — khi lượt chạy không dò được (không
+   * có git, hoặc bên gọi không truyền kết quả gộp thử vào). Xem ghi chú 4 ở
+   * đầu file: `0` và `chưa dò` là hai chuyện khác nhau.
+   */
+  conflicts: ConflictRow[] | null;
   parked: ParkedItem[];
   decisions: DecisionRow[];
   cost: CostSummary;
@@ -303,6 +321,15 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
   out.push('', `PR đang mở: ${metrics.openPrs.length}`);
   for (const row of metrics.openPrs) out.push(`- ${prLabel(row)}`);
 
+  // Mục `P-007`. Đặt ngay dưới "PR đang mở" vì nó là cách đọc thứ hai của
+  // cùng hàng đợi đó: PR nào trong hàng đợi đang không nhúc nhích được.
+  if (metrics.conflicts === null) {
+    out.push('', 'PR đang xung đột với `main`: CHƯA DÒ — lượt chạy không có kết quả gộp thử');
+  } else {
+    out.push('', `PR đang xung đột với \`main\`: ${metrics.conflicts.length}`);
+    for (const row of metrics.conflicts) out.push(`- ${renderConflictRow(row)}`);
+  }
+
   out.push('', `Mục parked: ${metrics.parked.length}`);
   for (const item of metrics.parked) out.push(`- ${item.lane}/${item.id} · ${item.title}`);
 
@@ -317,7 +344,19 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
 
 // --- Lớp vỏ đọc đĩa / gọi `gh` ---
 
-export function collectMetrics(root: string, snapshot: GithubSnapshot, now: Date): DigestMetrics {
+/**
+ * Kết quả gộp thử của mục `P-007`: mốc kẹt của từng PR đang mở, khoá là số
+ * PR. `null` cho một PR nghĩa là PR đó **không** xung đột. Bên gọi truyền
+ * `null` cho cả tham số nghĩa là lượt chạy chưa dò gì cả.
+ */
+export type ConflictOrigins = ReadonlyMap<number, ConflictOrigin | null>;
+
+export function collectMetrics(
+  root: string,
+  snapshot: GithubSnapshot,
+  now: Date,
+  origins: ConflictOrigins | null = null,
+): DigestMetrics {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
   const lanesDir = join(root, 'ops', 'lanes');
@@ -347,10 +386,30 @@ export function collectMetrics(root: string, snapshot: GithubSnapshot, now: Date
   const total = sumCostUsd(logLines);
   const cost24h = sumCostUsd(linesSince(logLines, since));
 
+  // Mục `P-007`. Chỉ PR **đã dò ra mốc** mới vào mục xung đột; PR không có
+  // khoá trong `origins` là PR chưa dò, và nó không được lặng lẽ tính là
+  // sạch — nên nó cũng không vào mục này, mà số PR mở ở mục trên vẫn đủ để
+  // thấy chênh lệch.
+  const conflicts =
+    origins === null
+      ? null
+      : conflictRows(
+          snapshot.openPrs
+            .filter((pr) => origins.get(pr.number) != null)
+            .map((pr) => ({
+              number: pr.number,
+              title: pr.title,
+              labels: labelNames(pr.labels),
+              origin: origins.get(pr.number)!,
+            })),
+          now.toISOString(),
+        );
+
   return {
     since,
     merged: mergedByLane(snapshot.mergedPrs, since),
     openPrs: openPrRows(snapshot.openPrs),
+    conflicts,
     parked,
     decisions: decisionRows(snapshot.decisionIssues),
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
@@ -417,7 +476,15 @@ function main(): void {
     snapshot = readSnapshotFile(path);
   }
 
-  const metrics = collectMetrics(process.cwd(), snapshot, new Date());
+  // Mục `P-007`: mốc kẹt đo bằng gộp thử, không đọc ra từ văn xuôi trong
+  // `note` của log. `--no-conflicts` cho lượt chạy không có kho git đầy đủ
+  // — và khi đó bản tin in `CHƯA DÒ`, không in `0`.
+  const root = process.cwd();
+  const origins = argv.includes('--no-conflicts')
+    ? null
+    : measureConflicts(root, snapshot.openPrs.map((pr) => pr.number));
+
+  const metrics = collectMetrics(root, snapshot, new Date(), origins);
 
   process.stdout.write(argv.includes('--json') ? `${JSON.stringify(metrics, null, 2)}\n` : renderDigestMetrics(metrics));
 }
