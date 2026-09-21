@@ -75,16 +75,27 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - kiểm: tra điều kiện AdSense và nghĩa vụ thuế hiện hành.
 - dự phòng nếu sai: mở `🤖 [QĐ]`.
+- ✅ **Đọc nguồn chính thức 2026-09-21** (lượt `crux-worker-1`), G8 chuyển `suy luận` → **`tài liệu nói vậy`**. Không khai cao hơn: theo thang độ tin cậy ở đầu `docs/assumptions.md`, `đã kiểm một phần` đòi **chạy thật trong một ngữ cảnh**, mà chưa ngữ cảnh nào của đường tiền được chạy. Kết quả đầy đủ kèm URL nguồn và ngày truy cập ở `docs/assumptions.md` mục `G8`; ba điểm chính:
+  - **Nhận tiền được.** Bảng phương thức thanh toán của chính AdSense xếp Việt Nam vào nhóm dùng **Check** và **Wire** (EFT và Hyperwallet **không** mở cho Việt Nam). Ngưỡng chi trả **100 USD**, phát hành giữa ngày 21 và 26 hằng tháng.
+  - **⚠️ Mỹ giữ lại 30%, và không giảm được.** Người ngoài Mỹ khai đủ thông tin thuế mà không có quyền lợi hiệp định thì bị khấu trừ **30%** doanh thu từ người xem ở Mỹ. Hiệp định thuế Mỹ–Việt **đã ký 07/07/2015 nhưng chưa có hiệu lực** (kết luận suy ra từ hai nguồn, không nguồn nào nói thẳng câu đó) — IRS không liệt kê Việt Nam trong danh sách hiệp định đang hiệu lực, còn US Treasury đăng văn bản kèm đúng ghi chú "đăng khi ký, trước khi phê chuẩn và có hiệu lực". Kênh đầu tiên nhắm người xem Mỹ nên khoản này chạm gần như toàn bộ doanh thu — số cho CHARTER mục 8, đọc từ nguồn chứ không ước lượng.
+  - **Nộp thuế ở Việt Nam có đường rõ ràng.** Cá nhân sáng tạo nội dung số: **GTGT 5% + TNCN 2%** trên doanh thu; ngưỡng không phải nộp thuế nay là **1 tỷ đồng/năm** (NĐ 141/2026/NĐ-CP), không còn là 100 triệu của Thông tư 40/2021. Dưới ngưỡng chỉ phải **thông báo doanh thu** chậm nhất 31/01 năm sau; trên ngưỡng thì khai và nộp từ quý vượt ngưỡng.
+- ⬜ **Còn treo, không chặn Đợt 0/1 — chặn ở Mốc 8:** chưa đọc toàn văn NĐ 68/2026/NĐ-CP và NĐ 141/2026/NĐ-CP dù `vanban.chinhphu.vn` nối được; chưa chạy thật đầu cuối (mở tài khoản và nhận một lần chuyển tiền cần danh tính chủ dự án và cần đã có doanh thu); chưa kiểm ngân hàng Việt Nam nhận chuyển khoản USD cho cá nhân và thủ tục ngoại hối; **chưa kiểm 30% đã bị Mỹ giữ có được trừ vào thuế Việt Nam không** — không có hiệp định đang hiệu lực nên rủi ro đánh thuế hai lần là thật; chưa kiểm doanh thu AdSense trên website (khác YouTube) có cùng cách xử lý không.
+- ghi chú về phương pháp: mục này **không** bị bức tường mạng của issue `#36` chặn nữa. Đo bằng chạy thật đầu lượt (`15:41Z`): `support.google.com` 200 · `adsense.google.com` 302 · `policies.google.com` 200 · `www.irs.gov` 200 · `luatvietnam.vn` 200. Mọi domain đã truy cập ghi ở `ops/network-domains.md` (chỉ dẫn 2 của chủ dự án trên issue bản tin #50).
 
 ### VF-G9 · Thuê người soát bản địa và giao việc qua link
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - kiểm: tìm ít nhất hai kênh tuyển thực tế và một cách giao việc không cần tài khoản.
-- dự phòng nếu sai: mở `🤖 [QĐ]`. Rủi ro A4: vai "người ngoài" nhận việc qua link, có thời hạn phản hồi.
+- dự phòng nếu sai: mở `🤖 [QĐ]`. Rủi ro A4: vai "người ngoài" nhận việc qua link, có thời hạn phản hồi. Lượt kiểm 2026-09-21 **không** làm G9 sai, nên chưa phải mở.
+- nguồn: `docs/assumptions.md` mục `G9`; `ops/network-domains.md`; rủi ro A4; CHARTER mục 8 (ngân sách)
+- ✅ **Hai kênh tuyển, đọc trang gốc của chính hai tổ chức, 2026-09-21:** **EFA** (Editorial Freelancers Association, `www.the-efa.org/hiring/`) — *"There is no charge to use the Member Directory or Job List"*, non-member dùng được, đăng tin ở `/hiring/job-submission-form/`, tin lên trong ~48 giờ, và họ **từ chối tin trả thấp** (*"We do not post low-paying or nonpaying jobs…"*); **ACES** (The Society for Editing, `aceseditors.org/resources/job-board`) — *"a free service to the editing community"*, form ở `members.aceseditors.org/add-a-job-posting` có sẵn ô **Link to Apply** và **Email to Apply**, không đòi đăng nhập. Hai trang của chính ACES lệch nhau về hạn tin (60 ngày ở trang job-board, 30 ngày ở trang form) — ghi cả hai, không chọn hộ. Bảng giá EFA 2026 (khảo sát 11/2025–giữa 01/2026, >1.100 hội viên) ở `docs/assumptions.md` mục `G9`: copyediting 33,00–75,00 USD/giờ, proofreading 29,00–75,00 USD/giờ (hai dòng này là **min–max gộp qua 19 dòng con**, khai rõ tại chỗ), fact-checking 50,00–60,00 USD/giờ (đọc thẳng một dòng, không gộp).
+- ✅ **Cách giao việc, đo bằng `curl` không xác thực trong chính lượt chạy:** link tới nội dung **công khai** (`raw.githubusercontent.com/github/gitignore/main/Node.gitignore`) trả **200** kèm 2.189 byte nội dung thật — người ngoài đọc được, không cần tài khoản. **Ngược chiều:** cả trang repo lẫn raw của `HungQuach301/crux-studio` trả **404** (repo private), kể cả khi ép rỗng header `Authorization`. Nên **"gửi link repo" KHÔNG phải một cách giao việc** — phải xuất bản riêng phần cần soát, mà xuất bản ra ngoài là CHARTER 2.3 nhóm 2, `irreversible`: agent không tự làm.
+- ⬜ **Còn treo:** chưa đăng tin và chưa ai nhận việc (đăng tin là cam kết trả tiền cho người thật — `irreversible` nhóm 1), nên độ tin cậy dừng ở `đã kiểm một phần`; chưa dựng và chưa chạy thử biểu mẫu trả lời nào; `upwork.com`, `fiverr.com`, `proz.com`, `atanet.org`, `contentwriters.com` trả **403** với egress của sandbox — là chặn bot phía họ, **không** nói gì về trình duyệt của chủ dự án.
+- ⬜ **Phát hiện đáng một mục `platform` sau này:** mọi đường trả lời không cần tài khoản đều đổ vào hộp thư hoặc biểu mẫu của chủ dự án; không có đường nào để agent đọc phản hồi mà không qua người. Đúng nút cổ chai **A4**, và đánh thẳng vào thước đo "thời gian của anh" (CHARTER 1.3, mặc định M8). Mục này chỉ ghi nhận.
 
 ### VF-G10 · Phiên cloud có ghi được `.github/workflows` không
 - deps: —
@@ -142,12 +153,33 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - kiểm: bật một routine worker và để nó nhận một mục backlog. Xem lần chạy đó có đi hết vòng — sửa file, `pnpm check`, commit, push, mở PR, gắn nhãn — hay dừng giữa chừng ở một lời hỏi cấp quyền. Bằng chứng: link lần chạy, cộng PR nó mở ra (hoặc chỗ nó dừng).
 - dự phòng nếu sai: quay `permissions.defaultMode` về `acceptEdits` và nhận việc phải bấm tay ở đúng những chỗ lần chạy đã dừng.
 ### VF-G17 · GitHub có dùng `.gitattributes` khi tự tính `mergeable` không
+> **Đã trả lời: KHÔNG.** Chốt ngày 2026-09-22 ở lượt `crux-worker-1`, sau khi đo lại độc lập lần thứ hai. Chi tiết ở phần cuối mục.
+
 - deps: —
 - risk: medium
-- status: ready
+- status: review
+- **cửa merge: `open`** — mục này chỉ chạm tài liệu, sổ giả định, backlog và log. Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
 - kiểm: cần hai PR song song mà **cả hai đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04` log tách tới mức mục, nên ca kiểm là hai lần chạy của cùng một mục (`ops/logs/<lane>/<id>.jsonl`) hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc **hai** thứ: trạng thái `mergeable` của PR kia trên GitHub, và kết quả `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau — ghi cả hai.
-- vì sao chưa trả lời được: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Xem G17.
+- vì sao mục này treo lâu: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Phải chờ tới khi có một cặp PR mà **cả hai** đã mang sẵn luật. Xem G17.
 - dự phòng nếu sai: đã có sẵn — mục `P-016`, integrator tự gộp `main` vào PR xung đột. Không phụ thuộc câu trả lời này.
+- tiêu chí xong:
+  - ✅ **Ca kiểm đã xảy ra thật, hai lần độc lập** — không phải một lần rồi suy rộng. Bảng dưới là cả hai, ghi đủ **hai** phép đo như dòng `kiểm` đòi.
+  - ✅ Trạng thái trong sổ giả định kèm ngày và kết quả: `docs/assumptions.md` mục `G17` — phần "Câu hỏi còn mở nay đã trả lời". Trạng thái `sai` của `G17` **không đổi** (câu trả lời này siết thêm lý do dự phòng, không lật nó), nên không có bước "chuyển dự phòng" nào phải làm ở đây — `P-016` đã là cơ chế chính từ trước.
+  - ✅ Ghi kết quả vào các phần phụ thuộc mà `G17` liệt kê, **và nói rõ chỗ cố ý để nguyên** — soát chéo bắt được chỗ này ở bản đầu, khi ba dòng dưới đây vẫn còn khai "chưa biết / còn mở" trong cùng file với `KF-009`:
+    - `.gitattributes` — chú thích đầu file, chỗ trước đây ghi "chưa được chứng minh là có ảnh hưởng tới `mergeable`".
+    - `ops/known-failures.md` — `KF-009` (bằng chứng), cộng **ba** chỗ cũ nay đã sửa: dòng "**Chưa kiểm**" của `KF-005`, điểm 2 phần `D-C04` của `KF-005`, và đoạn cuối phần `G17`. Để nguyên thì file tự mâu thuẫn với chính `KF-009` cách đó ~110 dòng.
+    - `ops/lanes/verify/backlog.md` — mục này.
+    - **Cố ý KHÔNG sửa, vì là bản ghi lịch sử chứ không phải phát biểu hiện tại:** `ops/lanes/platform/backlog.md` tiêu chí xong của `P-018` (đã `done` — ghi lại điều kiện *lúc đó*), `CHARTER.md` mục 14 nhật ký thay đổi (sửa còn đẩy cửa merge từ `open` sang `automerge-delayed`), và `docs/decisions/D-C04.md`. `ops/scripts/recheck-assumptions.ts` không phải sửa: bài kiểm `union-merge-order` chỉ nói về phía git, không khẳng định gì về `mergeable` của GitHub.
+  - ✅ Không mở `🤖 [QĐ]`: CHARTER 11.1 chỉ đòi `[QĐ]` khi một giả định chuyển sang `sai` mà **chưa** có dự phòng. `G17` đã `sai` và đã có dự phòng đang chạy.
+
+| Lần quan sát | PR | `mergeable_state` GitHub tự tính | `git merge-tree --write-tree` ở phía worker |
+|---|---|---|---|
+| `crux-integrator`, 2026-09-22 02:05 giờ VN | `#56`, `#65` | `dirty` | `EXIT=0`, gộp sạch |
+| `crux-worker-1`, 2026-09-21 19:38Z | `#75` | `dirty` | `EXIT=0`, gộp sạch |
+
+- **đo lại độc lập, 2026-09-21 19:38Z (lượt `crux-worker-1`) — cùng kết quả, và tách biến sạch hơn:** lần đầu (`#56`, `#65`) còn một chỗ hở cho người đọc hoài nghi — `main` vừa tiến ngay trước đó, nên `dirty` **có thể** là trạng thái cũ GitHub chưa tính lại. Lần này thì không: `base.sha` của `#75` **đúng bằng** `main` tại lúc đo (`296869b`), và file **duy nhất** mà nhánh với `main` cùng chạm là `ops/logs/platform/P-016.jsonl` — đúng một file, đã khai `merge=union`. Bật/tắt một biến trên cùng phép đo: union bật → `EXIT=0`; ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes` → `EXIT=1`, `CONFLICT (content) in ops/logs/platform/P-016.jsonl`; xoá dòng đó → `EXIT=0` trở lại. Đối chứng chặt hơn vì `-merge` là *unset* (git rơi về trình nhị phân, luôn xung đột): chạy lại với `merge=text` cũng `EXIT=1`, `CONFLICT (content)`, không cảnh báo nhị phân — chênh lệch đúng là do luật union. **Không gộp, không push gì lên `#75`** — nó là PR nháp của worker khác đang làm dở; phép đo chỉ đọc, `git merge-tree` không đụng cây làm việc.
+- **hệ quả đã có chủ, không để treo ở mục này:** lớp tự merge (`automerge.yml`) nghe phía GitHub, nên một PR có thể "sạch" ở máy mà không bao giờ merge được. Cơ chế đỡ đã chạy — `P-016`, bước 0 của phụ lục P3, gộp `main` vào nhánh để GitHub tính lại. Phần *hiển thị* chỗ kẹt đó lên bản tin là `P-007` (đang mở ở `#75`). Mục này **không** mở rộng sang hai việc đó.
+- **đã quan sát được, 2026-09-22 (lượt `crux-integrator` 02:05 giờ VN) — câu trả lời là KHÔNG:** đúng ca kiểm mà mục này mô tả đã xảy ra thật. `#56` và `#65` đều đã mang sẵn `.gitattributes`, cùng ghi vào một file append-only (`ops/logs/platform/P-016.jsonl`), và `#69` merge vào `main` cũng ghi vào file đó. **GitHub:** `mergeable_state: "dirty"` cho cả hai. **Phía worker:** `git merge-tree --write-tree origin/<nhánh> origin/main` trả `EXIT=0` "gộp sạch" cho cả hai, và `node ops/scripts/integrator-resolve.ts origin/main` trả `{"outcome":"clean","files":[]}`. Hai câu trả lời **khác nhau**, đúng như dòng `kiểm` dự liệu. Tách được biến: chạy lại phép đo sau khi tắt luật union (`ops/logs/**/*.jsonl -merge` trong `.git/info/attributes`, thắng `.gitattributes` trong cây) thì cả hai lập tức `EXIT=1`, `CONFLICT (content) in ops/logs/platform/P-016.jsonl`. Ghi đầy đủ ở `ops/known-failures.md` **KF-009**. Lượt đó giữ `status: ready` cho làn `verify` đọc lại và tự chốt — làn `integration` ghi quan sát, không tự chuyển trạng thái mục của làn khác. **Đã chốt ở lượt `crux-worker-1` 19:38Z**, sau khi đo lại độc lập (bullet trên).
 
 ### VF-G18 · `pnpm install --lockfile-only` có giữ phép phân giải cũ không
 - deps: —

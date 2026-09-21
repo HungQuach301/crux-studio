@@ -122,12 +122,15 @@ Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ 
 
 - deps: I-004
 - risk: low
-- status: ready
+- status: review
 - nguồn: phát hiện khi làm `I-004`; CHARTER mục 7; KF-005
 - tiêu chí xong:
-  - **Kiểm trước, dựa vào sau (CHARTER 11.1):** trước khi viết gì, dựng bằng chạy thật một ca git gộp lockfile **sạch** mà kết quả lệch manifest. Không dựng được thì ghi lại là không tái hiện được và đóng mục — không xây cơ chế cho một lỗi chưa ai thấy.
-  - Nếu tái hiện được: sau mỗi lần gộp có chạm `pnpm-lock.yaml`, integrator chạy `pnpm install --frozen-lockfile`; đỏ thì tạo lại lockfile bằng `ops/scripts/integrator-lockfile.ts` (đã có sẵn) rồi kiểm lại, thay vì push một PR chắc chắn đỏ ở CI.
-  - Test tái hiện đi kèm, theo luật `fix` của bất biến I2.
+  - ✅ **Kiểm trước, dựa vào sau (CHARTER 11.1):** ca hỏng **tái hiện được**, dựng bằng git thật và `pnpm` thật trước khi viết một dòng cơ chế nào. Hình dạng: một bên bỏ phụ thuộc cuối cùng còn dùng một gói (khối `packages:` biến mất), bên kia thêm phụ thuộc vào đúng gói đó ở một gói khác trong workspace (chỉ `importers` đổi). Hai vùng cách nhau xa hơn ba dòng ngữ cảnh của git ⇒ **gộp sạch**, không một dấu xung đột, mà `pnpm install --frozen-lockfile` đỏ với `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`.
+  - ✅ Sau mỗi lần gộp có chạm `pnpm-lock.yaml`, integrator kiểm → tạo lại bằng `ops/scripts/integrator-lockfile.ts` → **kiểm lại**: `guardLockfileAfterMerge` trong `ops/scripts/integrator-resolve.ts`, chạy ở **cả** đường `clean` **lẫn** đường union (lockfile đổi được mà không hề nằm trong danh sách xung đột), và luôn chạy **trước** commit vì bản mồi nằm ở `MERGE_HEAD`. Còn đỏ sau khi tạo lại thì huỷ gộp, trả `aborted-ineligible`.
+  - ✅ Test tái hiện đi kèm (bất biến I2): `ops/test/integrator-clean-merge-lockfile.test.ts`, 4 bài, không gọi mạng — phụ thuộc là tarball dựng tại chỗ tham chiếu bằng `file:`, nên nó có khối `packages:` thật mà `workspace:*` không có. Kiểm bằng đột biến: bỏ cổng thì 2 bài đỏ.
+  - ⚠️ **Đo được và phải ghi lại, vì nó đổi cách sửa:** hai cổng KHÔNG bắt cùng một thứ. Trên đúng cây gộp hỏng đó, `pnpm install --lockfile-only --frozen-lockfile` **xanh** mã 0, chỉ `pnpm install --frozen-lockfile` mới đỏ. Cổng rẻ chỉ đối chiếu specifier của `importers`; nó không hỏi phép phân giải có thật trong `packages:` hay không. Cổng cuối của `regenerateLockfile` (`I-004`) chính là cổng rẻ đó — nên `I-006` không dùng lại nó mà thêm `verifyLockfileInstall` (cài thật). Giới hạn của cổng mới, ghi trước: nó **cài thật**, nên một lượt không ra được mạng cũng cho đỏ; hướng sai của nó là an toàn (huỷ gộp, giao người), và nguyên văn đầu ra của `pnpm` đi kèm trong `reason` để phân biệt hai ca.
+  - ✅ **Vòng soát chéo (subagent, ngữ cảnh sạch) tìm ra một hồi quy thật, đã sửa trong cùng PR:** cổng cài thật, mà `pnpm install` không thấy lockfile thì **tự sinh** một bản mới rồi thoát 0 — nên lần gộp mà một bên vừa **xoá** `pnpm-lock.yaml` bị cổng hồi sinh đúng file đó và để lại cây bẩn, trái hợp đồng "không bao giờ sửa `cwd` khi huỷ" của `resolveAdditiveMerge`. Nay guard bỏ qua khi lockfile không còn trong cây đã gộp. Cùng vòng soát: `maxBuffer` 64 MiB cho lệnh cổng (trần 1 MiB mặc định làm cổng đỏ vì `ENOBUFS`, không vì lockfile), tách `aborted-error` khỏi `aborted-ineligible` khi cổng **không chạy được** thay vì **chạy xong và đỏ**, và một bài kiểm cho **đường union** — đột biến cho thấy nửa union của cổng trước đó không có bài nào phủ.
+  - **Còn treo, có chủ đích:** một dạng lệch thứ hai đã đo được mà cổng này **không** bắt — gộp sạch để lại một khối `importers` cho một gói không còn là thành viên workspace (một bên thu hẹp `packages:` trong `pnpm-workspace.yaml`, bên kia thêm gói mới). `pnpm install --frozen-lockfile` xanh trên ca đó; `pnpm install --lockfile-only` dọn sạch nó. Không xây thêm cổng ở đây: chưa đo được hệ quả thật nào của nó, và `I-006` bắt kiểm trước rồi mới dựa vào. Ghi ở Z17 để lượt sau nhận.
 
 ### I-007 · Tách "kho thật sự không có nhánh `claude/*`" khỏi "chưa quét được"
 
@@ -147,13 +150,22 @@ là một cảnh báo không ai đọc.
 
 - deps: `I-005`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-005`; `ops/known-failures.md` nhóm Z (cách 3 — cấm im lặng)
 - tiêu chí xong:
   - `git ls-remote --heads origin 'refs/heads/claude/*'` rỗng → `◦ chưa quan sát được` (quan sát hợp lệ);
     `ls-remote` hoặc `fetch` hỏng → `broken`.
   - Test cho cả hai nhánh, dựng kho bare thật.
   - Ghi lại trong `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
+- **Đã làm** (PR `#53`): thêm `listRemoteClaudeBranches()` vào `ops/scripts/recheck-assumptions.ts`, hỏi
+  thẳng remote bằng `git ls-remote --heads origin 'refs/heads/claude/*'` — không phụ thuộc kết quả fetch
+  cục bộ. `collectCommits()` chỉ ném khi hàm này cũng không xác nhận được rỗng (remote lệch với fetch cục
+  bộ, hoặc chính `ls-remote` lỗi); remote xác nhận rỗng thì trả `[]` như một quan sát hợp lệ, đi qua đúng
+  nhánh `observedNothing` sẵn có của `judgeTrailerEvidence`. Test dựng hai kho bare thật trong
+  `ops/test/recheck-assumptions.test.ts`: một remote thật rỗng (khẳng định KHÔNG ném, in `◦`), một remote
+  hỏng (khẳng định `listRemoteClaudeBranches` vẫn ném). Test cũ của `I-005` dựng đúng kịch bản mục này
+  sửa nên viết lại thành khẳng định hành vi mới thay vì xoá, giữ nguyên bằng chứng hồi quy của bug gốc.
+  Cập nhật `docs/assumptions.md` mục G14 và hàng Z15 của `ops/known-failures.md`.
 
 ### I-008 · Fixture của sáu xưởng còn nhúng bản sao Channel Pack của Đợt 0
 
@@ -221,7 +233,7 @@ trước khi viết máy kiểm.
 
 - deps: `I-008`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-008` (PR `#40`); `ops/known-failures.md` hàng Z16; CHARTER 6.1
 - tiêu chí xong:
   - Chọn và ghi lý do một trong ba: (a) fixture **đọc** snapshot tập vàng lúc chạy, (b) fixture giữ bản
@@ -230,6 +242,54 @@ trước khi viết máy kiểm.
   - Nếu chọn (a) hoặc (b): hoà giải với CHARTER 6.1 — nói rõ một PR `pnpm replay -- --update` được
     phép chạm file nào, hoặc sửa 6.1 bằng PR `owner-merge` nếu cần.
   - Kiểm nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường của một artifact đầu vào.
+- quyết định: **phương án (a)** — fixture **đọc** snapshot tập vàng lúc chạy.
+
+  Lý do chọn (a) chứ không (b) hay (c), theo đúng thứ tự cân nhắc:
+
+  1. **(a) giữ đúng hình dạng đã dùng cho nửa trước của Z16.** `I-008` không thêm phép so bản sao pack
+     với `packs/` — nó **bỏ** bản sao. Một phép so chỉ báo *sau khi* đã lệch; một nguồn duy nhất thì
+     không có gì để lệch. Cùng lỗi, cùng cách chữa.
+  2. **(a) là phương án duy nhất không đụng CHARTER 6.1.** Đây là chỗ khó mà thân mục nêu. Với (b),
+     fixture giữ bản sao nên **mỗi** PR `pnpm replay -- --update` buộc phải sửa kèm sáu file fixture —
+     đúng thứ CLAUDE.md mục 1 và CHARTER 6.1 cấm, và muốn hoà giải thì phải sửa 6.1 bằng PR
+     `owner-merge`. Với (a), fixture tự đi theo snapshot, nên một PR `--update` **chỉ chạm
+     `ops/golden/**`** và không file nào khác. Không cần sửa CHARTER, không cần nới luật.
+  3. **(c) bị loại vì không có nguồn thật để nêu.** Sáu fixture này dựng ra để chạy thử đúng đường chạy
+     của tập vàng; "độc lập" ở đây sẽ là độc lập trên giấy, và thân mục đã nói "không có nguồn" chính là
+     chỗ Z16 sống.
+
+  Hệ quả phụ, ghi để lượt sau khỏi đo lại: luật máy mà hàng **Z13** đề nghị (đỏ khi một PR vừa chạm
+  `ops/golden/**` vừa chạm thứ khác) trước mục này **không dựng được** — nó sẽ đỏ với chính các PR nó
+  phải cho qua. Nay dựng được.
+
+  Khối `upstream` khai thẳng **vẫn giữ** trong kernel: chạy một xưởng độc lập với artifact viết tay là
+  chế độ CHARTER 5.4 nói tới. Luật "fixture trong repo không được chép" nằm ở
+  `ops/scripts/check-fixtures.ts`, nơi biết file nào là fixture của repo — kernel trung tính.
+- đã làm:
+  - `kernel/src/input.ts`: khoá `upstreamFrom` (`{ golden, workshops }`), `goldenSnapshotPath`, và luật
+    **ném ở mọi cách khai sai**. Không nhánh nào trả `upstream` rỗng rồi chạy tiếp: "nạp được 0
+    artifact" và "xưởng này không tiêu thụ gì" trông giống hệt nhau lúc chạy. Xưởng không tiêu thụ gì
+    (`topic`) khai `upstream: {}`, không khai `upstreamFrom` với danh sách rỗng.
+  - `ops/scripts/check-fixtures.ts`: `upstreamCopyProblems` — fixture trong repo khai thẳng `upstream`
+    không rỗng là đỏ. Phép so bối cảnh chuyển sang đọc khối `upstream` **đã dựng xong**, không đọc thô
+    từ file: với `upstreamFrom` thì file không còn gì để đọc thô, mà phép so vẫn cần chạy — nó là thứ
+    bắt một snapshot khai bối cảnh lệch channel pack.
+  - Sáu `workshops/<tên>/fixtures/input.json`: **3959 dòng bản chép đổi thành 6 con trỏ** (77 dòng tổng).
+  - `kernel/test/input.test.ts` (mới, 13 test) và 6 test mới trong `ops/test/check-fixtures.test.ts`.
+- còn treo:
+  - Luật máy của hàng **Z13** vẫn chưa ai dựng — mục này chỉ gỡ thứ chặn nó, không dựng nó. Nếu dựng thì
+    là một mục riêng, và nó nằm trong `ops/workflows/` chứ không phải `pnpm check`.
+  - `upstreamFrom.workshops` khai tay, không suy từ `definition.consumes`. Cố ý ở PR này (`readInputFile`
+    nhận một đường dẫn file chứ không nhận `definition`), nhưng **vòng soát chéo đã đo và nó nặng hơn
+    câu trên**: đổi `consumes` của một xưởng rồi chạy `pnpm replay -- --update` thì `pnpm check` **xanh
+    hoàn toàn** trong khi fixture vẫn trỏ tới bộ xưởng cũ. Đo thật: `workshops/release/src/index.ts` để
+    `consumes: ['editorial','assembly']` còn fixture giữ `['topic','editorial','assembly']` → check xanh,
+    chạy độc lập exit 0, artifact mang thừa một đầu vào. Tức nó **không** chỉ lộ ra qua `inputsHash` như
+    ghi ban đầu — chỉ lộ tới lần `--update` hợp lệ kế tiếp, sau đó không gì thấy nữa. Thành mục `I-011`.
+  - `goldenSnapshotPath` giải đường dẫn bằng `resolve`, nên `upstreamFrom.golden` khai `../..` trỏ được
+    ra ngoài `ops/golden/`. Với fixture trong repo thì test `kernel/test/input.test.ts` #19 bắt được (nó
+    so từng artifact với snapshot thật), nhưng kernel tự nó không chặn. Không siết ở PR này vì đó là đổi
+    hành vi ngoài tiêu chí xong; ghi để lượt sau quyết.
 
 ### I-010 · Mục đã vào `main` mà vẫn nằm `status: review` — không có gì chuyển nó sang `done`
 
@@ -299,3 +359,95 @@ là làn chết đói nặng nhất.
     gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
   - ⬜ `I-001` ghi ngưỡng bỏ PR nháp là **72 giờ**, trong khi CHARTER phụ lục P1 bước 3 và CLAUDE.md
     mục 2 ghi **24 giờ**. Lệch này có từ trước mục `I-010`, không sửa ở đây để không trộn phạm vi.
+
+### I-011 · `consumes` của một xưởng nay có ba bản chép tay, và lệch nhau thì không gì đỏ
+
+Tìm ra trong vòng soát của `I-009`, đã đo bằng chạy thật.
+
+`I-009` bỏ được bản chép **artifact** trong fixture, nhưng nó đẩy Z16 lên một tầng: danh sách xưởng
+tiêu thụ nay viết tay ở **ba** chỗ, và không chỗ nào buộc vào chỗ nào —
+
+1. `definition.consumes` trong `workshops/<tên>/src/index.ts` — nguồn thật, đường chạy tập dùng nó;
+2. `upstreamFrom.workshops` trong `workshops/<tên>/fixtures/input.json`;
+3. danh sách viết cứng trong `kernel/test/input.test.ts` (bài "sáu fixture … khớp ĐÚNG snapshot").
+
+Đo được: đổi `consumes` của `release` thành `['editorial','assembly']` mà để fixture giữ
+`['topic','editorial','assembly']` thì `pnpm check` **xanh hoàn toàn** và lệnh chạy độc lập exit 0 với
+một artifact đầu vào thừa. `inputsHash` có đổi, nhưng điều đó chỉ lộ ra tới lần `pnpm replay -- --update`
+hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+
+- deps: `I-009`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
+- tiêu chí xong:
+  - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
+    (ví dụ `--input` không khai danh sách, CLI truyền `definition.consumes` xuống `readInputFile`). Không
+    làm được thì phải nói rõ vì sao, rồi mới dựng phép so.
+  - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
+    nó đang kiểm thì không kiểm gì.
+  - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
+
+### I-012 · Bài kiểm G14 quét cả nhánh đã merge, nên nó kêu oan và sẽ kêu mãi mãi
+
+Tìm ra ở lượt `crux-integrator` 2026-09-22 02:05 giờ VN — lần đầu phụ lục P3 bước 4 có cơ chế thật để
+chạy (`pnpm recheck:assumptions`, mục `I-003`). Đã đo bằng chạy thật.
+
+`collectCommits` quét `refs/remotes/origin/claude/*` trừ `^refs/remotes/origin/main`. Phép loại đó đúng
+với ý định — chú thích của `judgeTrailerEvidence` nói rõ loại `main` ra vì **squash làm mất trailer, không
+phải agent làm mất** — nhưng nó rò: GitHub merge kiểu **squash**, nên nhánh đã merge vẫn còn trên remote
+với **toàn bộ** lịch sử không nằm trong `main`. Bài kiểm vì thế đếm lại đúng những commit mà nó định loại.
+
+Đo được, lượt 2026-09-22: **14/131 commit "thiếu trailer"**, và phân loại từng commit thì
+
+- **10** nằm trên đúng một nhánh stale, `origin/claude/platform/P-009` (PR `#9` đã merge, nhánh chưa xoá).
+  Trong đó có `99d6bcf Initial commit`, `e01a667 Add files via upload`, `087246e Delete .github/...` —
+  commit của **chính chủ dự án** qua giao diện web, không bao giờ có trailer và không nên có;
+- **2** là `chore: sync workflows from ops/workflows [skip ci]`, do GitHub Action `sync-workflows` sinh;
+- **2** là merge tay dạng `Gộp main vào <nhánh>` mà `isToolCommit` không khớp (nó chỉ nhận
+  `Gộp … (integrator,` và `Merge branch …`);
+- **1** là tín hiệu thật: `7fc292a` (`integration: bước 0 của P3 lượt 23:05`, trên
+  `origin/claude/keen-mayer-nzkvdy`) — commit do agent soạn, thiếu trailer `Claude-Session`. Đây là đúng
+  phần mà giả định **G14** còn để ngỏ, và là thứ duy nhất trong 14 dòng đáng gọi là quan sát.
+
+Vì sao đáng một mục chứ không phải một dòng ghi chú: bài kiểm này **không bao giờ xanh được nữa**. Commit
+của chủ dự án trên nhánh stale sẽ nằm đó mãi, nên mỗi thứ Hai nó lại in sẵn một thân issue `🤖 [QĐ]` cho
+một giả định chẳng đổi trạng thái — đúng lý do mà chính script đã bỏ kết luận `nâng` ("một cảnh báo kêu
+mọi lượt là một cảnh báo không ai đọc"), và đúng hình dạng `I-005`/`I-007` đã sửa một lần cho ca "kêu
+oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue; lượt sau sẽ không may như vậy.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: lượt `crux-integrator` 2026-09-22 02:05 giờ VN, `ops/logs/integration/P3-daily-2026-09-22.jsonl`;
+  `docs/assumptions.md` G14; mục `I-003`, `I-005`, `I-007`
+- tiêu chí xong:
+  - Phạm vi quét chỉ còn commit **của agent, trên nhánh còn sống**. Loại nhánh đã merge bằng câu hỏi trả
+    lời được — ví dụ đối chiếu với danh sách PR đang mở, hoặc loại mọi commit có trước điểm rẽ của nhánh
+    khỏi `main` — chứ không phải nới `isToolCommit` cho tới khi hết đỏ. Nới danh sách chữ ký là vá sản
+    phẩm (CLAUDE.md mục 13).
+  - `isToolCommit` nhận thêm hai dạng đã đo được: `chore: sync workflows…` (máy sinh) và merge tay dạng
+    `Gộp <ref> vào <nhánh>`. Mỗi dạng một test âm.
+  - Một test dựng kho bare thật có **đúng hình dạng đã gặp** — một nhánh đã squash-merge còn sót trên
+    remote, mang commit không trailer — và bài kiểm G14 phải ra `khớp`, không `sai`. Cùng quy ước "không
+    mô phỏng" với các test G14/G17 đang có trong `ops/test/recheck-assumptions.test.ts`.
+  - `7fc292a` không được biến mất cùng với nhiễu: sau khi siết phạm vi, một commit agent thật sự thiếu
+    trailer vẫn phải ra `sai`. Có test cho đúng điều đó.
+- **Đã làm:**
+  - `collectCommits` (`ops/scripts/recheck-assumptions.ts`) nay lọc `refs/remotes/origin/claude/*` còn
+    đúng nhánh có **PR mở**, trước khi `git log` — trả lời "trả lời được" mà tiêu chí xong đòi, không đoán
+    theo ngày hay theo lịch sử git (squash không giữ SHA cũ nên "điểm rẽ khỏi `main`" của một nhánh stale
+    không nói lên gì). `fetchOpenPrBranches()` gọi `gh pr list --state open` — cùng quy ước gọi lệnh với
+    `fetchMergedPrs()` của `ops/scripts/update-metrics.ts`, không phải cách mới. Nhánh hết PR mở (đã
+    merge/đã đóng) loại thẳng khỏi phạm vi quét: `liveRefs.length === 0` trả `[]` như một quan sát hợp lệ
+    (cùng nhánh `observedNothing` với ca "kho không còn nhánh nào" của `I-007`), không phải lỗi.
+  - `isToolCommit` nhận thêm đúng hai dạng đã đo được, neo chặt để không rơi lại thành danh sách đen:
+    `chore: sync workflows from ops/workflows` (tiền tố do Action `sync-workflows` sinh) và
+    `Gộp (origin/)?main(...) vào ` (mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ
+    "Gộp … vào" nói chung — giữ nguyên vẹn ca âm `"Gộp hai mô hình định lượng vào một bảng"` đã có).
+  - Test mới trong `ops/test/recheck-assumptions.test.ts`: hai test cho `isToolCommit`, ba test cho
+    `collectCommits` (nhánh stale bị loại dù thiếu trailer thật; nhánh sống vẫn ra `sai` khi thật sự thiếu
+    trailer — phép lọc mới không được nuốt tín hiệu thật; mọi nhánh hết PR mở thì trả rỗng, không ném).
+    Ba test `collectCommits` cũ (mục `I-005`, `I-007`) cập nhật để tự khai nhánh nào có PR mở, không gọi
+    `gh` thật trong test.
+  - `ops/known-failures.md` hàng **Z15**: thêm đoạn "Sửa tiếp ở mục `I-012`".

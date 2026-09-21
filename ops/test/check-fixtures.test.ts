@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WORKSHOPS, type Envelope } from '@crux/kernel';
-import { fixtureInputProblems, inputFileProblems } from '../scripts/check-fixtures.ts';
+import { fixtureInputProblems, inputFileProblems, upstreamCopyProblems } from '../scripts/check-fixtures.ts';
 
 /** Gốc repo, không phải cwd: `node --test` chạy được từ thư mục nào cũng đúng. */
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -260,4 +260,131 @@ test('fixture chỉ khai bối cảnh và artifact đầu vào thì XANH', () =>
 
 test('sáu fixture trong repo này XANH', () => {
   assert.deepEqual(fixtureInputProblems(REPO_ROOT), []);
+});
+
+// ── I-009 · nửa còn lại của Z16: artifact đầu vào là bản chép tập vàng ────
+//
+// Test âm ở đây phải đỏ đúng chỗ mục này tồn tại: một fixture repo mang bản
+// chép snapshot. Bản chép đó **hợp contract** và **khớp bối cảnh** — cả hai
+// lớp bắt mà `I-008` dựng đều xanh với nó — nên nếu bài kiểm dưới đây không
+// đỏ thì `I-009` chưa thay được gì cho tình trạng cũ.
+
+/** Dựng một gốc repo có đủ sáu thư mục fixture và một tập vàng thật. */
+function makeRepoRoot(fixtures: Record<string, unknown>): string {
+  const { root } = makeRoot(undefined);
+  mkdirSync(join(root, 'ops', 'golden', 'ep-0001-stub', 'snapshots'), { recursive: true });
+  for (const workshop of WORKSHOPS) {
+    writeFileSync(
+      join(root, 'ops', 'golden', 'ep-0001-stub', 'snapshots', `${workshop}.json`),
+      JSON.stringify(goldenArtifact(workshop)),
+    );
+    mkdirSync(join(root, 'workshops', workshop, 'fixtures'), { recursive: true });
+    writeFileSync(
+      join(root, 'workshops', workshop, 'fixtures', 'input.json'),
+      JSON.stringify(fixtures[workshop] ?? { episodeId: 'ep-0001-stub', channel: SLUG, upstream: {} }),
+    );
+  }
+  return root;
+}
+
+test('I-009 · fixture repo khai THẲNG artifact đầu vào thì ĐỎ — đó đúng là bản chép đã trôi', () => {
+  const copy = goldenArtifact('topic');
+  const root = makeRepoRoot({
+    editorial: { episodeId: 'ep-0001-stub', channel: SLUG, upstream: { topic: copy } },
+  });
+  try {
+    // Bản chép này hợp contract VÀ khớp bối cảnh, nên hai lớp bắt của I-008 đều xanh…
+    assert.deepEqual(
+      inputFileProblems(root, join(root, 'workshops', 'editorial', 'fixtures', 'input.json'), 'Fixture thử'),
+      [],
+    );
+    // …và chỉ luật của I-009 mới bắt được nó.
+    const problems = fixtureInputProblems(root);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /upstreamFrom/);
+    assert.match(problems[0]!, /I-009/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-009 · làm lệch MỘT trường của một artifact đầu vào đã chép thì vẫn ĐỎ', () => {
+  const drifted = goldenArtifact('topic') as unknown as Record<string, unknown>;
+  // Đúng hình dạng đã trôi thật: MỘT trường trong payload đổi giá trị, phong
+  // bì nguyên vẹn, artifact vẫn HỢP CONTRACT. Đó là điều khiến `I-008` không
+  // bắt được nó — không phải một artifact hỏng, mà một artifact đúng mà cũ.
+  const selected = (drifted['payload'] as Record<string, unknown>)['selected'] as Record<string, unknown>;
+  selected['question'] = 'Câu hỏi của một bản chép đã trôi khỏi snapshot.';
+  const fixture = { episodeId: 'ep-0001-stub', channel: SLUG, upstream: { topic: drifted } };
+  const root = makeRepoRoot({ editorial: fixture });
+  try {
+    // Hai lớp bắt của I-008 vẫn xanh với nó — đo, không phải đoán.
+    assert.deepEqual(
+      inputFileProblems(root, join(root, 'workshops', 'editorial', 'fixtures', 'input.json'), 'Fixture thử'),
+      [],
+    );
+    const problems = fixtureInputProblems(root);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /upstreamFrom/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-009 · `upstream: {}` rỗng KHÔNG đỏ — đó là cách xưởng topic nói nó không tiêu thụ gì', () => {
+  const root = makeRepoRoot({});
+  try {
+    assert.deepEqual(fixtureInputProblems(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-009 · fixture repo trỏ tập vàng bằng `upstreamFrom` thì XANH', () => {
+  const root = makeRepoRoot({
+    editorial: {
+      episodeId: 'ep-0001-stub',
+      channel: SLUG,
+      upstreamFrom: { golden: 'ep-0001-stub', workshops: ['topic'] },
+    },
+  });
+  try {
+    assert.deepEqual(fixtureInputProblems(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-009 · phép so bối cảnh vẫn chạy qua `upstreamFrom` — snapshot lệch pack thì ĐỎ', () => {
+  const root = makeRepoRoot({
+    editorial: {
+      episodeId: 'ep-0001-stub',
+      channel: SLUG,
+      upstreamFrom: { golden: 'ep-0001-stub', workshops: ['topic'] },
+    },
+  });
+  try {
+    // Làm lệch MỘT trường của snapshot tập vàng, không phải của fixture.
+    const snapshot = join(root, 'ops', 'golden', 'ep-0001-stub', 'snapshots', 'topic.json');
+    writeFileSync(snapshot, JSON.stringify({ ...goldenArtifact('topic'), locale: 'en-GB' }));
+    const problems = fixtureInputProblems(root);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /locale/);
+    assert.match(problems[0]!, /en-GB/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-009 · `upstreamCopyProblems` đọc thô, nên nó bắt cả file mà readInputFile đã từ chối', () => {
+  const { root, path } = makeRoot({
+    episodeId: 'ep-0001-stub',
+    channel: 'khong-co-kenh-nay',
+    upstream: { topic: goldenArtifact('topic') },
+  });
+  try {
+    assert.equal(upstreamCopyProblems(path, 'Fixture thử').length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
