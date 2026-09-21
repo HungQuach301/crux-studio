@@ -91,7 +91,7 @@ DoD Đợt 0 đòi "một cảnh báo thử của watchdog tới được điệ
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: `ops/known-failures.md` KF-004; CHARTER 2.4; giả định G2
 - tiêu chí xong:
   - `watchdog.yml` và `main-ci.yml` đặt `@HungQuach301` **ngay trong thân issue** chúng mở, không chờ `notify.yml`. Một `@nhắc` trong thân issue sinh thông báo của chính GitHub, không cần workflow thứ hai nào chạy.
