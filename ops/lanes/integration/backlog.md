@@ -33,11 +33,20 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 
 - deps: `docs/assumptions.md`
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER 11.1; phụ lục P3 bước 4
 - tiêu chí xong:
-  - Giả định nào có cách kiểm tự động thì chạy được bằng một lệnh.
-  - Giả định đổi trạng thái thì mở `🤖 [QĐ]` **kèm danh sách phần bị ảnh hưởng**, lấy từ các mã giả định.
+  - ✅ Giả định nào có cách kiểm tự động thì chạy được bằng một lệnh — `pnpm recheck:assumptions`
+    (`ops/scripts/recheck-assumptions.ts`). Mục nào tự khai `**Kiểm tự động:**` trong sổ mới được chạy;
+    mục cần người được liệt kê ra thành "cần người", không im lặng bỏ qua.
+  - ✅ Giả định đổi trạng thái thì lệnh **in sẵn thân issue `🤖 [QĐ]`** đủ năm phần của CLAUDE.md mục 14,
+    kèm danh sách phần bị ảnh hưởng lấy nguyên từ cột *Phần phụ thuộc* của chính giả định đó. Lệnh
+    **không** tự mở issue và **không** tự sửa sổ — mở issue là việc của routine (CHARTER 11.1).
+  - ✅ Hai bài kiểm thật đang chạy: `trailer-commit-routine` (G14) và `union-theo-thu-tu-thoi-gian` (G17),
+    cả hai đều chạy thật chứ không mô phỏng. 13 test trong `ops/test/recheck-assumptions.test.ts`.
+  - ✅ `pnpm assumptions` đỏ nếu sổ khai một mã bài kiểm không tồn tại, để sổ và code không trôi khỏi nhau.
+  - **Chưa làm, cố ý:** lệnh không nằm trong `pnpm check`. Đỏ ở đây nghĩa là thế giới đã đổi, không phải PR
+    đó sai; một giả định hoá ra sai không được chặn mọi làn (CHARTER mục 4). Phụ lục P3 bước 4 gọi nó.
 
 ### I-004 · Tạo lại lockfile khi xung đột
 - deps: —
