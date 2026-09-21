@@ -89,13 +89,22 @@ export type ItemVerdict =
 export interface BacklogItem {
   id: string;
   status: string;
+  /**
+   * Tên mục — phần còn lại của dòng `### <id> · <tên>`, đã bỏ dấu `·` và
+   * khoảng trắng hai đầu. Chuỗi rỗng nếu tiêu đề chỉ có mã mục.
+   *
+   * Thêm cho mục `platform/P-005` (bản tin ngày cần một dòng đọc được cho
+   * mỗi mục `parked`), đặt ở đây thay vì tách lại tiêu đề ở bên gọi: một
+   * định nghĩa "mục backlog" cho cả repo.
+   */
+  title: string;
   /** Thân mục còn ít nhất một dấu treo — xem `HOLD_MARKERS`. */
   hasHoldMarker: boolean;
   /** Dòng `- status: …`, hoặc `null` nếu mục không khai `status`. */
   statusLine: number | null;
 }
 
-const HEADING = /^###\s+(\S+)/;
+const HEADING = /^###\s+(\S+)([^\n]*)$/;
 const STATUS = /^-\s*status:\s*(\S+)\s*$/;
 
 /** Thân mục có dấu treo nào không. So không phân biệt hoa thường. */
@@ -113,10 +122,10 @@ export function hasHoldMarker(body: string): boolean {
  */
 export function parseBacklog(content: string): BacklogItem[] {
   const lines = content.split('\n');
-  const starts: Array<{ id: string; line: number }> = [];
+  const starts: Array<{ id: string; title: string; line: number }> = [];
   for (let i = 0; i < lines.length; i++) {
     const m = HEADING.exec(lines[i]!);
-    if (m) starts.push({ id: m[1]!, line: i });
+    if (m) starts.push({ id: m[1]!, title: m[2]!.replace(/^\s*[·•]?\s*/, '').trim(), line: i });
   }
 
   return starts.map((start, index) => {
@@ -136,6 +145,7 @@ export function parseBacklog(content: string): BacklogItem[] {
 
     return {
       id: start.id,
+      title: start.title,
       status,
       hasHoldMarker: hasHoldMarker(body.join('\n')),
       statusLine,
