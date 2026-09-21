@@ -238,7 +238,7 @@ Tách danh tính cứng (tài khoản máy `crux-bot` kèm CODEOWNERS) là việ
 
 Phiên cloud của Claude có thể không có quyền ghi vào `.github/workflows/`. Vì vậy:
 
-- Agent viết mọi workflow vào `ops/workflows/*.yml`. Đây là vùng bảo vệ.
+- Agent viết mọi workflow vào `ops/workflows/*.yml`. Đây là vùng bảo vệ — mức `owner-merge` cho `automerge.yml` và mọi workflow dùng secret hoặc phát hành, mức `automerge-delayed` cho phần còn lại (mục 3, D-C06).
 - Chủ dự án tạo **một lần** workflow `.github/workflows/sync-workflows.yml`. Workflow này dùng secret `WORKFLOW_SYNC_TOKEN`: một fine-grained PAT, chỉ cho repo này, với quyền Contents và Workflows ở mức read/write.
 - Khi `main` thay đổi trong `ops/workflows/**`, workflow sync chép các file sang `.github/workflows/`.
 
@@ -448,7 +448,7 @@ Khi tách, làm ba bước:
 - Sổ giả định đã lập. Mỗi giả định chịu tải có trạng thái rõ ràng: đã kiểm, đang kiểm, hoặc đã giao cho làn `verify`.
 
 **Việc của chủ dự án:**
-- Merge các PR nền tảng (vùng bảo vệ).
+- Merge các PR `owner-merge` (mục 3, ba nhóm sau D-C06). Các PR vùng bảo vệ còn lại tự vào `main` sau 12 giờ.
 - Bật ruleset nếu có GitHub Pro.
 - Xác nhận các mặc định ở mục 12.
 

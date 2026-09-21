@@ -1,6 +1,6 @@
 # CLAUDE.md — Luật làm việc của agent Crux Studio
 
-> 🤖 File này do agent viết. Nó nằm trong **vùng bảo vệ** (CHARTER mục 3): chỉ merge được bằng PR `owner-merge`.
+> 🤖 File này do agent viết. Nó nằm trong **vùng bảo vệ** (CHARTER mục 3), mức `automerge-delayed` từ quyết định `D-C06`: PR sửa nó tự vào `main` sau 12 giờ CI xanh, nếu chủ dự án không comment `dừng`.
 
 ## 0. Nguồn thẩm quyền
 
