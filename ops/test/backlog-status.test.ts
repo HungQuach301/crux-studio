@@ -1,14 +1,24 @@
 /**
  * `ops/scripts/backlog-status.ts` — cơ chế của mục `I-010`.
  *
- * Chỉ kiểm các hàm thuần. Lớp `main()` đọc thư mục và gọi `git log`; phần
- * `git log` được kiểm riêng qua `readMainSubjects` trên chính kho này, vì
- * đó là thứ duy nhất trong file có thể im lặng trả về rỗng và làm cả tool
- * kết luận "chưa merge gì cả" mà không có gì đỏ.
+ * Chỉ kiểm các hàm thuần, cộng `readMainSubjects` — thứ duy nhất trong file
+ * có thể im lặng trả về rỗng và làm cả tool kết luận "chưa merge gì cả" mà
+ * không có gì đỏ.
+ *
+ * `readMainSubjects` được kiểm trên **kho git tạm dựng riêng cho phép thử**,
+ * không phải trên chính kho này. Lý do đã đo bằng chạy thật: CI checkout ở
+ * trạng thái detached và **không có** ref `origin/main` lẫn `main`, nên một
+ * phép thử dựa vào kho hiện tại xanh ở máy và đỏ ở CI — đúng loại phép thử
+ * đo môi trường thay vì đo hành vi. Kho tạm cho cả hai chiều: có `main` thì
+ * đọc đúng, không có ref nào thì **ném lỗi** chứ không trả rỗng.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   OPEN_BOX,
   parseBacklog,
@@ -132,11 +142,47 @@ test('applyFix: mã mục không có trong file thì không đổi gì', () => {
   assert.equal(content, BACKLOG);
 });
 
-test('readMainSubjects: đọc được lịch sử thật, không trả rỗng im lặng', () => {
-  const subjects = readMainSubjects();
-  assert.ok(subjects.length > 0, 'lịch sử main rỗng — tool sẽ kết luận sai là chưa merge gì');
-  assert.ok(
-    subjects.every((s) => s.length > 0),
-    'có tiêu đề rỗng lọt vào danh sách',
-  );
+/** Kho git tạm, tối thiểu, không đụng tới kho đang làm việc. */
+function tempRepo(commitSubjects: readonly string[], branch: string | null): string {
+  const dir = mkdtempSync(join(tmpdir(), 'backlog-status-'));
+  const git = (...args: string[]) => {
+    const r = spawnSync(
+      'git',
+      ['-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+  };
+  git('init', '--quiet', '--initial-branch', 'work');
+  for (const subject of commitSubjects) {
+    git('commit', '--quiet', '--allow-empty', '-m', subject);
+  }
+  if (branch !== null) git('branch', branch);
+  return dir;
+}
+
+test('readMainSubjects: đọc đúng tiêu đề commit của main, không trả rỗng im lặng', () => {
+  const dir = tempRepo(['[demo] D-001 — xong', '[demo] D-002 — xong phần chính'], 'main');
+  try {
+    const subjects = readMainSubjects(dir);
+    // Mới nhất trước, đúng thứ tự `git log`.
+    assert.deepEqual(subjects, ['[demo] D-002 — xong phần chính', '[demo] D-001 — xong']);
+    assert.ok(
+      subjects.every((s) => s.length > 0),
+      'có tiêu đề rỗng lọt vào danh sách',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readMainSubjects: không có ref main thì NÉM LỖI, không trả rỗng', () => {
+  // Ca thật: CI checkout detached, không có origin/main lẫn main. Trả rỗng ở
+  // đây sẽ làm tool kết luận "chưa mục nào merge" và im lặng bỏ sót tất cả.
+  const dir = tempRepo(['[demo] D-001 — xong'], null);
+  try {
+    assert.throws(() => readMainSubjects(dir), /không đọc được lịch sử/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

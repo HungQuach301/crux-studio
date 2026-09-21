@@ -31,7 +31,7 @@ Lỗ hổng nằm ở chỗ **"cần người" không phải một trạng thái
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: PR #26 (bốn lượt `aborted-ineligible`, 2026-09-21); CHARTER phụ lục P1 bước 2 và phụ lục P3 bước 0; CHARTER mục 7 (hàng đợi merge tuần tự)
 - **cửa merge:** chạy `node ops/invariants.protected-area.ts` — mục này sửa CHARTER phụ lục P1/P3 (mục khác mục 1 và 3) nên nhiều khả năng là `automerge-delayed`. Đừng đoán, chạy.
 - tiêu chí xong:
