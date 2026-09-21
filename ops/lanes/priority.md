@@ -30,7 +30,7 @@ Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt
 
 Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Kẹt lâu nhất đi trước. Lý do: một PR đỏ hoặc kẹt nằm đó chặn hàng đợi merge, và hàng đợi merge là tuần tự.
 
-Ba ca này đọc bằng máy, không bằng mắt: `node ops/scripts/pr-pickup.ts` in ra PR phải nhận, làn sở hữu, số giờ kẹt và số lượt đã bỏ lại.
+Ca 3 đọc bằng máy, không bằng mắt: `node ops/scripts/pr-pickup.ts --prs <file.json>` in ra trường `pickup` — PR phải nhận, làn sở hữu, số giờ kẹt. Không có `--prs` thì tool nói thẳng là nó chưa trả lời được; trường `stuck` khi đó chỉ là bản ghi của lượt bước 0 gần nhất, **chưa** lọc qua ngưỡng 2 giờ, đừng đọc nó như danh sách phải nhận.
 
 ## Điều tiết
 

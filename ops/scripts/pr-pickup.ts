@@ -49,6 +49,26 @@ export const PICKUP_QUIET_HOURS = 2;
  */
 export const ESCALATE_AFTER_TURNS = 3;
 
+/**
+ * Và PR phải kẹt ít nhất ngần này giờ nữa thì mới nổi lên bản tin. HAI điều
+ * kiện, không phải một.
+ *
+ * Vì sao cần điều kiện thứ hai: `turns` đếm mỗi **lượt quan sát**, không
+ * phải mỗi **lần thử sửa**. Bước 0 chạy ở đầu mọi lượt worker và dự án chạy
+ * 2–3 worker song song, nên ba lượt có thể trôi qua trong nửa giờ mà không
+ * có thông tin mới nào — đã đo trên #39: 12:06Z, 12:19Z, 12:38Z, 32 phút.
+ * Báo động ở đó là báo động giả, đúng thứ mặc định M8 và rủi ro B11 cấm.
+ * Số giờ kẹt thì không phụ thuộc số worker, nên nó là vế giữ cho con số
+ * `turns` không tự thổi phồng. Ngược lại, hai worker song song cùng đọc một
+ * dòng rồi cùng ghi một số ⇒ `turns` còn đếm **thiếu**; vế giờ cũng đỡ luôn
+ * ca đó.
+ *
+ * Sáu giờ, vì từ ca 2c mới (phụ lục P1) một PR `aborted-ineligible` được
+ * worker kế tiếp nhận trong khoảng một nhịp chạy. Còn kẹt sau sáu giờ nghĩa
+ * là đã có worker nhận và đã không giải được — lúc đó nó thật sự cần người.
+ */
+export const ESCALATE_AFTER_HOURS = 6;
+
 /** Bốn kết quả của `integrator-resolve.ts`. */
 export type ResolveOutcome = 'resolved' | 'clean' | 'aborted-ineligible' | 'aborted-error';
 
@@ -200,13 +220,24 @@ export function parseStuckEntries(note: string | undefined): StuckEntry[] {
   try {
     const parsed: unknown = JSON.parse(note.slice(at + STUCK_MARKER.length));
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry): entry is StuckEntry =>
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof (entry as StuckEntry).pr === 'number' &&
-        typeof (entry as StuckEntry).outcome === 'string',
-    );
+    return parsed.filter((entry): entry is StuckEntry => {
+      if (typeof entry !== 'object' || entry === null) return false;
+      const e = entry as StuckEntry;
+      // `turns` và `hoursStuck` đi thẳng vào dòng gửi chủ dự án, nên kiểu
+      // của chúng phải kiểm ở đây. Thiếu phép kiểm này thì một dòng log
+      // hỏng in ra "kẹt NaN giờ" trong bản tin — kiểm đã chạy thật.
+      return (
+        typeof e.pr === 'number' &&
+        Number.isFinite(e.pr) &&
+        typeof e.outcome === 'string' &&
+        typeof e.branch === 'string' &&
+        (typeof e.lane === 'string' || e.lane === null) &&
+        typeof e.turns === 'number' &&
+        Number.isFinite(e.turns) &&
+        typeof e.hoursStuck === 'number' &&
+        Number.isFinite(e.hoursStuck)
+      );
+    });
   } catch {
     return [];
   }
@@ -228,10 +259,25 @@ export function consecutiveAbortedTurns(notes: Array<string | undefined>, prNumb
   let turns = 0;
   for (let i = notes.length - 1; i >= 0; i--) {
     const entry = parseStuckEntries(notes[i]).find((e) => e.pr === prNumber);
-    if (entry?.outcome !== 'aborted-ineligible') break;
+    if (entry === undefined || !isLeftBehind(entry.outcome)) break;
     turns += 1;
   }
   return turns;
+}
+
+/**
+ * PR bị **bỏ lại** ở lượt bước 0, tức bước 0 đã chạy xong mà PR vẫn xung
+ * đột. Gồm CẢ `aborted-error`.
+ *
+ * `aborted-error` không phải việc worker nhận (xem `needsPickup`: P3 bước 0
+ * gọi nó là lỗi ngoài dự tính và cấm thử lại trong cùng lần chạy), nhưng nó
+ * vẫn phải **đếm** và vẫn phải nổi lên bản tin khi lặp lại. Không thì một PR
+ * kẹt ở `aborted-error` rơi khỏi cả hai vế — không ai nhận, và không bao giờ
+ * ai biết — tức dựng lại đúng cái khoảng trống không-ai-sở-hữu mà P-022 sinh
+ * ra để đóng.
+ */
+export function isLeftBehind(outcome: ResolveOutcome): boolean {
+  return outcome === 'aborted-ineligible' || outcome === 'aborted-error';
 }
 
 /**
@@ -250,7 +296,7 @@ export function consecutiveAbortedTurns(notes: Array<string | undefined>, prNumb
  */
 export function nextTurnCount(notes: Array<string | undefined>, prNumber: number): number {
   const previous = parseStuckEntries(notes[notes.length - 1]).find((e) => e.pr === prNumber);
-  if (previous?.outcome !== 'aborted-ineligible') return 1;
+  if (previous === undefined || !isLeftBehind(previous.outcome)) return 1;
   const carried = previous.turns;
   return (Number.isFinite(carried) && carried > 0 ? Math.floor(carried) : 1) + 1;
 }
@@ -262,10 +308,25 @@ export function nextTurnCount(notes: Array<string | undefined>, prNumber: number
 export function selectEscalations(
   entries: StuckEntry[],
   threshold: number = ESCALATE_AFTER_TURNS,
+  minHours: number = ESCALATE_AFTER_HOURS,
 ): StuckEntry[] {
   return entries
-    .filter((entry) => entry.outcome === 'aborted-ineligible' && entry.turns >= threshold)
+    .filter(
+      (entry) => isLeftBehind(entry.outcome) && entry.turns >= threshold && entry.hoursStuck >= minHours,
+    )
     .sort((a, b) => (b.turns !== a.turns ? b.turns - a.turns : a.pr - b.pr));
+}
+
+/**
+ * Số giờ kẹt, viết cho người đọc trên màn hình điện thoại. Dưới một giờ thì
+ * ra phút: `Math.floor` trên số giờ in ra "kẹt 0 giờ … cần anh gỡ tay",
+ * một câu tự mâu thuẫn — và làm phiền chủ dự án bằng một con số vô nghĩa
+ * đúng là thứ mặc định M8 cấm. Đã in ra thật trước khi sửa.
+ */
+export function formatStuckDuration(hours: number): string {
+  if (!Number.isFinite(hours) || hours < 0) return 'không rõ bao lâu';
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} phút`;
+  return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} giờ`;
 }
 
 /** Một dòng tiếng Việt cho bản tin ngày, mục "Cần anh quyết". */
@@ -273,8 +334,8 @@ export function escalationLine(entry: StuckEntry, repoUrl: string): string {
   const lane = entry.lane ?? 'không rõ làn';
   return (
     `PR #${entry.pr} (${lane}, \`${entry.branch}\`) kẹt xung đột ` +
-    `${Math.floor(entry.hoursStuck)} giờ, ${entry.turns} lượt liên tiếp không tự giải được ` +
-    `— cần anh gỡ tay: ${repoUrl}/pull/${entry.pr}`
+    `${formatStuckDuration(entry.hoursStuck)}, ${entry.turns} lượt liên tiếp không tự giải được ` +
+    `(${entry.outcome}) — cần anh gỡ tay: ${repoUrl}/pull/${entry.pr}`
   );
 }
 
@@ -291,26 +352,84 @@ const P016_LOG = join('ops', 'logs', 'platform', 'P-016.jsonl');
 export function readStepZeroNotes(root: string = process.cwd()): Array<string | undefined> {
   const path = join(root, P016_LOG);
   if (!existsSync(path)) return [];
-  const lines = readFileSync(path, 'utf8')
-    .split('\n')
-    .filter((line) => line.trim() !== '')
-    .map((line) => JSON.parse(line) as { at: string; note?: string });
+  const lines: Array<{ at: string; note?: string }> = [];
+  for (const raw of readFileSync(path, 'utf8').split('\n')) {
+    if (raw.trim() === '') continue;
+    try {
+      lines.push(JSON.parse(raw) as { at: string; note?: string });
+    } catch {
+      // Một dòng hỏng không được giết cả bước đọc log. File này append-only
+      // và gộp bằng `merge=union` (union KHÔNG khử trùng lặp), lại được ghi
+      // bởi mọi nhánh worker — đúng loại file dễ sinh dòng rác nhất. Ném ở
+      // đây là giết bước bản tin mà phụ lục P2 bắt chạy, và giết nó im lặng
+      // đối với người đọc bản tin. Cùng lối với `parseStuckEntries`.
+      continue;
+    }
+  }
   return lines
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
     .map((line) => line.note);
+}
+
+// Cách dùng:
+//   node ops/scripts/pr-pickup.ts [--prs <file.json>]
+//
+// `--prs` là một file JSON chứa mảng `StuckPrCandidate` — worker dựng nó từ
+// kết quả liệt kê PR của bước 0. Có nó thì tool trả lời được câu hỏi
+// "PR nào phải nhận ngay"; không có thì tool nói thẳng là nó chưa trả lời
+// được, chứ không im lặng in ra một danh sách trông như câu trả lời.
+function argOf(name: string): string | undefined {
+  const index = process.argv.indexOf(`--${name}`);
+  return index === -1 ? undefined : process.argv[index + 1];
 }
 
 function main(): void {
   const notes = readStepZeroNotes();
   const latest = parseStuckEntries(notes[notes.length - 1]);
   const escalations = selectEscalations(latest);
+
+  const prsPath = argOf('prs');
+  let pickup: PickupAssignment | null = null;
+  let pickupNote =
+    'chưa trả lời được: thiếu --prs <file.json> (mảng StuckPrCandidate). ' +
+    'Trường `stuck` dưới đây là bản ghi của lượt bước 0 GẦN NHẤT, ' +
+    'CHƯA lọc qua ngưỡng chống giẫm chân — đừng đọc nó như danh sách phải nhận.';
+  if (prsPath !== undefined) {
+    if (!existsSync(prsPath)) {
+      process.stderr.write(`Không thấy file --prs: ${prsPath}\n`);
+      process.exit(2);
+    }
+    const prs = JSON.parse(readFileSync(prsPath, 'utf8')) as StuckPrCandidate[];
+    pickup = assignPickup(prs, new Date());
+    pickupNote =
+      pickup === null
+        ? 'không có PR nào phải nhận — lượt chạy đi duyệt backlog (phụ lục P1 bước 3)'
+        : `phải nhận PR #${pickup.pr.number} (${pickup.ownerLane ?? 'không rõ làn'}) trước khi duyệt backlog`;
+  }
+
   process.stdout.write(
     `${JSON.stringify(
       {
         quietHours: PICKUP_QUIET_HOURS,
         escalateAfterTurns: ESCALATE_AFTER_TURNS,
+        escalateAfterHours: ESCALATE_AFTER_HOURS,
+        pickupNote,
+        pickup,
         stuck: latest,
+        // Đối chứng độc lập: số `turns` mà dòng log khai, so với số đếm lại
+        // từ chính chuỗi dòng log. Lệch là bình thường ở giai đoạn này (các
+        // dòng cũ không mang khối máy đọc), nhưng nó phải HIỆN RA, không
+        // phải nằm im — "đối chứng" mà không ai so thì không phải đối chứng.
+        recount: latest.map((entry) => ({
+          pr: entry.pr,
+          turnsGhiTrongLog: entry.turns,
+          turnsDemLai: consecutiveAbortedTurns(notes, entry.pr),
+          lech: entry.turns !== consecutiveAbortedTurns(notes, entry.pr),
+        })),
         escalations,
+        escalationLines: escalations.map((entry) =>
+          escalationLine(entry, 'https://github.com/HungQuach301/crux-studio'),
+        ),
       },
       null,
       2,

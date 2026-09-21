@@ -590,6 +590,13 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 
 ## 14. Nhật ký thay đổi
 
+**C6 · 2026-09-21 · mục `P-022`.** "Cần người" sau một lượt `aborted-ineligible` thành trạng thái **có chủ**. Sửa phụ lục (ngoài mục 1 và 3), cửa `automerge-delayed`. Nguyên nhân: PR #26 bị bỏ lại **bốn** lượt liên tiếp và PR #39 **ba** lượt trong 32 phút, cùng một `reason` — hàng đợi merge tuần tự đứng theo chúng mà không ai thấy đó là việc của mình.
+- **Phụ lục P1 bước 2 · ca thứ ba.** `aborted-ineligible` đứng **ngang giá** CI đỏ và comment chưa xử lý, cùng ngưỡng chống giẫm chân 2 giờ. Việc thuộc làn sở hữu PR (suy từ tên nhánh); làn đó không có worker rảnh thì worker gặp nó vẫn phải nhận.
+- **Nới một lệnh cấm, và khoanh phạm vi lệnh cấm cũ.** Worker đã nhận PR theo ca 2c **được giải xung đột bằng tay**; lệnh cấm `--ours`/`--theirs`/rebase/sửa tay ở phụ lục P3 bước 0b từ nay đọc là cấm cho *bước quét hàng đợi*, chỗ không ai đọc nội dung PR. Ràng buộc đi kèm: chạy `pnpm check` + `pnpm replay`, đỏ thì `reset --hard` và không push; vẫn không rebase, không force-push; hai bên đổi cùng một logic thì mở `🤖 [QĐ]`. Quyết định `reversible` (nằm trong git, revert được) nên làm ngay theo CHARTER 2.3.
+- **Phụ lục P3 bước 0d · bốn trường bắt buộc.** Mỗi PR bỏ lại ghi nhánh · làn sở hữu · số lượt liên tiếp · số giờ kẹt, dạng máy đọc được trong `note`.
+- **Phụ lục P2 · nhịp tim.** PR quá 3 lượt **và** quá 6 giờ thì nổi lên mục "Cần anh quyết" của bản tin. Hai điều kiện chứ không một: `turns` đếm theo lượt quan sát nên với 2–3 worker song song nó tự thổi phồng; số giờ kẹt thì không.
+- **Máy, không phải giấy.** `ops/scripts/pr-pickup.ts` cộng 36 test, trong đó một bài kiểm **âm** và một bài canh chính cơ chế: dòng log bước 0 thiếu khối máy đọc là CI đỏ (`Z17` trong `ops/known-failures.md`).
+
 **C5 · 2026-09-21 · quyết định `D-C04`.** Bất biến **I8** phân vùng log tới mức **mục**: `ops/logs/<lane>/<id>.jsonl` thay cho `ops/logs/<lane>.jsonl`. Chủ dự án trả lời **B** trên issue #14. Chi tiết và lý do ở `docs/decisions/D-C04.md`.
 - **Mục 3 · dòng I8.** Một file cho mỗi mục backlog hoặc mỗi tập, nên hai PR trong cùng một làn không bao giờ chạm cùng một file. `KF-005` hết nguyên nhân gốc thay vì được vá.
 - **Mục 7 · File nóng.** "Log tách theo làn" thành "log tách tới mức mục", kèm lý do: 2–3 worker song song làm hai mục trong một làn là chế độ chạy bình thường.
@@ -671,7 +678,14 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
       chạy `pnpm check` và `pnpm replay`, xanh thì push. Đỏ thì `git reset --hard` về commit trước khi gộp,
       không push, và ghi lý do vào báo cáo. Vẫn không rebase và không force-push (CHARTER 3.3).
       Hai bên đổi cùng một logic và chọn bên nào cũng mất hành vi ⇒ mở `🤖 [QĐ]`, đừng đoán.
-      `node ops/scripts/pr-pickup.ts` in ra PR phải nhận và số lượt nó đã bị bỏ lại — chạy, đừng đọc log bằng mắt.
+      **Khai đã nhận, ngay khi nhận:** comment `🤖` trên chính PR đó nói rõ lượt chạy nào đang giải. Ca nhận mục
+      backlog có PR nháp làm dấu khai (CLAUDE.md mục 2); ca này không có gì tương đương, mà nó lại thường kết thúc
+      bằng **không để lại dấu vết nào** (đỏ thì `reset --hard`, không push). Thiếu dấu khai thì worker kế tiếp làm
+      lại đúng việc vừa hỏng. Ngưỡng 2 giờ ở ca này tính theo commit mới **hoặc** comment khai nhận, cái nào muộn hơn.
+      **Chạy, đừng đọc log bằng mắt:** `node ops/scripts/pr-pickup.ts --prs <file.json>` — `<file.json>` là mảng
+      `StuckPrCandidate` dựng từ kết quả liệt kê PR của bước 0 — in ra trường `pickup` (PR phải nhận, làn sở hữu,
+      số giờ kẹt). Chạy không có `--prs` thì tool **nói thẳng là nó chưa trả lời được** và chỉ in bản ghi bước 0
+      gần nhất; đừng đọc trường `stuck` như danh sách phải nhận, nó chưa lọc qua ngưỡng chống giẫm chân.
 3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
    mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
    coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.
@@ -769,7 +783,9 @@ Làn integration của Crux Studio.
         chạy `pnpm check` VÀ `pnpm replay`. Xanh thì `git push`. Đỏ thì `git reset --hard` về commit trước khi gộp
         (không push — đỏ sau khi gộp là tín hiệu thật, không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do.
       - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
-        `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt** và tên file gây
+        `--theirs`, rebase hay tự viết lại file bằng tay. Lệnh cấm này là cấm cho **bước quét hàng đợi** này, chỗ
+        không ai đọc nội dung PR — **ngoại lệ:** worker đã nhận PR theo phụ lục P1 bước 2c thì được giải tay, với
+        ràng buộc ghi ở đó (mục `P-022`). Đưa PR vào ghi chú kèm **số giờ đã kẹt** và tên file gây
         vướng (có sẵn trong `reason` của kết quả).
       - `outcome: "aborted-error"`: lỗi ngoài dự tính (cây bẩn, v.v.). Đưa vào ghi chú, không thử lại trong cùng lần
         chạy.

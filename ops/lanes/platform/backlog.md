@@ -42,6 +42,10 @@ Lỗ hổng nằm ở chỗ **"cần người" không phải một trạng thái
   - **Bước 0 của P3 (phụ lục P3)** ghi kèm, cho mỗi PR bỏ lại: tên nhánh, **làn sở hữu**, số lượt `aborted-ineligible` liên tiếp, và số giờ kẹt. Không có mấy số đó thì lượt sau không biết việc này đã bỏ lại mấy lần.
   - **Nhịp tim, không chỉ là luật trên giấy** (nhóm Z trong `ops/known-failures.md`): một PR `aborted-ineligible` quá **N** lượt liên tiếp phải nổi lên bản tin ngày ở mục "Cần anh quyết" hoặc trong cảnh báo của `watchdog`. Luật mà không có ai đếm thì nó im lặng đúng lúc cần kêu — và lần này đã im lặng bốn lượt.
   - Test khoá phần suy ra làn từ tên nhánh và phần chọn PR phải nhận, **kèm test âm**: một PR `aborted-ineligible` mà bị bỏ qua thì bài kiểm phải đỏ.
+- **Còn treo sau PR #44, khai trước thay vì để tự phát hiện:**
+  - `turns` đếm mỗi **lượt quan sát**, không phải mỗi **lần thử sửa**. Với 2–3 worker song song nó vừa thổi phồng được (ba lượt trong 32 phút — đã đo trên #39) vừa đếm thiếu được (hai worker cùng đọc một dòng rồi cùng ghi một số). Vá tạm bằng điều kiện thứ hai `ESCALATE_AFTER_HOURS = 6`; cách đo đúng cần một khoá theo `sha` của `main` tại lượt quan sát, chưa làm.
+  - **Dấu khai đã nhận cho ca 2c chưa có máy kiểm.** Phụ lục P1 bước 2c đòi worker comment `🤖` khai đã nhận, và tính ngưỡng 2 giờ theo commit **hoặc** comment đó. `needsPickup` hiện chỉ nhìn `lastCommitAt` — bên gọi phải tự đưa mốc muộn hơn vào. Chưa có gì đỏ khi quên.
+  - **`ops/logs/platform/P-016.jsonl` là file duy nhất mọi nhánh worker đều ghi vào**, nên lời hứa của `D-C04` ("hai PR không bao giờ chạm cùng một file") thủng đúng ở đó. `merge=union` đỡ được lần gộp, nhưng nó là lớp phòng thủ thứ hai chứ không phải lớp duy nhất. Đáng một mục riêng.
 
 ### P-019 · Bản tin thêm mục "Tiến độ", và đếm lượt chạy routine
 Chỉ dẫn 3 của chủ dự án trên issue bản tin #17 (2026-09-21).

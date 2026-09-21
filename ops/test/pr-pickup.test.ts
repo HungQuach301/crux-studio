@@ -12,12 +12,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   PICKUP_QUIET_HOURS,
   ESCALATE_AFTER_TURNS,
+  ESCALATE_AFTER_HOURS,
   STUCK_MARKER,
   ownerLaneOf,
   hoursStuck,
@@ -30,6 +31,8 @@ import {
   nextTurnCount,
   selectEscalations,
   escalationLine,
+  formatStuckDuration,
+  isLeftBehind,
   readStepZeroNotes,
   type StuckPrCandidate,
   type StuckEntry,
@@ -197,6 +200,17 @@ test('parseStuckEntries: dòng log cũ hoặc khối hỏng ra [], không ném',
   assert.deepEqual(parseStuckEntries(`văn xuôi ${STUCK_MARKER}{"pr":39}`), [], 'không phải mảng thì bỏ');
 });
 
+test('parseStuckEntries: số hỏng bị loại — bản tin không được in "NaN giờ"', () => {
+  // Đã in ra thật trước khi sửa: 'kẹt xung đột NaN giờ … cần anh gỡ tay'.
+  const bad = (over: Record<string, unknown>) =>
+    parseStuckEntries(`x ${STUCK_MARKER}${JSON.stringify([{ ...entry(), ...over }])}`);
+  assert.deepEqual(bad({ hoursStuck: 'b' }), []);
+  assert.deepEqual(bad({ turns: null }), []);
+  assert.deepEqual(bad({ hoursStuck: Number.NaN }), [], 'NaN không sống sót qua JSON, nhưng null thì có');
+  assert.deepEqual(bad({ branch: 42 }), []);
+  assert.equal(bad({ lane: null }).length, 1, 'lane null là hợp lệ — nhánh ngoài quy ước');
+});
+
 // --- Nhịp tim ---
 
 test('consecutiveAbortedTurns: đếm đúng chuỗi lượt liên tiếp', () => {
@@ -262,32 +276,79 @@ test('nextTurnCount: lượt trước gỡ được, hoặc không nhắc tới 
 });
 
 test('nextTurnCount: số hỏng ở dòng trước không lan ra thành NaN', () => {
-  const broken = formatStuckNote('x', [entry({ turns: Number.NaN as unknown as number })]);
-  assert.equal(nextTurnCount([broken], 39), 2);
+  // `parseStuckEntries` đã loại entry có `turns` không phải số hữu hạn, nên
+  // dòng hỏng coi như không nhắc tới PR ⇒ đếm lại từ 1. Hướng sai an toàn:
+  // đếm thiếu thì chậm một lượt, đếm thừa thì báo động giả.
+  const broken = formatStuckNote('x', [{ ...entry(), turns: null as unknown as number }]);
+  assert.equal(nextTurnCount([broken], 39), 1);
+  // Số hợp lệ thì vẫn cộng dồn bình thường.
+  assert.equal(nextTurnCount([formatStuckNote('x', [entry({ turns: 2 })])], 39), 3);
 });
 
-test('selectEscalations: quá ngưỡng thì nổi lên bản tin, dưới ngưỡng thì không', () => {
+test('selectEscalations: quá CẢ HAI ngưỡng thì nổi lên bản tin', () => {
+  const long = ESCALATE_AFTER_HOURS + 1;
   const list = [
-    entry({ pr: 39, turns: ESCALATE_AFTER_TURNS }),
-    entry({ pr: 26, turns: ESCALATE_AFTER_TURNS + 1 }),
-    entry({ pr: 12, turns: ESCALATE_AFTER_TURNS - 1 }),
+    entry({ pr: 39, turns: ESCALATE_AFTER_TURNS, hoursStuck: long }),
+    entry({ pr: 26, turns: ESCALATE_AFTER_TURNS + 1, hoursStuck: long }),
+    entry({ pr: 12, turns: ESCALATE_AFTER_TURNS - 1, hoursStuck: long }),
   ];
   assert.deepEqual(
     selectEscalations(list).map((e) => e.pr),
     [26, 39],
-    'nhiều lượt nhất trước; PR dưới ngưỡng không làm phiền chủ dự án',
+    'nhiều lượt nhất trước; PR dưới ngưỡng lượt không làm phiền chủ dự án',
   );
 });
 
-test('selectEscalations: kết quả khác aborted-ineligible không bao giờ nổi lên', () => {
-  assert.deepEqual(selectEscalations([entry({ outcome: 'resolved', turns: 9 })]), []);
+test('selectEscalations: đủ lượt nhưng chưa đủ giờ thì IM — chặn báo động giả', () => {
+  // Đúng ca đã đo thật trên #39: ba lượt bước 0 trong 32 phút, vì bước 0
+  // chạy ở đầu mọi lượt worker và dự án chạy 2–3 worker song song. Ba lượt
+  // ở đó không mang thông tin mới nào.
+  const fast = entry({ turns: ESCALATE_AFTER_TURNS + 5, hoursStuck: 0.57 });
+  assert.deepEqual(selectEscalations([fast]), []);
+  assert.equal(selectEscalations([{ ...fast, hoursStuck: ESCALATE_AFTER_HOURS }]).length, 1);
+});
+
+test('selectEscalations: kết quả đã gỡ xong không bao giờ nổi lên', () => {
+  const long = ESCALATE_AFTER_HOURS + 1;
+  assert.deepEqual(selectEscalations([entry({ outcome: 'resolved', turns: 9, hoursStuck: long })]), []);
+  assert.deepEqual(selectEscalations([entry({ outcome: 'clean', turns: 9, hoursStuck: long })]), []);
+});
+
+test('aborted-error: không ai nhận, nhưng KHÔNG được rơi khỏi nhịp tim', () => {
+  const long = ESCALATE_AFTER_HOURS + 1;
+  const err = entry({ outcome: 'aborted-error', turns: ESCALATE_AFTER_TURNS, hoursStuck: long });
+  // Không phải việc worker nhận — P3 bước 0 cấm thử lại trong cùng lần chạy.
+  assert.equal(needsPickup({ lastOutcome: 'aborted-error', lastCommitAt: hoursAgo(5) }, NOW), false);
+  // Nhưng phải nổi lên bản tin, nếu không nó rơi khỏi CẢ HAI vế và dựng lại
+  // đúng khoảng trống không-ai-sở-hữu mà P-022 sinh ra để đóng.
+  assert.equal(selectEscalations([err]).length, 1);
+  assert.equal(isLeftBehind('aborted-error'), true);
+  assert.equal(isLeftBehind('aborted-ineligible'), true);
+  assert.equal(isLeftBehind('resolved'), false);
+  assert.equal(isLeftBehind('clean'), false);
+});
+
+test('aborted-error: vẫn cộng dồn số lượt như aborted-ineligible', () => {
+  const notes = [formatStuckNote('x', [entry({ outcome: 'aborted-error', turns: 2 })])];
+  assert.equal(nextTurnCount(notes, 39), 3);
+  assert.equal(consecutiveAbortedTurns(notes, 39), 1);
+});
+
+test('formatStuckDuration: dưới một giờ ra phút, không ra "0 giờ"', () => {
+  // Đã in ra thật trước khi sửa: "kẹt xung đột 0 giờ … cần anh gỡ tay".
+  assert.equal(formatStuckDuration(0.57), '34 phút');
+  assert.equal(formatStuckDuration(0.01), '1 phút', 'không bao giờ ra 0');
+  assert.equal(formatStuckDuration(2.5), '2.5 giờ');
+  assert.equal(formatStuckDuration(26), '26 giờ');
+  assert.equal(formatStuckDuration(Number.NaN), 'không rõ bao lâu');
+  assert.equal(formatStuckDuration(-1), 'không rõ bao lâu');
 });
 
 test('escalationLine: một dòng, đủ PR, làn, giờ kẹt và link', () => {
   const line = escalationLine(entry({ turns: 4, hoursStuck: 5.8 }), 'https://github.com/o/r');
   assert.ok(line.includes('#39'));
   assert.ok(line.includes('visual'));
-  assert.ok(line.includes('5 giờ'));
+  assert.ok(line.includes('5.8 giờ'), 'một chữ số thập phân, không làm tròn xuống thành 5');
   assert.ok(line.includes('4 lượt'));
   assert.ok(line.includes('https://github.com/o/r/pull/39'));
 });
@@ -330,4 +391,61 @@ test('readStepZeroNotes: sắp theo `at`, không tin thứ tự dòng trong file
 
 test('readStepZeroNotes: chưa có file log thì [] chứ không ném', () => {
   assert.deepEqual(readStepZeroNotes(mkdtempSync(join(tmpdir(), 'pr-pickup-empty-'))), []);
+});
+
+test('readStepZeroNotes: một dòng rác KHÔNG được giết cả bước đọc log', () => {
+  // File này append-only, gộp bằng `merge=union` (union không khử trùng lặp)
+  // và mọi nhánh worker đều ghi vào nó — đúng loại file dễ sinh dòng rác.
+  // Ném ở đây là giết bước bản tin mà phụ lục P2 bắt chạy.
+  const root = mkdtempSync(join(tmpdir(), 'pr-pickup-rac-'));
+  mkdirSync(join(root, 'ops', 'logs', 'platform'), { recursive: true });
+  writeFileSync(
+    join(root, 'ops', 'logs', 'platform', 'P-016.jsonl'),
+    [
+      'khong-phai-json',
+      JSON.stringify({ at: '2026-09-21T12:00:00.000Z', note: formatStuckNote('ok', [entry()]) }),
+      '{"at": nửa dòng',
+    ].join('\n') + '\n',
+    'utf8',
+  );
+  const notes = readStepZeroNotes(root);
+  assert.equal(notes.length, 1, 'giữ dòng đọc được, bỏ dòng hỏng');
+  assert.equal(consecutiveAbortedTurns(notes, 39), 1);
+});
+
+// --- Nhịp tim phải TỰ CANH chính nó (nhóm Z) ---
+
+test('mọi dòng log bước 0 từ khi có cơ chế P-022 phải mang khối máy đọc', () => {
+  // Không có bài kiểm này thì cơ chế tắt được KHÔNG TIẾNG ĐỘNG: một lượt
+  // worker quên gọi `formatStuckNote` thì PR biến mất khỏi `stuck`, biến
+  // mất khỏi `escalations`, và số lượt tụt về 1 ở lượt sau — tức dựng lại
+  // đúng Z17 một nấc trên. Đây là vế "không chỉ là luật trên giấy" trong
+  // tiêu chí xong của P-022: một thứ Ở NGOÀI đếm và so, không phải prompt
+  // tự khai.
+  //
+  // Các dòng TRƯỚC mốc này viết bằng văn xuôi thuần và log là append-only,
+  // nên không sửa lại được — mốc chính là ranh giới đó.
+  const CUTOFF = Date.parse('2026-09-21T12:38:00.000Z');
+  const path = join(process.cwd(), 'ops', 'logs', 'platform', 'P-016.jsonl');
+  const lines = readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => JSON.parse(line) as { at: string; note?: string })
+    .filter((line) => Date.parse(line.at) >= CUTOFF);
+
+  assert.ok(lines.length >= 1, 'phải có ít nhất một dòng bước 0 theo cơ chế mới');
+  for (const line of lines) {
+    assert.ok(
+      line.note !== undefined && line.note.includes(STUCK_MARKER),
+      `dòng log bước 0 lúc ${line.at} thiếu khối \`${STUCK_MARKER}\` — ` +
+        'bước 0 phải dựng note bằng formatStuckNote (CHARTER phụ lục P3 bước 0d)',
+    );
+    // Và khối đó phải đọc được thành entry hợp lệ, không chỉ có mặt.
+    const entries = parseStuckEntries(line.note);
+    for (const e of entries) {
+      assert.equal(typeof e.branch, 'string');
+      assert.ok(Number.isFinite(e.turns) && e.turns >= 1);
+      assert.ok(Number.isFinite(e.hoursStuck) && e.hoursStuck >= 0);
+    }
+  }
 });
