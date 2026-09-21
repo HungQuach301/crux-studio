@@ -620,6 +620,12 @@ export interface RoutineRuns {
   runs: Map<string, number[]>;
   /** Số dòng log có nhắc tên routine trong cửa sổ. 0 nghĩa là không có gì để quan sát. */
   mentions: number;
+  /**
+   * Số dòng log bị loại vì `at` không đọc được. Bỏ im lặng thì số lượt tụt
+   * mà không dòng nào nói vì sao — bỏ **hết** ra `◦` (không xanh giả), nhưng
+   * bỏ **một phần** là đúng nhóm lỗi Z. Nên nó được đếm và in vào `evidence`.
+   */
+  unparsedAt: number;
 }
 
 /**
@@ -660,9 +666,9 @@ export interface RoutineRuns {
  * không dính gì tới G1.
  */
 export function collectRoutineRuns(lines: readonly RunLogLine[]): RoutineRuns {
-  const stamped = lines
-    .map((line) => ({ at: Date.parse(line.at), note: line.note ?? '' }))
-    .filter((row) => Number.isFinite(row.at));
+  const parsed = lines.map((line) => ({ at: Date.parse(line.at), note: line.note ?? '' }));
+  const stamped = parsed.filter((row) => Number.isFinite(row.at));
+  const unparsedAt = parsed.length - stamped.length;
 
   const newest = stamped.reduce((max, row) => (row.at > max ? row.at : max), Number.NEGATIVE_INFINITY);
   const floor = newest - FLEET_WINDOW_DAYS * 24 * 60 * 60 * 1000;
@@ -691,7 +697,7 @@ export function collectRoutineRuns(lines: readonly RunLogLine[]): RoutineRuns {
     runs.set(name, starts);
   }
 
-  return { runs, mentions };
+  return { runs, mentions, unparsedAt };
 }
 
 /**
@@ -755,6 +761,9 @@ export function judgeWorkerFleet(collected: RoutineRuns): CheckOutcome {
     `Cửa sổ ${FLEET_WINDOW_DAYS} ngày tính lùi từ dòng log mới nhất; ${collected.mentions} dòng log có nhắc tên routine.`,
     'Con số là **cận dưới**: lượt worker ra `idle` không commit gì (phụ lục P1 bước 3) nên không để lại dòng log nào.',
   );
+  if (collected.unparsedAt > 0) {
+    evidence.push(`⚠ ${collected.unparsedAt} dòng log bị loại vì \`at\` không đọc được — số lượt ở trên đã tụt đi vì lý do KHÔNG dính gì tới G1.`);
+  }
 
   if (collected.mentions === 0) {
     return {

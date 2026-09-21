@@ -645,7 +645,7 @@ Giao diện web chỉ có các mốc lịch có sẵn: hourly, daily, weekdays, 
 
 **Đo được, 2026-09-21 (mục `VF-G1`, giả định `G1`) — cấu hình đang chạy thật là 3 worker.** Ba dòng trên viết ra lúc chưa ai đo; nay `ops/logs/**` cho con số: `crux-worker-1` (4 lượt), `crux-worker-2` (8 lượt), `crux-worker-3` (5 lượt) đều có lượt thật, cộng `crux-integrator` 13 lượt nhịp trung vị 1,0 giờ. Hai chỗ phải đọc đúng:
 
-- Đội đang ở **cấu hình 3 worker**, không phải mặc định 2 worker. Phương án dự phòng Plan B của `G1` chưa phải dùng tới.
+- Đội đang ở **cấu hình 3 worker**, không phải mặc định 2 worker. Nói cho đúng phạm vi: Plan B của `G1` có hai vế — "chỉ dùng routines" và "2 worker, preset hourly" — và quan sát này chỉ bác được vế sau. Vế "chỉ dùng routines" vẫn tương thích với những gì đo được, nên **đừng** đọc thành "Plan B chưa phải dùng tới".
 - Nhịp thật **không** phải "3 giờ một lần, lệch nhau 1 giờ" như dòng thứ hai mô tả — các lượt quan sát được nằm ở độ phân giải giờ. Nhưng log **đếm thiếu**: worker ra `idle` không commit gì (bước 3 của prompt dưới đây), nên mọi con số là **cận dưới**. Chốt được "ít nhất ba worker"; **không** chốt được nhịp chính xác của từng worker, và đừng viết số nhịp vào đây như thể đã chốt.
 
 Vế còn lại của `G1` — tài khoản **có** tính năng Projects hay không — vẫn chỉ chủ dự án trả lời được (issue `#5`): ba routine hourly rời nhau cho đúng cùng một quan sát. Bài kiểm `worker-fleet-cadence` trong `pnpm recheck:assumptions` canh hồi quy của vế đo được: đội tụt về ≤ 2 worker thì nó ra `sai` và in sẵn thân issue `🤖 [QĐ]`.

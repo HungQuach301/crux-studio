@@ -39,7 +39,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 | Mã | Giả định | Độ tin cậy | Trạng thái | Mục kiểm |
 |---|---|---|---|---|
-| G1 | Tài khoản có Claude Code Projects | **`đã kiểm một phần`** | đội worker đo được ≥ 3, vế "có Projects" vẫn cần chủ dự án | `VF-G1` |
+| G1 | Tài khoản có Claude Code Projects | `suy luận` | mệnh đề CHƯA kiểm được; hệ quả vận hành đã đo và đã có bài kiểm canh | `VF-G1` |
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
@@ -68,7 +68,9 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 - **Nội dung:** tài khoản của chủ dự án có tính năng Claude Code Projects, nên thread do Project khởi chạy được song song với routine.
 - **Nguồn:** chưa có. Đây là suy luận từ mô tả sản phẩm.
-- **Độ tin cậy:** **`đã kiểm một phần`** (2026-09-21, mục `VF-G1`) — xem phần tách hai vế ngay dưới.
+- **Độ tin cậy:** `suy luận` — **không đổi**, và đây là chỗ dễ nhầm nhất của mục này.
+
+  Lượt `VF-G1` ngày 2026-09-21 đo được nhiều thứ, nhưng **không phần nào của chính mệnh đề "tài khoản có Claude Code Projects" được kiểm**. Thứ đo được là một *hệ quả* mà phụ lục P1 treo lên G1, và hệ quả ấy **không phân biệt được** Projects với ba routine hourly rời nhau. Nâng lên `đã kiểm một phần` (bản đầu của lượt này đã làm, vòng soát chéo bắt lại) là nới một cổng thật: CHARTER 11.1 luật 2 cấm xây mục backlog trên giả định còn `suy luận`, nên đổi nhãn sẽ mở cổng đó ra bằng bằng chứng không đỡ nổi nó. Khác với `G2`, nơi phần lõi của **chính mệnh đề** đã chạy thật.
 - **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · `ops/scripts/recheck-assumptions.ts` · CHARTER phụ lục P1 (số worker và nhịp chạy)
 - **Cách kiểm:** mở `claude.ai/code`, xem có tạo được Project không. **Chỉ chủ dự án làm được** — agent không thấy trang cấu hình tài khoản.
 - **Dự phòng:** Plan B — chỉ dùng routines. Nhịp chạy chuyển sang cấu hình mặc định của P1: 2 worker, preset hourly. Không mất gì về mặt kiến trúc, chỉ chậm hơn.
@@ -80,13 +82,15 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | (a) Tài khoản **có tính năng** Claude Code Projects | **không** — trang cấu hình tài khoản | vẫn `suy luận`, hỏi ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) |
 | (b) **Hệ quả vận hành** mà phụ lục P1 treo lên G1: chạy được cấu hình 3 worker hay phải lùi về Plan B 2 worker | **có** — `ops/logs/**` (bất biến I8) | **đã kiểm, 2026-09-21** |
 
-- **Bằng chứng cho vế (b), 2026-09-21 (lượt `crux-worker-2`), đo từ `ops/logs/**`, không đọc tài liệu:** **ba** worker chạy thật trong cửa sổ quan sát — `crux-worker-1` (4 lượt), `crux-worker-2` (8 lượt), `crux-worker-3` (5 lượt) — cộng `crux-integrator` 13 lượt, nhịp **trung vị 1,0 giờ** (8 trên 12 khoảng cách nằm trong 0,9–1,1 giờ; bốn khoảng còn lại 1,9 / 2,9 / 1,1 / 1,0 — phần lệch là các lượt không để lại dòng log, xem giới hạn (1) ngay dưới). Tức là **cấu hình 3 worker đang chạy, dự phòng Plan B chưa phải dùng tới**; phần "2 worker" của Plan B không mô tả hiện trạng.
+- **Bằng chứng cho vế (b), 2026-09-21 (lượt `crux-worker-2`), đo từ `ops/logs/**`, không đọc tài liệu:** **ba** worker chạy thật trong cửa sổ quan sát — `crux-worker-1` (4 lượt), `crux-worker-2` (8 lượt), `crux-worker-3` (5 lượt) — cộng `crux-integrator` 13 lượt, nhịp **trung vị 1,0 giờ** (8 trên 12 khoảng cách nằm trong 0,9–1,1 giờ; bốn khoảng còn lại 1,9 / 2,9 / 1,1 / 1,0 — phần lệch là các lượt không để lại dòng log, xem giới hạn (1) ngay dưới). Tức là **cấu hình 3 worker đang chạy**.
+
+  **Đọc đúng phạm vi của kết luận này — Plan B có hai vế:** "chỉ dùng routines" **và** "2 worker, preset hourly". Quan sát trên bác được **đúng vế sau** (không phải 2 worker). Vế "chỉ dùng routines" thì nó **không** bác được, và còn tương thích hoàn toàn với Plan B: thứ đo được là các routine tên `crux-worker-<N>` — đúng tên routine của phụ lục P1 — chạy ở độ phân giải giờ. Nói "Plan B chưa phải dùng tới" là vượt bằng chứng; nói đúng phải là **phần "2 worker" của Plan B không mô tả hiện trạng**.
 - **Giới hạn của bằng chứng, khai trước:**
   1. Con số là **cận dưới, không phải số đúng**. Phụ lục P1 bước 3 bảo worker không nhận được mục nào thì in `idle` và kết thúc **không commit gì** — lượt đó không để lại dòng log. Khoảng cách 7,0 / 5,0 / 4,1 giờ giữa các lượt quan sát được gần như chắc chắn là các lượt `idle` không ghi gì, chứ không phải routine đứng im.
   2. Vì (1), **nhịp thật của từng worker không chốt được** từ log. Nhịp trung vị đo được của ba worker là 4,0 / 2,0 / 2,6 giờ, nhưng các khoảng 7,0 và 7,2 giờ xen giữa những khoảng 0,9 giờ cho thấy đó là khoảng cách giữa các lượt **có ghi log**, không phải nhịp chạy. Chốt được đúng một điều: có ít nhất ba worker, và chúng chạy ở độ phân giải giờ chứ không phải 3 giờ một lượt như phụ lục P1 mô tả cho cấu hình 3 worker.
   3. **Một dòng log tính cho đúng một routine — tên xuất hiện đầu tiên**, vì dòng log mở bằng chính routine viết nó. Bản đầu của bài kiểm đếm *mọi* tên nhắc trong `note` và sai ngay ở dòng log đầu tiên của chính mục này: dòng ấy **kể lại** số lượt của cả bốn routine nên tự tính thành một lượt cho từng routine. Báo cáo worker nhắc tên routine khác là chuyện thường (bước 0 của phụ lục P3 luôn nhắc `crux-integrator`), nên lỗi đó sẽ lặp mãi nếu không chặn. Luật "tên đầu tiên" sai theo chiều **an toàn**: nó chỉ làm phép đếm nhỏ đi, nên không bao giờ che được một đội đã tụt về Plan B.
   3. Quan sát này **không** chứng minh vế (a). Ba routine hourly rời nhau cho đúng cùng một quan sát. Nó chỉ nói cấu hình đang chạy là cấu hình nào, và đó đúng là thứ phụ lục P1 cần biết.
-- **Kiểm tự động:** `worker-fleet-cadence` — đọc `ops/logs/**` bằng `readRunLogs` của kernel (không tự `cat`: thứ tự dòng trong file không mang nghĩa), gom các dòng log nhắc tên routine thành từng **lượt** (hai dòng cách nhau quá 50 phút là hai lượt), rồi đếm số worker rời nhau trong cửa sổ 7 ngày tính lùi từ dòng log **mới nhất**.
+- **Kiểm tự động:** `worker-fleet-cadence` — **bài kiểm này canh vế dự phòng, không đi chứng minh mệnh đề**, đúng cùng kiểu với bài kiểm của `G17` ("không đi tìm lại kết luận đã có, mà canh các điều kiện dự phòng đang đứng lên trên"). Nó đọc `ops/logs/**` bằng `readRunLogs` của kernel (không tự `cat`: thứ tự dòng trong file không mang nghĩa), gom các dòng log nhắc tên routine thành từng **lượt** (hai dòng cách nhau quá 50 phút là hai lượt), rồi đếm số worker rời nhau trong cửa sổ 7 ngày tính lùi từ dòng log **mới nhất**.
 
   Cửa sổ neo vào dòng log mới nhất chứ không vào `now`: neo vào `now` thì một bản clone cũ, hoặc một tuần repo nằm yên, tự đẩy bài kiểm sang `sai` vì một lý do chẳng dính gì tới G1.
 

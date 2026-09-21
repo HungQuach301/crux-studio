@@ -768,6 +768,21 @@ test('G1 · luật "tên đầu tiên" sai theo chiều AN TOÀN — không che 
   assert.equal(judgeWorkerFleet(collectRoutineRuns(noisy)).verdict, 'sai');
 });
 
+test('G1 · dòng log có `at` không đọc được thì được ĐẾM và nói ra, không bỏ im lặng', () => {
+  const collected = collectRoutineRuns([
+    logLine('không-phải-ngày-tháng', 'Lượt crux-worker-1.'),
+    ...runsOf('crux-worker-1', 1),
+    ...runsOf('crux-worker-2', 1),
+    ...runsOf('crux-worker-3', 1),
+  ]);
+  assert.equal(collected.unparsedAt, 1);
+  const outcome = judgeWorkerFleet(collected);
+  assert.ok(
+    outcome.evidence.some((line) => line.includes('không đọc được')),
+    'bỏ một phần trong im lặng là đúng nhóm lỗi Z: số lượt tụt mà không dòng nào nói vì sao',
+  );
+});
+
 test('G1 · dòng log ngoài cửa sổ 7 ngày không được tính', () => {
   const collected = collectRoutineRuns([
     logLine('2026-09-01T00:00:00.000Z', 'Lượt crux-worker-1 cũ.'),
