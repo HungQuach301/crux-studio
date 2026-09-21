@@ -3,28 +3,19 @@
  * `run --input <file>`. Viết một lần ở kernel để sáu xưởng không chép lại
  * sáu bản khác nhau.
  *
- * File `--input` KHÔNG mang bản sao pack. Nó khai `channel`, còn pack thật
- * được nạp từ `packs/` — một nguồn duy nhất cho cả hai chế độ chạy (mục
- * `integration/I-008`). Trước đó sáu fixture nhúng mỗi file một bản sao,
- * và bản sao lệch bản thật mà mọi chỉ báo vẫn xanh: fixture chạy độc lập
- * nên không có gì so nó với `packs/`, và tập vàng không băm pack
- * (`inputsHashOf` chỉ băm con trỏ artifact đầu vào). Đúng nhóm **Z** của
- * `ops/known-failures.md` — hỏng mà mọi chỉ báo đều xanh.
+ * Cả hai chế độ nạp pack từ `packs/`, không chế độ nào mang bản sao cấu hình:
+ * `--episode` gọi `loadChannelPack` ngay dưới đây, `--input` đi qua
+ * `readInputFile` ở `input.ts` (mục `integration/I-008`).
  */
 
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Envelope, WorkshopName } from './envelope.ts';
 import { fixedClock, systemClock } from './clock.ts';
 import { Cassette } from './cassette.ts';
 import { readArtifact } from './artifact-store.ts';
 import { loadChannelPack, loadGenrePack } from './packs.ts';
-import {
-  runWorkshop,
-  type EpisodeContext,
-  type WorkshopDefinition,
-  type WorkshopInput,
-} from './workshop.ts';
+import { readInputFile } from './input.ts';
+import { runWorkshop, type WorkshopDefinition, type WorkshopInput } from './workshop.ts';
 
 export interface CliArgs {
   episode?: string;
@@ -69,82 +60,6 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     }
   }
   return args;
-}
-
-/**
- * Hình dạng của một file `--input`: bối cảnh tập, và artifact của các xưởng
- * trước. `genre` và `locale` không bắt buộc — khai thì phải khớp channel
- * pack, vì channel pack là nguồn duy nhất của hai trường đó.
- *
- * `packs` KHÔNG phải một khoá hợp lệ ở đây; xem `readInputFile`.
- */
-export interface InputFile {
-  episodeId: string;
-  channel: string;
-  genre?: string;
-  locale?: string;
-  upstream?: Partial<Record<WorkshopName, Envelope>>;
-}
-
-/**
- * Đọc một file `--input` và dựng đầu vào của xưởng, với pack nạp từ
- * `packs/`.
- *
- * Ném lỗi khi file nhúng bản sao pack. Đó là điểm chặn chính của mục
- * `integration/I-008`: một bản sao nằm im trong fixture sẽ lệch bản thật
- * mà không gì đỏ, nên cách duy nhất giữ được là không cho phép nó tồn tại.
- * Fixture cần một pack khác pack thật thì thêm một kênh vào `packs/channels/`,
- * chứ không sửa riêng bản sao của mình.
- */
-export function readInputFile(
-  root: string,
-  path: string,
-): { episode: EpisodeContext; input: WorkshopInput } {
-  const raw: unknown = JSON.parse(readFileSync(resolve(path), 'utf8'));
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new Error(`File --input ${path} không phải một object JSON.`);
-  }
-  const file = raw as InputFile & Record<string, unknown>;
-
-  if ('packs' in file) {
-    throw new Error(
-      `File --input ${path} nhúng khoá "packs". Pack được nạp từ packs/ theo trường ` +
-        `"channel", không chép vào fixture: bản sao lệch bản thật mà không gì đỏ ` +
-        `(mục integration/I-008).`,
-    );
-  }
-  if (typeof file.episodeId !== 'string' || file.episodeId.length === 0) {
-    throw new Error(`File --input ${path} thiếu trường "episodeId".`);
-  }
-  if (typeof file.channel !== 'string' || file.channel.length === 0) {
-    throw new Error(`File --input ${path} thiếu trường "channel".`);
-  }
-
-  const channelPack = loadChannelPack(root, file.channel);
-  const genrePack = loadGenrePack(root, channelPack.genre);
-
-  for (const field of ['genre', 'locale'] as const) {
-    const declared = file[field];
-    if (declared !== undefined && declared !== channelPack[field]) {
-      throw new Error(
-        `File --input ${path} khai ${field} "${String(declared)}" nhưng channel pack ` +
-          `"${file.channel}" khai "${String(channelPack[field])}".`,
-      );
-    }
-  }
-
-  return {
-    episode: {
-      episodeId: file.episodeId,
-      channel: file.channel,
-      genre: channelPack.genre,
-      locale: channelPack.locale,
-    },
-    input: {
-      upstream: file.upstream ?? {},
-      packs: { channel: channelPack, genre: genrePack },
-    },
-  };
 }
 
 /**

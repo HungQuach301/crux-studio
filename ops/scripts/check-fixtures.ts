@@ -92,10 +92,12 @@ export function fixtureInputFiles(
 export function fixtureInputProblems(root: string): string[] {
   const problems: string[] = [];
   for (const workshop of WORKSHOPS) {
-    if (!existsSync(fixtureInputPath(root, workshop))) {
+    const required = fixtureInputPath(root, workshop);
+    if (!existsSync(required)) {
       problems.push(
         `Xưởng ${workshop} không có fixtures/input.json, nên không kiểm được gì ` +
-          `(CHARTER 5.4: mỗi xưởng có bộ fixture riêng).`,
+          `(CHARTER 5.4: mỗi xưởng có bộ fixture riêng). Đã tìm ở: ${required} — ` +
+          `sai đường dẫn này thường là chạy lệnh từ thư mục khác gốc repo.`,
       );
       continue;
     }

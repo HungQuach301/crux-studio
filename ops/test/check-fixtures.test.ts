@@ -14,11 +14,26 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WORKSHOPS } from '@crux/kernel';
+import { fileURLToPath } from 'node:url';
+import { WORKSHOPS, type Envelope } from '@crux/kernel';
 import { fixtureInputProblems, inputFileProblems } from '../scripts/check-fixtures.ts';
+
+/** Gốc repo, không phải cwd: `node --test` chạy được từ thư mục nào cũng đúng. */
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+
+/**
+ * Một artifact đầu vào THẬT, lấy từ tập vàng. Không dựng bằng object rút gọn:
+ * `readInputFile` validate artifact đầu vào theo contract, nên một object rút
+ * gọn sẽ đỏ vì thiếu trường chứ vì lý do bài kiểm muốn đo.
+ */
+function goldenArtifact(workshop: string): Envelope {
+  return JSON.parse(
+    readFileSync(join(REPO_ROOT, 'ops', 'golden', 'ep-0001-stub', 'snapshots', `${workshop}.json`), 'utf8'),
+  ) as Envelope;
+}
 
 const SLUG = 'us-personal-finance';
 const GENRE = 'data-explainer';
@@ -123,13 +138,56 @@ test('artifact đầu vào khai bối cảnh lệch pack thì ĐỎ — bản sa
   const problems = problemsFor({
     episodeId: 'ep-0001-stub',
     channel: SLUG,
-    upstream: {
-      topic: { episodeId: 'ep-0001-stub', channel: SLUG, genre: 'essay', locale: 'en-GB' },
-    },
+    upstream: { topic: { ...goldenArtifact('topic'), genre: 'essay', locale: 'en-GB' } },
   });
   assert.equal(problems.length, 2, problems.join('\n'));
   assert.ok(problems.some((p) => /genre/.test(p) && /essay/.test(p)));
   assert.ok(problems.some((p) => /locale/.test(p) && /en-GB/.test(p)));
+});
+
+test('artifact đầu vào KHÔNG hợp contract thì ĐỎ — trước PR này không ai validate nó', () => {
+  const artifact = goldenArtifact('topic') as unknown as Record<string, unknown>;
+  delete artifact['inputsHash'];
+  const problems = problemsFor({
+    episodeId: 'ep-0001-stub',
+    channel: SLUG,
+    upstream: { topic: artifact },
+  });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0]!, /không hợp contract/);
+});
+
+test('tên xưởng viết sai trong `upstream` thì ĐỎ, không phải upstream rỗng lúc chạy', () => {
+  const problems = problemsFor({
+    episodeId: 'ep-0001-stub',
+    channel: SLUG,
+    upstream: { editoral: goldenArtifact('editorial') },
+  });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0]!, /editoral/);
+});
+
+test('bản sao đặt tên KHÁC `packs` cũng ĐỎ — luật khoá là danh sách cho phép', () => {
+  for (const extra of [
+    { channelPack: { slug: SLUG, pillars: ['thresholds'] } },
+    { limits: { targetDurationMs: 1 } },
+    { context: { packs: { channel: STALE_CHANNEL_COPY } } },
+  ]) {
+    const problems = problemsFor({
+      episodeId: 'ep-0001-stub',
+      channel: SLUG,
+      upstream: {},
+      ...extra,
+    });
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /khoá lạ/);
+  }
+});
+
+test('`upstream: null` thì ĐỎ — `?? {}` sẽ nuốt nó thành "không có đầu vào"', () => {
+  const problems = problemsFor({ episodeId: 'ep-0001-stub', channel: SLUG, upstream: null });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0]!, /upstream/);
 });
 
 test('fixture khai channel không có trong packs/ thì ĐỎ', () => {
@@ -157,12 +215,12 @@ test('fixture THỨ HAI trong cùng thư mục cũng bị quét — không có f
     // Một file `--input` thứ hai, mang bản sao pack. Kiểm chỉ nhìn
     // `input.json` sẽ XANH ở đây, và đó đúng là nhóm Z.
     writeFileSync(
-      join(root, 'workshops', 'topic', 'fixtures', 'input-thu-hai.json'),
+      join(root, 'workshops', 'topic', 'fixtures', 'input-second.json'),
       JSON.stringify({ ...clean, packs: { channel: STALE_CHANNEL_COPY } }),
     );
     const problems = fixtureInputProblems(root);
     assert.equal(problems.length, 1, problems.join('\n'));
-    assert.match(problems[0]!, /input-thu-hai\.json/);
+    assert.match(problems[0]!, /input-second\.json/);
 
     // `*.artifact.json` không phải file `--input`: check-contracts.ts
     // validate chúng theo contract, nên kiểm này phải bỏ qua.
@@ -195,13 +253,11 @@ test('fixture chỉ khai bối cảnh và artifact đầu vào thì XANH', () =>
     channel: SLUG,
     genre: GENRE,
     locale: 'en-US',
-    upstream: {
-      topic: { episodeId: 'ep-0001-stub', channel: SLUG, genre: GENRE, locale: 'en-US' },
-    },
+    upstream: { topic: goldenArtifact('topic') },
   });
   assert.deepEqual(problems, []);
 });
 
 test('sáu fixture trong repo này XANH', () => {
-  assert.deepEqual(fixtureInputProblems(process.cwd()), []);
+  assert.deepEqual(fixtureInputProblems(REPO_ROOT), []);
 });

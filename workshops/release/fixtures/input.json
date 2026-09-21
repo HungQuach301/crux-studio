@@ -214,7 +214,7 @@
       "channel": "us-personal-finance",
       "genre": "data-explainer",
       "locale": "en-US",
-      "inputsHash": "0834e716fd0019a4de9cb6a12bdd8be63ea2a7dcf10a56684cec7f952bc856e2",
+      "inputsHash": "743e56723af4e00b71c9e0574ebc29c4d109b497ac18a0e6c608f2dc24dd1576",
       "inputs": [
         {
           "kind": "editorial.script",
@@ -224,7 +224,7 @@
         {
           "kind": "visual.storyboard",
           "path": "episodes/us-personal-finance/ep-0001-stub/visual/artifact.json",
-          "hash": "61631c80465c0866cb98b39a435adb9eb52569ba43c90c692da925cf0eab94e2"
+          "hash": "a6cd4206d83f3edb9c943598ada4eda5842c32394d1474c9713cad2a3b58b470"
         },
         {
           "kind": "audio.timing",
@@ -279,7 +279,7 @@
             {
               "id": "layout-repetition",
               "verdict": "pass",
-              "expected": "≤ 40 lần mỗi cặp layout+biến thể",
+              "expected": "≤ 20 lần mỗi cặp layout+biến thể",
               "actual": "trong ngưỡng",
               "rootCauseStage": "visual"
             },
@@ -326,9 +326,45 @@
               "expected": "≥ 5",
               "actual": 2,
               "rootCauseStage": "editorial"
+            },
+            {
+              "id": "motion-coverage",
+              "verdict": "pass",
+              "expected": "≥ 0.7",
+              "actual": 0.9636,
+              "rootCauseStage": "visual"
+            },
+            {
+              "id": "longest-static-run",
+              "verdict": "pass",
+              "expected": "≤ 8000ms",
+              "actual": 3723,
+              "rootCauseStage": "visual"
+            },
+            {
+              "id": "text-words-per-second",
+              "verdict": "pass",
+              "expected": "≤ 1.5",
+              "actual": 1.0286,
+              "rootCauseStage": "visual"
+            },
+            {
+              "id": "scene-max-duration",
+              "verdict": "pass",
+              "expected": "≤ 12000ms",
+              "actual": 10099,
+              "sceneIds": [],
+              "rootCauseStage": "visual"
             }
           ],
-          "selfCheckMismatch": []
+          "selfCheckMismatch": [],
+          "antiSlide": {
+            "motionCoverage": 0.9636,
+            "longestStaticRunMs": 3723,
+            "textWordsPerSecond": 1.0286,
+            "longestSceneMs": 10099,
+            "staticSceneCount": 15
+          }
         },
         "render": {
           "fps": 30,

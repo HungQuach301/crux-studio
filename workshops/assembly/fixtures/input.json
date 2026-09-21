@@ -257,7 +257,7 @@
             "kind": "image",
             "claimIds": [],
             "onScreenWordCount": 5,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S009",
@@ -439,7 +439,7 @@
             "kind": "text-minimal",
             "claimIds": [],
             "onScreenWordCount": 7,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S023",
@@ -621,7 +621,7 @@
             "kind": "footage",
             "claimIds": [],
             "onScreenWordCount": 9,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S037",
@@ -803,7 +803,7 @@
             "kind": "image",
             "claimIds": [],
             "onScreenWordCount": 5,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S051",
@@ -991,7 +991,7 @@
             "kind": "text-minimal",
             "claimIds": [],
             "onScreenWordCount": 7,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S065",
@@ -1183,7 +1183,7 @@
               "C1"
             ],
             "onScreenWordCount": 9,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S079",
@@ -1373,7 +1373,7 @@
             "kind": "image",
             "claimIds": [],
             "onScreenWordCount": 5,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S093",
@@ -1565,7 +1565,7 @@
             "kind": "text-minimal",
             "claimIds": [],
             "onScreenWordCount": 7,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S107",
@@ -1757,7 +1757,7 @@
               "C2"
             ],
             "onScreenWordCount": 9,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S121",
@@ -1947,7 +1947,7 @@
             "kind": "image",
             "claimIds": [],
             "onScreenWordCount": 5,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S135",
@@ -2139,7 +2139,7 @@
             "kind": "text-minimal",
             "claimIds": [],
             "onScreenWordCount": 7,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S149",
@@ -2331,7 +2331,7 @@
             "kind": "footage",
             "claimIds": [],
             "onScreenWordCount": 9,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S163",
@@ -2523,7 +2523,7 @@
               "C3"
             ],
             "onScreenWordCount": 5,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S177",
@@ -2705,7 +2705,7 @@
             "kind": "text-minimal",
             "claimIds": [],
             "onScreenWordCount": 7,
-            "hasMotion": false
+            "hasMotion": true
           },
           {
             "id": "S191",
