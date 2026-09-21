@@ -33,7 +33,7 @@ Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩ
 
 ## Chi phí
 
-Đọc từ `ops/logs/<lane>.jsonl` (bất biến I8).
+Đọc từ `ops/logs/<lane>/<id>.jsonl` (bất biến I8, quyết định `D-C04`). Sinh bằng `ops/scripts/update-metrics.ts`, gom mọi file log và sắp theo `at` — đừng viết tay.
 
 | Ngày | Chi phí 24h | Tích luỹ | % ngân sách học |
 |---|---|---|---|

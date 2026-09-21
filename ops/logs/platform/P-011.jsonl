@@ -1,0 +1,1 @@
+{"at":"2026-09-21T00:30:00.000Z","lane":"platform","kind":"lane","ref":"platform/P-011","status":"ok","durationMs":0,"costUsd":0,"note":"KF-004: @nhắc trong thân issue của watchdog và main-ci; luật brokenEventChains trong lint:workflows; automerge gọi labels sau merge. 110 test xanh."}

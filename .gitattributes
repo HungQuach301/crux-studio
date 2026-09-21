@@ -16,6 +16,13 @@
 # Cơ chế chính không phải file này, mà là mục `P-016`: integrator tự gộp
 # `main` vào PR xung đột. Xem G17 trong docs/assumptions.md.
 #
+# Từ quyết định `D-C04` (mục `P-018`), log phân vùng tới mức **mục**:
+# `ops/logs/<lane>/<id>.jsonl`. Hai mục không còn chung file, nên union ở
+# đây là **lớp phòng thủ thứ hai**, không còn là lớp duy nhất — nó cứu
+# trường hợp hai lần chạy cùng ghi vào một mục. Luật giữ nguyên cả hai
+# hình dạng đường dẫn: file phẳng cũ (nếu còn sót) và file trong thư mục
+# làn.
+#
 # ⚠️ Union **không** xếp lại theo thời gian: dòng của nhánh đứng trước dòng
 # của `main`, bất kể `at`. Mọi bên đọc log phải **tự sắp theo `at`**, không
 # được tin vào thứ tự dòng trong file.
@@ -32,4 +39,5 @@
 # được TẠO LẠI, không ghép: `ops/scripts/integrator-lockfile.ts` (mục
 # `I-004`, CHARTER mục 7).
 ops/logs/*.jsonl              merge=union
+ops/logs/**/*.jsonl           merge=union
 docs/visual/calibration-log.jsonl  merge=union

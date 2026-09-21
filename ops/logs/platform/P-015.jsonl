@@ -1,0 +1,1 @@
+{"at":"2026-09-21T02:30:00.000Z","lane":"platform","kind":"lane","ref":"platform/P-015","status":"ok","durationMs":0,"costUsd":0,"note":"KF-005: .gitattributes merge=union cho log append-only, đã kiểm bằng chạy thật cả hình dạng squash. Test khoá cả hai chiều. Rà nốt các file dùng chung còn lại."}
