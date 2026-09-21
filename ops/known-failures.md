@@ -87,6 +87,12 @@ Ba lớp cộng lại làm nó khó thấy:
 
 Và một điều nữa lộ ra khi PR #7 chạy CI: **workflow chạy trên một PR là bản trong `.github/workflows/` của nhánh PR**, mà nhánh PR thừa hưởng bản đó từ `main` — agent không ghi được `.github/` nên nó không bao giờ là bản mới. Bằng chứng: `ci` run #1 của PR #7 hiển thị `Run actions/checkout@v4`, trong khi nhánh đó đã đổi `ops/workflows/ci.yml` sang `@v7`. Hệ quả: **thay đổi trong `ops/workflows/` không tự kiểm được bằng CI của chính PR đó** — chỉ `pnpm lint:workflows` kiểm được trước merge, và chỉ lần chạy sau khi merge mới là bằng chứng thật.
 
+
+- **Máy lấp khoảng đó từ nay (mục `P-010`):** `ops/workflows/smoke-workflows.yml` chạy sau mỗi lần `ops/workflows/**` đổi trên `main` và gọi **đúng những workflow vừa đổi** — kèm `-f dry_run=true` với workflow nào khai `inputs.dry_run`. Nó đối chiếu **nội dung** `.github/workflows/` với `ops/workflows/` trước khi gọi, để không bao giờ chạy thử bản cũ rồi báo xanh. Workflow đỏ thì **một** issue `alert` cho cả lần push.
+
+  Điều này **không** biến "sau khi merge" thành "trước khi merge" — không gì làm được thế chừng nào G10 còn đúng. Nó rút khoảng chờ từ *"tới lần ai đó bấm tay"* xuống *"vài phút sau merge"*, và đó là toàn bộ điều hứa hẹn.
+
+  `automerge.yml` **không bao giờ** được gọi ở chế độ thật: hai lớp chặn độc lập trong `ops/scripts/smoke-workflows.ts`, có test âm riêng. Luật mềm đi kèm trong `pnpm lint:workflows`: workflow có tác dụng phụ ra ngoài mà không khai `dry_run` thì **cảnh báo** — miễn trừ phải viết lý do ra (`# P-010 dry-run: …`), không phải một cờ bật được mà không nghĩ.
 ### Luật rút ra
 
 **Mỗi workflow chỉ khai đúng quyền nó cần — nhưng "đúng" có hai phía.** Khai thừa thì mở rộng bề mặt tấn công; khai thiếu thì hỏng im lặng, và trên repo private nó hỏng kèm một thông báo lỗi dẫn sai hướng. Từ nay phía "thiếu" do máy chặn; phía "thừa" do người soát diff bắt.
