@@ -213,5 +213,16 @@ jobs:
           while IFS=$'\t' read -r WF WHY; do
             [ -z "$WF" ] && continue
             echo "gọi $WF — $WHY"
-            gh workflow run "$WF" --repo "$REPO" --ref main
+            # Một PR vừa THÊM một workflow mới thì file đó chưa có trong
+            # `.github/workflows/` — `sync-workflows` vừa được gọi ở vòng
+            # trước và còn đang chạy. GitHub trả 404 cho `gh workflow run`
+            # với một workflow chưa đăng ký, và dưới `set -e` điều đó làm
+            # bước này đỏ SAU KHI đã merge xong: một job đỏ không nói lên
+            # điều gì sai về lần merge.
+            #
+            # `|| true` ở đây là chủ ý (rà soát Z9), và KHÔNG im lặng: ca
+            # này được in ra kèm đúng lý do, để lần chạy sau không phải đoán.
+            if ! gh workflow run "$WF" --repo "$REPO" --ref main; then
+              echo "::warning::gọi $WF không thành công — nhiều khả năng nó vừa được THÊM trong lượt merge này và sync-workflows chưa chép xong. Nó sẽ chạy ở lần ops/workflows/** đổi kế tiếp."
+            fi
           done < <(node ops/invariants.post-merge-dispatch.ts "$ALL")

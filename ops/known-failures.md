@@ -93,6 +93,7 @@ Và một điều nữa lộ ra khi PR #7 chạy CI: **workflow chạy trên m�
   Điều này **không** biến "sau khi merge" thành "trước khi merge" — không gì làm được thế chừng nào G10 còn đúng. Nó rút khoảng chờ từ *"tới lần ai đó bấm tay"* xuống *"vài phút sau merge"*, và đó là toàn bộ điều hứa hẹn.
 
   `automerge.yml` **không bao giờ** được gọi ở chế độ thật: hai lớp chặn độc lập trong `ops/scripts/smoke-workflows.ts`, có test âm riêng. Luật mềm đi kèm trong `pnpm lint:workflows`: workflow có tác dụng phụ ra ngoài mà không khai `dry_run` thì **cảnh báo** — miễn trừ phải viết lý do ra (`# P-010 dry-run: …`), không phải một cờ bật được mà không nghĩ.
+
 ### Luật rút ra
 
 **Mỗi workflow chỉ khai đúng quyền nó cần — nhưng "đúng" có hai phía.** Khai thừa thì mở rộng bề mặt tấn công; khai thiếu thì hỏng im lặng, và trên repo private nó hỏng kèm một thông báo lỗi dẫn sai hướng. Từ nay phía "thiếu" do máy chặn; phía "thừa" do người soát diff bắt.

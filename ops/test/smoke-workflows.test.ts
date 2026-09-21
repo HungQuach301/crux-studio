@@ -262,6 +262,49 @@ test('P-010 · mỗi dry_run trong cây thật thật sự chặn thao tác ghi,
   }
 });
 
+test('P-010 · chốt dry_run phải nằm TRƯỚC thao tác ghi, không chỉ có mặt đâu đó trong file', () => {
+  // Kiểm sự tồn tại là chưa đủ, và chỗ này là nơi điều đó tốn nhất: nhánh
+  // `hasDryRunInput` được xét TRƯỚC `realDispatchBan`, nên một khi
+  // `automerge.yml` đã khai `dry_run`, hai lớp `NEVER_REAL_DISPATCH` và
+  // `MERGE_PATTERNS` không còn được hỏi tới. Chốt trong thân job là lớp
+  // cuối cùng bảo vệ bất biến I4 — một lần sửa sau chuyển nó xuống dưới
+  // lệnh merge thì không còn gì chặn, và không gì đỏ.
+  const writes: Record<string, RegExp> = {
+    'automerge.yml': /gh api -X PUT "repos\/\$REPO\/pulls\/\$NUM\/merge"/,
+    'labels.yml': /gh label create "\$NAME"/,
+    'notify.yml': /gh issue comment "\$NUM"/,
+    'watchdog.yml': /gh issue create --repo "\$REPO" --title "\$TITLE"/,
+    'main-ci.yml': /gh issue create --repo "\$REPO" --title "\$TITLE"/,
+  };
+
+  for (const [file, write] of Object.entries(writes)) {
+    const source = read(file);
+    const gate = source.search(/if \[ "\$DRY_RUN" = "true" \]/);
+    const at = source.search(write);
+    assert.ok(gate !== -1, `${file}: không tìm thấy chốt dry_run`);
+    assert.ok(at !== -1, `${file}: không tìm thấy thao tác ghi — luật này đã lạc hậu, sửa nó`);
+    assert.ok(gate < at, `${file}: chốt dry_run (vị trí ${gate}) phải nằm TRƯỚC thao tác ghi (vị trí ${at})`);
+  }
+});
+
+test('P-010 · dispatchInputs không bị một dòng chú thích thụt sâu kéo lệch mốc', () => {
+  // Ca này đo được thật: chú thích thụt sâu hơn khoá làm `keyIndent` lấy
+  // theo nó, rồi `description`/`type`/`default` của input ĐẦU TIÊN bị đọc
+  // thành tên input. Hệ quả: một khối `inputs:` không hề có `dry_run` vẫn
+  // làm `hasDryRunInput` trả `true`, và cảnh báo `missingDryRun` bị nuốt.
+  const source = `name: x
+on:
+  workflow_dispatch:
+    inputs:
+        # chú thích thụt sâu hơn khoá
+      reason:
+        description: 'lý do'
+        dry_run: true
+`;
+  assert.deepEqual(dispatchInputs(source), ['reason']);
+  assert.equal(hasDryRunInput(source), false);
+});
+
 test('P-010 · mọi workflow trong cây thật đều dựng được kế hoạch, không file nào rơi ra ngoài', () => {
   const files = readdirSync(WORKFLOW_DIR).filter((f) => f.endsWith('.yml'));
   assert.ok(files.length >= 6, 'tiền đề: cây thật có đủ workflow để bài này có nghĩa');

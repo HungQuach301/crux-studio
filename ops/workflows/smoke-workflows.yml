@@ -95,6 +95,8 @@ jobs:
           # `--ref`, nên vẫn đúng cho đường `automerge` gọi tường minh.
           EVENT_SHA: ${{ github.sha }}
           INPUT_SHA: ${{ inputs.sha }}
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           SHA="${INPUT_SHA:-${EVENT_SHA:-}}"
@@ -104,12 +106,46 @@ jobs:
           fi
           git cat-file -e "$SHA^{commit}"
 
-          # Đúng NHỮNG workflow vừa đổi trong lần push đó, không chạy lại cả
-          # bộ. Commit gốc (không có cha) thì so với cây rỗng của git.
+          # `sync-workflows` ĐẨY MỘT COMMIT lên `main`, và commit đó chỉ chạm
+          # `.github/workflows/`. Nếu nó vào trước khi lần chạy này được tạo
+          # thì `github.sha` trỏ vào chính nó, `git diff` cho danh sách RỖNG,
+          # và cơ chế này báo "không có gì để thử" rồi xanh — đúng loại "xanh
+          # sai" mà mục này đi gỡ. Lùi về commit gần nhất thật sự chạm
+          # `ops/workflows/`.
+          # `--no-walk` là bắt buộc: không có nó, `git log -1 <sha> -- <path>`
+          # duyệt CẢ LỊCH SỬ tới `<sha>` và gần như luôn tìm thấy một commit
+          # cũ nào đó, nên điều kiện không bao giờ đúng. Đã đo bằng chạy
+          # thật trên một repo dựng riêng: không `--no-walk` trả commit của
+          # PR trước đó, có `--no-walk` trả rỗng đúng như cần.
+          if [ -z "$(git log -1 --no-walk --format=%H "$SHA" -- 'ops/workflows/')" ]; then
+            SKIPPED="$SHA"
+            SHA=$(git rev-list -1 "$SKIPPED" -- 'ops/workflows/')
+            echo "::notice::$SKIPPED không chạm ops/workflows/ (nhiều khả năng là commit sync). Lùi về $SHA."
+          fi
+
+          # Khoảng diff: trên sự kiện `push`, `github.event.before` phủ CẢ
+          # LƯỢT — một lượt `automerge` merge nhiều PR thì dùng `$SHA^` sẽ
+          # bỏ sót mọi PR trừ cái cuối.
           EMPTY=$(git hash-object -t tree /dev/null)
-          PARENT=$(git rev-parse --verify --quiet "$SHA^" || echo "$EMPTY")
-          git diff --name-only "$PARENT" "$SHA" -- 'ops/workflows/' > changed.txt
-          echo "Commit $SHA đổi $(wc -l < changed.txt) đường dẫn dưới ops/workflows/:"
+          BASE=""
+          if [ -n "${EVENT_BEFORE:-}" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            BASE=$(git rev-parse --verify --quiet "$EVENT_BEFORE^{commit}" || true)
+          fi
+          [ -z "$BASE" ] && BASE=$(git rev-parse --verify --quiet "$SHA^" || echo "$EMPTY")
+          git diff --name-only "$BASE" "$SHA" -- 'ops/workflows/' > changed.txt
+
+          # HỢP với phép so nội dung: file nào trong `ops/workflows/` còn
+          # khác bản trong `.github/workflows/` thì chắc chắn CHƯA được chạy
+          # thử lần nào, bất kể nó đổi ở commit nào. Đây là lớp không phụ
+          # thuộc vào việc chọn đúng commit — hợp hai nguồn thì thừa một lần
+          # chạy thử là cùng, còn thiếu thì im lặng.
+          for PATH_ in ops/workflows/*.yml; do
+            FILE=$(basename "$PATH_")
+            cmp -s "$PATH_" ".github/workflows/$FILE" || echo "ops/workflows/$FILE" >> changed.txt
+          done
+
+          sort -u changed.txt -o changed.txt
+          echo "Xét từ $BASE tới $SHA, hợp với phần lệch so với .github/workflows/:"
           cat changed.txt
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
@@ -151,6 +187,7 @@ jobs:
           echo "$PLAN" | jq .
 
       - name: Gọi từng workflow rồi chờ kết quả
+        id: run
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -235,12 +272,31 @@ jobs:
           SHA: ${{ steps.changed.outputs.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
         run: |
           set -euo pipefail
           [ -f plan.json ] || echo '{"dispatch":[],"notDispatchable":[],"refused":[]}' > plan.json
           [ -f results.json ] || echo '[]' > results.json
           PLAN=$(cat plan.json)
           RESULTS=$(cat results.json)
+
+          # CHÍNH CƠ CHẾ NÀY hỏng thì cũng phải kêu. Nếu bước gọi chết giữa
+          # chừng, `results.json` thiếu hoặc thiếu dòng, và đếm "đỏ" trên nó
+          # sẽ ra 0 — job đỏ trên `main` mà không issue, không thông báo, và
+          # `watchdog.yml` không canh lần chạy đỏ nói chung. Đúng nhóm Z.
+          # Vì vậy: mỗi workflow có trong kế hoạch mà KHÔNG có kết quả được
+          # tính là một dòng đỏ.
+          PLANNED=$(echo "$PLAN" | jq -r '.dispatch[].file')
+          if [ "$DRY_RUN" != "true" ]; then
+            for FILE in $PLANNED; do
+              echo "$RESULTS" | jq -e --arg f "$FILE" 'any(.[]; .file == $f)' > /dev/null && continue
+              echo "::error::$FILE nằm trong kế hoạch nhưng không có kết quả — bước gọi đã chết giữa chừng."
+              RESULTS=$(echo "$RESULTS" | jq --arg f "$FILE" --arg o "$RUN_OUTCOME" \
+                '. + [{file: $f, dryRun: true, conclusion: "không-có-kết-quả", runUrl: "",
+                       firstError: ("bước gọi của smoke-workflows kết thúc " + $o + " trước khi tới workflow này")}]')
+            done
+            echo "$RESULTS" > results.json
+          fi
           # Cấm im lặng (rà soát Z2): tóm tắt lần chạy LUÔN được ghi, kể cả
           # khi mọi thứ xanh và kể cả khi không có gì để gọi.
           {

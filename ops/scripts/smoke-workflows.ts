@@ -83,15 +83,23 @@ export function dispatchInputs(source: string): string[] {
   const inputsIndex = wdBody.findIndex((l) => /^\s+inputs:/.test(l));
   if (inputsIndex === -1) return [];
 
-  const inputsBody = blockLines(wdBody, inputsIndex);
+  // Bỏ chú thích TRƯỚC khi lấy mốc thụt lề. Một dòng `#` thụt sâu hơn khoá
+  // mà lọt vào đây sẽ kéo `keyIndent` xuống sâu, và khi đó những KHOÁ CON
+  // của input đầu tiên (`description:`, `type:`, `default:`) bị đọc thành
+  // tên input. Hệ quả đo được: một khối `inputs:` không hề có `dry_run` vẫn
+  // làm `hasDryRunInput` trả `true`, và cảnh báo `missingDryRun` bị nuốt.
+  const inputsBody = blockLines(wdBody, inputsIndex).filter(
+    (line) => !line.trimStart().startsWith('#'),
+  );
   if (inputsBody.length === 0) return [];
-  const keyIndent = inputsBody[0]!.length - inputsBody[0]!.trimStart().length;
+  // Mốc là dòng thụt NÔNG NHẤT, không phải dòng đầu: nông nhất là mức của
+  // chính các khoá, kể cả khi file viết lệch.
+  const keyIndent = Math.min(...inputsBody.map((l) => l.length - l.trimStart().length));
 
   const names: string[] = [];
   for (const line of inputsBody) {
     const indent = line.length - line.trimStart().length;
     if (indent !== keyIndent) continue;
-    if (line.trimStart().startsWith('#')) continue;
     const key = /^\s*([A-Za-z_][A-Za-z0-9_-]*):/.exec(line);
     if (key) names.push(key[1]!);
   }
