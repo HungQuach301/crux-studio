@@ -19,14 +19,8 @@
   #view { display: block; }
 </style>
 <canvas id="view" width="1920" height="1080"></canvas>
-<script>
-'use strict';
-
-const CANVAS_W = 6000;
-const CANVAS_H = 3400;
-const VIEW_W = 1920;
-const VIEW_H = 1080;
-const DURATION_S = 180;
+<script type="module">
+import { CANVAS_W, CANVAS_H, VIEW_W, VIEW_H, morphMixAt, viewportFor } from './camera.js';
 
 const view = document.getElementById('view');
 const vctx = view.getContext('2d', { alpha: false });
@@ -160,59 +154,12 @@ function paintMorphRegion(mix) {
 
 
 // ------------------------------------------------------------ máy quay
-// Bốn đoạn của WP-003 mục 3b. Mỗi mốc là một trạng thái máy quay
-// {x, y, zoom} ở giây t; giữa hai mốc nội suy mượt (smoothstep).
-// Không mốc nào để máy quay đứng yên hoàn toàn: quy tắc "không khung nào
-// đứng yên, máy quay trôi chậm liên tục" của D-04 chính là điều kiện sinh
-// ra nguy cơ giật hình mà chỉ số 4-6 đo.
-const KEYS = [
-  { t: 0,   x: 1300, y: 1750, zoom: 0.62 },  // mở, nhìn rộng biểu đồ cột
-  { t: 52,  x: 3200, y: 1820, zoom: 0.58 },  // 1. trôi ngang chậm qua biểu đồ
-  { t: 62,  x: 4600, y: 1100, zoom: 0.62 },  // bắt sang con số lớn
-  { t: 88,  x: 4820, y: 830,  zoom: 1.70 },  // 2. zoom vào một con số
-  { t: 100, x: 4830, y: 1500, zoom: 0.72 },  // lùi ra, hướng về vùng morph
-  { t: 108, x: 4820, y: 1900, zoom: 0.66 },  // vào vùng morph
-  { t: 140, x: 4790, y: 1930, zoom: 0.63 },  // 3. morph, máy quay vẫn trôi
-  { t: 162, x: 2600, y: 1800, zoom: 0.60 },  // 4. quay lại vùng đã xem
-  { t: 180, x: 1500, y: 1770, zoom: 0.62 },  // về gần điểm mở
-];
-
-// Đoạn morph: mix chạy 0 -> 1 -> 0 trong khoảng này.
-const MORPH_FROM = 108;
-const MORPH_TO = 150;
-
-function smoothstep(p) { return p * p * (3 - 2 * p); }
-
-function cameraAt(tSec) {
-  const t = Math.max(0, Math.min(DURATION_S, tSec));
-  let i = 0;
-  while (i < KEYS.length - 2 && KEYS[i + 1].t <= t) i++;
-  const a = KEYS[i];
-  const b = KEYS[i + 1];
-  const span = b.t - a.t;
-  const p = span <= 0 ? 0 : smoothstep((t - a.t) / span);
-  return {
-    x: a.x + (b.x - a.x) * p,
-    y: a.y + (b.y - a.y) * p,
-    zoom: a.zoom + (b.zoom - a.zoom) * p,
-  };
-}
-
-function morphMixAt(tSec) {
-  if (tSec <= MORPH_FROM || tSec >= MORPH_TO) return 0;
-  const p = (tSec - MORPH_FROM) / (MORPH_TO - MORPH_FROM);
-  return smoothstep(p < 0.5 ? p * 2 : (1 - p) * 2);
-}
+// Đường đi máy quay, mức trộn morph và vùng cắt nằm ở `camera.js`, để bài
+// kiểm `node --test` chạy được mà không cần mở trình duyệt.
 
 // Vẽ MỘT mẫu của khung hình tại giây tSec lên ngữ cảnh đích.
 function drawSample(ctx, tSec, alpha) {
-  const cam = cameraAt(tSec);
-  const sw = VIEW_W / cam.zoom;
-  const sh = VIEW_H / cam.zoom;
-  let sx = cam.x - sw / 2;
-  let sy = cam.y - sh / 2;
-  sx = Math.max(0, Math.min(CANVAS_W - sw, sx));
-  sy = Math.max(0, Math.min(CANVAS_H - sh, sy));
+  const { sx, sy, sw, sh } = viewportFor(tSec);
   ctx.globalAlpha = alpha;
   ctx.drawImage(big, sx, sy, sw, sh, 0, 0, VIEW_W, VIEW_H);
   ctx.globalAlpha = 1;
@@ -221,17 +168,16 @@ function drawSample(ctx, tSec, alpha) {
 let lastMorphMix = -1;
 
 /**
- * Vẽ khung hình số `frame`.
- * - fps: 30 hoặc 60
+ * Vẽ khung hình tại giây `tSec` của cảnh.
+ * - fps: chỉ dùng để tính bề rộng cửa trập khi lấy mẫu mờ chuyển động.
  * - blurSamples: 1 = không mờ chuyển động; >1 = lấy ngần ấy mẫu phụ trong
  *   khoảng thời gian của một khung rồi cộng trung bình.
- * - staticCamera: true thì máy quay đứng yên — đó là phép đối chứng của
- *   chỉ số 3 (chậm hơn render tĩnh cùng số khung bao nhiêu lần).
+ *
+ * Máy quay đứng yên (phép đối chứng của chỉ số 3) được thể hiện bằng cách
+ * gọi mọi khung với CÙNG một `tSec`, không bằng một cờ riêng.
  */
-window.renderFrame = function (frame, fps, blurSamples, staticCamera) {
-  const tSec = staticCamera ? 0 : frame / fps;
-
-  const mix = staticCamera ? 0 : morphMixAt(tSec);
+window.renderFrame = function (tSec, fps, blurSamples) {
+  const mix = morphMixAt(tSec);
   if (mix !== lastMorphMix) {
     paintMorphRegion(mix);
     lastMorphMix = mix;
@@ -257,6 +203,6 @@ window.sceneReady = false;
 paintStaticScene();
 paintMorphRegion(0);
 lastMorphMix = 0;
-window.renderFrame(0, 30, 1, false);
+window.renderFrame(0, 30, 1);
 window.sceneReady = true;
 </script>

@@ -15,7 +15,7 @@
     "assumptions": "node ops/scripts/check-assumptions.ts",
     "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\"",
+    "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\" \"spike/**/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",
     "run:episode": "node ops/scripts/run-episode.ts",
     "check": "pnpm contracts && pnpm lint:deps && pnpm lint:workflows && pnpm assumptions && pnpm typecheck && pnpm test && pnpm replay"

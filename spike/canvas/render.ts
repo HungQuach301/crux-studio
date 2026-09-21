@@ -16,10 +16,12 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer, type Server } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import type { AddressInfo } from 'node:net';
 
 export interface RenderConfig {
   /** Tên cấu hình, dùng cho tên file và cho bảng trong RESULT.md. */
@@ -27,10 +29,20 @@ export interface RenderConfig {
   fps: 30 | 60;
   /** 1 = không mờ chuyển động. >1 = số mẫu phụ mỗi khung. */
   blurSamples: number;
-  /** Máy quay đứng yên — phép đối chứng của chỉ số 3. */
+  /**
+   * Máy quay đứng yên — phép đối chứng của chỉ số 3. Mọi khung vẽ ở cùng
+   * một thời điểm của cảnh, nên số khung và đường ra không đổi, chỉ có
+   * chuyển động biến mất.
+   */
   staticCamera: boolean;
   /** Số khung. Mặc định 3 phút nhân fps. */
   frames: number;
+  /**
+   * Bước thời gian mỗi khung, giây. Bỏ trống thì dùng `1 / fps` — tức là
+   * dựng thời gian thật. Đặt giá trị lớn để lấy ảnh rời rạc rải đều cảnh
+   * (bảng ảnh kiểm khuôn hình), thay vì dựng cả clip.
+   */
+  secondsPerFrame?: number;
 }
 
 export interface RenderResult {
@@ -163,10 +175,47 @@ async function httpJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+};
+
+/**
+ * Máy phục vụ tĩnh cho thư mục cảnh, chỉ nghe ở 127.0.0.1.
+ *
+ * Vì sao không nạp thẳng bằng `file://`: `scene.html` nạp `camera.js` bằng
+ * `<script type="module">`, và trình duyệt chặn import module giữa hai
+ * nguồn `file://` theo luật CORS. Một máy phục vụ HTTP tại chỗ vừa gỡ được
+ * chỗ đó, vừa giống đường chạy thật hơn.
+ */
+function serveScene(dir: string): Promise<{ server: Server; port: number }> {
+  const server = createServer((req, res) => {
+    const name = (req.url ?? '/').split('?')[0]!.replace(/^\/+/, '') || 'scene.html';
+    // Chỉ phục vụ file nằm ngay trong thư mục cảnh.
+    if (name.includes('/') || name.includes('..')) {
+      res.writeHead(403).end('không phục vụ đường dẫn con');
+      return;
+    }
+    const file = join(dir, name);
+    if (!existsSync(file)) {
+      res.writeHead(404).end('không có');
+      return;
+    }
+    res.writeHead(200, { 'content-type': MIME[extname(name)] ?? 'application/octet-stream' });
+    res.end(readFileSync(file));
+  });
+  return new Promise((ok) => {
+    server.listen(0, '127.0.0.1', () => {
+      ok({ server, port: (server.address() as AddressInfo).port });
+    });
+  });
+}
+
 export async function renderOne(cfg: RenderConfig, outDir: string): Promise<RenderResult> {
   const chrome = findChrome();
   const userDataDir = mkdtempSync(join(tmpdir(), 'crux-spike-'));
-  const sceneUrl = 'file://' + join(import.meta.dirname, 'scene.html');
+  const { server, port: scenePort } = await serveScene(import.meta.dirname);
+  const sceneUrl = `http://127.0.0.1:${scenePort}/scene.html`;
 
   const browser: ChildProcess = spawn(chrome, [
     '--headless=new',
@@ -254,9 +303,11 @@ export async function renderOne(cfg: RenderConfig, outDir: string): Promise<Rend
     let sceneNs = 0n;
     let captureNs = 0n;
     for (let frame = 0; frame < cfg.frames; frame++) {
+      const step = cfg.secondsPerFrame ?? 1 / cfg.fps;
+      const tSec = cfg.staticCamera ? 0 : frame * step;
       const t0 = process.hrtime.bigint();
       await cdp.send('Runtime.evaluate', {
-        expression: `renderFrame(${frame},${cfg.fps},${cfg.blurSamples},${cfg.staticCamera})`,
+        expression: `renderFrame(${tSec},${cfg.fps},${cfg.blurSamples})`,
         returnByValue: true,
       });
       const t1 = process.hrtime.bigint();
@@ -295,6 +346,7 @@ export async function renderOne(cfg: RenderConfig, outDir: string): Promise<Rend
     };
   } finally {
     cdp?.close();
+    server.close();
     browser.kill('SIGKILL');
     if (ffmpeg && ffmpeg.exitCode === null) ffmpeg.kill('SIGKILL');
     rmSync(userDataDir, { recursive: true, force: true });
