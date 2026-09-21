@@ -75,6 +75,34 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
     fixture không gọi mạng (mọi phụ thuộc là `workspace:*`). Kiểm bằng đột biến: gỡ đường lockfile ra thì
     4 test đỏ.
 
+### I-005 · `recheck:assumptions` phải phân biệt "chưa quét được" với "quét rồi không thấy gì"
+Lỗi nhóm Z (số sai mà không gì đỏ), tìm ra bằng chạy thật ở lượt `crux-integrator` ngày 2026-09-21.
+
+`collectCommits` trong `ops/scripts/recheck-assumptions.ts` trả `[]` khi
+`for-each-ref refs/remotes/origin/claude/` rỗng, và `judgeTrailerEvidence([])` in ra
+`◦ chưa quan sát được — không có commit nào trên nhánh claude/* chưa vào main`. Hai tình huống
+khác hẳn nhau lại in ra y hệt:
+
+- **quét rồi không thấy gì** — bình thường, đúng như chú thích của bài kiểm;
+- **chưa quét được** — clone của phiên cloud mới `git fetch origin main`, chưa có ref nào của
+  `origin/claude/*`. Đây là chế độ chạy **mặc định** của cả ba routine, nên bài kiểm G14 của
+  bước 4 (thứ Hai) sẽ im lặng không kiểm gì trong hầu hết các lượt.
+
+Cùng lượt đó, chạy lại sau khi `git fetch origin` cho **G14 khớp, 24/24 commit có trailer** —
+tức bài kiểm chạy được, chỉ là nó đã bỏ qua một cách lặng lẽ.
+
+- deps: `I-003`
+- risk: low
+- status: ready
+- nguồn: phụ lục P3 bước 4; CLAUDE.md mục 7 ("kiểm bằng chạy thật"); `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - Không có ref `origin/claude/*` nào thì bài kiểm ra nhánh **`broken`** (`⚠ … KHÔNG CHẠY ĐƯỢC`,
+    cơ chế đã có sẵn), **không** ra `◦ chưa quan sát được`.
+  - Bài kiểm tự `git fetch origin 'refs/heads/claude/*:refs/remotes/origin/claude/*'` trước khi quét,
+    hoặc phụ lục P3 bước 4 ghi rõ phải fetch trước — chọn một, đừng để cả hai cùng không ai làm.
+  - Test tái hiện lỗi (bắt buộc, bất biến I2): một repo git dựng thật, **không** có ref
+    `origin/claude/*`, phải cho `broken` chứ không cho `observedNothing`.
+
 ### I-006 · Lockfile gộp **sạch** mà vẫn lệch manifest
 Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ phủ ca lockfile **xung đột**. Khi git gộp lockfile sạch, integrator không đụng tới nó — nhưng "merge được" không đồng nghĩa "đúng": git ghép hunk theo dòng, không hiểu YAML, nên về lý thuyết nó ghép ra một lockfile lệch với manifest sau khi gộp. Local `pnpm check` **không** bắt được: nó không chạy `pnpm install --frozen-lockfile` (CI mới chạy). Nghĩa là integrator báo "xanh, đã push" rồi CI mới đỏ — đúng nhóm lỗi Z.
 
