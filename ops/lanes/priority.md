@@ -26,8 +26,11 @@ Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt
 
 1. PR đang mở có CI đỏ, và chưa có worker nào đang xử lý (không có commit mới trong 2 giờ).
 2. PR đang mở có comment chưa xử lý, cùng điều kiện trên.
+3. PR đang mở mà lượt bước 0 gần nhất trả `aborted-ineligible`, cùng điều kiện trên (mục `P-022`). **Ngang giá với ca 1 và ca 2**, không phải ca hạng hai: tool đã làm đúng phần của nó và dừng, nên nếu không ai nhận thì PR nằm đó qua hết lượt này tới lượt khác — đã đo #26 bốn lượt, #39 ba lượt. Việc thuộc **làn sở hữu PR** (suy từ tên nhánh `claude/<lane>/<id>`); làn đó không có worker rảnh ở lượt này thì **worker gặp nó vẫn phải nhận**. Ca này **được giải tay**, khác bước 0 — xem phụ lục P1 bước 2c của CHARTER.
 
-Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Lý do: một PR đỏ nằm đó chặn hàng đợi merge, và hàng đợi merge là tuần tự.
+Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Kẹt lâu nhất đi trước. Lý do: một PR đỏ hoặc kẹt nằm đó chặn hàng đợi merge, và hàng đợi merge là tuần tự.
+
+Ba ca này đọc bằng máy, không bằng mắt: `node ops/scripts/pr-pickup.ts` in ra PR phải nhận, làn sở hữu, số giờ kẹt và số lượt đã bỏ lại.
 
 ## Điều tiết
 

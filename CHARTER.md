@@ -653,8 +653,25 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    Bước 0 rẻ: liệt kê PR xung đột, gọi ops/scripts/integrator-resolve.ts, chỉ chạy pnpm check khi có gộp thật.
    Không có PR nào xung đột thì in một dòng "không có PR xung đột" rồi đi tiếp — không bao giờ bỏ qua im lặng.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
-2. Ưu tiên: nếu có PR đang mở với CI đỏ hoặc có comment chưa xử lý và chưa có worker nào đang xử lý
-   (không có commit mới trong 2 giờ), xử lý đúng một PR đó rồi kết thúc.
+2. Ưu tiên: nếu có PR đang mở rơi vào MỘT trong ba ca dưới đây, và chưa có worker nào đang xử lý
+   (không có commit mới trong 2 giờ), xử lý đúng một PR đó rồi kết thúc. Ba ca NGANG GIÁ nhau, cùng một
+   ngưỡng chống giẫm chân; kẹt lâu nhất đi trước.
+   a. CI đỏ.
+   b. Có comment chưa xử lý.
+   c. Lượt bước 0 gần nhất trên PR đó trả `aborted-ineligible` (mục `P-022`). Tool đã làm đúng phần của nó —
+      có xoá/sửa dòng ở một bên thì nó không tự giải — nhưng "cần người" phải là trạng thái CÓ CHỦ, nếu không
+      PR nằm đó qua hết lượt này tới lượt khác (đã đo: #26 bốn lượt, #39 ba lượt) và hàng đợi merge tuần tự
+      đứng theo nó.
+      **Ai nhận:** worker của làn sở hữu PR, suy từ tên nhánh `claude/<lane>/<id>` — giải xung đột cần biết PR
+      đó định làm gì. Dự án không gán worker theo làn, nên vế thường gặp là vế sau: **làn đó không có worker
+      rảnh ở lượt này thì worker gặp nó vẫn phải nhận.** Thà một worker khác làn giải còn hơn PR nằm chờ.
+      **Được giải tay ở ca này** — khác bước 0. Lệnh cấm `--ours`/`--theirs`/rebase/sửa tay ở phụ lục P3
+      bước 0b là lệnh cấm cho *bước quét hàng đợi*, chỗ không ai đọc nội dung PR. Ở đây worker đã nhận PR,
+      đọc diff của cả hai bên và chịu trách nhiệm về kết quả: gộp `main` vào nhánh PR, giải xung đột bằng tay,
+      chạy `pnpm check` và `pnpm replay`, xanh thì push. Đỏ thì `git reset --hard` về commit trước khi gộp,
+      không push, và ghi lý do vào báo cáo. Vẫn không rebase và không force-push (CHARTER 3.3).
+      Hai bên đổi cùng một logic và chọn bên nào cũng mất hành vi ⇒ mở `🤖 [QĐ]`, đừng đoán.
+      `node ops/scripts/pr-pickup.ts` in ra PR phải nhận và số lượt nó đã bị bỏ lại — chạy, đừng đọc log bằng mắt.
 3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
    mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
    coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.
@@ -689,6 +706,8 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
 
 2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang xung đột với main kèm
    số giờ kẹt; PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
+   **PR quá ngưỡng lượt `aborted-ineligible` liên tiếp — chạy `node ops/scripts/pr-pickup.ts` và lấy trường
+   `escalations`, đừng đọc log bằng mắt** (mục `P-022`);
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3.
 
@@ -697,6 +716,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Cần anh quyết: N việc
      Mỗi irreversible MỘT dòng: tóm tắt · khuyến nghị · link. Không thuật ngữ chưa giải thích.
      Đọc và trả lời được trong khoảng 60 giây trên màn hình điện thoại (rủi ro B11).
+     Mục này cũng là chỗ NHỊP TIM của hàng đợi merge kêu (mục `P-022`): mỗi PR mà `escalations` trả về —
+     tức đã quá 3 lượt bước 0 liên tiếp không tự giải được — một dòng, theo `escalationLine`:
+     PR · làn · số giờ kẹt · số lượt · link. Đây là việc CẦN ANH GỠ TAY, không phải một quyết định A/B:
+     ba lượt liên tiếp nghĩa là cả worker lẫn integrator đều đã thử và đều dừng đúng luật.
+     Không có PR nào quá ngưỡng thì KHÔNG viết dòng nào — im lặng ở đây là tin tốt, và làm phiền
+     chủ dự án bằng tin tốt là đúng thứ mặc định M8 cấm.
 
    Đã tự làm
      Mỗi reversible đã làm theo khuyến nghị một dòng. Phủ quyết bằng "hoàn tác #N" trong 24 giờ.
@@ -755,6 +780,12 @@ Làn integration của Crux Studio.
    d. Ghi một dòng vào `ops/logs/platform/P-016.jsonl` (bất biến I8): số PR đã giải, số PR bỏ lại kèm giờ kẹt của từng PR,
       trong trường `note`. Đây là nguồn cho `ops/metrics.md` (mục P-005, chưa xây) và cho bản tin ngày liệt kê PR xung
       đột (mục P-007, chưa xây) — tới khi hai mục đó xong, dòng log này là nơi duy nhất giữ số giờ kẹt.
+      Với **mỗi PR bỏ lại**, `note` mang đủ bốn thứ: tên nhánh · làn sở hữu · **số lượt `aborted-ineligible`
+      liên tiếp** · số giờ kẹt (mục `P-022`). Thiếu mấy số đó thì lượt sau không biết việc này đã bỏ lại mấy lần,
+      và một luật mà không ai đếm thì nó im lặng đúng lúc cần kêu — lần trước nó đã im lặng bốn lượt.
+      Phần máy đọc dựng bằng `formatStuckNote` của `ops/scripts/pr-pickup.ts` và đi SAU phần văn xuôi trong cùng
+      `note`; người vẫn đọc được dòng log, máy vẫn đếm được. Số lượt liên tiếp lấy bằng `consecutiveAbortedTurns`
+      trên chính file log này, không đếm bằng mắt.
 
 Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
 mỗi ngày, như trước khi đổi nhịp):
