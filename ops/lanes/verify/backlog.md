@@ -59,10 +59,18 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G7 · Điều khoản TTS, stock, font, bản đồ
 - deps: —
 - risk: high
-- status: ready
+- status: parked
 - kiểm: đọc điều khoản từng nhà cung cấp, trích dẫn kèm ngày đọc.
 - dự phòng nếu sai: đổi nhà cung cấp.
 - ghi chú: cùng việc với AU-001 nhưng ở góc sổ giả định; kết quả ghi vào `ops/license-ledger.md`.
+- ✅ **Nhóm font — xong cho giấy phép `OFL-1.1`, 2026-09-21:** đọc văn bản giấy phép **gốc** đi kèm gói font (`package/LICENSE` của `@fontsource/inter@5.3.0`, `registry.npmjs.org`). SIL OFL 1.1 điều 5: video đã dựng là "document created using the Font Software" nên không kéo theo nghĩa vụ nào — thương mại `được`, giao cho khách hàng B2B `được`. Giao **file font** là ca khác, có điều kiện. Bước đọc "video = document" là **suy luận** từ chính văn bản giấy phép; OFL FAQ (`scripts.sil.org`) — nguồn xác nhận chuẩn — nằm trong nhóm đích bị chặn. Phạm vi hẹp hơn chữ "font": **một** font, **một** giấy phép; điều khoản dịch vụ Google Fonts và font `Apache-2.0` chưa đọc được. Dòng sổ và trích nguyên văn ở `ops/license-ledger.md`.
+- ⬜ **`parked` — ba nhóm còn lại không kiểm được từ phiên cloud.** Chính sách mạng của environment chặn **16 trên 18** đích đã đo — mọi trang điều khoản của TTS, ảnh/video stock và bản đồ trả `000`, công cụ đọc web trả `EGRESS_BLOCKED`. Hai đích mở (`registry.npmjs.org`, `cloud.google.com`) không đủ: phần điều khoản riêng cho Cloud Text-to-Speech không đọc trọn được. Bảng đo kèm giờ UTC ở `ops/license-ledger.md`.
+
+  Đây **không** phải chữ ký lỗi lặp lần thứ ba (CLAUDE.md mục 13) mà là một chỗ chặn cứng ở lần thử đầu: không có cách nào bên trong repo đi vòng qua nó, và lách chính sách mạng là việc agent không được làm. Gỡ chặn cần chủ dự án — issue **#36** nêu ba phương án.
+
+  **Không** hạ chuẩn bằng đoạn trích của máy tìm kiếm: đó là tóm tắt của bên thứ ba, đúng loại bằng chứng mà luật đầu file này loại bỏ.
+- vì sao `parked` chứ không phải `review`: phần làm được đã xong và đã vào `main` qua PR của mục này, nhưng phần còn lại **không** chờ một lượt worker nào cả — nó chờ một việc ngoài repo mà chỉ chủ dự án làm được (#36). Để `review` thì lượt worker sau lại nhận mục này rồi lại dừng ở đúng chỗ cũ. Có câu trả lời cho #36 thì mở lại thành `ready`.
+- hệ quả: `AU-001` của làn `audio` vẫn chặn, và `voice.commercialLicenseVerified` giữ `false`. Làn `audio` không đứng chờ được thì nhận mục khác — `irreversible` và chỗ chặn chỉ chặn nhánh việc của nó (CHARTER 2.3).
 
 ### VF-G8 · Đường nhận tiền và nộp thuế cho người ở Việt Nam
 - deps: —
