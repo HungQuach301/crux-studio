@@ -212,10 +212,13 @@ export function isToolCommit(subject: string): boolean {
  * trailer" và bài kiểm kêu `sai` vì một lý do chẳng liên quan gì tới G14.
  * Lần chạy đầu của chính bài kiểm này đã mắc đúng lỗi đó.
  *
- * Nhánh "không có gì để quan sát" ở đây nay chỉ còn nghĩa **hẹp**: đã có ref
- * `origin/claude/*`, nhưng không commit nào của chúng nằm ngoài `main` trong
- * cửa sổ ngày. Trường hợp "chưa có ref nào để quét" không còn đi qua đây —
- * `collectCommits` ném, và `main()` xếp nó vào `broken` (mục `I-005`).
+ * Nhánh "không có gì để quan sát" ở đây gộp **hai** ca (mục `I-007`): đã có
+ * ref `origin/claude/*` nhưng không commit nào của chúng nằm ngoài `main`
+ * trong cửa sổ ngày, HOẶC kho thật sự không còn nhánh `claude/*` nào —
+ * `collectCommits` đã hỏi thẳng remote bằng `listRemoteClaudeBranches` và
+ * xác nhận rỗng trước khi trả `[]`. Trường hợp "chưa quét được" (fetch hoặc
+ * chính `ls-remote` lỗi) không đi qua đây — `collectCommits` ném, và
+ * `main()` xếp nó vào `broken` (mục `I-005`, `I-007`).
  */
 export function judgeTrailerEvidence(commits: CommitTrailerInfo[]): CheckOutcome {
   const byTool = commits.filter((c) => isToolCommit(c.subject));
@@ -235,8 +238,10 @@ export function judgeTrailerEvidence(commits: CommitTrailerInfo[]): CheckOutcome
       observed: 'không có commit nào trên nhánh `claude/*` chưa vào `main` — không có gì để quan sát.',
       evidence: [
         'Không quan sát được gì KHÁC với quan sát được và thấy đúng.',
-        'Tới được đây nghĩa là ĐÃ có ref `origin/claude/*` để quét, chỉ là mọi commit của chúng đã vào ' +
-          '`main` hoặc đã quá cửa sổ ngày — `collectCommits` ném khi chưa quét được gì (mục `I-005`).',
+        'Hai lý do có thể: đã có ref `origin/claude/*` để quét nhưng mọi commit của chúng đã vào `main` ' +
+          'hoặc đã quá cửa sổ ngày, HOẶC kho thật sự không còn nhánh `claude/*` nào (mọi PR đã merge và ' +
+          'nhánh đã xoá) — `git ls-remote` xác nhận rỗng (mục `I-007`). `collectCommits` ném khi chưa quét ' +
+          'được gì, không phải khi quan sát thấy rỗng thật (mục `I-005`, `I-007`).',
       ],
     };
   }
@@ -327,21 +332,47 @@ function fetchScanInputs(root: string): void {
 }
 
 /**
+ * Hỏi thẳng **remote** (không qua fetch cục bộ) xem `origin` có nhánh nào
+ * khớp `refs/heads/claude/*` không. Mục `I-007`: khi `for-each-ref` cục bộ
+ * sau fetch rỗng, rỗng đó có hai nghĩa khác nhau — "chưa quét được" (fetch
+ * hỏng, thiếu quyền đọc nhánh) hay "kho thật sự không còn nhánh nào" (mọi PR
+ * đã merge và nhánh đã xoá) — và chỉ cách hỏi thẳng remote mới tách được hai
+ * ca đó. `ls-remote` không phụ thuộc trạng thái fetch cục bộ, nên nó là
+ * nguồn sự thật độc lập.
+ *
+ * Ném khi chính `ls-remote` lỗi (mạng, quyền đọc) — đó mới là "chưa quét
+ * được" thật. Trả mảng rỗng khi `ls-remote` CHẠY ĐƯỢC và không thấy nhánh
+ * nào — đó là một quan sát hợp lệ, không phải lỗi.
+ */
+export function listRemoteClaudeBranches(root: string): string[] {
+  const result = spawnSync('git', ['ls-remote', '--heads', 'origin', 'refs/heads/claude/*'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `git ls-remote --heads origin refs/heads/claude/* thất bại: ${result.stderr || result.stdout}`,
+    );
+  }
+  return result.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
  * Commit trên các nhánh `origin/claude/*` mà **chưa vào `main`**, trong
  * `days` ngày gần nhất. Xem chú thích của `judgeTrailerEvidence` về lý do
  * loại `main` ra: squash làm mất trailer, không phải agent làm mất.
  *
- * Ném khi không có ref nào để quét (mục `I-005`). Rỗng ở đây **không** phải
- * một quan sát: không phân biệt được "kho không có nhánh nào" với "clone
- * chưa kéo nhánh nào về", và đoán bừa một trong hai chính là lỗi cũ. Bên
- * gọi — `main()` — biến lỗi này thành dòng `broken`, thấy được và làm
- * `process.exitCode = 1`.
- *
- * Giới hạn khai trước: khi kho **thật sự** không còn nhánh `claude/*` nào
- * (mọi PR đã merge và nhánh đã xoá), đây là một quan sát hợp lệ nhưng vẫn ra
- * `broken`. Repo hiện **không** xoá nhánh sau merge nên chưa chạm phải; mục
- * `I-007` tách hai trường hợp đó bằng `git ls-remote`. Chọn kêu-oan thay vì
- * im-lặng là có chủ ý, và đúng tiêu chí xong của `I-005`.
+ * Rỗng ở `for-each-ref` cục bộ sau fetch không tự nó là một quan sát — nó có
+ * thể là "kho không có nhánh nào" hoặc "clone chưa kéo nhánh nào về", và
+ * đoán bừa một trong hai chính là lỗi của mục `I-005`. Mục `I-007` tách hai
+ * ca đó bằng `listRemoteClaudeBranches` (hỏi thẳng remote, không qua fetch
+ * cục bộ): remote cũng rỗng thì đây là quan sát hợp lệ, trả `[]`; remote
+ * KHÔNG rỗng (fetch cục bộ lệch với remote) hoặc chính `ls-remote` lỗi thì
+ * ném, để `main()` xếp vào `broken` và làm `process.exitCode = 1` — chưa
+ * quét được phải kêu, không được im lặng thành `◦ chưa quan sát được`.
  */
 export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
   fetchScanInputs(root);
@@ -352,9 +383,14 @@ export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
     .filter((line) => line.length > 0);
 
   if (refs.length === 0) {
+    const remoteBranches = listRemoteClaudeBranches(root);
+    if (remoteBranches.length === 0) {
+      // Kho thật sự không còn nhánh claude/* nào — quan sát hợp lệ.
+      return [];
+    }
     throw new Error(
-      'không có ref `refs/remotes/origin/claude/*` nào sau khi fetch — CHƯA QUÉT ĐƯỢC, ' +
-        'không phải "quét rồi không thấy gì". Kiểm remote `origin` và quyền đọc nhánh.',
+      'origin CÓ nhánh khớp `refs/heads/claude/*` nhưng fetch cục bộ không thấy ref nào sau khi fetch — ' +
+        'CHƯA QUÉT ĐƯỢC, không phải "kho không còn nhánh nào". Kiểm remote `origin` và quyền đọc nhánh.',
     );
   }
 
