@@ -48,9 +48,25 @@ Nếu GitHub đòi gói trả phí mới bật được ruleset trên repo priva
 
 ## `automerge` gộp PR khi và chỉ khi
 
-1. CI xanh.
-2. PR có nhãn `automerge`.
-3. PR **không** có nhãn `owner-merge` (CI tự gắn nhãn đó cho PR chạm vùng bảo vệ).
-4. PR không ở trạng thái nháp.
+Từ quyết định **D-C06**, quyết định nằm ở `ops/invariants.merge-gate.ts` chứ không nằm trong bash, và nó xét **ba cửa**:
 
-Cộng một điều kiện thứ năm không có trong CHARTER nhưng suy ra từ nó: **chỉ gộp đúng commit mà CI đã chạy**. Nếu nhánh có commit mới sau lần CI đó, gộp bây giờ là gộp một thứ chưa được kiểm — workflow dừng và chờ lần CI kế tiếp.
+| Cửa | Nhãn cần có | Khoảng chờ |
+|---|---|---|
+| `owner-merge` | — | máy không bao giờ gộp |
+| `automerge-delayed` | `automerge-delayed` | 12 giờ kể từ lúc CI xanh |
+| `open` | `automerge` | không chờ |
+
+Điều kiện chung cho hai cửa máy gộp được:
+
+1. CI xanh **trên đúng commit đầu nhánh**. Nhánh có commit mới sau lần CI đó thì gộp bây giờ là gộp một thứ chưa được kiểm — workflow dừng và chờ lần CI kế tiếp.
+2. PR không ở trạng thái nháp.
+3. PR không đang xung đột với `main`, và `mergeable: null` không được coi là gộp được (KF-002).
+4. Không có comment `dừng` của chủ dự án — comment không bắt đầu bằng 🤖, có chứa chữ `dừng`.
+
+**Cửa được tính lại ở đây, không lấy từ nhãn.** `ci.yml` chạy theo định nghĩa trong nhánh PR, nên nhãn nó gắn không phải bằng chứng đáng tin: một PR sửa `ci.yml` sẽ không bị nhãn nào chặn. `automerge.yml` chạy `ops/invariants.protected-area.ts` **bản trên `main`** trước mỗi lần gộp. Nhãn là để người đọc; cửa là thứ máy tin (rà soát Z8).
+
+## Sau khi gộp, gọi tay các workflow nghe `push`
+
+Gộp bằng `GITHUB_TOKEN` **không** sinh sự kiện `push` cho workflow nào (giả định G2, KF-004). Danh sách phải gọi do `ops/invariants.post-merge-dispatch.ts` trả về — `main-ci.yml` luôn luôn, `labels.yml` khi `ops/labels.json` đổi, `sync-workflows.yml` khi `ops/workflows/**` đổi.
+
+Danh sách đó **không** được viết cứng trong bash: viết cứng nghĩa là thêm một workflow nghe `push` mà quên sửa bash thì không có gì báo, và đó đúng là cách KF-004 xảy ra lần đầu.

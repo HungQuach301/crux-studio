@@ -1,34 +1,49 @@
-# 🤖 Merge tự động (CHARTER 3.3, bất biến I2 và I4).
+# 🤖 Merge tự động (CHARTER 3.3, bất biến I2 và I4; quyết định D-C06).
 #
-# Agent KHÔNG BAO GIỜ merge. Agent chỉ gắn nhãn `automerge`. File này merge.
+# Agent KHÔNG BAO GIỜ merge. Agent chỉ gắn nhãn. File này merge.
 #
 # Kích hoạt bằng `workflow_run`, nên nó luôn chạy theo định nghĩa trên main:
 # nhánh PR không sửa được nó. Đó là toàn bộ lý do dùng workflow_run thay vì
-# pull_request.
+# pull_request. Từ D-C06 có thêm lịch mỗi giờ, vì hàng chờ 12 giờ của nhãn
+# `automerge-delayed` không tự tới hạn bằng một sự kiện nào cả.
+#
+# Ba cửa, quyết định ở `ops/invariants.merge-gate.ts`:
+#
+#   owner-merge        · máy không bao giờ merge
+#   automerge-delayed  · nhãn `automerge-delayed`, merge sau 12 giờ CI xanh,
+#                        trừ khi chủ dự án comment `dừng`
+#   open               · nhãn `automerge`, merge ngay
+#
+# CỬA được tính lại ở đây bằng `ops/invariants.protected-area.ts` BẢN TRÊN
+# MAIN, không lấy từ nhãn. Nhãn do `ci.yml` gắn, mà `ci.yml` chạy theo định
+# nghĩa trong nhánh PR — một PR sửa `ci.yml` sẽ không bị nhãn nào chặn. Đó
+# là rà soát Z8 trong `ops/known-failures.md`.
 name: automerge
 
 on:
   workflow_run:
     workflows: [ci]
     types: [completed]
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
   actions: write
 
-# KF-004 push: merge ở đây sinh sự kiện `push` vào main, mà `main-ci.yml` và
-# `labels.yml` đăng ký nghe. Cả hai được gọi TƯỜNG MINH ở bước cuối job, nên
-# chuỗi không đứt.
+# KF-004 push: merge ở đây sinh sự kiện `push` vào main, mà `main-ci.yml`,
+# `labels.yml` và `.github/workflows/sync-workflows.yml` đăng ký nghe. Cả ba
+# được gọi TƯỜNG MINH ở bước cuối job, theo danh sách mà
+# `ops/invariants.post-merge-dispatch.ts` trả về.
 #
-# Còn một workflow thứ ba nghe `push` vào main: `.github/workflows/sync-workflows.yml`
-# (do chủ dự án tạo, agent không sửa được). Nó cũng KHÔNG chạy sau một lần
-# automerge. Hiện điều đó vô hại vì nó chỉ quan tâm `ops/workflows/**`, mà
-# thư mục đó nằm trong vùng bảo vệ (I4) nên automerge không bao giờ merge PR
-# chạm tới nó — chỉ chủ dự án merge, và merge của người thì sinh sự kiện thật.
-#
-# Nghĩa là chỗ này an toàn NHỜ phạm vi vùng bảo vệ, không nhờ thiết kế của
-# automerge. Rút `ops/workflows/**` khỏi vùng bảo vệ sẽ làm nó đứt im lặng.
+# Trước D-C06, `ops/workflows/**` nằm trọn trong vùng `owner-merge`, nên
+# `sync-workflows` an toàn NHỜ phạm vi vùng bảo vệ chứ không nhờ thiết kế —
+# chỉ merge của NGƯỜI mới chạm được thư mục đó, và merge của người sinh sự
+# kiện thật. D-C06 chuyển thư mục đó sang `automerge-delayed`, tức là máy
+# merge được, tức là đường đó đã đứt. Vì vậy lời gọi `sync-workflows` bây
+# giờ là BẮT BUỘC, và có test riêng ở `ops/test/invariants-post-merge-dispatch.test.ts`.
 
 concurrency:
   group: automerge
@@ -38,86 +53,137 @@ jobs:
   merge:
     name: merge
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    # Chạy theo lịch và khi gọi tay thì không có `workflow_run` để xét. Chạy
+    # sau CI thì chỉ quan tâm lần CI của một pull request đã xong.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'pull_request'
     steps:
-      - name: Tìm PR của lần chạy CI này
-        id: pr
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Lập danh sách PR ứng viên
+        id: queue
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          NUM=$(gh api "repos/$REPO/commits/$SHA/pulls" \
-            -H "Accept: application/vnd.github+json" \
-            --jq '[.[] | select(.state=="open")][0].number // empty')
-          if [ -z "$NUM" ]; then
-            echo "Không có PR mở nào cho $SHA."
-            echo "number=" >> "$GITHUB_OUTPUT"
-          else
-            echo "number=$NUM" >> "$GITHUB_OUTPUT"
-          fi
+          # Mọi PR mở mang một trong hai nhãn tự merge. Lấy cả hàng đợi ở
+          # mọi lần chạy, kể cả lần chạy do CI của MỘT PR kích hoạt: một PR
+          # đang chờ 12 giờ không có sự kiện nào của riêng nó để tới hạn.
+          NUMS=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+            --jq '.[] | select(.labels | map(.name) | (index("automerge") != null or index("automerge-delayed") != null)) | .number' \
+            | tr '\n' ' ')
+          echo "Ứng viên: ${NUMS:-(không có)}"
+          echo "nums=$NUMS" >> "$GITHUB_OUTPUT"
 
-      - name: Merge khi thoả đủ bốn điều kiện
-        if: steps.pr.outputs.number != ''
+      - name: Xét từng PR rồi merge cái nào tới lượt
+        id: merge
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ steps.pr.outputs.number }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          OWNER: HungQuach301
+          NUMS: ${{ steps.queue.outputs.nums }}
         run: |
           set -euo pipefail
-          DATA=$(gh api "repos/$REPO/pulls/$PR")
-          DRAFT=$(echo "$DATA" | jq -r .draft)
-          HEAD=$(echo "$DATA"  | jq -r .head.sha)
-          LABELS=$(echo "$DATA" | jq -r '[.labels[].name] | join(",")')
+          WORK="$RUNNER_TEMP/automerge"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          MERGED=""
 
-          # 1 · CI xanh — đã được `if` của job bảo đảm.
-          # 2 · Có nhãn automerge.
-          # 3 · Không chạm vùng bảo vệ — CI gắn owner-merge cho những PR đó.
-          # 4 · Không ở trạng thái nháp.
-          echo "PR #$PR · draft=$DRAFT · nhãn=$LABELS"
-
-          case ",$LABELS," in *",automerge,"*) ;; *) echo "Không có nhãn automerge. Dừng."; exit 0;; esac
-          case ",$LABELS," in *",owner-merge,"*) echo "PR chạm vùng bảo vệ — chỉ chủ dự án merge (I4). Dừng."; exit 0;; esac
-          [ "$DRAFT" = "true" ] && { echo "PR còn nháp. Dừng."; exit 0; }
-
-          # CI đã xanh trên SHA nào thì merge đúng SHA đó. Nếu nhánh đã có
-          # commit mới sau lần CI đó, merge bây giờ là merge một thứ chưa được kiểm.
-          if [ "$HEAD" != "$SHA" ]; then
-            echo "Nhánh đã đổi sau lần CI ($HEAD ≠ $SHA). Chờ lần CI kế tiếp."
+          if [ -z "${NUMS// /}" ]; then
+            echo "Không có PR nào mang nhãn tự merge. Kết thúc."
+            echo "merged=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          gh api -X PUT "repos/$REPO/pulls/$PR/merge" \
-            -f merge_method=squash \
-            -f sha="$SHA"
-          echo "merged=1" >> "$GITHUB_ENV"
+          for NUM in $NUMS; do
+            echo "──────────── PR #$NUM"
+
+            # GitHub tính `mergeable` bất đồng bộ và trả `null` khi chưa xong.
+            # Hỏi lại vài lần; `null` KHÔNG BAO GIỜ được coi là merge được (KF-002).
+            DATA=""
+            for TRY in 1 2 3; do
+              DATA=$(gh api "repos/$REPO/pulls/$NUM")
+              [ "$(echo "$DATA" | jq -r '.mergeable // "null"')" != "null" ] && break
+              echo "  mergeable chưa tính xong (lần $TRY), chờ 5 giây."
+              sleep 5
+            done
+
+            HEAD=$(echo "$DATA" | jq -r .head.sha)
+
+            # Cửa: tính lại từ đường dẫn, bằng bản trên main. Không tin nhãn.
+            PR_DIR="$WORK/$NUM"
+            mkdir -p "$PR_DIR/head"
+            git fetch --no-tags --quiet origin main "+refs/pull/$NUM/head:refs/remotes/pr/$NUM"
+            BASE=$(git merge-base origin/main "refs/remotes/pr/$NUM")
+            git diff --name-only "$BASE" "refs/remotes/pr/$NUM" > "$PR_DIR/changed.txt"
+            git archive "refs/remotes/pr/$NUM" | tar -x -C "$PR_DIR/head"
+            git show "$BASE:CHARTER.md" > "$PR_DIR/base-CHARTER.md" 2>/dev/null || true
+            AREA=$(node ops/invariants.protected-area.ts \
+              --changed "$PR_DIR/changed.txt" \
+              --head "$PR_DIR/head" \
+              --base-charter "$PR_DIR/base-CHARTER.md")
+            GATE=$(echo "$AREA" | jq -r .gate)
+            echo "  cửa=$GATE · $(echo "$AREA" | jq -r '[.owner[], .delayed[]] | join(" · ") | if . == "" then "không chạm vùng bảo vệ" else . end')"
+
+            jq -n \
+              --arg gate "$GATE" \
+              --arg head "$HEAD" \
+              --arg owner "$OWNER" \
+              --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --argjson pr "$DATA" \
+              --argjson ci "$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$HEAD&status=completed&per_page=1" --jq '.workflow_runs[0] // {}')" \
+              --argjson comments "$(gh pr view "$NUM" --repo "$REPO" --json comments --jq '[.comments[] | {author: .author.login, body: .body, createdAt: .createdAt}]')" \
+              '{gate: $gate, labels: [$pr.labels[].name], draft: $pr.draft, mergeable: $pr.mergeable,
+                mergeableState: $pr.mergeable_state, headSha: $head, ciSha: ($ci.head_sha // null),
+                ciConclusion: ($ci.conclusion // null), ciCompletedAt: ($ci.updated_at // null),
+                comments: $comments, owner: $owner, now: $now, delayHours: 12}' > "$PR_DIR/state.json"
+
+            DECISION=$(node ops/invariants.merge-gate.ts "$PR_DIR/state.json")
+            OUTCOME=$(echo "$DECISION" | jq -r .outcome)
+            # Cấm im lặng (rà soát Z2): mọi PR đều in ra kết luận của nó,
+            # kể cả kết luận "không làm gì".
+            echo "  $OUTCOME — $(echo "$DECISION" | jq -r .reason)"
+            [ "$OUTCOME" != "merge" ] && continue
+
+            gh api -X PUT "repos/$REPO/pulls/$NUM/merge" \
+              -f merge_method=squash \
+              -f sha="$HEAD"
+            echo "  đã merge #$NUM"
+            MERGED="$MERGED $NUM"
+          done
+
+          echo "merged=${MERGED# }" >> "$GITHUB_OUTPUT"
 
       - name: Gọi tay các workflow lẽ ra chạy theo sự kiện push
-        if: env.merged == '1'
+        if: steps.merge.outputs.merged != ''
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ steps.pr.outputs.number }}
+          MERGED: ${{ steps.merge.outputs.merged }}
         # Merge bằng GITHUB_TOKEN KHÔNG tự kích hoạt workflow khác (giả định
-        # G2, và cùng cơ chế với KF-004). Mọi workflow đăng ký `on: push` vào
-        # main vì thế phải được gọi TƯỜNG MINH ở đây — thiếu một cái là nó im
-        # lặng không chạy, và không có gì đỏ để báo.
+        # G2, cùng cơ chế với KF-004). Danh sách phải gọi do
+        # `ops/invariants.post-merge-dispatch.ts` quyết định — KHÔNG viết
+        # cứng ở đây. Viết cứng nghĩa là thêm một workflow nghe `push` mà
+        # quên sửa bash thì không có gì báo, và đó đúng là cách KF-004 xảy ra.
         run: |
           set -euo pipefail
+          WORK="$RUNNER_TEMP/automerge"
+          ALL="$WORK/merged-files.txt"
+          : > "$ALL"
+          for NUM in $MERGED; do
+            cat "$WORK/$NUM/changed.txt" >> "$ALL"
+          done
 
-          # main-ci: luôn gọi. main vừa đổi thì phải kiểm lại main.
-          gh workflow run main-ci.yml --repo "$REPO" --ref main
-          echo "đã gọi main-ci"
-
-          # labels: chỉ gọi khi PR vừa merge có đụng nguồn sự thật của nhãn.
-          # Không gọi vô điều kiện, để một lần merge không đẻ ra một lần chạy
-          # thừa mỗi lần.
-          CHANGED=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
-          if echo "$CHANGED" | grep -qx 'ops/labels.json'; then
-            gh workflow run labels.yml --repo "$REPO" --ref main
-            echo "đã gọi labels (ops/labels.json có đổi)"
-          else
-            echo "ops/labels.json không đổi, không cần gọi labels"
-          fi
+          while IFS=$'\t' read -r WF WHY; do
+            [ -z "$WF" ] && continue
+            echo "gọi $WF — $WHY"
+            gh workflow run "$WF" --repo "$REPO" --ref main
+          done < <(node ops/invariants.post-merge-dispatch.ts "$ALL")

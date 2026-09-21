@@ -4,37 +4,42 @@
     {
       "name": "decision",
       "color": "5319E7",
-      "description": "Hộp quyết định. Issue 🤖 [QĐ]. Luôn đi kèm reversible hoặc irreversible."
+      "description": "Hộp quyết định 🤖 [QĐ]. Đi kèm reversible hoặc irreversible. Một dòng tóm tắt trong bản tin."
     },
     {
       "name": "reversible",
       "color": "B4A7F5",
-      "description": "Agent làm theo khuyến nghị NGAY và ghi lại. Chủ dự án phủ quyết thì agent hoàn tác."
+      "description": "Agent làm ngay theo khuyến nghị. Phủ quyết trong 24 giờ: comment 'hoàn tác #N' ở bản tin."
     },
     {
       "name": "irreversible",
       "color": "B60205",
-      "description": "Agent CHỜ trả lời. Chỉ nhánh việc liên quan chờ; các làn khác vẫn chạy."
+      "description": "Agent chờ trả lời. Bảy nhóm ở CHARTER 2.3. Trả lời ở bản tin, dạng '#19 A, #14 B'."
     },
     {
       "name": "digest",
       "color": "0E8A16",
-      "description": "Bản tin ngày. Dòng đầu luôn là 'Cần anh quyết: N việc'."
+      "description": "Bản tin sáng — hộp quyết định duy nhất. Mọi việc cần chủ dự án đều nằm ở đây."
     },
     {
       "name": "alert",
       "color": "D93F0B",
-      "description": "Cảnh báo của người canh hoặc của main-ci. Đẩy thông báo về điện thoại qua notify.yml."
+      "description": "Cảnh báo khẩn, bốn loại (CHARTER 2.4). Thứ duy nhất ngoài bản tin được @nhắc."
     },
     {
       "name": "automerge",
       "color": "0052CC",
-      "description": "PR không chạm vùng bảo vệ. automerge.yml merge khi CI xanh và PR không còn nháp."
+      "description": "PR không chạm vùng bảo vệ. automerge.yml merge ngay khi CI xanh và PR không còn nháp."
     },
     {
       "name": "owner-merge",
       "color": "B60205",
-      "description": "PR chạm vùng bảo vệ (I4). CI tự gắn. automerge.yml bỏ qua; chỉ chủ dự án merge."
+      "description": "PR chạm vùng chỉ chủ dự án merge (I4, thu hẹp theo D-C06). Ba nhóm ở CHARTER mục 3."
+    },
+    {
+      "name": "automerge-delayed",
+      "color": "1D76DB",
+      "description": "Vùng bảo vệ mức 2 (D-C06). Tự merge sau 12 giờ CI xanh, trừ khi chủ dự án nói 'dừng'."
     },
     {
       "name": "fix",

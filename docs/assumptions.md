@@ -65,12 +65,13 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 
 ## G2 · `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci`
 
-- **Nội dung:** một workflow dùng `GITHUB_TOKEN` gọi được API merge, và merge đó **không** tự kích hoạt workflow khác — nên phải gọi `main-ci` tường minh bằng `workflow_dispatch`.
+- **Nội dung:** một workflow dùng `GITHUB_TOKEN` gọi được API merge, và merge đó **không** tự kích hoạt workflow khác — nên **mọi** workflow nghe `push` vào `main` phải được gọi tường minh bằng `workflow_dispatch`: `main-ci`, `labels`, và từ `D-C06` cả `sync-workflows`.
 - **Nguồn:** tài liệu GitHub Actions về `GITHUB_TOKEN` và về việc sự kiện do nó tạo ra không kích hoạt workflow mới.
 - **Độ tin cậy:** `tài liệu nói vậy`
-- **Phần phụ thuộc:** `ops/workflows/automerge.yml` · `ops/workflows/main-ci.yml`
+- **Phần phụ thuộc:** `ops/workflows/automerge.yml` · `ops/workflows/main-ci.yml` · `ops/invariants.post-merge-dispatch.ts`
 - **Cách kiểm:** DoD Đợt 0 đòi `automerge` merge **thật** một PR low-risk mà không cần người. Đó là bài kiểm, và nó là chạy thật chứ không phải đọc tài liệu.
-- **Dự phòng — đã viết sẵn:** `main-ci.yml` chạy thêm **theo lịch mỗi giờ** (`cron: '17 * * * *'`). Nếu lời gọi tường minh không chạy được, `main` vẫn được kiểm trong vòng một giờ. Không cần sửa gì khi phát hiện sai.
+- **Dự phòng — đã viết sẵn cho `main-ci`:** `main-ci.yml` chạy thêm **theo lịch mỗi giờ** (`cron: '17 * * * *'`). Nếu lời gọi tường minh không chạy được, `main` vẫn được kiểm trong vòng một giờ. Không cần sửa gì khi phát hiện sai.
+- **Dự phòng cho `sync-workflows` — CHƯA có.** `D-C06` đưa `ops/workflows/**` vào diện máy tự merge được, nên nếu lời gọi tường minh hỏng thì workflow mới nằm trong `main` mà `.github/workflows/` vẫn giữ bản cũ — và **mọi thứ vẫn xanh** (rà soát **Z3** trong `ops/known-failures.md`). Dự phòng đúng cho chỗ này là phép so nội dung `ops/workflows/*` với `.github/workflows/*` trong `main-ci`, thuộc mục `P-014`, **chưa xây**. Tới khi nó xong, đây là chỗ hở lớn nhất mà `D-C06` tạo ra.
 - **Trạng thái:** đang dựa vào, có dự phòng. Chuyển sang `đã kiểm` khi PR low-risk đầu tiên được automerge.
 
 ## G3 · Trần số lần chạy routine mỗi ngày
