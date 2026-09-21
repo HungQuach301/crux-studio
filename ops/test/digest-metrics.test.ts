@@ -72,6 +72,29 @@ test('mergedByLane: PR merged trước mốc 24 giờ bị loại, PR chưa merg
   assert.deepEqual(groups, [{ lane: 'visual', prs: [{ number: 3, title: 'PR 3', headRefName: 'claude/visual/V-003' }] }]);
 });
 
+test('mergedByLane: so bằng mốc thời gian, không so chuỗi — `gh` trả mức giây, `since` có mili giây', () => {
+  // `since` thật LUÔN có mili giây (`new Date(...).toISOString()`), còn `gh`
+  // trả `mergedAt` ở mức giây. So chuỗi thì `'Z' > '.'`, nên
+  // `'…T18:00:00Z' > '…T18:00:00.293Z'` — một PR merged 293ms TRƯỚC mốc cắt
+  // bị tính nhầm là trong 24 giờ. Ca này phải đỏ nếu ai đó đổi lại thành so chuỗi.
+  const sinceWithMs = '2026-09-20T18:00:00.293Z';
+  assert.ok('2026-09-20T18:00:00Z' > sinceWithMs, 'tiền đề của bài kiểm: so chuỗi cho kết quả ngược');
+
+  assert.deepEqual(mergedByLane([pr(1, 'claude/visual/V-001', { mergedAt: '2026-09-20T18:00:00Z' })], sinceWithMs), []);
+  assert.equal(
+    mergedByLane([pr(2, 'claude/visual/V-001', { mergedAt: '2026-09-20T18:00:01Z' })], sinceWithMs).length,
+    1,
+  );
+});
+
+test('mergedByLane: `mergedAt` không đọc được thì GIỮ, không lặng lẽ coi là ngoài 24 giờ', () => {
+  const groups = mergedByLane([pr(3, 'claude/visual/V-001', { mergedAt: 'hôm qua' })], SINCE);
+  assert.deepEqual(
+    groups.map((g) => [g.lane, g.prs.map((p) => p.number)]),
+    [['visual', [3]]],
+  );
+});
+
 test('ÂM — mergedByLane: nhánh không suy được làn ra nhóm riêng, KHÔNG biến mất', () => {
   // Ca thật: nền tảng gán nhánh `claude/<tên-ngẫu-nhiên>` cho một số lượt
   // routine (PR #62, #66). Bỏ chúng đi thì bảng "PR merged 24 giờ" thiếu
@@ -258,9 +281,11 @@ test('collectMetrics: đọc backlog và log thật, cộng tiền theo bất bi
   try {
     mkdirSync(join(root, 'ops', 'lanes', 'audio'), { recursive: true });
     mkdirSync(join(root, 'ops', 'lanes', 'verify'), { recursive: true });
+    mkdirSync(join(root, 'ops', 'lanes', 'topic'), { recursive: true });
     mkdirSync(join(root, 'ops', 'logs', 'platform'), { recursive: true });
     writeFileSync(join(root, 'ops', 'lanes', 'audio', 'backlog.md'), '### AU-001 · Giọng đọc\n- status: parked\n');
-    writeFileSync(join(root, 'ops', 'lanes', 'verify', 'backlog.md'), '### VF-G1 · Projects\n- status: ready\n');
+    writeFileSync(join(root, 'ops', 'lanes', 'verify', 'backlog.md'), '### VF-G7 · Điều khoản\n- status: parked\n');
+    writeFileSync(join(root, 'ops', 'lanes', 'topic', 'backlog.md'), '### T-001 · Bản đồ đề tài\n- status: parked\n');
 
     // Một dòng trong 24 giờ, một dòng cũ hơn, và một dòng `rollup` trùng
     // tiền với dòng stage — `sumCostUsd` phải bỏ dòng rollup, nếu không
@@ -286,7 +311,13 @@ test('collectMetrics: đọc backlog và log thật, cộng tiền theo bất bi
     );
 
     assert.equal(metrics.since, SINCE);
-    assert.deepEqual(metrics.parked, [{ lane: 'audio', id: 'AU-001', title: 'Giọng đọc' }]);
+    // Thứ tự mục `parked` theo `LANES` (topic → audio → verify), KHÔNG theo
+    // thứ tự `readdirSync` trả về — bản tin đọc mỗi sáng thì thứ tự phải ổn định.
+    assert.deepEqual(metrics.parked, [
+      { lane: 'topic', id: 'T-001', title: 'Bản đồ đề tài' },
+      { lane: 'audio', id: 'AU-001', title: 'Giọng đọc' },
+      { lane: 'verify', id: 'VF-G7', title: 'Điều khoản' },
+    ]);
     assert.deepEqual(
       metrics.merged.map((g) => [g.lane, g.prs.map((p) => p.number)]),
       [['platform', [1]]],

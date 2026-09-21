@@ -108,9 +108,19 @@ export interface MergedGroup {
  * mất mốc. Nhóm rỗng bị bỏ, nhóm `không suy được làn` thì không.
  */
 export function mergedByLane(prs: readonly GhPr[], since: string): MergedGroup[] {
+  const sinceMs = Date.parse(since);
   const buckets = new Map<string, MergedGroup['prs']>();
   for (const pr of prs) {
-    if (typeof pr.mergedAt !== 'string' || pr.mergedAt < since) continue;
+    if (typeof pr.mergedAt !== 'string') continue;
+    // So bằng **mốc thời gian**, không so chuỗi: `gh` trả `mergedAt` ở mức
+    // giây (`…T15:44:08Z`) còn `since` có mili giây (`…T15:44:08.293Z`), và
+    // so chuỗi thì `'Z' > '.'` — một PR merged trong cùng giây với mốc cắt
+    // bị tính nhầm là trong 24 giờ.
+    const mergedMs = Date.parse(pr.mergedAt);
+    // `mergedAt` không đọc được là dữ liệu hỏng, không phải "ngoài 24 giờ".
+    // Giữ lại để nó hiện ra trên bản tin thay vì biến mất — cùng hướng thận
+    // trọng với ba chỗ ở đầu file.
+    if (Number.isFinite(mergedMs) && mergedMs < sinceMs) continue;
     const lane = laneFromBranch(pr.headRefName) ?? UNKNOWN_LANE;
     const bucket = buckets.get(lane) ?? [];
     bucket.push({ number: pr.number, title: pr.title, headRefName: pr.headRefName });
@@ -312,7 +322,20 @@ export function collectMetrics(root: string, snapshot: GithubSnapshot, now: Date
 
   const lanesDir = join(root, 'ops', 'lanes');
   const parked: ParkedItem[] = [];
-  for (const lane of readdirSync(lanesDir)) {
+  // Cùng lý do với `mergedByLane`: bản tin đọc mỗi sáng, nên thứ tự đổi
+  // theo dữ liệu là thứ làm người đọc mất mốc. `readdirSync` KHÔNG bảo đảm
+  // thứ tự, nên xếp theo `LANES`; thư mục lạ (không phải tên làn) vẫn được
+  // giữ, xếp cuối theo bảng chữ cái — bỏ nó đi là bỏ im lặng.
+  const known = LANES as readonly string[];
+  const laneDirs = readdirSync(lanesDir).sort((a, b) => {
+    const ia = known.indexOf(a);
+    const ib = known.indexOf(b);
+    if (ia === -1 && ib === -1) return a < b ? -1 : a > b ? 1 : 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  for (const lane of laneDirs) {
     const path = join(lanesDir, lane, 'backlog.md');
     if (!existsSync(path)) continue;
     parked.push(...parkedItems(lane, readFileSync(path, 'utf8')));
