@@ -274,15 +274,15 @@ Nguyên nhân: sự kiện `pull_request` chụp `github.event.pull_request.labe
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: bất biến I2; `ci` run #1 và #2 của PR #7
 - tiêu chí xong:
-  - `ci.yml` thêm `labeled` và `unlabeled` vào `on.pull_request.types`, cạnh bộ mặc định `opened, synchronize, reopened`. Gắn hay gỡ nhãn `fix` đều chạy lại CI.
-  - Job `fix-has-test` **tự đọc nhãn hiện tại qua API** thay vì tin vào ảnh chụp trong `github.event` — ảnh chụp luôn có thể cũ, kể cả sau khi thêm `labeled`.
-  - Bước kiểm **không bao giờ `skipped` một cách im lặng**: PR không có nhãn `fix` thì in rõ "không có nhãn fix, bỏ qua" và kết thúc `success`; có nhãn thì phải chạy và phải kết luận.
-  - `automerge.yml` **từ chối merge** PR mang nhãn `fix` khi job `fix-has-test` chưa xanh **trên đúng commit sắp merge**. Không đủ nếu chỉ kiểm "CI xanh" ở mức run — một run cũ từ trước lúc gắn nhãn vẫn xanh.
-  - **Test âm bắt buộc:** một PR có nhãn `fix` mà diff không chạm file test nào thì `fix-has-test` phải **đỏ**, và `automerge` phải từ chối. Test dương: cùng PR đó thêm một file test thì cả hai qua.
-  - Thêm một dòng vào `ops/known-failures.md` khi mục này xong, vì đây là lỗi "CI xanh sai" — loại tệ nhất.
+  - ✅ `ci.yml` thêm `labeled` và `unlabeled` vào `on.pull_request.types`, cạnh bộ mặc định `opened, synchronize, reopened`. Gắn hay gỡ nhãn `fix` đều chạy lại CI.
+  - ✅ Job `fix-has-test` **tự đọc nhãn hiện tại qua API** thay vì tin vào ảnh chụp trong `github.event` — ảnh chụp luôn có thể cũ, kể cả sau khi thêm `labeled`.
+  - ✅ Bước kiểm **không bao giờ `skipped` một cách im lặng**: PR không có nhãn `fix` thì in rõ "không có nhãn fix, bỏ qua" và kết thúc `success`; có nhãn thì phải chạy và phải kết luận. Bước không còn `if:` cấp step — luôn chạy.
+  - ✅ `automerge.yml` **từ chối merge** PR mang nhãn `fix` khi job `fix-has-test` chưa xanh **trên đúng commit sắp merge**. Không đủ nếu chỉ kiểm "CI xanh" ở mức run: `ops/invariants.merge-gate.ts` nay đọc riêng `fixHasTestConclusion` (kết luận của check run `fix-has-test` trên `headSha`, `automerge.yml` truyền vào), không tin `ciConclusion` tổng — một run cũ từ trước lúc gắn nhãn, hoặc job `skipped`, không còn qua được.
+  - ✅ **Test âm bắt buộc, ở tầng quyết định (`ops/invariants.merge-gate.ts`):** nhãn `fix` + `fixHasTestConclusion` khác `success` (`skipped`, `failure`, hoặc `null` — không tìm thấy check run) → `outcome: 'skip'`. Test dương: `fixHasTestConclusion: 'success'` → `merge` bình thường; PR không mang nhãn `fix` thì trường này không cản gì kể cả `null`. Phần bash quyết định "diff có chạm file test hay không" giữ nguyên logic đã có từ trước (không đổi), chỉ đổi chỗ nó luôn chạy thay vì có thể bị `if:` bỏ qua — kiểm bằng `bash -n` (`pnpm lint:workflows`), chưa có hạ tầng chạy thật bash trong YAML như test của `.ts`; ca chạy thật đầu tiên là PR `fix` kế tiếp sau khi mục này merge.
+  - ✅ Thêm một dòng vào `ops/known-failures.md` (KF-008) khi mục này xong, vì đây là lỗi "CI xanh sai" — loại tệ nhất.
 
 ### P-010 · Sau mỗi merge chạm `ops/workflows/`, tự chạy thử workflow vừa đổi — **ưu tiên cao**
 KF-003 đã ghi: workflow chạy trên một PR là bản trong `.github/workflows/` của **nhánh PR**, mà nhánh PR thừa hưởng bản đó từ `main`. Agent không ghi được `.github/`, nên bản mới **không bao giờ** được chạy trước khi merge. `pnpm lint:workflows` chỉ bắt được cú pháp, không bắt được quyền thiếu, secret thiếu, hay một lệnh `gh` gọi sai.
