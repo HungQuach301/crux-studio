@@ -76,7 +76,7 @@ tức bài kiểm chạy được, chỉ là nó đã bỏ qua một cách lặn
 
 - deps: `I-003`
 - risk: low
-- status: ready
+- status: review
 - nguồn: phụ lục P3 bước 4; CLAUDE.md mục 7 ("kiểm bằng chạy thật"); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - Không có ref `origin/claude/*` nào thì bài kiểm ra nhánh **`broken`** (`⚠ … KHÔNG CHẠY ĐƯỢC`,
