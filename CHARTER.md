@@ -607,10 +607,43 @@ Tạo bản tin ngày cho Crux Studio. Không sửa code, không mở PR.
 3. Đóng bản tin của ngày hôm trước.
 ```
 
-### P3 · `crux-integrator` — chạy hằng ngày lúc 02:00 (model: Opus)
+### P3 · `crux-integrator` — chạy **mỗi giờ** (đổi từ hằng ngày, mục `P-016`; model: Opus)
+
+> **Cần chủ dự án làm một việc:** đổi lịch của routine `crux-integrator` từ hằng ngày sang preset **hourly** ở
+> `claude.ai/code/routines`. Agent không tự đổi được lịch của một routine đã tạo — chỉ đổi được nội dung prompt ở đây.
+> Tới khi đổi, bước 0 dưới đây vẫn chỉ chạy mỗi ngày một lần, đúng nhịp cũ.
+>
+> Đổi nhịp làm số lần chạy của routine này tăng từ 1 lên khoảng 24 mỗi ngày — chạm giả định **G3** ("trần số lần chạy
+> routine mỗi ngày đủ cho worker theo Phụ lục P1, cộng 2 routine"), đang `chưa biết`. Các bước 1–5 (nặng: `pnpm check`,
+> `pnpm replay`, ghi `ops/metrics.md`) giữ nguyên nhịp một-lần-một-ngày để không nhân chi phí đó lên 24 lần; chỉ bước 0
+> (rẻ: liệt kê PR, gộp, `pnpm check` CHỈ khi có gộp thật) chạy mỗi giờ.
 
 ```
 Làn integration của Crux Studio.
+
+0. Giải xung đột merge cho hàng đợi (mỗi lần chạy — mục P-016; CHARTER mục 7):
+   a. Liệt kê mọi PR đang mở có `mergeable_state` là xung đột, xếp theo số giờ đã xung đột giảm dần (PR kẹt lâu nhất
+      trước).
+   b. Với mỗi PR đó, theo đúng thứ tự trên: checkout nhánh, `git fetch origin main`, rồi chạy
+      `node ops/scripts/integrator-resolve.ts origin/main` — KHÔNG tự đối chiếu/giải bằng lời, tool này đã đối chiếu
+      bằng số (đếm dòng xoá ở mỗi bên so với tổ tiên chung) và tự huỷ merge nếu không đủ điều kiện.
+      - `outcome: "clean"` hoặc `"resolved"`: tool đã tạo commit merge. Chạy `pnpm check` VÀ `pnpm replay`. Xanh thì
+        `git push`. Đỏ thì `git reset --hard` về commit trước khi gộp (không push — đỏ sau khi gộp là tín hiệu thật,
+        không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do.
+      - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
+        `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt** và tên file gây
+        vướng (có sẵn trong `reason` của kết quả).
+      - `outcome: "aborted-error"`: lỗi ngoài dự tính (cây bẩn, v.v.). Đưa vào ghi chú, không thử lại trong cùng lần
+        chạy.
+   c. Không đụng PR có nhãn `owner-merge` **trừ** bước gộp `main` ở trên — gộp không đổi ý nghĩa PR, chỉ giữ cho nó
+      merge được. Integrator không bao giờ tự merge PR nào, kể cả PR `automerge` (bất biến I4).
+   d. Ghi một dòng vào `ops/logs/platform.jsonl` (bất biến I8): số PR đã giải, số PR bỏ lại kèm giờ kẹt của từng PR,
+      trong trường `note`. Đây là nguồn cho `ops/metrics.md` (mục P-005, chưa xây) và cho bản tin ngày liệt kê PR xung
+      đột (mục P-007, chưa xây) — tới khi hai mục đó xong, dòng log này là nơi duy nhất giữ số giờ kẹt.
+
+Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
+mỗi ngày, như trước khi đổi nhịp):
+
 1. Chạy `pnpm check` và tập vàng replay trên main. Nếu đỏ: tìm commit gây đỏ trong các merge 24 giờ qua, mở PR revert
    (nhãn automerge, nhánh claude/integration/revert-<sha>), ghi vào ops/known-failures.md, và thêm một mục fix vào
    backlog của làn gây lỗi.
