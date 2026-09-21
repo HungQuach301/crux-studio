@@ -54,6 +54,23 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
 ### I-004 · Tạo lại lockfile khi xung đột
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER mục 7 (file nóng được phân vùng)
 - tiêu chí xong: lockfile do làn này tạo lại, không phải do làn gây xung đột tự sửa.
+  - ✅ Cơ chế là tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-lockfile.ts`, gọi từ
+    `integrator-resolve.ts` — tức là từ bước 0 của routine integrator VÀ từ đầu mỗi lượt worker (phụ lục P1).
+    Làn gây xung đột không phải chạm vào lockfile, và cũng không được: nó là file dẫn xuất.
+  - ✅ Lockfile **tách khỏi** luật "thuần cộng thêm" của `P-016`. Xung đột lockfile thật gần như luôn có sửa
+    dòng ở cả hai bên, nên luật cũ luôn trả `aborted-ineligible`; union thì merge được mà vẫn hỏng (nhóm lỗi
+    Z — KF-005 đã ghi). Tạo lại từ manifest của cây vừa gộp là cách duy nhất không cần người.
+  - ✅ **Không trôi phiên bản:** bản mồi lấy từ `MERGE_HEAD` (thân chung, thực tế là `origin/main`) rồi mới
+    gọi `pnpm install --lockfile-only`, nên mọi phép phân giải còn thoả manifest được giữ nguyên.
+  - ✅ **Kiểm lại bằng đúng cổng CI dùng:** `pnpm install --frozen-lockfile` chạy ngay sau khi sinh; đỏ thì
+    `git merge --abort`, không push. Đã kiểm bằng đột biến rằng cổng này đỏ thật khi lockfile lệch manifest.
+  - ✅ **Hai chỗ dừng lại thay vì đoán,** cả hai có test âm: manifest (`package.json`, `pnpm-workspace.yaml`)
+    xung đột cùng lúc → `aborted-ineligible` (sinh lockfile từ JSON đã bị union làm hỏng là đóng băng cái
+    hỏng vào một file không ai đọc bằng mắt); lockfile bị xoá ở một bên → `aborted-ineligible`.
+  - ✅ `.gitattributes` ghi rõ vì sao union **không** áp cho lockfile; KF-005 ghi cùng lý do.
+  - ✅ 10 test trong `ops/test/integrator-lockfile.test.ts`: git thật, workspace pnpm thật, `pnpm` thật, và
+    fixture không gọi mạng (mọi phụ thuộc là `workspace:*`). Kiểm bằng đột biến: gỡ đường lockfile ra thì
+    4 test đỏ.
