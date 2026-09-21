@@ -13,6 +13,7 @@
     "lint:deps": "node ops/scripts/lint-deps.ts",
     "lint:workflows": "node ops/scripts/check-workflows.ts",
     "assumptions": "node ops/scripts/check-assumptions.ts",
+    "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",

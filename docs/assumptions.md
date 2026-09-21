@@ -13,6 +13,16 @@ Charter được viết dựa trên hiểu biết về Claude, GitHub và YouTub
 
 Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ này **mỗi thứ Hai** (phụ lục P3). Lý do: nhiều tính năng đang ở giai đoạn research preview và có thể đổi bất cứ lúc nào (rủi ro B6).
 
+**Một lệnh duy nhất cho việc đó** (mục `I-003`):
+
+```bash
+pnpm recheck:assumptions
+```
+
+Lệnh này chạy lại **bài kiểm** của những giả định tự khai `**Kiểm tự động:**` ở mục của mình, và in ra hai loại kết luận: `khớp` (quan sát đúng như sổ ghi) và `sai` (quan sát ngược với sổ). Với mỗi giả định `sai` nó **in sẵn thân issue `🤖 [QĐ]` kèm danh sách phần bị ảnh hưởng**, lấy nguyên từ cột *Phần phụ thuộc* của chính giả định đó. Bài kiểm chạy được nhưng không có gì để quan sát thì mang dấu riêng `◦ chưa quan sát được`, không phải `✓` — hai thứ đó in giống nhau thì một bài kiểm không bao giờ chạy trông y hệt một bài kiểm luôn xanh. Giả định nào không tự kiểm được thì được liệt kê thành "cần người", không im lặng bỏ qua.
+
+Đừng nhầm với `pnpm assumptions`: lệnh kia kiểm **truy vết** (sổ có đủ mục không, file liệt kê có nhắc mã không) và chạy trong `pnpm check` ở mọi PR. Lệnh này kiểm **nội dung** — điều sổ đang khẳng định về nền tảng còn đúng không — nên nó **không** nằm trong `pnpm check`: một giả định hoá ra sai không được phép chặn mọi làn (CHARTER mục 4).
+
 ## Thang độ tin cậy
 
 | Độ tin cậy | Nghĩa |
@@ -195,9 +205,14 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 
   **Bằng chứng, 2026-09-20 (phiên cloud tương tác):** cả hai commit của Đợt 0 mang trailer `Claude-Session: https://claude.ai/code/session_…`, đọc được bằng `git log --format='%(trailers:key=Claude-Session,valueonly=true)'`. Commit `e01a667` do chủ dự án upload qua web thì **không** có trailer — nghĩa là trailer thật sự phân biệt được hai nguồn.
 
-  **Chưa kiểm:** commit do routine và do thread tạo. Đó mới là ngữ cảnh charter dựa vào.
-- **Phần phụ thuộc:** `ops/workflows/ci.yml` (job `trailer-warn`) · `CLAUDE.md` mục 6 · CHARTER 3.1
+  **Bằng chứng, 2026-09-21 (lần quan sát tự động đầu tiên):** `pnpm recheck:assumptions` quét các commit trên `origin/claude/*` chưa vào `main` và thấy **mọi commit của agent ở đó đều mang trailer**, trong đó có `b244b1e` do routine `crux-integrator` tạo. Đây là bằng chứng đầu tiên từ ngữ cảnh **routine**, chứ không phải phiên tương tác. Nhưng nó **chưa đóng được** phần chưa kiểm: bài kiểm không phân biệt được routine với thread, và các commit còn lại trong lần quét là của chính phiên đang viết mục này — bằng chứng tự dẫn chính mình. Cái bài kiểm thật sự bảo đảm là **hồi quy**: hôm nào trailer thôi được ghi thì nó đỏ ngay. Phần phân biệt routine/thread vẫn ở `VF-G14`.
+
+  **Một phát hiện đi kèm, và nó đổi cách đọc G14:** repo merge bằng **squash**, mà commit squash do GitHub tạo giữ lại `Co-Authored-By` nhưng **mất** `Claude-Session` — trailer bị đẩy vào giữa message ghép nên không còn nằm ở khối trailer cuối. Hệ quả: **trên `main` gần như không commit nào có trailer**, và điều đó không nói gì về G14. Muốn kiểm G14 thì phải đọc commit **trên nhánh PR**. Job `trailer-warn` đọc đúng khoảng `origin/<base>..HEAD` nên không dính lỗi này; bài kiểm tự động lần đầu viết ra thì có, và đã sửa.
+- **Phần phụ thuộc:** `ops/workflows/ci.yml` (job `trailer-warn`) · `CLAUDE.md` mục 6 · `ops/scripts/recheck-assumptions.ts` · CHARTER 3.1
 - **Cách kiểm phần còn lại:** đọc kết quả job `trailer-warn` trên các PR do routine mở, trong một tuần. Miễn phí, và tự động.
+- **Kiểm tự động:** `session-trailer-on-branch` — quét 14 ngày commit trên các nhánh `origin/claude/*` **chưa vào `main`**, và đòi mọi commit ở đó mang `Claude-Session`. Commit do **công cụ** tạo (merge commit của `integrator-resolve.ts`, message mặc định của `git merge`) được loại bằng một **danh sách trắng hẹp theo subject**, không phải bằng "commit nào thiếu `Co-Authored-By` thì là của công cụ" — luật sau fail-open đúng vào kịch bản phải bắt, vì hôm nền tảng tắt `attribution` thì cả hai trailer biến mất cùng lúc và mọi commit của agent bị xếp nhầm sang nhóm công cụ.
+
+  Hai giới hạn khai trước: (a) bài kiểm canh **hồi quy** "trailer còn được ghi không", nó **không** phân biệt được commit của routine với commit của thread — git không có trường nào cho việc đó, nên phần phân biệt ấy vẫn nằm ở `VF-G14`; (b) **trên `main` gần như không có trailer nào**, vì repo merge bằng squash và commit squash giữ `Co-Authored-By` nhưng mất `Claude-Session` — muốn kiểm G14 thì phải đọc commit trên nhánh PR, không đọc `main`.
 - **Dự phòng — đã viết sẵn:** dựa vào quy ước 🤖 và log làn. CI **chỉ cảnh báo**, cố ý không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì một luật cứng ở đó sẽ chặn toàn bộ công việc.
 - **Trạng thái:** giao làn `verify` mục `VF-G14` cho phần routine.
 
@@ -243,8 +258,9 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
   Kết luận: **git đọc `.gitattributes` của nhánh đích ở trạng thái TRƯỚC lần gộp.** Một luật merge do `main` mang tới **không tự áp cho chính lần gộp mang nó tới**. Hai lần thử của `P-015` đều đặt luật sẵn ở commit gốc, nên cả hai đều bỏ sót đúng điều kiện đã làm hỏng việc thật.
 
   **Chỗ vẫn chưa kiểm, và phải nói rõ:** bằng chứng trên **không** chứng minh được GitHub bỏ qua `.gitattributes` khi nó tự tính trạng thái `mergeable`. Trong tình huống của PR #11, git ở phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Câu hỏi "GitHub có dùng `.gitattributes` không" chỉ trả lời được bằng hai PR mà **cả hai đều đã mang sẵn** `.gitattributes` — chưa có cặp nào như thế. Giữ nó ở mục `VF-G17`.
-- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes`
+- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes` · `ops/scripts/recheck-assumptions.ts`
 - **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào `ops/logs/<lane>.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai.
+- **Kiểm tự động:** `union-merge-order` — dựng hai repo git thật trong thư mục tạm, khác nhau **đúng một điều kiện**: nhánh đã mang `.gitattributes` trước lần gộp hay chưa. Bài kiểm không đi tìm lại kết luận `sai` đã có, mà canh **hai điều kiện dự phòng đang đứng lên trên**: (1) luật do `main` mang tới vẫn KHÔNG áp cho chính lần gộp mang nó tới — nếu git đổi hành vi này thì G17 hết `sai`; (2) union VẪN cứu được lần gộp khi nhánh đã mang sẵn luật — nếu hỏng thì `.gitattributes` thành đồ trang trí và KF-005 phải viết lại. Phần *GitHub tự tính `mergeable`* thì **không** tự kiểm được ở đây: nó cần hai PR thật trên GitHub, vẫn nằm ở `VF-G17`.
 - **Dự phòng — đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được mọi lần gộp **sau khi** nhánh đã mang luật — không mất gì. Nhưng nó không còn được coi là cơ chế chính. Cơ chế chính chuyển sang mục `P-016`: routine integrator **tự gộp `main`** vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Việc giải xung đột trở thành việc của máy, không phải việc của người.
 - **Bài học chung, vượt ra ngoài mục này:** hai lần thử của `P-015` là chạy thật, và vẫn cho kết luận sai — vì cả hai đều dựng ở **trạng thái sau cùng**, không dựng ở trạng thái mà lỗi thật sẽ xảy ra. "Kiểm bằng chạy thật" (CHARTER 11.1 luật 3) chưa đủ. Bài thử phải tái hiện **đúng điều kiện đầu vào của lần chạy thật**, và điều kiện dễ bỏ sót nhất là *thứ tự thời gian*: ai có gì, vào lúc nào.
 - **Trạng thái:** `sai`, đã chuyển dự phòng ngay trong cùng PR ghi nhận nó (quyết định `reversible` theo CLAUDE.md mục 7). Phần còn mở giao làn `verify` mục `VF-G17`.
@@ -255,5 +271,6 @@ Routine `crux-integrator` chạy lại các kiểm tra tự động của sổ n
 
 1. Thêm một dòng vào **Bảng tổng** và một mục đầy đủ ở dưới, đủ bảy phần: nội dung, nguồn, độ tin cậy, phần phụ thuộc, cách kiểm, dự phòng, trạng thái.
 2. **Ghi mã giả định vào từng file liệt kê ở cột *Phần phụ thuộc***, dưới dạng comment hoặc một dòng trong tài liệu. `pnpm assumptions` kiểm việc này và đỏ nếu thiếu.
+2b. Nếu giả định **kiểm được bằng máy**, thêm một phần `**Kiểm tự động:** \`<mã bài kiểm>\`` và đăng ký bài kiểm cùng mã đó trong `ops/scripts/recheck-assumptions.ts`. Khai một mã không có bài kiểm thì `pnpm assumptions` đỏ — sổ và code không trôi khỏi nhau được. Không kiểm được bằng máy thì **không** thêm phần này: khi đó `pnpm recheck:assumptions` liệt kê mục đó vào nhóm "cần người", và đó là câu trả lời đúng, không phải một ô bỏ trống.
 3. Thêm một mục `VF-<mã>` vào `ops/lanes/verify/backlog.md`.
 4. Nếu giả định chưa có dự phòng viết sẵn thì **không được xây gì lên trên nó** (luật 2).
