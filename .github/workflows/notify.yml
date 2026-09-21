@@ -4,6 +4,14 @@
 # động bằng danh tính của chủ dự án, nên issue do agent mở sẽ KHÔNG báo về
 # máy chủ dự án. Workflow này chạy bằng github-actions[bot] — một danh tính
 # khác — nên @nhắc của nó mới đẩy được thông báo qua GitHub Mobile.
+#
+# ⚠️ PHẠM VI: workflow này CHỈ phủ issue do NGƯỜI hoặc AGENT mở. Nó KHÔNG
+# phủ issue do workflow khác mở, vì GitHub không kích hoạt workflow từ sự
+# kiện do GITHUB_TOKEN tạo ra (KF-004). `watchdog.yml` và `main-ci.yml` vì
+# thế tự đặt @nhắc ngay trong thân issue chúng mở, không nhờ file này.
+#
+# Đừng "sửa" bằng cách thêm gì đó ở đây — không có gì ở đây sửa được, vì
+# file này không bao giờ được gọi trong trường hợp đó.
 name: notify
 
 on:
