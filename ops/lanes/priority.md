@@ -26,8 +26,15 @@ Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt
 
 1. PR đang mở có CI đỏ, và chưa có worker nào đang xử lý (không có commit mới trong 2 giờ).
 2. PR đang mở có comment chưa xử lý, cùng điều kiện trên.
+3. PR mà lượt bước 0 gần nhất của phụ lục P3 trả `aborted-ineligible`, cùng điều kiện trên (mục `P-022`).
+   Integrator đã làm hết phần của nó và bị cấm giải tay (phụ lục P3 bước 0b); "cần người" phải có người
+   nhận, không rơi vào khoảng trống giữa integrator và worker. Worker nhận không cần cùng làn với PR — chỉ
+   cần đọc PR để biết nó định làm gì rồi giải xung đột bằng phán đoán, khác bước 0 mang tính cơ học.
 
-Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Lý do: một PR đỏ nằm đó chặn hàng đợi merge, và hàng đợi merge là tuần tự.
+Ba lý do trên xếp theo đúng thứ tự liệt kê khi nhiều PR cùng đủ điều kiện (CI đỏ thắng, vì đã có tiêu chí
+xong và nhãn `fix` gắn sẵn). `ops/scripts/pr-triage.ts` (hàm `pickPrToHandle`) là cơ chế quyết định, đừng
+tự suy bằng lời. Xử lý **đúng một** PR như vậy rồi kết thúc lần chạy. Lý do: một PR kẹt nằm đó chặn hàng
+đợi merge, và hàng đợi merge là tuần tự.
 
 ## Điều tiết
 
