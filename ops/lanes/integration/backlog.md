@@ -172,10 +172,19 @@ chéo làn rẻ hơn sáu PR.
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `topic/T-002` (PR `#38`), phát hiện 4
 - tiêu chí xong:
   - Quyết được một trong hai hướng, và ghi lý do: fixture **đọc** pack thật lúc dựng, hay fixture giữ
     bản sao nhưng có một kiểm so bản sao với `packs/channels/<slug>/channel.json`.
   - Kiểm đó nằm trong `pnpm check`, và đỏ thật khi cố tình làm lệch một trường.
   - Sáu fixture khớp pack thật, hoặc khai rõ trường nào cố ý khác và vì sao.
+- **Đã làm** (PR `#40`): chọn hướng **đọc pack thật**. `readInputFile` của kernel nạp channel pack và
+  genre pack từ `packs/` theo trường `channel`, và ném lỗi nếu file `--input` nhúng khoá `packs` hoặc
+  khai `genre`/`locale` lệch channel pack; sáu fixture bỏ khối `packs`. Lý do chọn hướng này: một nguồn
+  duy nhất thì không còn gì để lệch — kiểm so sánh chỉ báo *sau khi* đã lệch — và một pack đổi không
+  còn phải sửa sáu file thuộc sáu làn, nên không sinh xung đột chéo làn (cùng lý do với `P-015`).
+  Kiểm nằm trong `pnpm contracts` (`ops/scripts/check-fixtures.ts`), chín test trong đó bảy test âm;
+  làm lệch `locale` thành `en-GB` thì `pnpm contracts` đỏ đúng một dòng. Bản sao genre cũng đã lệch
+  thật — thiếu năm khoá `limits` — nên nó bị bỏ cùng bản sao channel. Hàng **Z16** vào
+  `ops/known-failures.md`.
