@@ -15,7 +15,7 @@
  * trên cùng nền trình duyệt. Việc chốt thư viện thuộc mục `A-001`.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -60,6 +60,16 @@ export interface RenderResult {
   captureMs: number;
   clipPath: string;
   clipBytes: number;
+  /**
+   * Độ sáng trung bình của clip (Y trung bình, thang 0–255).
+   *
+   * Đây là máy kiểm cho một lỗi nhóm Z đã xảy ra thật: cộng mẫu mờ chuyển
+   * động bằng alpha cố định 1/N làm ảnh TỐI ĐI thay vì mờ đi, mà clip vẫn
+   * dựng xong và mọi số đo vẫn ra bình thường. Mờ chuyển động là phép
+   * trung bình, nên nó gần như không được đổi độ sáng trung bình của cảnh;
+   * lệch nhiều so với cấu hình không mờ nghĩa là phép cộng mẫu sai.
+   */
+  meanLuma: number;
 }
 
 const CHROME_CANDIDATES = [
@@ -167,6 +177,19 @@ class Cdp {
   }
 
   close(): void { this.#ws.close(); }
+}
+
+/** Độ sáng trung bình của cả clip, đọc bằng `ffmpeg signalstats`. */
+export function measureMeanLuma(clipPath: string): number {
+  const r = spawnSync('ffmpeg', [
+    '-hide_banner', '-v', 'error', '-i', clipPath,
+    '-vf', 'signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-',
+    '-f', 'null', '-',
+  ], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  const values: number[] = [];
+  for (const m of (r.stdout ?? '').matchAll(/YAVG=([0-9.]+)/g)) values.push(Number(m[1]));
+  if (values.length === 0) return Number.NaN;
+  return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 async function httpJson<T>(url: string): Promise<T> {
@@ -332,6 +355,7 @@ export async function renderOne(cfg: RenderConfig, outDir: string): Promise<Rend
     await ffDone;
 
     const clipBytes = readFileSync(clipPath).byteLength;
+    const meanLuma = measureMeanLuma(clipPath);
     return {
       config: cfg,
       frames: cfg.frames,
@@ -343,6 +367,7 @@ export async function renderOne(cfg: RenderConfig, outDir: string): Promise<Rend
       captureMs: Number(captureNs) / 1e6,
       clipPath,
       clipBytes,
+      meanLuma,
     };
   } finally {
     cdp?.close();

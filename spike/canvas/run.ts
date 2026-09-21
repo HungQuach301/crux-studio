@@ -12,7 +12,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { renderOne, type RenderConfig, type RenderResult } from './render.ts';
+import { measureMeanLuma, renderOne, type RenderConfig, type RenderResult } from './render.ts';
 
 /** 3 phút nội dung, theo WP-003 mục 3b. */
 const DURATION_S = 180;
@@ -84,6 +84,20 @@ async function main(): Promise<void> {
       `chụp ${(r.captureMs / r.frames).toFixed(1)}) · đỉnh RSS ` +
       `${(r.peakRssBytes / 1048576).toFixed(0)} MB · clip ${(r.clipBytes / 1048576).toFixed(1)} MB`,
     );
+  }
+
+  // Bù `meanLuma` cho các dòng đo trước khi phép kiểm này tồn tại, miễn là
+  // clip còn đó — rẻ hơn hẳn dựng lại, và không đụng vào số đo thời gian.
+  let filled = 0;
+  for (const row of done) {
+    if (Number.isFinite(row.meanLuma)) continue;
+    if (!existsSync(row.clipPath)) continue;
+    row.meanLuma = measureMeanLuma(row.clipPath);
+    filled += 1;
+  }
+  if (filled > 0) {
+    writeFileSync(store, JSON.stringify(done, null, 2) + '\n');
+    console.log(`[bù] đã đo độ sáng trung bình cho ${filled} cấu hình đo từ trước`);
   }
 
   console.log(`\nSố đo ở ${store}`);

@@ -194,7 +194,20 @@ window.renderFrame = function (tSec, fps, blurSamples) {
     for (let k = 0; k < blurSamples; k++) {
       // Cửa trập mở 50% khoảng khung — quy ước phim thường dùng.
       const sub = tSec + (k / blurSamples) * dt * 0.5;
-      drawSample(vctx, sub, 1 / blurSamples);
+      // Alpha 1/(k+1), KHÔNG phải 1/blurSamples.
+      //
+      // Vẽ chồng bằng source-over với alpha cố định 1/N không cho trung
+      // bình cộng: mẫu vẽ sau đè mẫu vẽ trước, nên trọng số lệch nhau
+      // (với N=4: 0.105 / 0.141 / 0.188 / 0.250), và (1-1/N)^N = 31.6%
+      // phần nền tối vẫn lọt qua — ảnh ra tối đi còn 68.4% độ sáng thay
+      // vì mờ đi. Clip vẫn dựng xong và số đo vẫn ra, nên lỗi này thuộc
+      // nhóm Z: hỏng mà mọi chỉ báo đều xanh.
+      //
+      // Alpha 1/(k+1) cho trung bình chạy: sau mẫu thứ k, ngữ cảnh giữ
+      // đúng trung bình cộng của k+1 mẫu đầu. Mẫu đầu vẽ với alpha 1 và
+      // phủ kín khung nên không còn nền nào lọt qua. Trọng số cuối cùng
+      // đều nhau và cộng lại bằng 1.
+      drawSample(vctx, sub, 1 / (k + 1));
     }
   }
 };

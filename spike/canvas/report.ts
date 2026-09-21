@@ -24,9 +24,18 @@ interface Row {
   sceneMs: number;
   captureMs: number;
   clipBytes: number;
+  meanLuma: number;
   at: string;
   host: { cores: number; totalMemBytes: number; node: string; platform: string };
 }
+
+/**
+ * Mờ chuyển động là phép TRUNG BÌNH các mẫu phụ, nên nó gần như không được
+ * đổi độ sáng trung bình của cảnh. Ngưỡng này là máy kiểm cho một lỗi nhóm
+ * Z đã xảy ra thật ở chính mục này: cộng mẫu bằng alpha cố định 1/N làm ảnh
+ * tối đi 15.8% thay vì mờ đi, mà clip vẫn dựng xong và mọi số đo vẫn ra.
+ */
+const LUMA_TOLERANCE = 0.03;
 
 /** Ngưỡng của WP-003 mục 3, bảng sáu chỉ số. */
 const LIMIT_RENDER_MIN = 25;
@@ -73,6 +82,9 @@ export function buildReport(rows: Row[]): string {
 
   // "Không hết bộ nhớ" đọc chặt hơn một chút: còn cách trần ít nhất 20%,
   // để kết luận không phụ thuộc vào việc runner lúc đó rỗi hay bận.
+  const lumaDrift = blur.meanLuma / base.meanLuma - 1;
+  const blurIsAverage = Number.isFinite(lumaDrift) && Math.abs(lumaDrift) <= LUMA_TOLERANCE;
+
   const m1 = peakBytes < host.totalMemBytes * 0.8;
   const m2 = renderMin <= LIMIT_RENDER_MIN;
   const m3 = Math.max(slowdownTotal, slowdownScene) <= LIMIT_SLOWDOWN;
@@ -116,19 +128,27 @@ export function buildReport(rows: Row[]): string {
   p(`| 5 | Chuyển động 30fps **có** mờ | clip xem được | \`blur-30.mp4\`, ${min(blur.wallMs)} phút render, ${blur.config.blurSamples} mẫu/khung | ${verdict(null)} |`);
   p(`| 6 | Chuyển động 60fps **không** mờ | clip xem được | \`hi-60-noblur.mp4\`, ${min(hi.wallMs)} phút render | ${verdict(null)} |`);
   p();
+  p(`**Máy kiểm phép cộng mẫu mờ chuyển động:** độ sáng trung bình của clip có mờ là`);
+  p(`**${blur.meanLuma.toFixed(2)}** so với **${base.meanLuma.toFixed(2)}** của clip không mờ —`);
+  p(`lệch ${(lumaDrift * 100).toFixed(1)}%, ngưỡng ±${(LUMA_TOLERANCE * 100).toFixed(0)}% → ` +
+    `${blurIsAverage ? '✅ đúng là phép trung bình' : '❌ KHÔNG phải phép trung bình, clip mờ bị sai'}.`);
+  p('Mờ chuyển động là phép trung bình các mẫu phụ nên nó gần như không được đổi độ sáng trung');
+  p('bình của cảnh. Phép kiểm này có vì bản đầu của spike đã sai đúng chỗ đó — xem phần cuối.');
+  p();
   p('**Chỉ số 4–6 cố ý để trống kết.** WP-003 mục 5 ghi rõ: không kết luận thay chủ dự án về');
   p('ba chỉ số này, chỉ xuất clip và số đo. Clip là nhị phân nên không commit (CHARTER 5.3);');
   p('chúng đi ra qua artifact `spike-canvas` của workflow.');
   p();
   p('## Số đo từng cấu hình');
   p();
-  p('| Cấu hình | Khung | fps | Mẫu/khung | Tổng | ms/khung | — cảnh | — chụp | Đỉnh RSS | Clip |');
-  p('|---|---|---|---|---|---|---|---|---|---|');
+  p('| Cấu hình | Khung | fps | Mẫu/khung | Tổng | ms/khung | — cảnh | — chụp | Đỉnh RSS | Clip | Y trung bình |');
+  p('|---|---|---|---|---|---|---|---|---|---|---|');
   for (const r of rows) {
     p(
       `| \`${r.config.name}\` | ${r.frames} | ${r.config.fps} | ${r.config.blurSamples} | ` +
       `${min(r.wallMs)} phút | ${one(r.msPerFrame)} | ${one(r.sceneMs / r.frames)} | ` +
-      `${one(r.captureMs / r.frames)} | ${mb(r.peakRssBytes)} MB | ${(r.clipBytes / 1048576).toFixed(1)} MB |`,
+      `${one(r.captureMs / r.frames)} | ${mb(r.peakRssBytes)} MB | ${(r.clipBytes / 1048576).toFixed(1)} MB | ` +
+      `${Number.isFinite(r.meanLuma) ? r.meanLuma.toFixed(2) : '—'} |`,
     );
   }
   p();
@@ -210,6 +230,23 @@ export function buildReport(rows: Row[]): string {
     p('Ít nhất một chỉ số hiệu năng **không đạt** — xem cột "Kết" ở bảng trên. Theo WP-003 mục 7');
     p('và mục 5b, đây là ca phải báo cáo chứ không phải ca tối ưu tiếp, và nó mở một `🤖 [QĐ]`.');
   }
+  p();
+  p('## Một lỗi nhóm Z mà spike này tự đâm phải');
+  p();
+  p('Bản đầu cộng các mẫu mờ chuyển động bằng `globalAlpha = 1 / blurSamples` cố định. Nghe');
+  p('đúng, nhưng `source-over` không cho trung bình cộng: mẫu vẽ sau đè mẫu vẽ trước, nên với');
+  p('4 mẫu trọng số ra 0.105 / 0.141 / 0.188 / 0.250 thay vì đều nhau, và `(1 - 1/4)^4 = 31.6%`');
+  p('phần nền tối vẫn lọt qua. Kết quả: clip "có mờ chuyển động" thật ra là clip **tối đi**,');
+  p('không phải mờ đi — đo được là lệch 15.8% độ sáng.');
+  p();
+  p('Đáng chú ý không phải lỗi, mà là **cách nó suýt lọt**: clip vẫn dựng xong, vẫn đủ 5.400');
+  p('khung, vẫn 180.000 giây, mọi số đo thời gian và bộ nhớ vẫn ra bình thường, `pnpm check`');
+  p('vẫn xanh. Chỉ số 5 lẽ ra được chấm trên một clip sai. Đúng nhóm **Z** trong');
+  p('`ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh.');
+  p();
+  p('Đã sửa bằng trung bình chạy (`globalAlpha = 1 / (k + 1)`, trọng số đều nhau, cộng lại bằng');
+  p('1), và **cột `Y trung bình` cùng phép kiểm ở trên là máy canh chỗ đó từ nay** — không dựa');
+  p('vào việc lần sau lại có người nhìn kỹ hai khung hình cạnh nhau.');
   p();
   p('## Chạy lại');
   p();
