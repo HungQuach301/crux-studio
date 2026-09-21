@@ -279,11 +279,20 @@ Routine `crux-digest` không nên tự tính số — nó nên đọc số đã 
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER 2.5, phụ lục P2
 - tiêu chí xong:
-  - Một lệnh in ra: PR merged 24h theo làn, PR đang mở và trạng thái CI, mục `parked`, issue `[QĐ]` đang mở tách theo `reversible`/`irreversible`, chi phí 24h và tích luỹ so với ngân sách.
-  - Dòng đầu luôn là `Cần anh quyết: N việc`.
+  - ✅ Một lệnh in ra: PR merged 24h theo làn, PR đang mở và trạng thái CI, mục `parked`, issue `[QĐ]` đang mở tách theo `reversible`/`irreversible`, chi phí 24h và tích luỹ so với ngân sách. — `pnpm digest:metrics` (`ops/scripts/digest-metrics.ts`), 18 test ở `ops/test/digest-metrics.test.ts` cộng 1 test `title` ở `ops/test/backlog-status.test.ts`.
+  - ✅ Dòng đầu luôn là `Cần anh quyết: N việc`. Có test cho cả ca `N = 0`.
+- cơ chế, để lượt sau khỏi đọc lại code:
+  - Mọi phép tính là hàm thuần; `main()` chỉ đọc backlog, đọc log qua `readRunLogs`, gọi `gh` rồi in. Tiền dùng lại `sumCostUsd`/`budgetPercent`/`BUDGET_LOW_USD` của `update-metrics.ts`, làn suy bằng `laneFromBranch` của `pr-triage.ts`, mục backlog tách bằng `parseBacklog` của `I-010` — không chép lại phép nào.
+  - **Hai đường nạp dữ liệu GitHub, một dạng dữ liệu duy nhất.** Không cờ thì gọi `gh`; `--github <file.json>` nhận đúng dạng `gh … --json` trả về, cho lượt agent không có `gh` trong `PATH` (đã đo: phiên routine hiện tại không có `gh`). Thêm `--json` nếu bên gọi muốn số thô.
+  - Ba chỗ cố ý **không** im lặng, mỗi chỗ một test âm: PR không suy được làn ra nhóm riêng (8/20 PR merged 24 giờ qua rơi vào đây — nhánh `claude/<tên-ngẫu-nhiên>` nền tảng gán); PR chưa có lần chạy CI nào ra `chưa có` chứ không gộp vào `xanh` (hình dạng `KF-002`); issue `decision` thiếu nhãn phân loại vẫn được đếm vào "Cần anh quyết".
+  - Thiếu `gh`, hay `--github` trỏ file thiếu khoá, đều **ném** — một bản tin "0 việc cần anh quyết" vì thiếu công cụ trông giống hệt một ngày yên ả.
+  - Thứ tự đọc **ổn định** ở cả hai chỗ: nhóm PR merged xếp theo `LANES`, và mục `parked` cũng vậy (`readdirSync` không bảo đảm thứ tự). Mốc 24 giờ so bằng **thời gian**, không so chuỗi — `gh` trả `mergedAt` ở mức giây còn `since` có mili giây, mà so chuỗi thì `'Z' > '.'`. Cả hai có test phá-thì-đỏ.
+- vòng soát chéo (subagent, ngữ cảnh sạch) — tự chạy lại `pnpm check`, `pnpm replay`, cửa merge và **8 bài phá thử**, cả 8 đều đỏ đúng chỗ. Ba điểm nó nêu đã sửa ngay trong PR: thứ tự mục `parked` không ổn định, mốc 24 giờ so bằng chuỗi, và số test khai sai địa chỉ. Hai nhận xét còn lại không chặn, ghi lại để không rơi mất: `main()` lấy gốc repo bằng `process.cwd()` nên lệnh chỉ đúng khi chạy từ gốc (`pnpm digest:metrics` luôn vậy); và nhánh của PR này mang thêm một commit ghi dòng log bước 0 phụ lục P3 vào `ops/logs/platform/P-016.jsonl` — không phải việc của `P-005`, nhưng là hình dạng bắt buộc của mọi lượt worker.
+- ⬜ **còn treo, cố ý tách:** nối lệnh này vào phụ lục P2 của CHARTER là việc của `P-019` — mục đó `deps: P-005` và tiêu chí xong của nó đã ghi rõ "Sửa phụ lục P2 của CHARTER cho khớp". Chạm CHARTER ở đây là trộn phạm vi hai mục. Tới khi đó, routine `crux-digest` gọi lệnh bằng tay.
+- ⬜ **chưa đo được ở lượt này:** nhánh gọi `gh` thật. Phiên routine không có `gh`, nên nhánh đó mới kiểm được bằng phép thử thiếu-`gh` (ném đúng câu) chứ chưa từng chạy xanh. Lần chạy đầu ở một môi trường có `gh` là lần đầu quan sát được nó.
 
 ### P-009 · `fix-has-test` không được bỏ qua chỉ vì nhãn gắn muộn — **ưu tiên cao**
 Bất biến **I2 vế hai** ("PR có nhãn `fix` phải kèm test tái hiện lỗi") hiện **thủng**. Bằng chứng: `ci` run #1 và #2 trên PR #7 — một PR mang nhãn `fix` — đều cho job `fix-has-test` kết quả `success` với bước kiểm ở trạng thái `skipped`.
