@@ -24,7 +24,7 @@ Channel pack đầy đủ đang nằm trong spec tham chiếu. Chuyển sang `pa
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: spec phần Channel Pack; CHARTER 5.1
 - tiêu chí xong:
   - `channel-bible`, `persona`, `lexicon`, `data-sources`, `topic-map`, `thesis-bank` nằm trong `packs/channels/us-personal-finance/`.
