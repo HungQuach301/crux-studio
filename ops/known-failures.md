@@ -335,6 +335,20 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 ---
 
+## KF-009 · GitHub báo PR `dirty` trong khi `git` ở phía dưới gộp **sạch** — `merge=union` không áp ở phía GitHub
+
+> Số **KF-009** chứ không phải KF-008: PR `#70` đang mở đã nhận **KF-008**. Nhận mã trước khi viết là cách hai worker không cùng lấy một số (cùng quy ước với các mã `G` trong `docs/assumptions.md`).
+
+- **Lần gặp:** nhiều — mọi lần `mergeable_state: dirty` mà integrator đo lại thấy `EXIT=0` đều là ca này. Lần đo tách bạch được nguyên nhân: lượt `crux-integrator` 2026-09-22 02:05 giờ VN, PR `#56` và `#65`.
+- **Chữ ký:** GitHub API trả `mergeable_state: "dirty"` cho một PR, `automerge.yml` vì thế không merge được nó, mà `git merge-tree --write-tree origin/<nhánh> origin/main` ở máy trả `EXIT=0` "gộp sạch" — và file duy nhất mà hai bên cùng chạm là một file `.jsonl` đã khai `merge=union` trong `.gitattributes`.
+- **Nguyên nhân gốc:** `.gitattributes` khai `ops/logs/**/*.jsonl merge=union` (KF-005). `git` ở máy đọc luật đó và ghép cả hai bên; **phép tính `mergeable` của GitHub thì không**. Hai bên cùng thêm dòng vào cuối `ops/logs/platform/P-016.jsonl` vì thế là "sạch" ở một phía và "xung đột" ở phía kia. Không có gì hỏng trong nội dung PR — cái hỏng là **hai phép đo khác nhau trên cùng một câu hỏi**, và lớp tự merge chỉ nghe một phía.
+- **Đo được, không suy luận** (2026-09-22, lượt integrator): `#56` và `#65` đều `dirty` trên GitHub và đều `EXIT=0` ở máy. Chạy lại đúng phép đo đó sau khi **tắt** luật union — ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes`, vốn thắng `.gitattributes` trong cây — thì cả hai lập tức `EXIT=1` với `CONFLICT (content) in ops/logs/platform/P-016.jsonl`. Bật/tắt đúng một biến, kết quả lật đúng theo nó.
+- **Đây là câu trả lời của `VF-G17`** (`ops/lanes/verify/backlog.md`), câu hỏi "GitHub có dùng `.gitattributes` khi tự tính `mergeable` không": **không**. Ghi chú trong chính `.gitattributes` ("chưa được chứng minh là có ảnh hưởng tới trạng thái `mergeable` GitHub tự tính") nay có bằng chứng, và nó ngả về phía xấu. Sổ giả định `G17` đã ở trạng thái **`sai`** và đã chuyển dự phòng, nên kết luận này **không** làm đổi trạng thái giả định nào — nó siết chặt thêm lý do dự phòng phải tồn tại.
+- **Đã sửa ở đâu:** không phải sửa — dự phòng đã có sẵn và đang chạy đúng: mục `P-016`, bước 0 của phụ lục P3. Integrator gộp `main` vào nhánh PR, `git` áp union ở phía có áp union, commit gộp mới làm GitHub tính lại và PR hết `dirty`. Điều KF này thêm là **vì sao** bước đó không bao giờ thừa: `.gitattributes` một mình không đủ, và sẽ không bao giờ đủ.
+- **Máy chặn từ nay:** không chặn được ở phía ta — hành vi nằm ở phía GitHub. Thứ canh nó là bước 0 của P3, chạy ở đầu **mọi** lượt worker và một lần mỗi lượt integrator, cộng dòng log bắt buộc ở `ops/logs/platform/P-016.jsonl` (bất biến I8). Hệ quả phải nhớ khi đọc bản tin: một PR `automerge-delayed` bị ca này chạm sẽ **đặt lại đồng hồ 12 giờ** mỗi lần integrator gộp cho nó (CHARTER 3.3) — chậm là giá của việc merge được, không phải dấu hiệu hỏng.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
