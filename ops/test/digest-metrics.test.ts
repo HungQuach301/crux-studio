@@ -26,10 +26,12 @@ import {
   needOwnerCount,
   openPrRows,
   parkedItems,
+  probeOrigins,
   renderDigestMetrics,
   rollupState,
   type GhPr,
 } from '../scripts/digest-metrics.ts';
+import { conflictRows } from '../scripts/conflict-watch.ts';
 
 const NOW = new Date('2026-09-21T18:00:00.000Z');
 const SINCE = '2026-09-20T18:00:00.000Z';
@@ -237,6 +239,7 @@ function baseMetrics(over: Partial<Parameters<typeof renderDigestMetrics>[0]> = 
     since: SINCE,
     merged: [],
     openPrs: [],
+    conflicts: [],
     parked: [],
     decisions: [],
     cost: { cost24h: 0, total: 0, budget: 600, percent: 0 },
@@ -269,6 +272,7 @@ test('renderDigestMetrics: đủ năm nhóm số liệu mà tiêu chí xong đò
   assert.match(text, /^- platform: #65$/m);
   assert.match(text, /^PR đang mở: 1$/m);
   assert.match(text, /^- #39 · CI chưa có · automerge-delayed · PR 39$/m);
+  assert.match(text, /^PR đang xung đột với `main`: 0$/m);
   assert.match(text, /^Mục parked: 1$/m);
   assert.match(text, /^- verify\/VF-G7 · Điều khoản TTS$/m);
   assert.match(text, /^Chi phí: 24 giờ 1\.5 USD · tích luỹ 12\.25 USD · 2% ngân sách học \(600 USD, CHARTER mục 8\)$/m);
@@ -328,6 +332,106 @@ test('collectMetrics: đọc backlog và log thật, cộng tiền theo bất bi
     assert.equal(metrics.cost.budget, 600);
     assert.equal(metrics.cost.percent, 2);
     assert.equal(needOwnerCount(metrics.decisions), 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- Mục `P-007`: PR đang xung đột với `main` ---
+
+test('P-007 · chưa dò thì bản tin nói CHƯA DÒ, không nói 0', () => {
+  // `0` và `chưa dò` là hai chuyện khác nhau. Một bản tin nói "0 PR xung
+  // đột" trong khi hàng đợi merge đang tắc là đúng rủi ro B7 mà mục này
+  // sinh ra để bịt — và là nhóm Z: sai mà không gì đỏ.
+  const text = renderDigestMetrics(baseMetrics({ conflicts: null }));
+  assert.match(text, /^PR đang xung đột với `main`: CHƯA DÒ/m);
+  assert.doesNotMatch(text, /^PR đang xung đột với `main`: 0$/m);
+});
+
+test('P-007 · mỗi PR xung đột một dòng, kẹt lâu nhất trước, kèm số giờ', () => {
+  const text = renderDigestMetrics(
+    baseMetrics({
+      conflicts: conflictRows(
+        [
+          {
+            number: 56,
+            title: 'P-021',
+            labels: ['automerge-delayed'],
+            origin: { sha: 'b', committedAt: '2026-09-21T17:00:00Z', exact: true },
+          },
+          {
+            number: 39,
+            title: 'V-001',
+            labels: ['automerge-delayed'],
+            origin: { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true },
+          },
+        ],
+        NOW.toISOString(),
+      ),
+    }),
+  );
+  assert.match(text, /^PR đang xung đột với `main`: 2$/m);
+  const lines = text.split('\n');
+  const first = lines.findIndex((line) => line.startsWith('- #39'));
+  const second = lines.findIndex((line) => line.startsWith('- #56'));
+  assert.ok(first !== -1 && second !== -1 && first < second, 'kẹt lâu nhất (#39, 3 giờ) phải đứng trước');
+  assert.match(lines[first]!, /kẹt 3\.00 giờ/);
+  assert.match(lines[first]!, /đồng hồ chờ KHÔNG chạy/);
+});
+
+test('P-007 · collectMetrics chỉ đưa vào mục xung đột những PR ĐÃ dò ra mốc', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-conflict-'));
+  try {
+    mkdirSync(join(root, 'ops', 'lanes', 'platform'), { recursive: true });
+    writeFileSync(join(root, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · x\n- status: ready\n');
+
+    const openPrs = [
+      pr(39, 'claude/visual/V-001', { labels: [{ name: 'automerge-delayed' }] }),
+      pr(42, 'claude/visual/V-002'),
+      pr(70, 'claude/modest-dijkstra-0gfgc6'),
+    ];
+    const metrics = collectMetrics(
+      root,
+      { mergedPrs: [], openPrs, decisionIssues: [] },
+      NOW,
+      new Map([
+        // #39 xung đột · #42 sạch · #70 không có khoá = chưa dò.
+        [39, { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true }],
+        [42, null],
+      ]),
+    );
+
+    assert.deepEqual(metrics.conflicts?.map((row) => row.number), [39]);
+    assert.equal(metrics.conflicts?.[0]!.hoursStuck, 3);
+    assert.equal(metrics.openPrs.length, 3, 'PR chưa dò vẫn nằm trong mục "PR đang mở"');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-007 · không truyền kết quả gộp thử thì conflicts là null, KHÔNG phải mảng rỗng', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-conflict-'));
+  try {
+    mkdirSync(join(root, 'ops', 'lanes', 'platform'), { recursive: true });
+    writeFileSync(join(root, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · x\n- status: ready\n');
+    const metrics = collectMetrics(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, NOW);
+    assert.equal(metrics.conflicts, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-007 · dò xung đột hỏng thì bản tin rơi về CHƯA DÒ, KHÔNG chết cả bản tin', () => {
+  // `measureConflicts` ném khi `git fetch` hụt. Để nó ném ra khỏi `main()`
+  // thì bản tin mất luôn "Cần anh quyết", chi phí, `parked` — một tính năng
+  // mới hạ một tính năng đang chạy (`CLAUDE.md` mục 14, "Một hộp duy nhất").
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-noremote-'));
+  try {
+    const snapshot = { mergedPrs: [], openPrs: [pr(1, 'claude/platform/P-001')], decisionIssues: [] };
+    // `root` không phải kho git và không có remote `origin` → `git fetch` hỏng.
+    assert.equal(probeOrigins(root, snapshot, []), null);
+    // `--no-conflicts` cũng ra `null`, nhưng không đi qua git lần nào.
+    assert.equal(probeOrigins(root, snapshot, ['--no-conflicts']), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
