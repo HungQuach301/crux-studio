@@ -627,9 +627,10 @@ Làn integration của Crux Studio.
    b. Với mỗi PR đó, theo đúng thứ tự trên: checkout nhánh, `git fetch origin main`, rồi chạy
       `node ops/scripts/integrator-resolve.ts origin/main` — KHÔNG tự đối chiếu/giải bằng lời, tool này đã đối chiếu
       bằng số (đếm dòng xoá ở mỗi bên so với tổ tiên chung) và tự huỷ merge nếu không đủ điều kiện.
-      - `outcome: "clean"` hoặc `"resolved"`: tool đã tạo commit merge. Chạy `pnpm check` VÀ `pnpm replay`. Xanh thì
-        `git push`. Đỏ thì `git reset --hard` về commit trước khi gộp (không push — đỏ sau khi gộp là tín hiệu thật,
-        không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do.
+      - `outcome: "resolved"`, hoặc `"clean"` **có** commit merge mới (kiểm bằng `git log -1` đổi so với trước khi
+        gọi tool — trường hợp PR đã đứng sau `main` sẵn thì `"clean"` không tạo commit gì, bỏ qua PR đó, không push):
+        chạy `pnpm check` VÀ `pnpm replay`. Xanh thì `git push`. Đỏ thì `git reset --hard` về commit trước khi gộp
+        (không push — đỏ sau khi gộp là tín hiệu thật, không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do.
       - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
         `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt** và tên file gây
         vướng (có sẵn trong `reason` của kết quả).

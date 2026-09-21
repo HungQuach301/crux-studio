@@ -70,6 +70,11 @@ function showOrEmpty(cwd: string, ref: string, file: string): string {
   return result.status === 0 ? result.stdout : '';
 }
 
+/** File có tồn tại ở `ref` không. */
+function existsAt(cwd: string, ref: string, file: string): boolean {
+  return git(cwd, ['cat-file', '-e', `${ref}:${file}`]).status === 0;
+}
+
 /**
  * Gộp `ontoRef` vào HEAD của cây làm việc tại `cwd`. `cwd` phải là một
  * checkout sạch, đã đứng đúng nhánh cần gộp; `ontoRef` phải đã fetch sẵn
@@ -84,13 +89,39 @@ export function resolveAdditiveMerge(cwd: string, ontoRef: string): ResolveResul
   }
 
   const merge = git(cwd, ['merge', '--no-commit', '--no-ff', ontoRef]);
+  try {
+    return resolveAfterMergeAttempt(cwd, ontoRef, merge);
+  } catch (error) {
+    // Lưới an toàn cuối cùng: bất kỳ lỗi nào chưa lường trước ở dưới đây
+    // (một `gitOrThrow` ném ra, một trường hợp git chưa nghĩ tới) đều KHÔNG
+    // được để cây làm việc dở dang giữa chừng — huỷ trước, báo lỗi sau.
+    // Không có nhánh nào trong `resolveAfterMergeAttempt` được phép ném lỗi
+    // ra ngoài mà không đi qua đây trước.
+    git(cwd, ['merge', '--abort']);
+    return {
+      outcome: 'aborted-error',
+      files: [],
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
+function resolveAfterMergeAttempt(
+  cwd: string,
+  ontoRef: string,
+  merge: SpawnSyncReturns<string>,
+): ResolveResult {
   if (merge.status === 0) {
     const staged = gitOrThrow(cwd, ['diff', '--cached', '--name-only']).trim();
     if (staged !== '') {
       gitOrThrow(cwd, ['commit', '--no-edit', '-m', `Gộp ${ontoRef} (integrator, không xung đột)`]);
+      // outcome 'clean' + có commit mới: HEAD vừa đổi, caller nên chạy
+      // pnpm check rồi push.
     } else {
-      // `--no-ff` với hai nhánh đã giống hệt nhau: không có gì để commit.
+      // `ontoRef` đã là tổ tiên của HEAD ("Already up to date") — không có
+      // gì để gộp. `--no-ff` vẫn để lại một merge dở dang trống, huỷ nó.
+      // outcome 'clean' ở nhánh này KHÔNG có commit mới; caller không cần
+      // push, vì HEAD không đổi.
       git(cwd, ['merge', '--abort']);
     }
     return { outcome: 'clean', files: [] };
@@ -112,6 +143,21 @@ export function resolveAdditiveMerge(cwd: string, ontoRef: string): ResolveResul
   const base = gitOrThrow(cwd, ['merge-base', 'HEAD', 'MERGE_HEAD']).trim();
 
   for (const file of conflicted) {
+    // Kiểm tồn tại TRƯỚC, tách khỏi numstat: một file bị XOÁ hẳn ở một bên
+    // trong khi bản base đã RỖNG cho ra `numstat` "0 0" — trông như không
+    // đổi gì, dù thực ra là xung đột xoá/sửa. numstat một mình không bắt
+    // được ca này; đây là ca đã tìm ra khi soát lại tool (phản hồi review).
+    const oursExists = existsAt(cwd, 'HEAD', file);
+    const theirsExists = existsAt(cwd, 'MERGE_HEAD', file);
+    if (!oursExists || !theirsExists) {
+      git(cwd, ['merge', '--abort']);
+      return {
+        outcome: 'aborted-ineligible',
+        files: conflicted,
+        reason: `${file}: bị xoá ở một bên (ours tồn tại=${oursExists}, theirs tồn tại=${theirsExists}) — không tự giải, cần người`,
+      };
+    }
+
     const ours = numstat(cwd, base, 'HEAD', file);
     const theirs = numstat(cwd, base, 'MERGE_HEAD', file);
     if (ours.binary || theirs.binary || ours.deleted > 0 || theirs.deleted > 0) {

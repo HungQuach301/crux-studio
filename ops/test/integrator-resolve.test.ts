@@ -119,6 +119,50 @@ test('một bên xoá/sửa dòng: huỷ toàn bộ, không đoán, trả cây v
   }
 });
 
+test('file RỖNG ở tổ tiên chung, một bên xoá hẳn, bên kia sửa: numstat "0 0" không được đánh lừa', () => {
+  // Đây là ca đã lộ ra khi soát lại tool: nếu chỉ dựa vào `numstat`, xoá một
+  // file đang RỖNG cho ra "0 dòng thêm, 0 dòng xoá" — trông giống hệt "không
+  // đổi gì" — dù đó vẫn là một xung đột xoá/sửa thật, không được tự giải.
+  const dir = initRepo();
+  try {
+    writeFileSync(join(dir, 'empty.txt'), '', 'utf8');
+    git(dir, ['add', 'empty.txt']);
+    git(dir, ['commit', '-q', '-m', 'thêm empty.txt rỗng']);
+    git(dir, ['branch', '-f', 'feature']); // rẽ nhánh feature lại từ đúng chỗ có empty.txt
+
+    git(dir, ['checkout', '-q', 'main']);
+    git(dir, ['rm', '-q', 'empty.txt']);
+    git(dir, ['commit', '-q', '-m', 'main xoá hẳn empty.txt']);
+
+    git(dir, ['checkout', '-q', 'feature']);
+    writeFileSync(join(dir, 'empty.txt'), 'feature-them-noi-dung\n', 'utf8');
+    git(dir, ['commit', '-q', '-am', 'feature thêm nội dung vào empty.txt']);
+
+    const before = git(dir, ['rev-parse', 'HEAD']).trim();
+    const result = resolveAdditiveMerge(dir, 'main');
+    assert.equal(result.outcome, 'aborted-ineligible', JSON.stringify(result));
+    assert.match(result.reason ?? '', /empty\.txt/);
+    assert.equal(git(dir, ['rev-parse', 'HEAD']).trim(), before, 'HEAD không được đổi khi huỷ');
+    assert.equal(git(dir, ['status', '--porcelain']).trim(), '', 'không được để lại merge dở dang (MERGE_HEAD, index chưa gộp)');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('ontoRef đã là tổ tiên của HEAD: không có gì để gộp, không tạo commit rỗng', () => {
+  const dir = initRepo();
+  try {
+    git(dir, ['checkout', '-q', 'feature']);
+    const before = git(dir, ['rev-parse', 'HEAD']).trim();
+    const result = resolveAdditiveMerge(dir, 'main'); // main chưa đổi gì kể từ gốc
+    assert.equal(result.outcome, 'clean');
+    assert.equal(git(dir, ['rev-parse', 'HEAD']).trim(), before, 'không có gì để gộp thì HEAD không được đổi');
+    assert.equal(git(dir, ['status', '--porcelain']).trim(), '');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('cây làm việc bẩn: từ chối thử gộp', () => {
   const dir = initRepo();
   try {
