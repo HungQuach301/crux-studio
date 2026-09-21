@@ -418,7 +418,7 @@ oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - nguồn: lượt `crux-integrator` 2026-09-22 02:05 giờ VN, `ops/logs/integration/P3-daily-2026-09-22.jsonl`;
   `docs/assumptions.md` G14; mục `I-003`, `I-005`, `I-007`
 - tiêu chí xong:
@@ -433,3 +433,21 @@ oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue
     mô phỏng" với các test G14/G17 đang có trong `ops/test/recheck-assumptions.test.ts`.
   - `7fc292a` không được biến mất cùng với nhiễu: sau khi siết phạm vi, một commit agent thật sự thiếu
     trailer vẫn phải ra `sai`. Có test cho đúng điều đó.
+- **Đã làm:**
+  - `collectCommits` (`ops/scripts/recheck-assumptions.ts`) nay lọc `refs/remotes/origin/claude/*` còn
+    đúng nhánh có **PR mở**, trước khi `git log` — trả lời "trả lời được" mà tiêu chí xong đòi, không đoán
+    theo ngày hay theo lịch sử git (squash không giữ SHA cũ nên "điểm rẽ khỏi `main`" của một nhánh stale
+    không nói lên gì). `fetchOpenPrBranches()` gọi `gh pr list --state open` — cùng quy ước gọi lệnh với
+    `fetchMergedPrs()` của `ops/scripts/update-metrics.ts`, không phải cách mới. Nhánh hết PR mở (đã
+    merge/đã đóng) loại thẳng khỏi phạm vi quét: `liveRefs.length === 0` trả `[]` như một quan sát hợp lệ
+    (cùng nhánh `observedNothing` với ca "kho không còn nhánh nào" của `I-007`), không phải lỗi.
+  - `isToolCommit` nhận thêm đúng hai dạng đã đo được, neo chặt để không rơi lại thành danh sách đen:
+    `chore: sync workflows from ops/workflows` (tiền tố do Action `sync-workflows` sinh) và
+    `Gộp (origin/)?main(...) vào ` (mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ
+    "Gộp … vào" nói chung — giữ nguyên vẹn ca âm `"Gộp hai mô hình định lượng vào một bảng"` đã có).
+  - Test mới trong `ops/test/recheck-assumptions.test.ts`: hai test cho `isToolCommit`, ba test cho
+    `collectCommits` (nhánh stale bị loại dù thiếu trailer thật; nhánh sống vẫn ra `sai` khi thật sự thiếu
+    trailer — phép lọc mới không được nuốt tín hiệu thật; mọi nhánh hết PR mở thì trả rỗng, không ném).
+    Ba test `collectCommits` cũ (mục `I-005`, `I-007`) cập nhật để tự khai nhánh nào có PR mở, không gọi
+    `gh` thật trong test.
+  - `ops/known-failures.md` hàng **Z15**: thêm đoạn "Sửa tiếp ở mục `I-012`".
