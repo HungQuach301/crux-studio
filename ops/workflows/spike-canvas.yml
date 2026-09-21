@@ -50,14 +50,17 @@ jobs:
             sudo apt-get install -y -qq ffmpeg
           fi
           ffmpeg -version | head -1
+          found=""
           for c in /usr/bin/google-chrome-stable /usr/bin/google-chrome /usr/bin/chromium-browser /usr/bin/chromium; do
-            if [ -x "$c" ]; then echo "CRUX_CHROME=$c" >> "$GITHUB_ENV"; break; fi
+            if [ -x "$c" ]; then found="$c"; break; fi
           done
-          if [ -z "${CRUX_CHROME:-}" ] && ! grep -q CRUX_CHROME "$GITHUB_ENV"; then
-            echo "không thấy Chrome trên runner này" >&2
+          if [ -z "$found" ]; then
+            echo "không thấy Chrome hay Chromium trên runner này" >&2
             exit 1
           fi
-          grep CRUX_CHROME "$GITHUB_ENV"
+          echo "CRUX_CHROME=$found" >> "$GITHUB_ENV"
+          echo "dùng trình duyệt: $found"
+          "$found" --version || true
 
       - name: Ghi mốc thời gian bắt đầu
         run: echo "SPIKE_STARTED=$(date +%s)" >> "$GITHUB_ENV"
