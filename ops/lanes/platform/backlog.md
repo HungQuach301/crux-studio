@@ -4,6 +4,61 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-018 · `D-C04` — log tách tới mức mục, sửa bất biến I8 — **ưu tiên CAO NHẤT** (chủ dự án chỉ định)
+Chủ dự án đã trả lời issue #14: chọn **B**, và trên issue bản tin #17 ghi "Ưu tiên cao nhất: thực hiện D-C04". Quyết định `irreversible` này **đã có câu trả lời**, nên nhánh việc của nó hết chờ.
+
+Bất biến **I8** hiện cho mỗi **làn** một file log, nhưng hai **mục trong cùng một làn** chạy song song là chế độ chạy bình thường. Đổi sang `ops/logs/<lane>/<id>.jsonl` thì hai PR không bao giờ chạm cùng một file, và xung đột log biến mất thay vì được vá.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: issue #14 (câu trả lời của chủ dự án, 2026-09-21); issue bản tin #17; CHARTER mục 3 (I8) và mục 7
+- **cửa merge: `owner-merge`** — sửa CHARTER mục 3 là nhóm `irreversible` thứ 4 (CLAUDE.md mục 14). Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
+- tiêu chí xong:
+  - Đổi I8 sang `ops/logs/<lane>/<id>.jsonl`, một file cho mỗi mục.
+  - **Sửa CHARTER mục 3 (dòng I8) và mục 7 trong cùng PR** — điều kiện 1 chủ dự án nêu: charter và code không được lệch nhau. Ghi `docs/decisions/D-C04.md` và vào nhật ký thay đổi của CHARTER (mục 14).
+  - Cập nhật `CLAUDE.md`, `ops/logs/README.md`, `kernel/src/log.ts`, và chuyển các dòng log đang có sang cấu trúc mới.
+  - **Giữ `.gitattributes merge=union` làm lớp phòng thủ thứ hai** — điều kiện 2. Ghi rõ vào `ops/known-failures.md` KF-005 giới hạn đã đo được: union chỉ có tác dụng khi nhánh đã mang sẵn luật **trước** lần gộp, và câu hỏi GitHub có dùng nó để tính `mergeable` hay không vẫn đang mở (`VF-G17`).
+  - Bên đọc log (`ops/scripts/update-metrics.ts` và mọi nơi khác) gom nhiều file và **sắp theo `at`**, không tin thứ tự dòng.
+  - Đóng issue #14 sau khi PR merge.
+
+### P-019 · Bản tin thêm mục "Tiến độ", và đếm lượt chạy routine
+Chỉ dẫn 3 của chủ dự án trên issue bản tin #17 (2026-09-21).
+
+- deps: P-005
+- risk: low
+- status: ready
+- nguồn: issue #17, chỉ dẫn 3; CHARTER phụ lục P2
+- tiêu chí xong:
+  - Bản tin có mục **Tiến độ**: số mục `done` trong 24 giờ · số mục còn lại theo từng đợt · thông lượng trung bình 3 ngày · ngày dự kiến xong từng đợt · **nút thắt hiện tại là máy hay người**.
+  - Thêm **số lượt chạy routine đã dùng trong 24 giờ** — cũng là số liệu để kiểm giả định `G3`.
+  - Sửa phụ lục P2 của CHARTER cho khớp (cửa `automerge-delayed`, không phải `owner-merge` — CHARTER mục khác mục 1 và 3).
+
+### P-020 · Watchdog: rút ngưỡng "không có PR nào merge" xuống 6 giờ, và canh routine hỏng
+Chỉ dẫn 4 của chủ dự án trên issue bản tin #17 (2026-09-21).
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: issue #17, chỉ dẫn 4
+- tiêu chí xong:
+  - Ngưỡng "không có PR nào merge" rút từ **48 giờ xuống 6 giờ**.
+  - Cảnh báo khi một routine **có lượt chạy lỗi**, hoặc **không chạy quá 3 giờ**.
+  - Cảnh báo đi theo chuỗi báo động đã có ở `P-011` (tới thẳng điện thoại), không phụ thuộc workflow thứ hai — KF-004.
+
+### P-021 · Luật: routine và phiên không tự đặt vòng chờ
+Chỉ dẫn 5 của chủ dự án trên issue bản tin #17 (2026-09-21).
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: issue #17, chỉ dẫn 5
+- **cửa merge: `automerge-delayed`** — sửa `CLAUDE.md`. Chạy `node ops/invariants.protected-area.ts` để xác nhận.
+- tiêu chí xong:
+  - Thêm luật vào `CLAUDE.md`: routine và phiên **không tự đặt vòng chờ** (`/loop`, hẹn giờ đánh thức). Việc chưa xong thì **kết thúc lượt**, để lượt chạy theo lịch kế tiếp làm tiếp.
+  - Nói rõ vì sao: một lượt chạy nằm chờ vẫn tiêu lượt chạy trong ngày (`G3`) mà không làm gì, và nó giấu việc chưa xong khỏi bản tin.
+
+
 ### P-017 · Chế độ vận hành 1–2 lần mỗi ngày — quyết định `D-C06`
 Chủ dự án chỉ xuất hiện tối đa **hai lần mỗi ngày, tổng không quá 15 phút**, và mọi việc cần anh nằm trong **một** chỗ: bản tin sáng. Bản C3.1 không đạt được điều đó vì ba thứ cộng lại: vùng bảo vệ quá rộng, danh sách `irreversible` quá dài, và mỗi quyết định là một cuộc gọi riêng. Cả ba đều là **cách thực thi** bất biến, không phải bất biến.
 

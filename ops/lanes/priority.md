@@ -4,7 +4,8 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 
 | # | Làn | Vì sao ở vị trí này |
 |---|---|---|
-| **0** | **`platform` · chỉ mục `P-016`** | **Ghim tạm thời.** Hàng đợi merge tuần tự đang phải giải tay ở mọi PR, nên nó chặn mọi làn khác — không làn nào tới được `main` mà không đi qua đó. Gỡ dòng này khi `P-016` chuyển `done`; phần còn lại của làn `platform` vẫn ở vị trí 7. |
+| **0a** | **`platform` · chỉ mục `P-018`** | **Ghim, chủ dự án chỉ định.** Trên issue bản tin #17 (2026-09-21) anh viết "Ưu tiên cao nhất: thực hiện D-C04", và đã trả lời **B** cho issue #14. Từ nay có 3 worker song song nên xung đột ở file log sẽ tăng nếu chưa làm. PR này là `owner-merge` — chỉ chủ dự án merge. Gỡ dòng này khi `P-018` chuyển `done`. |
+| **0b** | **`platform` · chỉ mục `P-016`** | **Ghim tạm thời.** Hàng đợi merge tuần tự đang phải giải tay ở mọi PR, nên nó chặn mọi làn khác — không làn nào tới được `main` mà không đi qua đó. Gỡ dòng này khi `P-016` chuyển `done`; phần còn lại của làn `platform` vẫn ở vị trí 7. |
 | 1 | `integration` | `main` đỏ chặn mọi làn khác. Revert trước, làm việc mới sau. |
 | 2 | `verify` | Kiểm trước, dựa vào sau (CHARTER 11.1 luật 2). Một giả định sai được phát hiện muộn đắt hơn mọi thứ trong bảng này. |
 | 3 | `topic` | Ưu tiên số một của Đợt 1 theo CHARTER mục 10. Cổng Mốc 3 là cổng quan trọng nhất, và nó nằm trọn trong làn này. Trượt cổng đó thì dự án dừng. |
@@ -19,6 +20,9 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 ## Ngoại lệ đứng trên bảng này
 
 Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt bảng:
+
+0. **Bước 0 của phụ lục P3** — giải xung đột merge cho hàng đợi. Chạy ở đầu **mọi** lượt worker, trước cả hai mục dưới đây.
+
 
 1. PR đang mở có CI đỏ, và chưa có worker nào đang xử lý (không có commit mới trong 2 giờ).
 2. PR đang mở có comment chưa xử lý, cùng điều kiện trên.
