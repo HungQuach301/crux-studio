@@ -56,6 +56,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | theo từng mục | `parked` | `VF-G15` |
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
+| G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G11`, `G14`) đã kiểm được một phần ngay trong Đợt 0 — cũng ở dưới.
 
@@ -281,3 +282,22 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 2b. Nếu giả định **kiểm được bằng máy**, thêm một phần `**Kiểm tự động:** \`<mã bài kiểm>\`` và đăng ký bài kiểm cùng mã đó trong `ops/scripts/recheck-assumptions.ts`. Khai một mã không có bài kiểm thì `pnpm assumptions` đỏ — sổ và code không trôi khỏi nhau được. Không kiểm được bằng máy thì **không** thêm phần này: khi đó `pnpm recheck:assumptions` liệt kê mục đó vào nhóm "cần người", và đó là câu trả lời đúng, không phải một ô bỏ trống.
 3. Thêm một mục `VF-<mã>` vào `ops/lanes/verify/backlog.md`.
 4. Nếu giả định chưa có dự phòng viết sẵn thì **không được xây gì lên trên nó** (luật 2).
+
+## G18 · `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi
+
+- **Nội dung:** khi trong cây đã có sẵn một `pnpm-lock.yaml`, `pnpm install --lockfile-only` **giữ lại** mọi phiên bản đã phân giải còn thoả manifest, và chỉ tính lại phần buộc phải đổi. Nó không phân giải lại từ đầu.
+- **Vì sao nó chịu tải:** toàn bộ cơ chế tạo lại lockfile của mục `I-004` đứng trên đây. Nếu sai, mỗi lần integrator giải một xung đột lockfile sẽ **âm thầm nâng phiên bản của hàng trăm gói phụ thuộc gián tiếp** — một thay đổi lớn không ai yêu cầu, đi kèm một PR nói rằng nó chỉ giải xung đột. Không gì đỏ; đúng nhóm lỗi Z.
+- **Độ tin cậy:** **`đã kiểm`** — bằng chạy thật, không bằng đọc tài liệu.
+
+  **Bằng chứng, 2026-09-21.** Một workspace tạm, phụ thuộc thật từ registry, hai lần chạy khác nhau **đúng một điều kiện** — có bản mồi hay không:
+
+  | Điều kiện đầu vào | `pnpm install --lockfile-only` cho ra |
+  |---|---|
+  | lockfile cũ còn nguyên (đã phân giải `semver@7.5.0`), manifest nới thành `^7.0.0` | **giữ `semver@7.5.0`** |
+  | xoá lockfile, sinh từ số không, cùng manifest `^7.0.0` | **`semver@7.8.5`** |
+
+  Hai dòng này là cùng một manifest, nên chênh lệch đo được chính là tác dụng của bản mồi. `semver` được chọn vì nó có nhiều bản phát hành trong cùng một dải `^7`.
+- **Phần phụ thuộc:** `ops/scripts/integrator-lockfile.ts` · `ops/lanes/integration/backlog.md` (I-004)
+- **Cách kiểm lại:** lặp đúng hai dòng trong bảng trên. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi registry npm, mà các lệnh kiểm của repo phải chạy được khi không có mạng — một bài kiểm im lặng bỏ qua vì không ra được internet còn tệ hơn là không có bài kiểm nào. Mục `VF-G18` giữ phần kiểm định kỳ.
+- **Dự phòng — chưa cần viết sẵn:** nếu giả định này hoá ra sai, cơ chế `I-004` không mất an toàn, nó chỉ mất tính "ít xáo trộn nhất": lockfile vẫn khớp manifest và CI vẫn gác. Khi đó `integrator-lockfile.ts` chuyển sang `aborted-ineligible` cho mọi xung đột lockfile và giao lại cho người — một dòng sửa, hành vi quay về đúng như trước mục `I-004`.
+- **Trạng thái:** đã kiểm, đang được dùng. Kiểm lại khi nâng `pnpm` qua một phiên bản chính.

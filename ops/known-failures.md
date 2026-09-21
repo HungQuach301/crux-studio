@@ -273,6 +273,8 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 **Cập nhật 2026-09-21 (tiếp) · Cơ chế của `P-016` đã có, dạng tool chứ không phải lời:** `ops/scripts/integrator-resolve.ts` đối chiếu bằng `git diff --numstat` với tổ tiên chung ở cả hai bên trước khi quyết — đúng "đối chiếu, không đoán" của KF-002 — rồi giải bằng `git merge-file --union` cho MỌI file đủ điều kiện, không chỉ file đã khai `merge=union`. Nhờ vậy lỗ hổng của G17 (attribute không tự áp cho chính lần gộp mang nó tới) không còn quan trọng: tool không phụ thuộc `.gitattributes` để quyết định giải hay không. Còn treo: nhịp chạy mỗi giờ của routine `crux-integrator` cần chủ dự án tự đổi lịch ở `claude.ai/code/routines` (agent không đổi được lịch một routine đã tạo).
 
+**Cập nhật 2026-09-21 (mục `I-004`) · Một loại file mà union là SAI, và vì sao:** `pnpm-lock.yaml`. Union chỉ đúng khi mỗi dòng độc lập và thứ tự dòng không mang ý nghĩa — lockfile không thoả cả hai: nó là YAML có cấu trúc, và là **file dẫn xuất** của các `package.json`. Ghép dòng của hai bên cho ra file *merge được mà vẫn hỏng* (nhóm lỗi Z): khoá lặp hoặc thụt lề sai, không gì đỏ cho tới khi `pnpm install --frozen-lockfile` chạy ở một máy khác. Thêm vào đó, xung đột lockfile thật gần như luôn có **sửa dòng ở cả hai bên** (một phiên bản đổi chỗ), nên luật "thuần cộng thêm" của `integrator-resolve.ts` luôn trả `aborted-ineligible` — PR nằm chờ người, đúng thứ `P-016` sinh ra để xoá. Cách đúng là **tạo lại** từ manifest của cây vừa gộp: `ops/scripts/integrator-lockfile.ts` (CHARTER mục 7 — lockfile do làn `integration` tạo lại).
+
 ---
 
 ## KF-006 · Mô tả nhãn dài quá 100 ký tự làm đỏ **bước đầu tiên** của job gắn nhãn `owner-merge`
