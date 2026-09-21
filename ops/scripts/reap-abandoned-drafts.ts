@@ -132,16 +132,43 @@ export interface ReapAction {
 
 export interface ReapPlan {
   actions: ReapAction[];
-  /** Nội dung backlog đã cập nhật, theo tên làn — chỉ những làn thật sự đổi. */
+  /** Nội dung backlog nếu MỌI action đều thành công — chỉ để xem trước; xem ghi chú ở `applyBacklogUpdates`. */
   updatedBacklogs: Map<string, string>;
   /** Nhánh không khớp `claude/<lane>/<id>` — bỏ qua, không đoán lane/id. */
   unparsed: DraftPrCandidate[];
 }
 
 /**
+ * Áp `revertClaimedToReady` tuần tự cho đúng danh sách `actions` được truyền
+ * vào — KHÔNG suy ra "mọi PR đã chọn ở bước quyết định". Tách riêng khỏi
+ * `planReap` vì lý do một lỗi review đã chỉ ra ở PR `I-001`: nếu ta luôn ghi
+ * đè bằng bản backlog tính sẵn cho *toàn bộ* danh sách đã chọn, một PR đóng
+ * thất bại giữa chừng (mạng, quyền) vẫn khiến mục của nó bị đổi thành
+ * `ready` dù PR chưa hề được đóng — và một PR đóng thất bại còn có thể chặn
+ * luôn việc ghi backlog của các PR đã đóng thành công *trước* nó. `main()`
+ * gọi hàm này CHỈ với các action đã đóng PR thành công, để hai lỗi trên
+ * không xảy ra: mỗi mục backlog chỉ về `ready` khi PR của nó thật sự đã đóng,
+ * và một PR lỗi không kéo theo các PR khác.
+ */
+export function applyBacklogUpdates(
+  backlogByLane: Map<string, string>,
+  actions: Array<{ lane: string; id: string }>,
+): Map<string, string> {
+  const updated = new Map<string, string>();
+  for (const { lane, id } of actions) {
+    const current = updated.get(lane) ?? backlogByLane.get(lane);
+    if (current === undefined) continue;
+    const result = revertClaimedToReady(current, id);
+    if (result.changed) updated.set(lane, result.content);
+  }
+  return updated;
+}
+
+/**
  * Hàm thuần: từ danh sách PR mở và nội dung backlog hiện tại (theo làn),
- * tính ra việc cần làm. Không gọi `gh`, không ghi đĩa — `main()` mới làm
- * việc đó, dựa trên kết quả hàm này.
+ * tính ra việc CÓ THỂ cần làm — dùng để in bản xem trước và để lấy `note`
+ * cho từng PR. Không gọi `gh`, không ghi đĩa. `main()` không dùng thẳng
+ * `updatedBacklogs` ở đây để ghi đĩa — xem `applyBacklogUpdates`.
  */
 export function planReap(
   prs: DraftPrCandidate[],
@@ -151,7 +178,6 @@ export function planReap(
 ): ReapPlan {
   const abandoned = selectAbandoned(prs, now, thresholdHours);
   const actions: ReapAction[] = [];
-  const updatedBacklogs = new Map<string, string>();
   const unparsed: DraftPrCandidate[] = [];
 
   for (const pr of abandoned) {
@@ -162,18 +188,23 @@ export function planReap(
     }
     const { lane, id } = parsed;
     const hours = hoursSince(pr.lastCommitAt, now) ?? Number.POSITIVE_INFINITY;
+    actions.push({ pr, lane, id, hours, note: abandonNote(lane, id, hours), backlogChanged: false });
+  }
 
-    const current = updatedBacklogs.get(lane) ?? backlogByLane.get(lane);
-    let backlogChanged = false;
-    if (current !== undefined) {
-      const result = revertClaimedToReady(current, id);
-      if (result.changed) {
-        updatedBacklogs.set(lane, result.content);
-        backlogChanged = true;
-      }
-    }
-
-    actions.push({ pr, lane, id, hours, note: abandonNote(lane, id, hours), backlogChanged });
+  const updatedBacklogs = applyBacklogUpdates(
+    backlogByLane,
+    actions.map((a) => ({ lane: a.lane, id: a.id })),
+  );
+  for (const action of actions) {
+    const laneContent = updatedBacklogs.get(action.lane);
+    if (laneContent === undefined) continue;
+    // Mục của action này thật sự đổi khi và chỉ khi làm lại riêng một mình
+    // nó cũng đổi — tránh việc một action SAU trong cùng làn "mượn" cờ
+    // `backlogChanged` của action này.
+    action.backlogChanged = revertClaimedToReady(
+      backlogByLane.get(action.lane) ?? '',
+      action.id,
+    ).changed;
   }
 
   return { actions, updatedBacklogs, unparsed };
@@ -249,24 +280,44 @@ function main(): void {
   const backlogByLane = readLaneBacklogs(candidateLanes);
   const plan = planReap(openPrs, new Date(), backlogByLane, thresholdHours);
 
+  // Đóng từng PR độc lập: một PR lỗi (mạng, quyền) không được chặn các PR
+  // khác, và backlog chỉ được cập nhật cho PR THẬT SỰ đã đóng — xem
+  // `applyBacklogUpdates` để biết vì sao (lỗi review PR I-001).
+  const closed: ReapAction[] = [];
+  const failed: Array<{ action: ReapAction; error: string }> = [];
   for (const action of plan.actions) {
-    runGh(['pr', 'close', String(action.pr.number), '--comment', action.note]);
+    try {
+      runGh(['pr', 'close', String(action.pr.number), '--comment', action.note]);
+      closed.push(action);
+    } catch (error) {
+      failed.push({ action, error: error instanceof Error ? error.message : String(error) });
+    }
   }
-  for (const [lane, content] of plan.updatedBacklogs) {
+
+  const updatedBacklogs = applyBacklogUpdates(
+    backlogByLane,
+    closed.map((a) => ({ lane: a.lane, id: a.id })),
+  );
+  for (const [lane, content] of updatedBacklogs) {
     writeFileSync(join(process.cwd(), 'ops', 'lanes', lane, 'backlog.md'), content, 'utf8');
   }
 
   process.stdout.write(
     `${JSON.stringify(
       {
-        closed: plan.actions.map((a) => ({ number: a.pr.number, lane: a.lane, id: a.id, hours: Math.floor(a.hours) })),
-        backlogUpdated: [...plan.updatedBacklogs.keys()],
+        closed: closed.map((a) => ({ number: a.pr.number, lane: a.lane, id: a.id, hours: Math.floor(a.hours) })),
+        failed: failed.map((f) => ({ number: f.action.pr.number, lane: f.action.lane, id: f.action.id, error: f.error })),
+        backlogUpdated: [...updatedBacklogs.keys()],
         unparsed: plan.unparsed.map((pr) => pr.headRefName),
       },
       null,
       2,
     )}\n`,
   );
+
+  // Có PR lỗi thì thoát khác 0: routine gọi tool này cần biết để đưa vào
+  // ghi chú của lần chạy (CHARTER 2.2), không được nuốt lỗi im lặng.
+  if (failed.length > 0) process.exitCode = 1;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

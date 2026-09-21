@@ -17,6 +17,7 @@ import {
   revertClaimedToReady,
   abandonNote,
   planReap,
+  applyBacklogUpdates,
   type DraftPrCandidate,
 } from '../scripts/reap-abandoned-drafts.ts';
 
@@ -148,4 +149,56 @@ test('planReap: không có PR nào bỏ thì không có hành động, không l�
   assert.deepEqual(plan.actions, []);
   assert.equal(plan.updatedBacklogs.size, 0);
   assert.deepEqual(plan.unparsed, []);
+});
+
+// --- applyBacklogUpdates: sửa lỗi review PR I-001 ("một PR đóng thất bại
+// không được kéo theo trạng thái ready giả cho mục của nó, và không được
+// chặn việc ghi backlog của các PR đã đóng thành công trước đó"). ---
+
+const TWO_ITEM_BACKLOG = [
+  '# 🤖 Backlog làn `integration`',
+  '',
+  '### I-001 · Một',
+  '- status: claimed',
+  '',
+  '### I-002 · Hai',
+  '- status: claimed',
+].join('\n');
+
+test('applyBacklogUpdates: chỉ đổi đúng các action được truyền vào', () => {
+  const backlogByLane = new Map([['integration', TWO_ITEM_BACKLOG]]);
+  const updated = applyBacklogUpdates(backlogByLane, [{ lane: 'integration', id: 'I-001' }]);
+  const content = updated.get('integration')!;
+  assert.match(content, /### I-001 · Một\n- status: ready/);
+  // I-002 KHÔNG được truyền vào (mô phỏng PR của nó đóng thất bại) — phải
+  // còn nguyên `claimed`, không được "mượn" theo I-001.
+  assert.match(content, /### I-002 · Hai\n- status: claimed/);
+});
+
+test('applyBacklogUpdates: action rỗng (mọi PR đóng đều thất bại) thì không đổi gì', () => {
+  const backlogByLane = new Map([['integration', TWO_ITEM_BACKLOG]]);
+  const updated = applyBacklogUpdates(backlogByLane, []);
+  assert.equal(updated.size, 0);
+});
+
+test('applyBacklogUpdates: hai action cùng làn, cả hai đều áp được (không mất action đầu)', () => {
+  const backlogByLane = new Map([['integration', TWO_ITEM_BACKLOG]]);
+  const updated = applyBacklogUpdates(backlogByLane, [
+    { lane: 'integration', id: 'I-001' },
+    { lane: 'integration', id: 'I-002' },
+  ]);
+  const content = updated.get('integration')!;
+  assert.match(content, /### I-001 · Một\n- status: ready/);
+  assert.match(content, /### I-002 · Hai\n- status: ready/);
+});
+
+test('planReap: backlogChanged của mỗi action độc lập, không phụ thuộc action khác cùng làn', () => {
+  const prs: DraftPrCandidate[] = [
+    { number: 1, headRefName: 'claude/integration/I-001', isDraft: true, lastCommitAt: hoursAgo(100) },
+    { number: 2, headRefName: 'claude/integration/I-002', isDraft: true, lastCommitAt: hoursAgo(100) },
+  ];
+  const backlogByLane = new Map([['integration', TWO_ITEM_BACKLOG]]);
+  const plan = planReap(prs, NOW, backlogByLane);
+  assert.equal(plan.actions.find((a) => a.id === 'I-001')!.backlogChanged, true);
+  assert.equal(plan.actions.find((a) => a.id === 'I-002')!.backlogChanged, true);
 });
