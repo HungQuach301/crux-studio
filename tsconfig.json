@@ -25,6 +25,7 @@
   "include": [
     "kernel/**/*.ts",
     "workshops/**/*.ts",
-    "ops/**/*.ts"
+    "ops/**/*.ts",
+    "spike/**/*.ts"
   ]
 }

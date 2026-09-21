@@ -1,0 +1,262 @@
+<!doctype html>
+<meta charset="utf-8">
+<!--
+  🤖 Cảnh thử của spike canvas liên tục (mục visual/V-002, spec WP-003, quyết định D-04).
+
+  Kiến trúc đúng như D-04: MỘT canvas lớn cố định 6000x3400 được vẽ một lần;
+  "chuyển cảnh" là máy quay di chuyển trong canvas đó. Mỗi khung chỉ là một
+  lần drawImage cắt vùng máy quay ra khung hình 1920x1080.
+
+  Nội dung 3 phút theo WP-003 mục 3b: trôi ngang chậm qua biểu đồ cột · zoom
+  vào một con số · morph giữa hai trạng thái của cùng dữ liệu · quay lại một
+  vùng đã xem trước đó.
+
+  Chữ và đường kẻ mảnh là CỐ Ý: chỉ số 4-6 nói về giật hình ở đồ hoạ cạnh
+  sắc và chữ, nên cảnh phải có chúng, nếu không phép đo không nói lên gì.
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #0d1117; overflow: hidden; }
+  #view { display: block; }
+</style>
+<canvas id="view" width="1920" height="1080"></canvas>
+<script>
+'use strict';
+
+const CANVAS_W = 6000;
+const CANVAS_H = 3400;
+const VIEW_W = 1920;
+const VIEW_H = 1080;
+const DURATION_S = 180;
+
+const view = document.getElementById('view');
+const vctx = view.getContext('2d', { alpha: false });
+
+// Canvas lớn cố định. Đây là thứ mà chỉ số 1 (bộ nhớ đỉnh) đo.
+const big = document.createElement('canvas');
+big.width = CANVAS_W;
+big.height = CANVAS_H;
+const bctx = big.getContext('2d', { alpha: false });
+
+// ---------------------------------------------------------------- dữ liệu
+// Hai trạng thái của CÙNG một bộ dữ liệu, cho đoạn morph.
+const N_BARS = 24;
+const stateA = [];
+const stateB = [];
+for (let i = 0; i < N_BARS; i++) {
+  const p = i / (N_BARS - 1);
+  stateA.push(0.18 + 0.72 * Math.pow(p, 1.7) + 0.05 * Math.sin(i * 2.1));
+  stateB.push(0.62 - 0.34 * Math.pow(p, 0.8) + 0.07 * Math.cos(i * 1.3));
+}
+
+const PALETTE = {
+  bg: '#0d1117',
+  grid: '#1f2933',
+  gridStrong: '#2c3a47',
+  bar: '#3d8bfd',
+  barAlt: '#f0a202',
+  text: '#e6edf3',
+  dim: '#8b949e',
+};
+
+// Vùng biểu đồ cột nằm trong toạ độ canvas lớn.
+const CHART = { x: 260, y: 1180, w: 3400, h: 1500 };
+const MORPH = { x: 3900, y: 1180, w: 1850, h: 1500 };
+
+function drawGrid() {
+  bctx.fillStyle = PALETTE.bg;
+  bctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  bctx.lineWidth = 1;
+  for (let x = 0; x <= CANVAS_W; x += 100) {
+    bctx.strokeStyle = (x % 500 === 0) ? PALETTE.gridStrong : PALETTE.grid;
+    bctx.beginPath();
+    bctx.moveTo(x + 0.5, 0);
+    bctx.lineTo(x + 0.5, CANVAS_H);
+    bctx.stroke();
+  }
+  for (let y = 0; y <= CANVAS_H; y += 100) {
+    bctx.strokeStyle = (y % 500 === 0) ? PALETTE.gridStrong : PALETTE.grid;
+    bctx.beginPath();
+    bctx.moveTo(0, y + 0.5);
+    bctx.lineTo(CANVAS_W, y + 0.5);
+    bctx.stroke();
+  }
+}
+
+function drawBars(ctx, box, values, colour) {
+  const gap = box.w / values.length * 0.28;
+  const bw = (box.w - gap * (values.length - 1)) / values.length;
+  for (let i = 0; i < values.length; i++) {
+    const h = Math.max(2, values[i] * box.h);
+    const x = box.x + i * (bw + gap);
+    const y = box.y + box.h - h;
+    ctx.fillStyle = (i % 6 === 5) ? PALETTE.barAlt : colour;
+    ctx.fillRect(x, y, bw, h);
+    ctx.fillStyle = PALETTE.dim;
+    ctx.font = '28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Q' + ((i % 4) + 1) + '·' + (2019 + Math.floor(i / 4)), x + bw / 2, box.y + box.h + 44);
+  }
+  // Đường trục: cạnh sắc 1px, đúng loại dễ giật khi máy quay trôi chậm.
+  ctx.strokeStyle = PALETTE.text;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(box.x, box.y + box.h + 1);
+  ctx.lineTo(box.x + box.w, box.y + box.h + 1);
+  ctx.stroke();
+}
+
+function paintStaticScene() {
+  drawGrid();
+
+  bctx.textAlign = 'left';
+  bctx.fillStyle = PALETTE.text;
+  bctx.font = '700 180px sans-serif';
+  bctx.fillText('Median rent vs. median income', 260, 520);
+  bctx.fillStyle = PALETTE.dim;
+  bctx.font = '64px sans-serif';
+  bctx.fillText('Spike canvas · V-002 · dữ liệu giả, chỉ để đo hiệu năng', 260, 640);
+
+  drawBars(bctx, CHART, stateA, PALETTE.bar);
+
+  // Con số lớn để zoom vào (đoạn 2 của kịch bản).
+  bctx.textAlign = 'center';
+  bctx.fillStyle = PALETTE.text;
+  bctx.font = '700 520px sans-serif';
+  bctx.fillText('41.3%', 4820, 820);
+  bctx.fillStyle = PALETTE.dim;
+  bctx.font = '72px sans-serif';
+  bctx.fillText('of income goes to rent', 4820, 950);
+
+  // Khung của vùng morph; nội dung vùng này được vẽ lại mỗi khung.
+  bctx.strokeStyle = PALETTE.gridStrong;
+  bctx.lineWidth = 3;
+  bctx.strokeRect(MORPH.x - 60, MORPH.y - 160, MORPH.w + 120, MORPH.h + 320);
+  bctx.textAlign = 'left';
+  bctx.fillStyle = PALETTE.dim;
+  bctx.font = '56px sans-serif';
+  bctx.fillText('Cùng dữ liệu, hai cách chuẩn hoá', MORPH.x - 40, MORPH.y - 60);
+
+  // Dải chân trang chạy suốt chiều ngang: giúp thấy rõ trôi ngang.
+  bctx.textAlign = 'left';
+  bctx.fillStyle = PALETTE.grid;
+  for (let x = 0; x < CANVAS_W; x += 400) {
+    bctx.font = '40px monospace';
+    bctx.fillText(String(x).padStart(4, '0'), x + 12, CANVAS_H - 60);
+  }
+}
+
+function paintMorphRegion(mix) {
+  bctx.save();
+  bctx.beginPath();
+  bctx.rect(MORPH.x - 50, MORPH.y - 140, MORPH.w + 100, MORPH.h + 240);
+  bctx.clip();
+  bctx.fillStyle = PALETTE.bg;
+  bctx.fillRect(MORPH.x - 50, MORPH.y - 140, MORPH.w + 100, MORPH.h + 240);
+  const blend = [];
+  for (let i = 0; i < N_BARS; i++) blend.push(stateA[i] * (1 - mix) + stateB[i] * mix);
+  drawBars(bctx, MORPH, blend, PALETTE.bar);
+  bctx.restore();
+}
+
+
+// ------------------------------------------------------------ máy quay
+// Bốn đoạn của WP-003 mục 3b. Mỗi mốc là một trạng thái máy quay
+// {x, y, zoom} ở giây t; giữa hai mốc nội suy mượt (smoothstep).
+// Không mốc nào để máy quay đứng yên hoàn toàn: quy tắc "không khung nào
+// đứng yên, máy quay trôi chậm liên tục" của D-04 chính là điều kiện sinh
+// ra nguy cơ giật hình mà chỉ số 4-6 đo.
+const KEYS = [
+  { t: 0,   x: 1300, y: 1750, zoom: 0.62 },  // mở, nhìn rộng biểu đồ cột
+  { t: 52,  x: 3200, y: 1820, zoom: 0.58 },  // 1. trôi ngang chậm qua biểu đồ
+  { t: 62,  x: 4600, y: 1100, zoom: 0.62 },  // bắt sang con số lớn
+  { t: 88,  x: 4820, y: 830,  zoom: 1.70 },  // 2. zoom vào một con số
+  { t: 100, x: 4830, y: 1500, zoom: 0.72 },  // lùi ra, hướng về vùng morph
+  { t: 108, x: 4820, y: 1900, zoom: 0.66 },  // vào vùng morph
+  { t: 140, x: 4790, y: 1930, zoom: 0.63 },  // 3. morph, máy quay vẫn trôi
+  { t: 162, x: 2600, y: 1800, zoom: 0.60 },  // 4. quay lại vùng đã xem
+  { t: 180, x: 1500, y: 1770, zoom: 0.62 },  // về gần điểm mở
+];
+
+// Đoạn morph: mix chạy 0 -> 1 -> 0 trong khoảng này.
+const MORPH_FROM = 108;
+const MORPH_TO = 150;
+
+function smoothstep(p) { return p * p * (3 - 2 * p); }
+
+function cameraAt(tSec) {
+  const t = Math.max(0, Math.min(DURATION_S, tSec));
+  let i = 0;
+  while (i < KEYS.length - 2 && KEYS[i + 1].t <= t) i++;
+  const a = KEYS[i];
+  const b = KEYS[i + 1];
+  const span = b.t - a.t;
+  const p = span <= 0 ? 0 : smoothstep((t - a.t) / span);
+  return {
+    x: a.x + (b.x - a.x) * p,
+    y: a.y + (b.y - a.y) * p,
+    zoom: a.zoom + (b.zoom - a.zoom) * p,
+  };
+}
+
+function morphMixAt(tSec) {
+  if (tSec <= MORPH_FROM || tSec >= MORPH_TO) return 0;
+  const p = (tSec - MORPH_FROM) / (MORPH_TO - MORPH_FROM);
+  return smoothstep(p < 0.5 ? p * 2 : (1 - p) * 2);
+}
+
+// Vẽ MỘT mẫu của khung hình tại giây tSec lên ngữ cảnh đích.
+function drawSample(ctx, tSec, alpha) {
+  const cam = cameraAt(tSec);
+  const sw = VIEW_W / cam.zoom;
+  const sh = VIEW_H / cam.zoom;
+  let sx = cam.x - sw / 2;
+  let sy = cam.y - sh / 2;
+  sx = Math.max(0, Math.min(CANVAS_W - sw, sx));
+  sy = Math.max(0, Math.min(CANVAS_H - sh, sy));
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(big, sx, sy, sw, sh, 0, 0, VIEW_W, VIEW_H);
+  ctx.globalAlpha = 1;
+}
+
+let lastMorphMix = -1;
+
+/**
+ * Vẽ khung hình số `frame`.
+ * - fps: 30 hoặc 60
+ * - blurSamples: 1 = không mờ chuyển động; >1 = lấy ngần ấy mẫu phụ trong
+ *   khoảng thời gian của một khung rồi cộng trung bình.
+ * - staticCamera: true thì máy quay đứng yên — đó là phép đối chứng của
+ *   chỉ số 3 (chậm hơn render tĩnh cùng số khung bao nhiêu lần).
+ */
+window.renderFrame = function (frame, fps, blurSamples, staticCamera) {
+  const tSec = staticCamera ? 0 : frame / fps;
+
+  const mix = staticCamera ? 0 : morphMixAt(tSec);
+  if (mix !== lastMorphMix) {
+    paintMorphRegion(mix);
+    lastMorphMix = mix;
+  }
+
+  vctx.globalAlpha = 1;
+  vctx.fillStyle = PALETTE.bg;
+  vctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  if (blurSamples <= 1) {
+    drawSample(vctx, tSec, 1);
+  } else {
+    const dt = 1 / fps;
+    for (let k = 0; k < blurSamples; k++) {
+      // Cửa trập mở 50% khoảng khung — quy ước phim thường dùng.
+      const sub = tSec + (k / blurSamples) * dt * 0.5;
+      drawSample(vctx, sub, 1 / blurSamples);
+    }
+  }
+};
+
+window.sceneReady = false;
+paintStaticScene();
+paintMorphRegion(0);
+lastMorphMix = 0;
+window.renderFrame(0, 30, 1, false);
+window.sceneReady = true;
+</script>
