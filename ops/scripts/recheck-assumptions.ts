@@ -64,6 +64,13 @@ export interface CheckOutcome {
   observed: string;
   /** Bằng chứng thô, mỗi dòng một ý. Đi vào issue nên phải đọc được. */
   evidence: string[];
+  /**
+   * Bài kiểm chạy được nhưng KHÔNG có gì để quan sát (cửa sổ quét rỗng).
+   * Phải phân biệt với "đã quan sát và thấy đúng": hai thứ này in ra giống
+   * nhau thì một bài kiểm không bao giờ chạy trông y hệt một bài kiểm luôn
+   * xanh — hỏng mà mọi chỉ báo đều xanh.
+   */
+  observedNothing?: boolean;
 }
 
 export interface CheckReport extends CheckOutcome {
@@ -158,16 +165,44 @@ export function formatDecisionIssue(entry: LedgerEntry, report: CheckReport): { 
 export interface CommitTrailerInfo {
   sha: string;
   subject: string;
-  /** Commit do chính agent soạn message: có `Co-Authored-By` nhắc tới Claude. */
-  byAgent: boolean;
   hasSessionTrailer: boolean;
 }
 
 /**
+ * Commit do **công cụ** tạo, nhận diện bằng một danh sách trắng HẸP: message
+ * của chúng do máy sinh, không đi qua agent, nên chúng không mang và không
+ * thể mang trailer.
+ *
+ * Danh sách trắng chứ không phải danh sách đen, và đó là điểm mấu chốt.
+ * Bản đầu làm ngược: "commit nào không có `Co-Authored-By: Claude` thì là
+ * commit công cụ". Luật đó **fail-open đúng vào kịch bản G14 phải bắt** —
+ * hôm nền tảng tắt `attribution`, cả `Co-Authored-By` lẫn `Claude-Session`
+ * biến mất cùng lúc, mọi commit của agent bị xếp vào nhóm "công cụ", phép
+ * đếm còn 0 phần tử, và bài kiểm kết luận `khớp`. Tức là nó xanh bằng cách
+ * gọi commit của agent là commit của công cụ — đúng nhóm lỗi Z mà chính
+ * file này lên án ở đầu.
+ *
+ * Với danh sách trắng thì chiều hỏng đảo lại: một commit lạ mà không nhận
+ * ra là do công cụ sẽ bị tính vào phép đếm, và thiếu trailer thành **bằng
+ * chứng ngược với G14** thay vì thành lý do loại khỏi phép đếm.
+ */
+export function isToolCommit(subject: string): boolean {
+  // `integrator-resolve.ts` sinh đúng hai dạng message này.
+  if (/^Gộp .*\(integrator[,)]/.test(subject)) return true;
+  // Message mặc định do chính git sinh khi gộp.
+  if (/^Merge (branch|remote-tracking branch|commit) /.test(subject)) return true;
+  return false;
+}
+
+/**
  * G14 nói: commit do routine và thread tạo mang trailer `Claude-Session`.
- * Sổ ghi `đã kiểm một phần` — phần đã kiểm là phiên cloud tương tác, phần
- * chưa kiểm là **routine**. Bài kiểm này đọc chính lịch sử git của repo, nên
- * mỗi lượt routine chạy lại là một lần quan sát thật, miễn phí.
+ * Bài kiểm này đọc chính lịch sử git của repo, nên mỗi lượt routine chạy lại
+ * là một lần quan sát thật, miễn phí.
+ *
+ * Nó canh **hồi quy**: "trailer còn được ghi không". Nó KHÔNG phân biệt được
+ * commit của routine với commit của thread — git không có trường nào cho
+ * việc đó — nên phần phân biệt ấy vẫn nằm ở mục `VF-G14`, không được coi là
+ * đã xong nhờ bài kiểm này.
  *
  * Phạm vi quét là **commit chưa vào `main`**, tức commit đang nằm trên nhánh
  * PR. Đây không phải chi tiết kỹ thuật vụn: repo merge bằng **squash**, và
@@ -176,40 +211,48 @@ export interface CommitTrailerInfo {
  * trailer cuối. Quét cả `main` thì mọi commit lịch sử hiện ra như "thiếu
  * trailer" và bài kiểm kêu `sai` vì một lý do chẳng liên quan gì tới G14.
  * Lần chạy đầu của chính bài kiểm này đã mắc đúng lỗi đó.
- *
- * Trong phạm vi ấy, chỉ xét commit do agent soạn message (`Co-Authored-By:
- * Claude …`). Commit do công cụ tạo — merge commit của
- * `integrator-resolve.ts` chẳng hạn — không mang trailer và không thể mang,
- * vì message của chúng không đi qua agent; chúng thành ghi chú riêng.
  */
 export function judgeTrailerEvidence(commits: CommitTrailerInfo[]): CheckOutcome {
-  const byAgent = commits.filter((c) => c.byAgent);
+  const byTool = commits.filter((c) => isToolCommit(c.subject));
+  const byAgent = commits.filter((c) => !isToolCommit(c.subject));
   const missing = byAgent.filter((c) => !c.hasSessionTrailer);
-  const byTool = commits.filter((c) => !c.byAgent);
 
   const note =
     byTool.length > 0
-      ? `${byTool.length} commit do công cụ tạo (merge của integrator, squash của GitHub) không mang trailer — ` +
-        'đúng như dự kiến, message của chúng không đi qua agent.'
+      ? `${byTool.length} commit do công cụ tạo (merge của integrator) không mang trailer — đúng như dự kiến, ` +
+        'message của chúng do máy sinh, không đi qua agent.'
       : 'Không có commit do công cụ tạo trong phạm vi quét.';
 
-  if (byAgent.length === 0) {
+  if (commits.length === 0) {
     return {
       verdict: 'khớp',
-      observed: 'không có commit nào do agent soạn trong phạm vi quét, chưa quan sát được gì.',
-      evidence: [note],
+      observedNothing: true,
+      observed: 'không có commit nào trên nhánh `claude/*` chưa vào `main` — không có gì để quan sát.',
+      evidence: [
+        'Không quan sát được gì KHÁC với quan sát được và thấy đúng. Thứ Hai không có PR nào đang mở là ' +
+          'chuyện bình thường (nhánh merge xong thì bị xoá), nên trạng thái này sẽ xuất hiện thật.',
+      ],
     };
   }
 
   if (missing.length > 0) {
     return {
       verdict: 'sai',
-      observed: `${missing.length}/${byAgent.length} commit do agent soạn KHÔNG mang trailer Claude-Session.`,
+      observed: `${missing.length}/${byAgent.length} commit KHÔNG mang trailer Claude-Session.`,
       evidence: [
         ...missing.map((c) => `\`${c.sha}\` ${c.subject} — thiếu trailer`),
         note,
         'Trailer là dấu vết duy nhất phân biệt người với máy khi chưa tách danh tính (CHARTER 3.1, mặc định M6).',
       ],
+    };
+  }
+
+  if (byAgent.length === 0) {
+    return {
+      verdict: 'khớp',
+      observedNothing: true,
+      observed: `${byTool.length} commit trong phạm vi quét đều do công cụ tạo — không có commit của agent để quan sát.`,
+      evidence: [note],
     };
   }
 
@@ -247,7 +290,7 @@ export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
 
   if (refs.length === 0) return [];
 
-  const format = ['%H', '%s', '%(trailers:key=Co-Authored-By,valueonly=true)', '%(trailers:key=Claude-Session,valueonly=true)'].join(FIELD);
+  const format = ['%H', '%s', '%(trailers:key=Claude-Session,valueonly=true)'].join(FIELD);
   const raw = git(root, [
     'log',
     `--since=${days}.days.ago`,
@@ -261,13 +304,8 @@ export function collectCommits(root: string, days = 14): CommitTrailerInfo[] {
     .map((record) => record.trim())
     .filter((record) => record.length > 0)
     .map((record) => {
-      const [sha = '', subject = '', coAuthored = '', session = ''] = record.split(FIELD);
-      return {
-        sha: sha.slice(0, 7),
-        subject,
-        byAgent: /claude/i.test(coAuthored),
-        hasSessionTrailer: session.trim().length > 0,
-      };
+      const [sha = '', subject = '', session = ''] = record.split(FIELD);
+      return { sha: sha.slice(0, 7), subject, hasSessionTrailer: session.trim().length > 0 };
     });
 }
 
@@ -341,6 +379,9 @@ function runUnionCase(withRuleOnBranch: boolean): 'sạch' | 'xung đột' {
     git(dir, ['init', '-q', '-b', 'main']);
     git(dir, ['config', 'user.email', 'test@example.invalid']);
     git(dir, ['config', 'user.name', 'Test']);
+    // Repo tạm vẫn đọc cấu hình toàn cục của máy: máy nào bật
+    // `commit.gpgsign` thì mọi `git commit` dưới đây fail và bài kiểm sập.
+    git(dir, ['config', 'commit.gpgsign', 'false']);
     writeFileSync(join(dir, 'shared.jsonl'), '{"at":"goc"}\n', 'utf8');
     git(dir, ['add', '.']);
     git(dir, ['commit', '-q', '-m', 'goc']);
@@ -380,22 +421,18 @@ export function runUnionExperiment(): UnionRuns {
 export interface AutoCheck {
   id: string;
   code: string;
-  /** Một câu cho người đọc kết quả: bài kiểm này quan sát cái gì. */
-  what: string;
   run: (root: string) => CheckOutcome;
 }
 
 export const AUTO_CHECKS: AutoCheck[] = [
   {
-    id: 'trailer-commit-routine',
+    id: 'session-trailer-on-branch',
     code: 'G14',
-    what: 'mọi commit do agent soạn trong 14 ngày qua có mang trailer `Claude-Session` không',
     run: (root) => judgeTrailerEvidence(collectCommits(root)),
   },
   {
-    id: 'union-theo-thu-tu-thoi-gian',
+    id: 'union-merge-order',
     code: 'G17',
-    what: 'hai điều kiện mà dự phòng của G17 đang đứng lên trên còn đúng không',
     run: () => judgeUnionRuns(runUnionExperiment()),
   },
 ];
@@ -418,28 +455,40 @@ function main(): void {
   const needsHuman = entries.filter((entry) => !entry.autoCheck);
 
   const reports: CheckReport[] = [];
-  const out: string[] = [];
+  const broken: string[] = [];
 
   for (const entry of declared) {
     const check = AUTO_CHECKS.find((candidate) => candidate.id === entry.autoCheck);
     if (!check) {
       // Sổ khai một bài kiểm không tồn tại. `pnpm assumptions` cũng bắt lỗi
       // này, nên tới được đây là bất thường — báo, không đoán.
-      out.push(`${entry.code} · KHAI SAI — sổ khai bài kiểm \`${entry.autoCheck}\` nhưng không có bài kiểm nào tên thế.`);
+      broken.push(`⚠ ${entry.code} · KHAI SAI — sổ khai \`${entry.autoCheck}\` nhưng không có bài kiểm nào tên thế.`);
       process.exitCode = 1;
       continue;
     }
-    const outcome = check.run(root);
-    reports.push({ code: entry.code, checkId: check.id, ...outcome });
+    try {
+      reports.push({ code: entry.code, checkId: check.id, ...check.run(root) });
+    } catch (error) {
+      // Một bài kiểm hỏng KHÔNG được nuốt cả báo cáo. Ví dụ thật: clone nông
+      // không có `refs/remotes/origin/main` thì bài kiểm G14 ném lỗi, và nếu
+      // lỗi thoát ra khỏi đây thì mất luôn kết quả G17 lẫn danh sách "cần
+      // người" — cả lượt chạy thứ Hai im lặng vì một bài kiểm.
+      broken.push(
+        `⚠ ${entry.code} · \`${check.id}\` · KHÔNG CHẠY ĐƯỢC — ${error instanceof Error ? error.message : String(error)}`,
+      );
+      process.exitCode = 1;
+    }
   }
 
-  out.push('# Chạy lại bài kiểm của sổ giả định', '');
+  const out: string[] = ['# Chạy lại bài kiểm của sổ giả định', ''];
   for (const report of reports) {
-    const mark = report.verdict === 'khớp' ? '✓' : '✗';
-    out.push(`${mark} ${report.code} · \`${report.checkId}\` · **${report.verdict}** — ${report.observed}`);
+    const mark = report.observedNothing ? '◦' : report.verdict === 'khớp' ? '✓' : '✗';
+    const verdict = report.observedNothing ? 'chưa quan sát được' : `**${report.verdict}**`;
+    out.push(`${mark} ${report.code} · \`${report.checkId}\` · ${verdict} — ${report.observed}`);
     for (const line of report.evidence) out.push(`    ${line}`);
     out.push('');
   }
+  if (broken.length > 0) out.push(...broken, '');
 
   out.push(
     `Cần người, không tự kiểm được: ${needsHuman.map((entry) => entry.code).join(', ') || '(không có)'}.`,
