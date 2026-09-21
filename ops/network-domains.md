@@ -31,7 +31,7 @@ khi danh sách ổn định, dán thẳng cột *Domain* vào đề xuất `Cust
 | `www.irs.gov` | danh sách hiệp định thuế Mỹ đang có hiệu lực (*Income Tax Treaties – A to Z*) | `VF-G8` | 2026-09-21 | 200 |
 | `home.treasury.gov` | trang hiệp định thuế của Bộ Tài chính Mỹ — trạng thái văn bản Mỹ–Việt ký 07/07/2015 | `VF-G8` | 2026-09-21 | 200 |
 | `baochinhphu.vn` | thuế suất GTGT/TNCN cho cá nhân sáng tạo nội dung số | `VF-G8` | 2026-09-21 | 200 |
-| `xaydungchinhsach.chinhphu.vn` | thủ tục kê khai theo NĐ 68/2026/NĐ-CP và NĐ 141/2026/NĐ-CP | `VF-G8` | 2026-09-21 | `curl` 000, công cụ đọc web **đọc được** |
+| `xaydungchinhsach.chinhphu.vn` | thủ tục kê khai theo NĐ 68/2026/NĐ-CP và NĐ 141/2026/NĐ-CP | `VF-G8` | 2026-09-21 | `curl` 000 · công cụ đọc web: không trả mã, nhưng lấy được nội dung |
 | `vanban.chinhphu.vn` | toàn văn Luật Thuế GTGT 48/2024/QH15 | `VF-G8` | 2026-09-21 | 200 |
 | `danang.gov.vn` | ngưỡng doanh thu chịu thuế của hộ và cá nhân kinh doanh từ 2026 | `VF-G8` | 2026-09-21 | 200 |
 | `mof.gov.vn` · `m-portal.mof.gov.vn` | hỏi đáp chính sách tài chính của Bộ Tài chính | `VF-G8` | 2026-09-21 | 200 |
