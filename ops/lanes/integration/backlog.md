@@ -75,7 +75,7 @@ Nhiều tính năng đang ở giai đoạn research preview và có thể đổi
     fixture không gọi mạng (mọi phụ thuộc là `workspace:*`). Kiểm bằng đột biến: gỡ đường lockfile ra thì
     4 test đỏ.
 
-### I-005 · Lockfile gộp **sạch** mà vẫn lệch manifest
+### I-006 · Lockfile gộp **sạch** mà vẫn lệch manifest
 Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ phủ ca lockfile **xung đột**. Khi git gộp lockfile sạch, integrator không đụng tới nó — nhưng "merge được" không đồng nghĩa "đúng": git ghép hunk theo dòng, không hiểu YAML, nên về lý thuyết nó ghép ra một lockfile lệch với manifest sau khi gộp. Local `pnpm check` **không** bắt được: nó không chạy `pnpm install --frozen-lockfile` (CI mới chạy). Nghĩa là integrator báo "xanh, đã push" rồi CI mới đỏ — đúng nhóm lỗi Z.
 
 - deps: I-004
