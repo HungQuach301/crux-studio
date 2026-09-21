@@ -367,14 +367,16 @@ Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: `ops/known-failures.md` KF-002; CHARTER 3.3, mục 7, 2.5
 - tiêu chí xong:
-  - `automerge.yml` đọc `mergeable` và `mergeable_state` của PR trước khi thử merge. Đang xung đột thì **bỏ qua và ghi lý do vào log của lần chạy**, không thử merge rồi để API báo lỗi — một job đỏ vì lý do đó trông giống hệt một job đỏ vì lỗi thật.
-  - GitHub tính `mergeable` bất đồng bộ và trả `null` khi chưa tính xong. Workflow phải xử lý `null` bằng cách **chờ rồi hỏi lại** (vài lần, có giới hạn), không coi `null` là "merge được".
-  - Script gom số liệu bản tin (`P-005`) thêm một mục: **PR đang xung đột với `main`**, kèm số giờ đã xung đột. Bản tin có mục này thì một PR bị kẹt không thể nằm im quá một ngày.
-  - Routine `crux-integrator` gộp `main` vào các PR xung đột mà nó tự giải quyết được, và gắn `parked` cộng mở `🤖 [QĐ]` cho những PR cần người quyết (hai bên cùng sửa một logic).
-  - Có test cho phần quyết định của `automerge.yml`: `mergeable: false` → bỏ qua; `mergeable: null` → hỏi lại; `mergeable: true` cộng đủ bốn điều kiện → merge.
+  - ✅ **Đã có từ trước lượt này** — `automerge.yml` đọc `mergeable` và `mergeable_state` của PR trước khi thử merge. Đang xung đột thì bỏ qua và in lý do ra log của lần chạy (`decideMerge` trả `skip`, bước "Xét từng PR" in mọi kết luận kể cả "không làm gì" — rà soát Z2), không thử merge rồi để API báo lỗi.
+  - ✅ **Đã có từ trước lượt này** — `null` được hỏi lại ba lần, giãn 5 giây, trong bước "Xét từng PR" của `automerge.yml`; hết ba lần mà vẫn `null` thì `decideMerge` trả `recheck` và PR bị bỏ qua. `null` không bao giờ được đọc thành "merge được".
+  - ✅ **Lượt `crux-worker-2` 2026-09-21 19:15Z** — `ops/scripts/digest-metrics.ts` thêm mục **PR đang xung đột với `main`**, kèm số giờ đã xung đột, xếp kẹt lâu nhất trước. Số giờ **đo lại bằng gộp thử** (`ops/scripts/conflict-watch.ts`, `git merge-tree --write-tree` với từng commit gần đây của `main` để tìm commit gây xung đột), không đọc ra từ văn xuôi trong trường `note` của `ops/logs/platform/P-016.jsonl`. Chưa dò được thì mục đó in `CHƯA DÒ`, **không** in `0`.
+  - ✅ **Phần integrator tự giải: đã có ở mục `P-016`** (`ops/scripts/integrator-resolve.ts`) — gộp `main` vào PR xung đột khi cả hai bên thuần cộng thêm, huỷ merge khi không đủ điều kiện.
+  - ⚠️ **Phần "gắn `parked` cộng mở `🤖 [QĐ]`" đã bị thay** bởi quyết định của mục `P-022`: một PR mà integrator bó tay là việc của **lượt worker kế tiếp** (phụ lục P1 bước 2 ca thứ ba), không phải một chỗ `parked` chờ chủ dự án. Dòng tiêu chí gốc viết trước `P-022`; giữ nguyên chữ ở đây thì hai nguồn lệch nhau. Không tự làm theo bản cũ.
+  - ✅ **Đã có từ trước lượt này** — `ops/test/invariants-merge-gate.test.ts` có đủ ba ca: `mergeable: false`/`mergeableState: 'dirty'` → `skip`; `mergeable: null` → `recheck`; đủ điều kiện → `merge`.
+- vì sao `review` chứ không `done`: mục này chỉ `done` khi bản tin **thật** in ra mục xung đột trong một lượt `crux-digest` chạy thật. Lượt worker này chạy được script bằng ảnh chụp `--github` (10 PR, 0 xung đột, trùng khít bước 0 đo độc lập) và dò lại được mốc kẹt cũ của PR #56 ra đúng `039b7f4` / `15:44:08Z` — cùng con số ba lượt trước đo bằng tay — nhưng lượt `crux-digest` đầu tiên sau khi merge mới là bằng chứng của chính bản tin.
 
 ### P-006 · Bảo vệ nhánh bằng ruleset
 - deps: VF-G12
