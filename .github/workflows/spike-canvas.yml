@@ -1,0 +1,110 @@
+# 🤖 Spike canvas liên tục — đo trên runner Actions thật (mục `visual/V-002`,
+# spec WP-003, quyết định D-04, giả định G5).
+#
+# File này viết vào ops/workflows/. sync-workflows.yml chép nó sang
+# .github/workflows/ SAU khi PR merge vào main (CHARTER 3.2, giả định G10).
+# Hệ quả: số phút Actions thật chỉ lấy được sau khi PR của V-002 đã merge.
+#
+# Chỉ chạy bằng tay (`workflow_dispatch`). Nó tốn phút Actions — chính là
+# thứ giả định G5 nói tới — nên KHÔNG treo vào `push` hay `pull_request`.
+name: spike-canvas
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'Tên cấu hình (base-30-noblur, static-30, blur-30, hi-60-noblur) hoặc all'
+        required: false
+        default: all
+      frames:
+        description: 'Ghi đè số khung — để đo thử rẻ trước khi chạy đủ 3 phút'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: render
+    runs-on: ubuntu-latest
+    # Chỉ số 2 đặt ngưỡng 25 phút cho 5.400 khung ở một worker; cả bốn cấu
+    # hình cộng lại nhiều hơn thế. Hộp thời gian rộng nhưng hữu hạn: hết giờ
+    # là một kết quả, không phải một lỗi cần thử lại (WP-003 mục 5).
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # ffmpeg không có sẵn trên mọi ảnh runner; Chrome thì có.
+      - name: Chuẩn bị ffmpeg và trình duyệt
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          ffmpeg -version | head -1
+          found=""
+          for c in /usr/bin/google-chrome-stable /usr/bin/google-chrome /usr/bin/chromium-browser /usr/bin/chromium; do
+            if [ -x "$c" ]; then found="$c"; break; fi
+          done
+          if [ -z "$found" ]; then
+            echo "không thấy Chrome hay Chromium trên runner này" >&2
+            exit 1
+          fi
+          echo "CRUX_CHROME=$found" >> "$GITHUB_ENV"
+          echo "dùng trình duyệt: $found"
+          "$found" --version || true
+
+      - name: Ghi mốc thời gian bắt đầu
+        run: echo "SPIKE_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Render
+        run: |
+          args="--out spike-out"
+          if [ "${{ inputs.config }}" != "all" ] && [ -n "${{ inputs.config }}" ]; then
+            args="$args --config ${{ inputs.config }}"
+          fi
+          if [ -n "${{ inputs.frames }}" ]; then
+            args="$args --frames ${{ inputs.frames }}"
+          fi
+          echo "node spike/canvas/run.ts $args"
+          node spike/canvas/run.ts $args
+
+      # Phút Actions là chính con số mà G5 cần. Đọc từ đồng hồ của job, không
+      # ngoại suy: ubuntu-latest tính hệ số 1 phút hoá đơn cho 1 phút chạy,
+      # và Actions làm tròn LÊN theo từng phút cho mỗi job.
+      - name: Quy phút Actions
+        run: |
+          ended=$(date +%s)
+          elapsed=$(( ended - SPIKE_STARTED ))
+          minutes=$(( (elapsed + 59) / 60 ))
+          {
+            echo "## Spike canvas — phút runner"
+            echo ""
+            echo "| Hạng mục | Giá trị |"
+            echo "|---|---|"
+            echo "| Runner | ubuntu-latest (hệ số 1×) |"
+            echo "| Giây tường, phần render | $elapsed |"
+            echo "| Phút Actions tính tiền, làm tròn lên | $minutes |"
+            echo ""
+            echo "Số đo từng cấu hình nằm trong artifact \`spike-canvas\`, file \`measurements.json\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "elapsed=${elapsed}s minutes=${minutes}"
+
+      - name: Gói kết quả
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-canvas
+          path: |
+            spike-out/*.mp4
+            spike-out/measurements.json
+          if-no-files-found: error
+          retention-days: 30
