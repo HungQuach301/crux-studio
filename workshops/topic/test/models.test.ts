@@ -153,18 +153,33 @@ test('chạy lại và chạy xen kẽ cho kết quả giống từng chữ số
 /* 5. Kiểm đột biến: cách hiểu sai phải KHÔNG khớp nguồn                */
 /* ------------------------------------------------------------------ */
 
-test('M-001: trừ phí vào lãi suất thay vì vào số dư thì không khớp SEC', () => {
-  // Cách sai: (1 + r − f)^n. Với phí 1% nó cho ~$180.611, còn SEC in $179.000.
-  const wrong = 100000 * Math.pow(1 + 0.04 - 0.01, 20);
-  assert.ok(Math.abs(wrong - 179000) / 179000 > 0.005, `cách trừ vào lãi suất cho ${wrong} — lẽ ra phải lệch quá dung sai`);
+test('M-001: trừ phí vào lãi suất thay vì vào số dư thì trượt cổng ở CẢ BA ca', () => {
+  const model = loadModel('M-001');
+  // Dung sai đọc từ file mô hình, KHÔNG gõ cứng: gõ cứng thì ai nới
+  // tolerancePct trong M-001.json cũng không làm bài này đỏ, và cổng mất
+  // tác dụng ở đúng lúc nó cần có tác dụng.
+  const tolerance = handWorkedTolerance(model) / 100;
 
-  const right = runModel(loadModel('M-001'), TOPIC_FORMULAS, {
-    initialBalanceUsd: 100000,
-    grossAnnualReturnPct: 4,
-    expenseRatioPct: 1,
-    years: 20,
-  });
-  assert.ok(Math.abs(right['endingBalanceUsd']! - 179000) / 179000 <= 0.005);
+  for (const [feePct, published] of [
+    [0.25, 208000],
+    [0.5, 198000],
+    [1, 179000],
+  ] as const) {
+    // Cách sai: (1 + r − f)^n — trừ phí thẳng vào lãi suất.
+    const wrong = 100000 * Math.pow(1 + 0.04 - feePct / 100, 20);
+    assert.ok(
+      Math.abs(wrong - published) / published > tolerance,
+      `phí ${feePct}%: cách trừ vào lãi suất cho ${wrong} và vẫn LỌT cổng ${tolerance * 100}%`,
+    );
+
+    const right = runModel(model, TOPIC_FORMULAS, {
+      initialBalanceUsd: 100000,
+      grossAnnualReturnPct: 4,
+      expenseRatioPct: feePct,
+      years: 20,
+    });
+    assert.ok(Math.abs(right['endingBalanceUsd']! - published) / published <= tolerance);
+  }
 });
 
 test('M-001: phí bằng 0 thì hai nhánh trùng nhau và không có hao hụt', () => {
@@ -400,4 +415,95 @@ test('M-008: phaseoutPct là tham số, không suy được từ độ rộng kh
   // một nửa, và không có gì trong dữ liệu đầu vào báo cho biết đã dùng nhầm.
   assert.equal(notCovered['iraDeductionUsd'], 5250);
   assert.equal(covered['iraDeductionUsd'], 2625);
+});
+
+test('M-002: nhân chênh lãi suất với dư nợ rồi chia 12 thì lệch 34% so với CFPB', () => {
+  const model = loadModel('M-002');
+  const tolerance = handWorkedTolerance(model) / 100;
+
+  // Cách hiểu sai dễ mắc nhất của mô hình này: coi khoản tiết kiệm hằng
+  // tháng là (chênh lãi suất × dư nợ) / 12. Nó bỏ qua việc phần lớn tiền trả
+  // hằng tháng là GỐC, vốn không đổi theo lãi suất — nên nó phóng đại khoản
+  // tiết kiệm và kéo điểm hoà vốn về sớm hơn thực tế.
+  const wrong = (180000 * (5.0 - 4.875)) / 100 / 12;
+  assert.ok(Math.abs(wrong - 14) / 14 > tolerance, `cách nhân thẳng cho ${wrong}, lẽ ra phải trượt cổng`);
+
+  const right = runModel(model, TOPIC_FORMULAS, {
+    loanAmountUsd: 180000,
+    baseRatePct: 5,
+    rateWithPointsPct: 4.875,
+    pointsPct: 0.375,
+    termMonths: 360,
+  });
+  assert.ok(Math.abs(right['monthlySavingsUsd']! - 14) / 14 <= tolerance);
+});
+
+test('M-005: mẫu số nhỏ hơn phải cho khoản rút LỚN hơn, không ngược lại', () => {
+  const model = loadModel('M-005');
+  const atAge73 = runModel(model, TOPIC_FORMULAS, {
+    priorYearEndBalanceUsd: 100000,
+    applicableDenominator: 26.5,
+  });
+  const atAge75 = runModel(model, TOPIC_FORMULAS, {
+    priorYearEndBalanceUsd: 100000,
+    applicableDenominator: 24.6,
+  });
+  // Hai mẫu số đều lấy từ ví dụ của Pub 590-B. Đảo chiều phép chia thành
+  // phép nhân — lỗi hay gặp nhất ở mô hình này — làm bất đẳng thức này lật.
+  assert.ok(atAge75['rmdUsd']! > atAge73['rmdUsd']!);
+  assert.ok(atAge75['rmdPctOfBalance']! > atAge73['rmdPctOfBalance']!);
+});
+
+test('M-004: PIA bằng 0 là đầu vào hợp lệ, không phải lỗi', () => {
+  // 0 nằm trong validRange của primaryInsuranceAmountUsd, nên nó phải chạy
+  // được: người chưa đủ số quý đóng góp có PIA bằng 0. Không chặn 0/0 thì
+  // reductionPct ra NaN và runModel ném NonFiniteOutputError.
+  const out = runModel(loadModel('M-004'), TOPIC_FORMULAS, {
+    primaryInsuranceAmountUsd: 0,
+    monthsBeforeFullRetirementAge: 44,
+    firstTierNumerator: 5,
+    firstTierDenominator: 9,
+    secondTierNumerator: 5,
+    secondTierDenominator: 12,
+  });
+  assert.equal(out['reductionUsd'], 0);
+  assert.equal(out['monthlyBenefitUsd'], 0);
+  assert.equal(out['reductionPct'], 0);
+});
+
+/**
+ * Trần dung sai — lớp canh chống "nới cổng cho xanh".
+ *
+ * `tolerancePct` sống trong file mô hình, và nới nó là cách rẻ nhất để một
+ * công thức sai đi qua cấp 1 mà không gì đỏ (nhóm Z: hỏng mà mọi chỉ báo
+ * đều xanh). Bảng dưới là chìa khoá thứ hai: nới dung sai buộc phải sửa cả
+ * file này, tức là một hành động có chủ đích, có người soát, chứ không phải
+ * một con số lặng lẽ to lên.
+ *
+ * Con số ở đây là TRẦN, không phải độ lệch quan sát được. Độ lệch thật nhỏ
+ * hơn nhiều và được bài `cấp 1 đạt` kiểm.
+ */
+const MAX_TOLERANCE_PCT: Readonly<Record<ModelShortId, number>> = {
+  'M-001': 0.3,
+  // 3% chỉ để phủ việc CFPB làm tròn khoản chênh về đơn vị đô la ($13,70 in
+  // ra là "$14"). Đây là dung sai lỏng nhất trong tám mô hình, và lý do nó
+  // lỏng nằm ở nguồn chứ không ở công thức.
+  'M-002': 3,
+  'M-003': 0.15,
+  'M-004': 0.05,
+  'M-005': 0.2,
+  'M-006': 0.05,
+  'M-007': 0.05,
+  'M-008': 0.05,
+};
+
+test('tolerancePct của mọi mô hình không vượt trần đã chốt', () => {
+  for (const shortId of MODEL_IDS) {
+    const actual = handWorkedTolerance(loadModel(shortId));
+    assert.ok(
+      actual <= MAX_TOLERANCE_PCT[shortId],
+      `${shortId}: tolerancePct = ${actual}% vượt trần ${MAX_TOLERANCE_PCT[shortId]}% — ` +
+        `nới cổng phải là một quyết định có soát, không phải một con số lặng lẽ to lên`,
+    );
+  }
 });

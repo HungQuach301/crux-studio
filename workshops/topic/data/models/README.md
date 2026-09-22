@@ -57,8 +57,9 @@ nên khi một tập dùng tới con số đó thì Fact & Risk Pass đọc đư
 
 2. **`M-008` · IRS Pub 590-A.** Câu hướng dẫn dòng 4 và ví dụ điền sẵn của chính tài liệu đó không cùng
    thoả một cách đọc nào: theo mặt chữ thì $6.825 phải thành $6.830, nhưng worksheet in $6.825. Cài đặt
-   dùng quy tắc duy nhất tái hiện được cả ba con số đã công bố, và `iraPhaseoutRounding` trong
-   `src/models.ts` giải thích đầy đủ. Chênh lệch tối đa $5 ở trần khấu trừ.
+   dùng **một** quy tắc tái hiện được cả ba con số đã công bố — không phải cách đọc duy nhất khớp, và
+   `iraPhaseoutRounding` trong `src/models.ts` nêu thẳng cách đọc thay thế. Chênh lệch tối đa $5 ở trần
+   khấu trừ.
 
 ## Còn thiếu, có chủ đích
 

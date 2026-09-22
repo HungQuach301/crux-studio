@@ -41,7 +41,9 @@
  * không mô hình nào được khai `verified` (`D-C02` điểm c, khoá ở tầng kiểu
  * trong `model-verify.ts`).
  *
- * Bất biến I3: file này chỉ được import `@crux/kernel`.
+ * Bất biến I3: file này chỉ import trong xưởng và `@crux/kernel` — hiện
+ * thực tế chỉ có module cùng xưởng và builtin của Node, chưa cần tới
+ * kernel. Không import xưởng khác.
  */
 
 import { readFileSync } from 'node:fs';
@@ -108,10 +110,14 @@ export function roundToDigits(value: number, digits: number): number {
  * dẫn theo đúng mặt chữ thì ô đó phải là $6.830, và khấu trừ cuối cùng đổi
  * từ $6.825 thành $6.830.
  *
- * Quy tắc cài ở đây là quy tắc DUY NHẤT tái hiện được **cả ba** con số đã
- * công bố ($611,40 → $620 · $6.825 → $6.825 · $5.250 → $5.250): làm tròn
- * lên tới bội số $10 **chỉ khi** kết quả còn phần lẻ dưới một đô la. Đây là
- * một suy luận từ bằng chứng, không phải điều tài liệu nói thẳng ra.
+ * Quy tắc cài ở đây là **một trong số ít** quy tắc tái hiện được **cả ba**
+ * con số đã công bố ($611,40 → $620 · $6.825 → $6.825 · $5.250 → $5.250):
+ * làm tròn lên tới bội số $10 **chỉ khi** kết quả còn phần lẻ dưới một đô
+ * la. Đây là một suy luận từ bằng chứng, không phải điều tài liệu nói thẳng
+ * ra — và nó **không phải** cách đọc duy nhất khớp: "làm tròn lên bội số $10
+ * trừ khi đã là bội số của $5" cũng khớp cả ba. Hai cách đọc chỉ tách nhau ở
+ * những giá trị mà ca kiểm hiện có không chạm tới, nên bằng chứng đang có
+ * không chọn được giữa chúng.
  *
  * **Rủi ro còn lại, đã ghi thành lời:** hai cách đọc chỉ khác nhau khi tích
  * ra một số nguyên đô la không chia hết cho 10, và chênh lệch tối đa là $5
@@ -212,8 +218,13 @@ const mortgagePointsBreakEven: FormulaFn = (p) => {
  * Công thức tổng quát của 12 CFR phần 1030 Phụ lục A:
  * `APY = 100[(1 + lãi/gốc)^(365/số ngày) − 1]`.
  *
- * Quy định cố định **365** ở tử số, kể cả năm nhuận — nên hằng số này không
- * phải tham số và không được "sửa cho đúng lịch".
+ * **365 là mặc định của quy định, không phải ràng buộc tuyệt đối.** Phụ lục A
+ * viết: *"The annual percentage yield is expressed as an annualized rate,
+ * based on a 365-day year. Institutions **may** calculate the annual
+ * percentage yield based on a 365-day or a 366-day year in a leap year."*
+ * Mô hình chọn 365 và để nó thành hằng số — đó là một **lựa chọn đã khai**,
+ * không phải điều quy định cấm đổi. Cả tám ví dụ của Phụ lục A đều dùng 365,
+ * nên chọn 365 là cách duy nhất tái hiện được chúng.
  */
 const depositApy: FormulaFn = (p) => {
   const ratio = p['interestEarnedUsd']! / p['principalUsd']!;
@@ -251,7 +262,11 @@ const socialSecurityEarlyReduction: FormulaFn = (p) => {
   return {
     reductionUsd,
     monthlyBenefitUsd,
-    reductionPct: (reductionUsd / pia) * 100,
+    // `pia = 0` nằm trong `validRange` nên nó là đầu vào HỢP LỆ, không phải
+    // ca cần ném lỗi: người chưa đủ số quý đóng góp có PIA bằng 0. Không
+    // chặn thì 0/0 ra `NaN` và `runModel` ném `NonFiniteOutputError` — biến
+    // một đầu vào hợp lệ thành lỗi. Cùng cách chặn với `rmdUniformLifetime`.
+    reductionPct: pia === 0 ? 0 : (reductionUsd / pia) * 100,
   };
 };
 

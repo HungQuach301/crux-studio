@@ -77,8 +77,8 @@
         "method": "hand-worked-case",
         "required": true,
         "pass": true,
-        "detail": "Ba con số SEC công bố ($208.000 · $198.000 · $179.000) đều khớp trong dung sai 0,5%.",
-        "tolerancePct": 0.5,
+        "detail": "Ba con số SEC công bố ($208.000 · $198.000 · $179.000) đều khớp; lệch lớn nhất 0,199% ở ca 0,25%. Dung sai đặt 0,3% chứ không phải 0,5% là có tính toán: cách hiểu sai phổ biến nhất (trừ phí thẳng vào lãi suất) lệch 0,392% · 0,494% · 0,900%, nên ở mức 0,5% nó vẫn LỌT hai trong ba ca. Ở 0,3% công thức đúng đạt cả ba và cách hiểu sai trượt cả ba — cổng mới thật sự phân biệt được hai cách.",
+        "tolerancePct": 0.3,
         "evidenceRef": "workshops/topic/data/models/cases/M-001.cases.json",
         "checkedAt": "2026-09-22T00:00:00Z"
       },

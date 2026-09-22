@@ -6,7 +6,7 @@
   "question": "Một khoản lãi đã trả trên một số dư trong một số ngày nhất định tương đương APY bao nhiêu, theo đúng công thức luật buộc ngân hàng phải dùng?",
   "assumptions": [
     "Dùng công thức tổng quát của Phụ lục A, không dùng công thức rút gọn — công thức rút gọn chỉ đúng khi kỳ đúng 365 ngày.",
-    "365 ở tử số là hằng số của quy định, kể cả năm nhuận. Không được thay bằng 366.",
+    "365 là MẶC ĐỊNH của quy định, không phải ràng buộc tuyệt đối: Phụ lục A viết \"Institutions may calculate the annual percentage yield based on a 365-day or a 366-day year in a leap year\". Mô hình chọn 365 — một lựa chọn đã khai, không phải điều quy định cấm đổi. Cả tám ví dụ của Phụ lục A dùng 365, nên chọn 365 là cách duy nhất tái hiện được chúng.",
     "interestEarnedUsd là lãi thực trả trong kỳ, đã tính gộp theo cách ngân hàng dùng. Mô hình này không tính gộp — nó quy đổi.",
     "Gốc là số tiền được giả định đã gửi để kiếm ra khoản lãi đó, theo đúng cách Phụ lục A đặt vấn đề ở các tài khoản phân tầng."
   ],
