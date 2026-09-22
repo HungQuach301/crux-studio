@@ -501,6 +501,8 @@ test('P-010 · cây thật không còn cảnh báo nào — cảnh báo thườn
     if (warning !== null) left.push(`${file} — ${warning}`);
   }
   assert.deepEqual(left, []);
+});
+
 // ── Z10 · thiếu `set -euo pipefail` ──────────────────────────────────────
 
 test('Z10 · khối run: | thiếu set -euo pipefail thì đỏ', () => {

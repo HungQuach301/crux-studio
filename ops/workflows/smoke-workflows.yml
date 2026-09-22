@@ -129,6 +129,12 @@ jobs:
           EMPTY=$(git hash-object -t tree /dev/null)
           BASE=""
           if [ -n "${EVENT_BEFORE:-}" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            # Z9: nuốt lỗi ở đây là CỐ Ý. `$EVENT_BEFORE` có thể không còn
+            # trong clone này (force-push, hoặc clone nông không kéo tới
+            # commit đó); `--verify --quiet` trả rỗng kèm exit khác 0, và
+            # `|| true` giữ cho `bash -e` không giết job. `BASE` rỗng được
+            # dòng ngay dưới bắt và lùi về `$SHA^` rồi về cây rỗng, nên
+            # không có ca nào đi tiếp với `BASE` sai.
             BASE=$(git rev-parse --verify --quiet "$EVENT_BEFORE^{commit}" || true)
           fi
           [ -z "$BASE" ] && BASE=$(git rev-parse --verify --quiet "$SHA^" || echo "$EMPTY")
