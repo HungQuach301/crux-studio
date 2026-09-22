@@ -607,7 +607,42 @@ mang **một** trong hai file nên CI từng PR xanh; chỉ khi cả hai vào `m
     merge" — vẫn để ngỏ: cần chạy `pnpm check` trên kết quả gộp thử của từng cặp PR đang mở, việc lớn hơn
     một mục fix. Ghi ở `KF-013` dòng *Máy chặn từ nay*.
 
-### I-017 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
+### I-017 · Phép đo xung đột của bước 0 chạy trên kho **nông** nên kết luận sai (KF-015)
+
+`fix`. `ops/scripts/conflict-watch.ts` mở đầu bằng đúng nguyên tắc cần thiết — "không tin `mergeable` của
+API, đo lại bằng chạy thật". Nhưng phép đo thật đó chạy trên bất cứ kho nào bên gọi đưa cho nó, và phiên
+cloud clone kho ở dạng **nông**: `git rev-parse --is-shallow-repository` trả `true`. Trên kho nông,
+`git merge-tree --write-tree` không tìm được tổ tiên chung vì tổ tiên đó nằm ngoài phần lịch sử đã tải, và
+`git rev-list --max-parents=0` trả commit **biên bị ghép (grafted)** chứ không phải root thật — nên cả phép
+đo lẫn phép kiểm chéo đều ra kết luận ngược.
+
+`fetchProbeRefs()` nạp `main` và đầu các PR trong một lần `git fetch`, nhưng **không** unshallow. Nó đã
+nhận trách nhiệm "`main` đi cùng chuyến chứ không để bên gọi tự lo" vì đúng lý do này (một `origin/main` cũ
+cho ra số trông hợp lý và sai) — độ sâu lịch sử là cùng một loại phụ thuộc, chỉ chưa được nhận.
+
+Hai lần gặp thật, chi tiết ở `ops/known-failures.md` `KF-015`. Lần đầu nó sinh một comment báo động **sai**
+trên PR `#42` yêu cầu chủ dự án force-push dựng lại nhánh hoặc đóng PR mở lại — đúng thứ CHARTER mục 1.2
+muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bước 0 và vào cả tiêu đề một commit trên
+`main`.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: lượt `crux-worker-1` 2026-09-22 ~13:40Z; `ops/known-failures.md` `KF-015`; comment `09:46:12Z` trên PR `#42` (đã nêu đúng phần còn thiếu nhưng chưa ai nhận)
+- **Số hiệu I-017:** `I-015` đã bị PR `#112` nhận, `I-016` đã có mục riêng.
+- tiêu chí xong:
+  - `fetchProbeRefs()` tự kiểm `git rev-parse --is-shallow-repository` và unshallow **trước khi** đo. Ném
+    lỗi nói rõ nếu không unshallow được, chứ không đo tiếp trên lịch sử thiếu — một phép đo sai ở đây đi
+    thẳng vào bản tin và vào comment gửi chủ dự án.
+  - Test tái hiện lỗi (bất biến I2, CI chặn): dựng một kho **nông** trong thư mục tạm với một nhánh gộp
+    sạch, gọi `measureConflicts`. Bài kiểm phải **đỏ** trên bản `main` hiện tại (ra "xung đột" hoặc ném
+    `refusing to merge unrelated histories`) và **xanh** sau bản sửa.
+  - `measureConflicts()` không để một PR làm hỏng cả mẻ: hiện tại mã thoát ngoài `0`/`1` của một PR ném lỗi
+    ra ngoài vòng lặp, nên một PR hỏng làm tắt phép đo của 18 PR còn lại. Trả lỗi **theo từng PR** để bên
+    gọi vẫn thấy phần còn lại. Không nuốt lỗi — ca hỏng phải đọc được ở đầu ra.
+  - `ops/known-failures.md` `KF-015` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
+
+### I-018 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
 
 Tìm ra trong vòng soát chéo của `I-015` (reviewer ngữ cảnh sạch, PR `#112`). `I-015` chữa chỗ worker đọc
 `deps` **sai**; hai chỗ dưới đây là `deps` và `status` **viết sai trong chính backlog**, và cả hai im lặng:
@@ -626,6 +661,10 @@ Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi v
 - risk: low
 - status: ready
 - nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z
+- **Số hiệu I-018:** mục này mở ra trong PR `#112` với số `I-016`, đổi thành `I-017` lúc gộp `main`
+  lúc `11:32Z` (khi đó `I-016` vừa vào `main` qua PR `#132`). Lần gộp `main` này (`f61e318`, PR `#145`)
+  mang thêm một mục `I-017` **khác** vào `main` (KF-015, kho nông) — mục trên `main` đã chính danh nên
+  giữ nguyên, mục này lùi tiếp sang `I-018`. Giữ nguyên nội dung và `deps`.
 - tiêu chí xong:
   - `readyQueue` (hoặc một phép kiểm cạnh nó) phát hiện vòng phụ thuộc và in ra thành một nhóm riêng,
     kèm đường đi của vòng. Test dựng một vòng hai mục và một vòng ba mục.

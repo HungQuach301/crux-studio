@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://crux.studio/contracts/topic/sensitivity.v0.schema.json",
+  "title": "Sensitivity Pass — v0",
+  "description": "Kết quả quét một hoặc nhiều tham số của một mô hình đã có trong workshops/topic/data/models/ (mục backlog topic/T-007, spec WP-013, Lõi định lượng mục 3). Tính toán thuần, không gọi mô hình ngôn ngữ — xem sensitivity.ts. `runAt` do bên gọi truyền vào, không đọc đồng hồ hệ thống bên trong engine, để hai lần chạy cùng đầu vào ra cùng một JSON (tiêu chí xong thứ hai của T-007/WP-013 mục 6). Đóng (additionalProperties: false), khác payload envelope v0 vốn cố ý để lỏng — đây là dữ liệu nội bộ của xưởng topic, không phải phong bì artifact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "modelId", "modelVersion", "runAt", "conclusionOutput", "parameters", "flipPoints"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 0 },
+    "modelId": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/M-[0-9]{3}$",
+      "description": "Khớp modelId của model.v0.schema.json."
+    },
+    "modelVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "runAt": { "type": "string", "format": "date-time" },
+    "conclusionOutput": {
+      "type": "string",
+      "minLength": 1,
+      "description": "'Biến kết luận' của S05b — tên output của mô hình mà dấu (dương/âm) hoặc giá trị của nó được coi là kết luận cần theo dõi điểm đảo chiều."
+    },
+    "parameters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "scannedRange", "step", "classification"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "scannedRange": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+          "step": { "type": "number", "minimum": 0, "description": "Phải dương — kernel validator chỉ hỗ trợ 'minimum' (đóng), không hỗ trợ 'exclusiveMinimum'; step = 0 bị chặn ở tầng ứng dụng (sensitivity.ts), không ở tầng schema." },
+          "classification": { "type": "string", "enum": ["stable", "sensitive", "flips"] },
+          "geoVarying": { "type": "boolean" }
+        }
+      }
+    },
+    "flipPoints": {
+      "type": "array",
+      "description": "Có thể rỗng, nhưng khi rỗng thì stableConclusion là trường bắt buộc (kiểm ở tầng ứng dụng — sensitivityProblems — vì validator của kernel không hỗ trợ if/then, cùng lý do approvedIssueUrl của model.v0.schema.json).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["parameter", "value", "conclusionBefore", "conclusionAfter"],
+        "properties": {
+          "parameter": { "type": "string", "minLength": 1 },
+          "value": { "type": "number" },
+          "unit": { "type": "string" },
+          "conclusionBefore": { "type": "string", "minLength": 1 },
+          "conclusionAfter": { "type": "string", "minLength": 1 },
+          "affectedGeos": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "stableConclusion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Bắt buộc khi flipPoints rỗng — 'không có điểm đảo chiều cũng là một kết quả hợp lệ' (T-007), nhưng phải ghi thành kết luận có bằng chứng, không được để trống."
+    }
+  }
+}
