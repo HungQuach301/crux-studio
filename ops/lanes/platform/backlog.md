@@ -459,3 +459,59 @@ Cùng hình dạng với **G17** ở một chỗ khác: *một luật nằm tron
   - Ghi kết quả vào `ops/known-failures.md` KF-010, dòng **Máy chặn từ nay**.
 - **ảnh hưởng tới `VF-G14`:** `c2388bf` phải bị loại khỏi mẫu, cùng lý do với chín mã băm mà `P-024` đã liệt kê — nó là ca này, không phải tín hiệu nền tảng ghi hỏng trailer. `trailer-warn` trả `success` trên `#39` dù commit không có trailer nào (job đặt `continue-on-error: true`, CHARTER mục 4), nên **không** dùng kết luận của job đó làm bằng chứng cho `G14` mà không đọc commit.
 - **mã mục nhận lúc 2026-09-22 11:3x giờ VN** (`ops/logs/README.md`, KF-005): `P-025` là mã cao nhất trên `main` **và** trên cả 16 nhánh PR đang mở tại lúc nhận (đo từng nhánh, `#109` giữ `P-025`), nên `P-026` không đụng ai.
+
+### P-027 · Cửa `automerge-delayed` chưa bao giờ merge được một PR nào — đồng hồ 12 giờ bị chính bước 0 đặt lại
+Bất biến **I4** hứa: PR `automerge-delayed` vào `main` sau **12 giờ** CI xanh. Đo trên dữ liệu thật thì lời hứa đó **chưa một lần** được giữ. Cửa `open` (nhãn `automerge`) chảy bình thường; cửa `automerge-delayed` là một chỗ giữ **vĩnh viễn**.
+
+Không có gì đỏ ở bất cứ đâu: CI xanh trên cả 13 PR, `mergeable_state: clean`, nhãn đúng, `automerge.yml` chạy đúng luật và trả `wait` đúng luật. Đúng nhóm **Z** — hỏng mà mọi chỉ báo đều xanh. Và không thành phần nào hỏng: docblock của chính `merge-gate.ts` nói việc đặt lại đồng hồ là **cố ý**. Lỗi nằm ở **vòng phản hồi** giữa nó và bước 0, nên đọc từng file riêng sẽ không bao giờ thấy.
+
+**Cơ chế, ba câu:** `ops/invariants.merge-gate.ts` đo 12 giờ từ `ciCompletedAt`, cộng một cổng `if (input.ciSha !== input.headSha) return {outcome:'skip'}` buộc lần CI đó phải thuộc **đầu nhánh hiện tại**. Bước 0 (phụ lục P3, chạy ở đầu **mọi** lượt worker theo phụ lục P1) gộp `main` vào PR và push một commit mới. Commit mới là đầu nhánh mới là lần CI mới là đồng hồ **về 0** — và bước 0 chạy dày hơn 12 giờ rất nhiều.
+
+**Đo, không suy (2026-09-22 05:4xZ, lượt `crux-worker-1`):**
+
+| Phép đo | Kết quả |
+|---|---|
+| PR đang mở mang nhãn `automerge-delayed`, **đo lúc `2026-09-22T05:47Z`** | **13** (`#39 #42 #49 #56 #65 #79 #81 #83 #84 #85 #89 #109 #112`) — con số này trôi theo thời gian, luôn đọc kèm mốc đo |
+| PR mang nhãn `automerge-delayed` do **máy** merge, tính trên **toàn bộ** 79 PR đã đóng | **0** |
+| PR mang nhãn `automerge-delayed` từng vào `main` bằng bất cứ đường nào | **1** — `#43`, và đó là chủ dự án merge **tay** |
+| PR có khoảng trống đầu-nhánh-không-đổi ≥ 12 giờ trong 24 giờ qua | **1 / 13** (chỉ `#42`) |
+| `#39` — mở từ `2026-09-21T11:43Z`, tức **18 giờ** | 29 lần đổi đầu nhánh / 24 giờ · trống lớn nhất **3h19m** |
+| `ops/invariants.merge-gate.ts` chạy thật trên trạng thái thật của `#39` | `{"outcome":"wait","reason":"CI xanh được 0.3 giờ, ngưỡng 12 giờ.","hoursLeft":12}` |
+
+Số lần đổi đầu nhánh trong 24 giờ và khoảng trống lớn nhất, cả 13 PR: `#109` 50 lần/1h26m · `#112` 52/1h26m · `#89` 47/1h39m · `#79` 46/1h39m · `#65` 42/1h39m · `#84` 42/2h28m · `#81` 41/2h48m · `#56` 38/2h11m · `#83` 36/8h09m · `#85` 35/7h38m · `#39` 29/3h19m · `#49` 29/5h59m · `#42` 16/**12h02m**.
+
+**Ca `#43` — đối chứng bắt buộc, và nó KHÔNG phủ định kết luận trên.** `#43` mang nhãn `automerge-delayed` và **đã vào `main`**, nên câu "cửa này chưa bao giờ cho PR nào qua" viết trần sẽ **sai**. Đọc kỹ thì nó củng cố kết luận: `#43` mở `2026-09-21T12:41:51Z`, merge `13:16:39Z` — **35 phút**, tức **trước** ngưỡng 12 giờ rất xa, nên `automerge.yml` ở mốc đó chắc chắn trả `wait` và không thể là thủ phạm. Trường `merged_by` chốt lại: `#43` ghi `HungQuach301` (người), trong khi PR do máy merge ghi `github-actions[bot]` — đối chứng `#113`, `merged_by: github-actions[bot]`. Vậy `#43` là **chủ dự án merge tay**, đúng loại thao tác mà thước đo "thời gian của anh" (CHARTER 1.3) đếm. PR delayed duy nhất còn lại đã đóng là `#44`, và nó đóng **không** merge.
+
+**Phát biểu đúng, sau khi đã loại `#43`:** *máy* chưa bao giờ merge một PR `automerge-delayed` nào. Cửa delayed chưa một lần tự chảy; lần duy nhất một PR delayed vào được `main` là nhờ có người bấm.
+
+**`#42` là ca đáng đọc kỹ nhất, vì nó cho thấy ngưỡng gần như không với tới được ngay cả khi không ai đụng vào PR.** Đầu nhánh đứng yên từ `2026-09-21T13:11:32Z` tới `2026-09-22T01:14:17Z` — 12h02m45s. CI xanh xong khoảng `13:12Z`, nên ngưỡng 12 giờ đạt khoảng `01:12Z`. `automerge.yml` chạy theo lịch **`cron: '23 * * * *'`**: lượt `00:23` còn sớm, lượt `01:23` thì đầu nhánh đã đổi hai lần. Cửa sổ sống của PR này rộng **khoảng 2 phút** và rơi đúng vào giữa hai lượt. Trượt.
+
+**Phản biện đã loại trừ — "repo còn non nên chưa PR nào kịp tới hạn":** không đúng. Cửa `automerge-delayed` ra đời cùng `D-C06`, vào `main` lúc `2026-09-21T08:30:56Z` (`git log -1 -- docs/decisions/D-C06.md`), tức đã **21 giờ** tại lúc đo. PR delayed cũ nhất (`#39`) đã mở **18 giờ**. Cả hai đều vượt xa ngưỡng 12 giờ, và **5/13** PR (`#39` 18,2h · `#42` 17,6h · `#49` 16,3h · `#56` 14,6h · `#65` 12,6h) đã mở hơn 12 giờ. Nếu cửa chảy thì ít nhất vài PR phải đã vào `main` **bằng máy**.
+
+**Vì sao chưa ai bắt được:** hệ quả "đồng hồ đặt lại" **đã** được ghi — mô tả `#85` và `#39` đều nói ra, phụ lục P3 bước 0c dặn phải ghi vào ghi chú, P-026 nhắc tới nó trong một tiêu chí. Nhưng mọi chỗ đó ghi nó cho **một lượt**, như một khoản phí phải trả. Không chỗ nào cộng lại theo thời gian để hỏi câu duy nhất quan trọng: *ngưỡng có bao giờ tới không.* Số đo một lượt thì vô hại; số đo tích luỹ nói rằng cửa này đóng.
+
+**Quan hệ với `P-023` (PR `#85`) — đây là chỗ vòng lặp tự khoá:**
+
+1. `KF-009`: GitHub không áp `merge=union`, nên một dòng bước 0 vào `main` làm mọi PR đang mở `dirty` phía GitHub.
+2. `automerge.yml` nghe phía GitHub, nên PR `dirty` không merge được cho tới khi có commit gộp `main`.
+3. Bước 0 gộp → hết `dirty`, nhưng đồng hồ 12 giờ về 0.
+4. `P-023` cắt đúng nguyên nhân ở (1): dòng bước 0 xuống file riêng từng lượt. Nó **đã xong và đang nằm trong PR `#85`**.
+5. `#85` mang nhãn `automerge-delayed`. Nên bản sửa cắt vòng lặp **bị chính vòng lặp đó giữ lại**.
+
+Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `automerge` bỏ qua; gộp thì đồng hồ về 0 và `automerge` trả `wait`. Không đường nào ra bằng máy.
+
+- deps: —
+- risk: **high** — chặn mọi làn. Mục `ready` nào cũng nằm sau một PR không merge được; bước 3 của phụ lục P1 ra `idle` ở lượt này đúng vì lý do đó.
+- status: review
+- nguồn: đo ở lượt `crux-worker-1` 2026-09-22 12:4x giờ VN; `ops/known-failures.md` **KF-011** và KF-009; `ops/invariants.merge-gate.ts`; `ops/workflows/automerge.yml`; CHARTER mục 3 (bất biến I4) và 3.3; phụ lục P1 bước 0, P3 bước 0b–0c
+- **cần chủ dự án trước khi làm:** gỡ kẹt ngay là một lần merge tay (đề xuất `#85`, vì nó cắt nguyên nhân gốc), và bản sửa lâu dài chạm `ops/invariants.*` (cửa `owner-merge`) hoặc CHARTER mục 3 (`irreversible`, CLAUDE.md mục 14). Issue `🤖 [QĐ]` **#116** kèm theo mục này.
+- tiêu chí xong:
+  - ✅ **Đo trước, sửa sau — ĐÃ LÀM (lượt `crux-worker-3` 2026-09-22):** lệnh `node ops/scripts/gate-flow.ts --prs <file.json>` trả lời "cửa `automerge-delayed` có chảy không" bằng số — với mỗi PR mang nhãn đó: khoảng trống đầu-nhánh-không-đổi dài nhất (`longestStableHours`), số lần đặt lại đồng hồ (`clockResets`), và số giờ còn thiếu so với ngưỡng (`hoursShort`). Nguồn là `git log --first-parent` trên `refs/pull/<n>/head` cộng nhãn từ đầu vào, **không** đọc văn xuôi trong `note` của log. Đo thật lúc làm: **14 PR delayed · 0 đang ở/quá ngưỡng · 1/14 (`#42`) từng có cửa sổ ≥ 12 giờ · tổng 154 lần đặt lại đồng hồ** — chữ ký KF-011 xác nhận bằng số. Đếm phạm vi `origin/main..refs/pull/<n>/head` (chỉ commit riêng của PR, không kể tổ tiên chung với `main`). Kiểm ở `ops/test/gate-flow.test.ts` (18 test).
+  - Bản tin ngày (phụ lục P2, mục "Đang chờ merge") nói **số giờ còn lại thật**, tính theo đồng hồ đã bị đặt lại — chứ không phải giờ kể từ lúc gắn nhãn. Dòng nào đã bị đặt lại quá N lần thì nói ra. Hiện bản tin không phân biệt hai thứ đó, nên một PR kẹt vĩnh viễn trông giống một PR sắp tới hạn.
+  - **Bản sửa cơ chế — hai phương án, chọn bằng `[QĐ]`, đừng tự chọn:**
+    - **(A) Bước 0 không gộp PR mà `git` nói là gộp sạch.** Đo lại bằng `git merge-tree --write-tree` (đã có sẵn: `branchConflicts` trong `ops/scripts/conflict-watch.ts`) trước khi tin `mergeable_state`. Đúng phạm vi mà phụ lục P3 bước 0a đã khai ("PR có `mergeable_state` là xung đột"), và cắt phần lớn các lần đặt lại vô ích. **Không đủ một mình:** với PR mà GitHub báo `dirty` thật theo `KF-009`, bỏ gộp nghĩa là `automerge` bỏ qua mãi mãi. Nên (A) phải đi cùng `P-023`.
+    - **(B) Đồng hồ 12 giờ không tính lại vì một commit gộp của bước 0.** Đo từ lần CI xanh trên commit **có nội dung** gần nhất, bỏ qua commit gộp do bước 0 tạo (nhận ra bằng chữ ký commit, không bằng văn xuôi). Chạm `ops/invariants.merge-gate.ts` → cửa `owner-merge`; và nếu đọc thành "sửa ý nghĩa bất biến I4" thì là `irreversible`. **Đánh đổi phải nói thẳng:** 12 giờ là khoảng để chủ dự án kịp nói `dừng`; một commit gộp không đổi ý định của PR, nhưng nó **có** đổi thứ sẽ vào `main`, nên (B) rút ngắn thời gian soát thật.
+  - **Bằng chứng bằng chạy thật, không bằng lập luận:** dựng lại đúng hình dạng — một PR `automerge-delayed` CI xanh, rồi một commit gộp bước 0 — và chạy `ops/invariants.merge-gate.ts`. Trước khi sửa: `outcome: "wait"`, `hoursLeft` quay về 12. Sau khi sửa: `merge`. Kèm **ca âm**: một commit có nội dung thật thì đồng hồ **phải** tính lại, nếu không (B) biến thành "merge bất chấp mọi thay đổi".
+  - Ghi kết quả vào `ops/known-failures.md` **KF-011**.
+- ⬜ **CÒN TREO — hai tiêu chí cuối (bản sửa cơ chế A/B và bằng chứng chạy thật của nó) CHỜ `🤖 [QĐ] #116`.** Lượt `crux-worker-3` chỉ làm phần **đo** (tiêu chí "đo trước, sửa sau" ở trên) — nó là cửa `open`, đảo ngược được, không chạm `ops/invariants.*` nên không đứng sau quyết định nào. Bản sửa cơ chế chạm `ops/invariants.merge-gate.ts` (cửa `owner-merge`) và có thể là `irreversible` (đổi ý nghĩa I4), nên KHÔNG được tự chọn A hay B: chờ câu trả lời của chủ dự án ở `#116` (đọc cả issue `#116` lẫn issue bản tin, dạng `#116 A`). Có câu trả lời thì lượt sau mở lại mục này thành `ready` để làm nốt — cùng nếp `VF-G7`/`VF-G19`. Dòng bản tin (tiêu chí 2) cũng để lượt đó làm cùng, vì `gate-flow.ts` đã sẵn sàng cấp số cho nó. Mục này KHÔNG được tự chuyển `done` khi PR đo merge — ô ⬜ này giữ nó lại (`ops/scripts/backlog-status.ts`, `HOLD_MARKERS`).
+- **mã mục nhận lúc 2026-09-22 12:4x giờ VN** (`ops/logs/README.md`, KF-005): `P-026` là mã cao nhất trên `main` **và** trên cả 18 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-027` không đụng ai.
