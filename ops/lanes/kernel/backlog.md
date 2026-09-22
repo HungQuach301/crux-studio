@@ -9,11 +9,12 @@ Làn nền. **Contract v0 cố ý để lỏng. Siết lại sau tập thật đ
 
 - deps: T-003
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec `snapshot.schema.json`, `model.schema.json`, `thesis.schema.json`
 - tiêu chí xong:
-  - `model` có `verification` với đủ bốn cấp, và agent **không** đặt được `verified` (D-C02).
-  - Mở mục này khi làn `topic` cần, không mở trước — contract không có người tiêu thụ là contract sẽ sai.
+  - ✅ `model` có `verification` với đủ bốn cấp, và agent **không** đặt được `verified` (D-C02). `kernel/contracts/model.schema.json` (chuyển từ `workshops/topic/contracts/model.v0.schema.json`, `topic/T-005` đã xây `verification.tiers` bốn cấp và khoá `verified` ở tầng kiểu của `model-verify.ts` — không đổi khi chuyển chỗ). `pnpm contracts` việc số 8 nay validate cả 8 file `workshops/topic/data/models/*.json` của `T-006` theo contract này — trước đó chỉ có test riêng của xưởng `topic` canh.
+  - ✅ Mở mục này khi làn `topic` cần, không mở trước. `model` đã có người tiêu thụ thật (`T-005`/`T-006`, 8 file đã persist) nên được chuyển. `snapshot` và `thesis` **chưa** — `snapshot` chưa có file nào persist ngoài dữ liệu test tổng hợp (`T-003` gọi API qua `transport` tiêm vào, Đợt 0 không gọi API trả tiền), và `thesis` chưa được xây (`topic/T-009` Thesis Engine còn `ready`, chưa nhận). Đưa hai schema đó vào kernel bây giờ đúng là "contract không có người tiêu thụ" mà tiêu chí này cấm — để lại cho lượt khi `T-003` có nơi ghi snapshot thật hoặc `T-009` bắt đầu.
+- **Còn treo, có chủ đích (chưa `done`):** `kernel/contracts/snapshot.schema.json` và `kernel/contracts/thesis.schema.json` chưa mở, đúng lý do ở trên.
 
 ### K-003 · Hỗ trợ đồng thời `schemaVersion` N và N-1
 Hiện `isSupportedSchemaVersion` mới có N = 0 nên chưa có gì để chứng minh. Mục này làm cho luật đó có thật.
