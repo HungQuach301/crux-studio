@@ -18,6 +18,10 @@ import {
   brokenEventChains,
   subscribedEvents,
   missingDryRun,
+  runBlocks,
+  blocksMissingPipefail,
+  secretsUsedWithoutEmptyCheck,
+  undocumentedSwallows,
   EXTERNAL_CONSUMERS,
 } from '../scripts/check-workflows.ts';
 
@@ -497,4 +501,246 @@ test('P-010 · cây thật không còn cảnh báo nào — cảnh báo thườn
     if (warning !== null) left.push(`${file} — ${warning}`);
   }
   assert.deepEqual(left, []);
+// ── Z10 · thiếu `set -euo pipefail` ──────────────────────────────────────
+
+test('Z10 · khối run: | thiếu set -euo pipefail thì đỏ', () => {
+  const bad = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo hi
+          exit 1
+`;
+  const bad2 = `name: y
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo hi
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(bad, 'bad.yml')), [6]);
+  assert.deepEqual(blocksMissingPipefail(runBlocks(bad2, 'bad2.yml')), [6]);
+});
+
+test('Z10 · khối run: | có set -euo pipefail ở dòng đầu thì sạch', () => {
+  const ok = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          echo hi
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(ok, 'ok.yml')), []);
+});
+
+test('Z10 · dòng trống ở đầu khối trước set -euo pipefail không tính là thiếu — không lệnh nào chạy trước nó', () => {
+  const ok = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+
+          set -euo pipefail
+          echo hi
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(ok, 'ok.yml')), []);
+});
+
+test('Z10 · một lệnh thật chạy TRƯỚC set -euo pipefail thì đỏ — đúng lỗ hổng luật này chặn', () => {
+  const bad = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo "chạy trước khi có lưới an toàn"
+          set -euo pipefail
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(bad, 'bad.yml')), [6]);
+});
+
+test('Z10 · run: một dòng (không phải khối |) không thuộc phạm vi luật này', () => {
+  const single = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: pnpm check
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(single, 'single.yml')), []);
+});
+
+test('Z10 · cả sáu workflow thật trong ops/workflows/ đều mở khối run: | bằng set -euo pipefail', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const source = readFileSync(join(dir, file), 'utf8');
+    const bad = blocksMissingPipefail(runBlocks(source, file));
+    assert.deepEqual(bad, [], `${file}: dòng ${bad.join(', ')}`);
+  }
+});
+
+// ── Z5 · secret dùng mà không khẳng định không rỗng ──────────────────────
+
+test('Z5 · dùng secrets.X mà không có phép kiểm rỗng trước đó thì đỏ', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: echo "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}"
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), ['PUBLISH_REPO_TOKEN']);
+});
+
+test('Z5 · có dòng khẳng định X không rỗng TRƯỚC lần dùng đầu thì sạch', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          [ -n "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}" ] || { echo "thiếu PUBLISH_REPO_TOKEN"; exit 1; }
+          echo "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}"
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), []);
+});
+
+test('Z5 · phép kiểm rỗng nằm SAU lần dùng đầu không tính — phải kiểm TRƯỚC', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}"
+          [ -n "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}" ] || exit 1
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), ['PUBLISH_REPO_TOKEN']);
+});
+
+test('Z5 · nhiều secret khác tên đều được kiểm riêng', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          [ -n "${'$'}{{ secrets.A }}" ] || exit 1
+          echo "${'$'}{{ secrets.A }}"
+          echo "${'$'}{{ secrets.B }}"
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), ['B']);
+});
+
+test('Z5 · không nhắc secrets.* nào thì im lặng', () => {
+  assert.deepEqual(secretsUsedWithoutEmptyCheck('name: x\non: [workflow_dispatch]\njobs:\n  j:\n    steps:\n      - run: echo hi\n'), []);
+});
+
+test('Z5 · cả sáu workflow thật hiện không dùng secrets.* nào (D-C01: hai PAT còn lại đều ngoài ops/workflows/)', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const missing = secretsUsedWithoutEmptyCheck(readFileSync(join(dir, file), 'utf8'));
+    assert.deepEqual(missing, [], `${file}: ${missing.join(', ')}`);
+  }
+});
+
+// ── Z9 · `|| true` / `continue-on-error: true` không có lý do ────────────
+
+test('Z9 · || true không có chú thích ngay trên hay cùng dòng thì đỏ', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          rm -f maybe-missing.txt || true
+`;
+  assert.deepEqual(undocumentedSwallows(source), [8]);
+});
+
+test('Z9 · continue-on-error: true không có chú thích thì đỏ', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - name: bước mềm
+        continue-on-error: true
+        run: exit 1
+`;
+  assert.deepEqual(undocumentedSwallows(source), [7]);
+});
+
+test('Z9 · chú thích NGAY TRÊN thì sạch', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          # chủ ý: file có thể chưa tồn tại, không phải lỗi
+          rm -f maybe-missing.txt || true
+`;
+  assert.deepEqual(undocumentedSwallows(source), []);
+});
+
+test('Z9 · chú thích CÙNG DÒNG thì sạch', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          rm -f maybe-missing.txt || true  # chủ ý: file có thể chưa tồn tại
+`;
+  assert.deepEqual(undocumentedSwallows(source), []);
+});
+
+test('Z9 · lệnh nối nhiều dòng bằng `\\` chỉ cần MỘT chú thích ở đầu khối', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          # chủ ý: lỗi vặt của API không được giết cả job
+          SYNC=$(gh run list --limit 1 \\
+            --json conclusion \\
+            --jq '.[0].conclusion' || true)
+`;
+  assert.deepEqual(undocumentedSwallows(source), []);
+});
+
+test('Z9 · comment cách xa hơn một dòng (không nối bằng `\\`) không tính', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          # chú thích cho lệnh khác, không phải lệnh dưới
+          echo "không liên quan"
+          rm -f maybe-missing.txt || true
+`;
+  const found = undocumentedSwallows(source);
+  assert.equal(found.length, 1, JSON.stringify(found));
+});
+
+test('Z9 · cả sáu workflow thật trong ops/workflows/ đều đã giải thích mọi || true / continue-on-error', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const found = undocumentedSwallows(readFileSync(join(dir, file), 'utf8'));
+    assert.deepEqual(found, [], `${file}: dòng ${found.join(', ')}`);
+  }
 });

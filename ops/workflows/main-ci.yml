@@ -51,6 +51,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - id: run
         run: pnpm check
+      # Z3 (ops/known-failures.md nhóm Z): `ops/workflows/` chỉ có hiệu lực
+      # SAU KHI sync-workflows.yml chép sang .github/workflows/. Nếu sync
+      # ngừng chạy hoặc hỏng vì PAT hết hạn, bản CŨ trong .github/ vẫn chạy
+      # và vẫn xanh — không có gì đỏ để báo điều đó. So hai thư mục ở đây.
+      #
+      # CHỈ chạy khi KHÔNG PHẢI sự kiện `push`: `push` vào main kích hoạt cả
+      # main-ci lẫn sync-workflows.yml cùng lúc, không có gì bảo đảm workflow
+      # nào xong trước — so ngay lúc đó sẽ đỏ giả sau một merge bình thường.
+      # Lịch mỗi giờ của job này (xem chú thích đầu file) đủ để bắt một lần
+      # sync hỏng thật trong vòng một giờ.
+      - name: Đối chiếu ops/workflows/ với .github/workflows/ (Z3)
+        if: github.event_name != 'push'
+        run: node ops/scripts/check-workflows-synced.ts
 
   alert:
     name: alert

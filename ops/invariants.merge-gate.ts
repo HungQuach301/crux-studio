@@ -22,6 +22,12 @@
  * phải từ lúc mở PR. Một lần push mới vì thế đặt lại đồng hồ: khoảng chờ
  * luôn áp lên đúng nội dung sắp vào `main`.
  *
+ * **Bất biến I2 vế hai, kiểm ở ĐÚNG JOB (mục `P-009`):** `ciConclusion`
+ * của cả workflow run KHÔNG đủ để biết PR có nhãn `fix` đã có test hay
+ * chưa — job `fix-has-test` có thể `skipped` mà không làm cả run đỏ. Cửa
+ * này đọc riêng kết luận của check run đó (`fixHasTestConclusion`) trên
+ * đúng `headSha`, và chặn merge nếu nó không phải `success`.
+ *
  * File này nằm dưới `ops/invariants.*` nên chính nó là `owner-merge`.
  */
 
@@ -48,6 +54,14 @@ export interface MergeInput {
   ciConclusion: string | null;
   /** Thời điểm lần chạy `ci` đó kết thúc, ISO 8601. */
   ciCompletedAt: string | null;
+  /**
+   * Kết luận của job `fix-has-test` (check run), đọc trên đúng `headSha` —
+   * KHÔNG suy từ `ciConclusion` tổng. Job đó có thể `skipped` (không phải
+   * `failure`) mà `ciConclusion` của cả workflow run vẫn `success` (mục
+   * `P-009`): một job bị bỏ qua không làm đỏ cả run. `null` nghĩa là không
+   * tìm thấy check run đó trên commit này — coi như chưa kiểm.
+   */
+  fixHasTestConclusion: string | null;
   comments: readonly Comment[];
   owner: string;
   now: string;
@@ -128,6 +142,16 @@ export function decideMerge(input: MergeInput): Decision {
     return { outcome: 'skip', reason: 'PR đang xung đột với `main`. Integrator gộp trước (CHARTER phụ lục P3 bước 0).' };
   }
 
+  // Bất biến I2 vế hai (mục `P-009`): PR mang nhãn `fix` phải có job
+  // `fix-has-test` XANH trên đúng commit sắp merge — không đủ nếu chỉ
+  // `ciConclusion === 'success'`, vì job đó `skipped` không làm cả run đỏ.
+  if (labels.includes('fix') && input.fixHasTestConclusion !== 'success') {
+    return {
+      outcome: 'skip',
+      reason: `PR mang nhãn \`fix\` nhưng job \`fix-has-test\` chưa xanh trên đầu nhánh (\`${input.fixHasTestConclusion ?? 'không tìm thấy'}\`).`,
+    };
+  }
+
   // Lời `dừng` chặn CẢ hai cửa, không riêng cửa có chờ. Chủ dự án nói dừng
   // thì máy dừng, kể cả với một PR thường.
   const stop = input.comments.find((comment) => isStopComment(comment, input.owner));
@@ -188,6 +212,7 @@ if (isMain) {
     ciSha: raw.ciSha ?? null,
     ciConclusion: raw.ciConclusion ?? null,
     ciCompletedAt: raw.ciCompletedAt ?? null,
+    fixHasTestConclusion: raw.fixHasTestConclusion ?? null,
     comments: raw.comments ?? [],
     owner: raw.owner ?? '',
     now: raw.now ?? new Date().toISOString(),

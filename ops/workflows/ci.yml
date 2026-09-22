@@ -10,6 +10,7 @@ name: ci
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 # P-010 dry-run: gọi tay file này KHÔNG chạm được tới tác dụng phụ nào. Hai
@@ -21,16 +22,20 @@ on:
 permissions:
   contents: read
 # KF-004 pull_request: job `protected-area` gắn và gỡ nhãn bằng GITHUB_TOKEN,
-# và chính workflow này đăng ký `on: pull_request`. Hiện KHÔNG đứt, vì
-# `on.pull_request` đang dùng bộ types mặc định — `opened, synchronize,
-# reopened` — không có `labeled`. Nhãn do chính CI gắn vì thế không kích hoạt
-# lại CI, và đó là điều mong muốn: nếu có, nó sẽ thành vòng lặp.
+# và chính workflow này đăng ký `on: pull_request` với `labeled`/`unlabeled`
+# trong `types` (mục `P-009`) — hai đường đi KHÁC nhau cho cùng một hành
+# động "thêm nhãn":
 #
-# ⚠️ Mục `P-009` sẽ thêm `labeled` và `unlabeled` vào types, để bắt được
-# trường hợp nhãn `fix` gắn muộn. Lúc đó dòng khai báo này KHÔNG còn đúng:
-# nhãn do CI tự gắn sẽ không kích hoạt lại CI (GITHUB_TOKEN), còn nhãn do
-# người gắn thì có — hai đường đi khác nhau cho cùng một hành động. P-009
-# phải xử lý đúng chỗ đó, và viết lại dòng này.
+#   - Nhãn do CHÍNH job của workflow này gắn (`gh pr edit` bằng
+#     `GITHUB_TOKEN`) KHÔNG kích hoạt lại CI — GitHub cố ý không tính sự
+#     kiện do `GITHUB_TOKEN` sinh ra là một trigger mới, để tránh vòng lặp.
+#     Không đứt gì: đó vẫn là điều mong muốn cho các nhãn `owner-merge` /
+#     `automerge-delayed` / `cross-lane` mà job `protected-area` tự gắn.
+#   - Nhãn do NGƯỜI (hoặc một phiên agent gọi API bằng danh tính riêng, không
+#     phải `GITHUB_TOKEN` của chính run này) gắn/gỡ THÌ có kích hoạt lại CI.
+#     Đây là đường P-009 cần: nhãn `fix` gắn MUỘN (sau khi PR đã mở, CI đã
+#     chạy xong lượt đầu) giờ chạy lại toàn bộ CI, và job `fix-has-test` bên
+#     dưới đọc lại nhãn hiện tại qua API — không tin ảnh chụp cũ.
 
   # pull-requests: write đủ cho CẢ hai việc của job protected-area: gắn nhãn
   # lên PR, VÀ tạo nhãn của repo bằng `gh label create`. Đã kiểm bằng chạy
@@ -91,16 +96,50 @@ jobs:
     name: fix-has-test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    # KHÔNG khai `permissions:` riêng ở đây (bẫy KF-003/KF-008 đã sập một
+    # lần khi soát chéo PR này): một khối `permissions:` cấp JOB thay thế
+    # toàn bộ khối cấp WORKFLOW cho đúng job đó, không cộng thêm — quyền
+    # không liệt kê thành `none`, kể cả `contents`, làm `actions/checkout`
+    # hỏng với lỗi gây hiểu lầm "Repository not found" (404). Khối cấp
+    # workflow phía trên đã có sẵn CẢ HAI quyền job này cần —
+    # `contents: read` (cho checkout) và `pull-requests: write`, thoả luôn
+    # `pull-requests: read` (cho `gh api repos/.../pulls/$PR`) — nên không
+    # cần khai gì thêm ở đây.
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # BẤT BIẾN I2, vế thứ hai: PR có nhãn `fix` phải kèm test tái hiện lỗi.
       # Sửa lỗi mà không có test là mời lỗi đó quay lại.
-      - name: PR fix phải có test
-        if: contains(github.event.pull_request.labels.*.name, 'fix')
+      #
+      # Mục `P-009`: đọc nhãn hiện tại QUA API, không qua
+      # `github.event.pull_request.labels` — ảnh chụp đó cố định tại lúc
+      # workflow run BẮT ĐẦU, nên một PR mở trước rồi mới gắn `fix` sau (thứ
+      # tự phổ biến nhất khi agent mở PR nháp trước) sẽ đọc thấy nhãn đã có
+      # ở lần chạy MỚI (do `labeled` kích hoạt), nhưng đọc từ ảnh chụp cũ ở
+      # một lần chạy cũ hơn vẫn đang treo vẫn sai — API luôn là hiện tại.
+      - name: Đọc nhãn hiện tại qua API
+        id: labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          HAS_FIX=$(gh api "repos/$REPO/pulls/$PR" --jq '([.labels[].name] | index("fix")) != null')
+          echo "PR #$PR có nhãn fix: $HAS_FIX"
+          echo "has_fix=$HAS_FIX" >> "$GITHUB_OUTPUT"
+
+      # Bước này KHÔNG bao giờ dùng `if:` để bỏ qua (rà soát Z2/Z9 — một
+      # step `skipped` im lặng trông giống hệt một step đã kiểm và đã qua).
+      # Luôn chạy, tự in ra kết luận, và tự quyết định thoát 0 hay 1.
+      - name: PR fix phải có test
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.labels.outputs.has_fix }}" != "true" ]; then
+            echo "Không có nhãn fix, bỏ qua."
+            exit 0
+          fi
           git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
           CHANGED=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
           echo "$CHANGED"
@@ -166,6 +205,11 @@ jobs:
           # CHARTER được cắt theo MỤC, không theo file: chỉ mục 1 (mục tiêu)
           # và mục 3 (bất biến) mới cần chủ dự án. Vì vậy luật cần cả bản cũ
           # lẫn bản mới để biết diff rơi vào mục nào.
+          # Z9: CHARTER.md có thể chưa tồn tại ở SHA nền (repo rất cũ, hoặc
+          # nhánh base lạ). Vắng file là hợp lệ — protected-area.ts đọc
+          # `baseCharter === null` và coi như CHARTER.md chạm mục 1 hoặc 3,
+          # tức cửa `owner-merge`, phương án an toàn nhất khi không đối chiếu
+          # được (xem `charterSections === null` trong file đó).
           git show "origin/$BASE:CHARTER.md" > "$RUNNER_TEMP/base-CHARTER.md" 2>/dev/null || true
 
           AREA=$(node ops/invariants.protected-area.ts \
@@ -180,35 +224,37 @@ jobs:
           echo "::notice::cửa merge = $GATE"
           echo "$AREA" | jq -r '(.owner[] | "  owner-merge vì \(.)"), (.delayed[] | "  chờ vì \(.)")'
 
-          # `|| true` ở đây là chủ ý: gỡ một nhãn không có mặt không phải lỗi,
-          # và bước này phải chạy được ở cả lần đầu lẫn các lần sau (rà soát Z9).
+          # Gỡ một nhãn không có mặt không phải lỗi, và bước này phải chạy
+          # được ở cả lần đầu lẫn các lần sau — một hàm dùng chung để chỉ cần
+          # MỘT chỗ giải thích `|| true` cho toàn bộ khối dưới đây (rà soát Z9).
+          rm_label() { gh pr edit "$PR" --remove-label "$1" || true; }
+
           case "$GATE" in
             owner-merge)
               gh pr edit "$PR" --add-label owner-merge
-              gh pr edit "$PR" --remove-label automerge-delayed || true
-              gh pr edit "$PR" --remove-label automerge || true
+              rm_label automerge-delayed
+              rm_label automerge
               ;;
             automerge-delayed)
               gh pr edit "$PR" --add-label automerge-delayed
-              gh pr edit "$PR" --remove-label owner-merge || true
-              gh pr edit "$PR" --remove-label automerge || true
+              rm_label owner-merge
+              rm_label automerge
               ;;
             *)
-              gh pr edit "$PR" --remove-label owner-merge || true
-              gh pr edit "$PR" --remove-label automerge-delayed || true
+              rm_label owner-merge
+              rm_label automerge-delayed
               ;;
           esac
 
-          # `|| true` là chủ ý (rà soát Z9): `grep` trả 1 khi không khớp dòng
-          # nào, và dưới `set -o pipefail` điều đó giết cả job — một PR không
-          # chạm thư mục làn nào sẽ làm job gắn nhãn đỏ vì lý do không liên
-          # quan gì tới nội dung PR.
+          # Z9: `grep` trả 1 khi không khớp dòng nào, và dưới `set -o pipefail`
+          # điều đó giết cả job — một PR không chạm thư mục làn nào sẽ làm
+          # job gắn nhãn đỏ vì lý do không liên quan gì tới nội dung PR.
           LANES=$( (grep -Eo '^(workshops|ops/lanes)/[a-z]+' "$RUNNER_TEMP/changed.txt" || true) | sort -u | wc -l)
           echo "số làn bị chạm: $LANES"
           if [ "$LANES" -gt 1 ]; then
             gh pr edit "$PR" --add-label cross-lane
           else
-            gh pr edit "$PR" --remove-label cross-lane || true
+            rm_label cross-lane
           fi
 
   trailer-warn:
@@ -226,6 +272,8 @@ jobs:
       # Claude-Session chỉ được CẢNH BÁO. Cố ý không chặn: nếu nền tảng đổi
       # cách ghi trailer thì một luật cứng ở đây sẽ chặn toàn bộ công việc.
       - name: Cảnh báo commit thiếu trailer Claude-Session
+        # Z9: luật mềm (xem khối comment trên) — trailer thiếu chỉ cảnh báo,
+        # không chặn PR, nên chính bước cảnh báo cũng không được phép đỏ CI.
         continue-on-error: true
         run: |
           set -euo pipefail

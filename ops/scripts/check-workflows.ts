@@ -36,13 +36,13 @@ const problems: string[] = [];
 /** Luật mềm (CHARTER mục 4): in ra, không làm đỏ. */
 const warnings: string[] = [];
 
-interface RunBlock {
+export interface RunBlock {
   startLine: number;
   indent: number;
   lines: string[];
 }
 
-function runBlocks(source: string, file: string): RunBlock[] {
+export function runBlocks(source: string, file: string): RunBlock[] {
   const lines = source.split('\n');
   const blocks: RunBlock[] = [];
   for (let i = 0; i < lines.length; i += 1) {
@@ -380,6 +380,99 @@ export function brokenEventChains(
   return found;
 }
 
+/**
+ * Z10 (`ops/known-failures.md` nhóm Z) — thiếu `set -euo pipefail`.
+ *
+ * Không có nó, bash mặc định chạy tiếp sau lệnh hỏng đầu tiên và trả mã
+ * thoát của LỆNH CUỐI trong khối. Một script hỏng giữa chừng vẫn `exit 0`,
+ * và CI báo xanh cho một bước đã thất bại thật. Rẻ, máy kiểm được ngay
+ * (chỉ cần dòng đầu của khối, không cần chạy gì), và bắt được một họ lỗi
+ * rộng — đây là luật nên làm trước trong `P-014`.
+ *
+ * Nhận `RunBlock[]` đã có sẵn (kết quả của `runBlocks`) thay vì tự đọc lại
+ * `source`, vì CLI bên dưới đã phân tách khối cho cả bash -n; tách ra khỏi
+ * đó chỉ để test được độc lập.
+ */
+export function blocksMissingPipefail(blocks: readonly RunBlock[]): number[] {
+  const bad: number[] = [];
+  for (const block of blocks) {
+    const first = block.lines.find((l) => l.trim() !== '');
+    if (first?.trim() !== 'set -euo pipefail') bad.push(block.startLine);
+  }
+  return bad;
+}
+
+/**
+ * Z5 — secret thiếu nói chung: `${{ secrets.X }}` nở thành chuỗi rỗng khi
+ * `X` không được set, lệnh vẫn chạy (có khi vẫn `exit 0`), và không có gì
+ * đỏ để báo điều đó.
+ *
+ * Đây là kiểm CHỮ, không phải kiểm ngữ nghĩa — nó không theo dõi `X` được
+ * gán cho biến `env:` nào rồi dùng gián tiếp qua biến đó. Nó đọc file theo
+ * từng dòng, và với mỗi `secrets.X`: nếu dòng ĐANG XÉT cũng chứa một phép
+ * kiểm rỗng (`-z` hoặc `-n`) thì coi chính dòng đó LÀ phép khẳng định (ca
+ * thường gặp nhất: `[ -n "${{ secrets.X }}" ] || exit 1`, khẳng định và
+ * dùng nằm chung một dòng); nếu không, và chưa có dòng nào TRƯỚC ĐÓ khẳng
+ * định `X`, thì đây là một lần dùng "trần" — đỏ. Giới hạn này chấp nhận
+ * được vì hiện KHÔNG workflow nào trong `ops/workflows/` dùng `secrets.*`
+ * (CLAUDE.md mục 4 chỉ cho hai PAT, cả hai đều ngoài phạm vi thư mục này)
+ * — luật ở đây là hàng rào cho lần đầu tiên một workflow thêm secret,
+ * không phải chữa một ca đã có.
+ */
+export function secretsUsedWithoutEmptyCheck(source: string): string[] {
+  const asserted = new Set<string>();
+  const flagged = new Set<string>();
+  const order: string[] = [];
+  for (const line of source.split('\n')) {
+    const names = new Set<string>();
+    for (const m of line.matchAll(/secrets\.([A-Za-z_][A-Za-z0-9_]*)/g)) names.add(m[1]!);
+    if (names.size === 0) continue;
+    const hasEmptyCheck = line.includes('-z') || line.includes('-n');
+    for (const name of names) {
+      if (hasEmptyCheck) {
+        asserted.add(name);
+        continue;
+      }
+      if (!asserted.has(name) && !flagged.has(name)) {
+        flagged.add(name);
+        order.push(name);
+      }
+    }
+  }
+  return order;
+}
+
+/**
+ * Z9 — `|| true` và `continue-on-error: true` nuốt lỗi ĐÚNG THIẾT KẾ ở
+ * nhiều chỗ (xem `ci.yml`); vấn đề chỉ xảy ra khi chỗ nuốt đó không ai định
+ * trước. Luật: mỗi chỗ như vậy phải có một dòng CHÚ THÍCH giải thích —
+ * ngay trên nó, hoặc ngay trên cùng dòng. Không giải thích là đỏ.
+ *
+ * Không đếm comment nằm xa hơn một dòng: một bình luận ở đầu cả khối không
+ * chứng minh được người viết cố ý ở TỪNG chỗ nuốt lỗi bên trong khối đó —
+ * xem cách `ci.yml` gom nhiều lần gỡ nhãn qua một hàm `rm_label`, đúng một
+ * chỗ để giải thích, thay vì lặp lại comment cho từng dòng gọi.
+ */
+export function undocumentedSwallows(source: string): number[] {
+  const lines = source.split('\n');
+  const bad: number[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    if (!/\|\|\s*true\b/.test(line) && !/continue-on-error:\s*true\b/.test(line)) continue;
+    const hashIndex = line.indexOf('#');
+    const trailingComment = hashIndex !== -1 && line.slice(hashIndex + 1).trim().length > 0;
+    if (trailingComment) continue;
+    // Đi ngược qua các dòng nối bằng `\` cuối dòng: một lệnh trải nhiều dòng
+    // (ví dụ `FOO=$(cmd \` … `|| true)`) chỉ cần MỘT chú thích ở đầu khối,
+    // không phải đúng ngay sát dòng vật lý chứa `|| true`.
+    let start = i;
+    while (start > 0 && /\\\s*$/.test(lines[start - 1]!)) start -= 1;
+    const precedingComment = (lines[start - 1]?.trim() ?? '').startsWith('#');
+    if (!precedingComment) bad.push(i + 1);
+  }
+  return bad;
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 //
 // Phần dưới chỉ chạy khi gọi trực tiếp. Nhờ vậy test import được
@@ -447,7 +540,8 @@ if (isMain) {
         );
       }
 
-      for (const block of runBlocks(source, file)) {
+      const blocks = runBlocks(source, file);
+      for (const block of blocks) {
         blockCount += 1;
         const script = join(scratch, `${file}-${block.startLine}.sh`);
         writeFileSync(script, block.lines.join('\n'), 'utf8');
@@ -457,6 +551,27 @@ if (isMain) {
             `${file}:${block.startLine} — cú pháp bash sai trong khối run:\n      ${result.stderr.trim().split('\n').join('\n      ')}`,
           );
         }
+      }
+
+      for (const line of blocksMissingPipefail(blocks)) {
+        problems.push(
+          `${file}:${line} — khối \`run: |\` thiếu \`set -euo pipefail\` ở dòng đầu (Z10). ` +
+            'Không có nó, một lệnh hỏng giữa chừng vẫn để lại exit 0 của lệnh cuối.',
+        );
+      }
+
+      for (const name of secretsUsedWithoutEmptyCheck(source)) {
+        problems.push(
+          `${file} — dùng \`secrets.${name}\` mà không có dòng nào TRƯỚC đó khẳng định ` +
+            `\`${name}\` không rỗng (Z5). Secret thiếu sẽ nở thành chuỗi rỗng, lệnh vẫn chạy.`,
+        );
+      }
+
+      for (const line of undocumentedSwallows(source)) {
+        problems.push(
+          `${file}:${line} — \`|| true\` hoặc \`continue-on-error: true\` không có chú thích ` +
+            'ngay trên (hoặc cùng dòng) giải thích vì sao nuốt lỗi ở đây là an toàn (Z9).',
+        );
       }
     }
   } finally {
