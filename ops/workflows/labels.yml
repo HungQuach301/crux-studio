@@ -11,6 +11,15 @@ on:
     branches: [main]
     paths: ['ops/labels.json']
   workflow_dispatch:
+    inputs:
+      # P-010 · chế độ chạy thử. `smoke-workflows.yml` gọi file này kèm
+      # `dry_run=true` sau mỗi lần `ops/workflows/**` đổi trên `main`, để
+      # lỗi quyền / lỗi lệnh `gh` lộ ra ngay thay vì nằm im tới lần
+      # `ops/labels.json` đổi kế tiếp (KF-003 xảy ra đúng ở file này).
+      dry_run:
+        description: 'Chạy thử: in ra nhãn ĐỊNH đồng bộ, không ghi gì lên repo'
+        type: boolean
+        default: false
 
 permissions:
   # contents: read LÀ BẮT BUỘC vì job này dùng actions/checkout. Khi một
@@ -32,12 +41,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
+          # Chạy thử vẫn phải CÓ GIÁ TRỊ: nó đọc `ops/labels.json` thật,
+          # chạy `jq` thật, và in ra từng nhãn nó ĐỊNH ghi. Một chế độ thử
+          # chỉ in "ok" thì không kiểm được gì ngoài việc runner khởi động.
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "CHẠY THỬ — không ghi nhãn nào lên repo $REPO."
+          fi
           jq -c '.labels[]' ops/labels.json | while read -r row; do
             NAME=$(echo "$row" | jq -r .name)
             COLOR=$(echo "$row" | jq -r .color)
             DESC=$(echo "$row" | jq -r .description)
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "ĐỊNH ghi: $NAME (màu $COLOR) — $DESC"
+              continue
+            fi
             gh label create "$NAME" --repo "$REPO" --color "$COLOR" --description "$DESC" --force
             echo "đã đồng bộ: $NAME"
           done

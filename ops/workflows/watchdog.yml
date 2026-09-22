@@ -14,6 +14,13 @@ on:
         description: 'Bắn một cảnh báo thử để kiểm đường thông báo tới điện thoại'
         type: boolean
         default: false
+      # P-010 · chế độ chạy thử. Khác `test_alert` ở đúng một điểm và điểm
+      # đó là tất cả: `test_alert` MỞ issue thật (nó kiểm đường thông báo);
+      # `dry_run` soát đủ bốn dấu hiệu rồi IN RA issue nó định mở, không mở.
+      dry_run:
+        description: 'Chạy thử: soát đủ bốn dấu hiệu, in ra issue ĐỊNH mở, không mở issue nào'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,6 +49,7 @@ jobs:
           REPO: ${{ github.repository }}
           OWNER: HungQuach301
           TEST: ${{ inputs.test_alert }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
           NOW=$(date -u +%s)
@@ -130,6 +138,17 @@ jobs:
             "$PROBLEMS" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
             "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")
+
+          # Chạy thử dừng ở ĐÂY, không sớm hơn: bốn phép soát trên đã gọi
+          # `gh issue list`, `gh pr list`, `gh run list` thật và đọc
+          # `ops/logs/**` thật, nên lỗi quyền hay lệnh `gh` sai vẫn lộ ra.
+          # Chỉ đúng thao tác ghi ra ngoài là bị chặn.
+          if [ "$DRY_RUN" = "true" ]; then
+            printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n%s\n%s\n' \
+              "$([ -n "$EXISTING" ] && echo "bình luận vào issue #$EXISTING" || echo "mở issue mới \"$TITLE\" nhãn alert")" \
+              "────────" "$BODY"
+            exit 0
+          fi
 
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
