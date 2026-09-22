@@ -213,9 +213,32 @@ export function censusTimeToIso(time: string): string {
   throw new NormalizeError(`Mốc thời gian Census không nhận dạng được: ${JSON.stringify(time)}`);
 }
 
-/** Xếp observations theo `period` tăng dần, để thứ tự không phụ thuộc nhà cung cấp (BLS trả mới trước). */
-function sortByPeriod(observations: Observation[]): Observation[] {
-  return [...observations].sort((a, b) => (a.period < b.period ? -1 : a.period > b.period ? 1 : 0));
+/**
+ * Xếp observations theo `period` tăng dần (BLS trả mới trước) VÀ chặn hai
+ * observation cùng `period`.
+ *
+ * Chặn trùng period là điều kiện đủ để tất định: khi mọi period là duy nhất,
+ * xếp theo period là một thứ tự TOÀN PHẦN, nên contentHash không phụ thuộc
+ * thứ tự dòng mà nhà cung cấp trả. Trùng period lại là một nhập nhằng nghĩa
+ * thật — BLS `annualaverage=true` trả M13 (bình quân năm) đụng M01, và một
+ * truy vấn Census nhiều vùng địa lý cho nhiều dòng cùng `time` — nên nuốt nó
+ * (gộp hay giữ thứ tự API) là đúng nhóm Z. Ném để lộ ra: một snapshot là MỘT
+ * chuỗi, mỗi kỳ đúng một giá trị.
+ */
+function orderedUniqueObservations(observations: Observation[]): Observation[] {
+  const ordered = [...observations].sort((a, b) =>
+    a.period < b.period ? -1 : a.period > b.period ? 1 : 0,
+  );
+  for (let i = 1; i < ordered.length; i += 1) {
+    if (ordered[i]!.period === ordered[i - 1]!.period) {
+      throw new NormalizeError(
+        `Hai observation cùng period ${JSON.stringify(ordered[i]!.period)} — một chuỗi ` +
+          `không được có hai giá trị cho một kỳ (BLS bình quân năm M13/Q05 đụng M01/Q01, ` +
+          `hay truy vấn Census nhiều vùng). Chụp mỗi chuỗi/vùng riêng, hoặc bỏ dòng bình quân năm.`,
+      );
+    }
+  }
+  return ordered;
 }
 
 // ── Ba adapter ─────────────────────────────────────────────────────────────
@@ -238,7 +261,7 @@ export function normalizeFred(
     }
     return { period: o.date, value: coerceValue(o.value) };
   });
-  return { unit: meta.unit, frequency: meta.frequency, observations: sortByPeriod(observations) };
+  return { unit: meta.unit, frequency: meta.frequency, observations: orderedUniqueObservations(observations) };
 }
 
 /** Dạng thô của BLS `/publicAPI/v2/timeseries/data/`. */
@@ -263,7 +286,7 @@ export function normalizeBls(
     period: blsPeriodToIso(d.year, d.period),
     value: coerceValue(d.value),
   }));
-  return { unit: meta.unit, frequency: meta.frequency, observations: sortByPeriod(observations) };
+  return { unit: meta.unit, frequency: meta.frequency, observations: orderedUniqueObservations(observations) };
 }
 
 /**
@@ -290,11 +313,14 @@ export function normalizeCensus(
   if (valueIdx < 0) {
     throw new NormalizeError(`Census: thiếu cột giá trị ${JSON.stringify(valueColumn)}.`);
   }
-  const observations = raw.slice(1).map((row) => ({
-    period: censusTimeToIso(row[timeIdx]!),
-    value: coerceValue(row[valueIdx]),
-  }));
-  return { unit: meta.unit, frequency: meta.frequency, observations: sortByPeriod(observations) };
+  const observations = raw.slice(1).map((row, i) => {
+    const time = row[timeIdx];
+    if (typeof time !== 'string') {
+      throw new NormalizeError(`Census: dòng ${i + 1} thiếu ô 'time' — dòng ngắn hơn tiêu đề?`);
+    }
+    return { period: censusTimeToIso(time), value: coerceValue(row[valueIdx]) };
+  });
+  return { unit: meta.unit, frequency: meta.frequency, observations: orderedUniqueObservations(observations) };
 }
 
 // ── Dựng snapshot ────────────────────────────────────────────────────────

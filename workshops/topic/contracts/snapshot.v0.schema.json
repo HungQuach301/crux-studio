@@ -24,8 +24,9 @@
     },
     "asOfDate": {
       "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
       "format": "date",
-      "description": "Mốc phiên bản của ảnh chụp (vintage). Là KHOÁ tất định: chạy lại adapter cùng asOfDate trên cùng dữ liệu gốc phải cho ra cùng observations và cùng contentHash. Không phải fetchedAt — fetchedAt là lúc chạy, asOfDate là kỳ dữ liệu được chốt."
+      "description": "Mốc phiên bản của ảnh chụp (vintage). Là KHOÁ tất định: chạy lại adapter cùng asOfDate trên cùng dữ liệu gốc phải cho ra cùng observations và cùng contentHash. Không phải fetchedAt — fetchedAt là lúc chạy, asOfDate là kỳ dữ liệu được chốt. Ràng ISO bằng pattern chứ không dựa vào `format` (validator kernel không enforce `format: date`)."
     },
     "fetchedAt": {
       "type": "string",

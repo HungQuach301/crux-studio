@@ -276,6 +276,62 @@ test('fetchSnapshot: có khoá nhưng transport mặc định -> LiveFetchNotWir
   );
 });
 
+// ── F1/F2/F4: ràng buộc bổ sung sau vòng soát ──────────────────────────────
+
+test('F1: asOfDate rác bị chặn — buildSnapshot ném, snapshotProblems báo asOfDate', () => {
+  assert.throws(() => buildSnapshot(MK({ asOfDate: 'NOT-A-DATE' })), NormalizeError);
+  assert.throws(() => buildSnapshot(MK({ asOfDate: '' })), NormalizeError);
+  const s = buildSnapshot(MK());
+  assert.ok(snapshotProblems({ ...s, asOfDate: 'NOT-A-DATE' }).some((p) => p.includes('asOfDate')));
+});
+
+test('F2: BLS bình quân năm M13 đụng M01 -> ném NormalizeError (không nuốt)', () => {
+  const raw: BlsRaw = {
+    Results: {
+      series: [
+        {
+          seriesID: 'X',
+          data: [
+            { year: '2026', period: 'M13', value: '4.0' }, // bình quân năm -> 2026-01-01
+            { year: '2026', period: 'M01', value: '3.7' }, // -> 2026-01-01, đụng
+          ],
+        },
+      ],
+    },
+  };
+  assert.throws(() => normalizeBls(raw, { unit: 'Percent', frequency: 'monthly' }), NormalizeError);
+});
+
+test('F2: Census nhiều vùng cùng time -> đụng period -> ném', () => {
+  const raw: CensusRaw = [
+    ['B25077_001E', 'time'],
+    ['250000', '2024'],
+    ['300000', '2024'], // cùng time, vùng khác -> đụng period
+  ];
+  assert.throws(() => normalizeCensus(raw, { unit: 'Dollars', frequency: 'annual' }), NormalizeError);
+});
+
+test('F2: tất định bất kể thứ tự dòng API — đảo thứ tự cho ra cùng contentHash', () => {
+  const asc: FredRaw = { observations: [
+    { date: '2026-03-01', value: '1' },
+    { date: '2026-04-01', value: '2' },
+    { date: '2026-05-01', value: '3' },
+  ] };
+  const desc: FredRaw = { observations: [...asc.observations].reverse() };
+  const build = (raw: FredRaw) =>
+    buildSnapshot({
+      provider: 'fred', seriesId: 'UNRATE', asOfDate: '2026-06-01',
+      fetchedAt: '2026-06-15T10:00:00.000Z', provenance: 'hand-built', source: SRC,
+      ...normalizeFred(raw, { unit: 'Percent', frequency: 'monthly' }),
+    });
+  assert.equal(build(asc).contentHash, build(desc).contentHash);
+});
+
+test('F4: dòng Census ngắn hơn tiêu đề -> NormalizeError, không TypeError thô', () => {
+  const raw = [['B25077_001E', 'time'], ['250000']] as CensusRaw; // thiếu ô time
+  assert.throws(() => normalizeCensus(raw, { unit: 'Dollars', frequency: 'annual' }), NormalizeError);
+});
+
 test('fetchSnapshot tất định: hai lần với transport giả cùng dữ liệu -> cùng contentHash', async () => {
   const call = (now: string) =>
     fetchSnapshot('fred', {
