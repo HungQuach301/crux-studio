@@ -572,7 +572,7 @@ muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bư
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~13:40Z; `ops/known-failures.md` `KF-015`; comment `09:46:12Z` trên PR `#42` (đã nêu đúng phần còn thiếu nhưng chưa ai nhận)
 - **Số hiệu I-017:** `I-015` đã bị PR `#112` nhận, `I-016` đã có mục riêng.
 - tiêu chí xong:

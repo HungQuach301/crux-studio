@@ -51,9 +51,10 @@ import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
 import {
   conflictRows,
+  isProbeError,
   measureConflicts,
   renderConflictRow,
-  type ConflictOrigin,
+  type ConflictProbe,
   type ConflictRow,
 } from './conflict-watch.ts';
 
@@ -346,10 +347,11 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
 
 /**
  * Kết quả gộp thử của mục `P-007`: mốc kẹt của từng PR đang mở, khoá là số
- * PR. `null` cho một PR nghĩa là PR đó **không** xung đột. Bên gọi truyền
- * `null` cho cả tham số nghĩa là lượt chạy chưa dò gì cả.
+ * PR. `null` cho một PR nghĩa là PR đó **không** xung đột; một
+ * `ConflictProbeError` nghĩa là **không dò được riêng PR đó** (`I-017`). Bên
+ * gọi truyền `null` cho cả tham số nghĩa là lượt chạy chưa dò gì cả.
  */
-export type ConflictOrigins = ReadonlyMap<number, ConflictOrigin | null>;
+export type ConflictOrigins = ReadonlyMap<number, ConflictProbe>;
 
 export function collectMetrics(
   root: string,
@@ -386,24 +388,30 @@ export function collectMetrics(
   const total = sumCostUsd(logLines);
   const cost24h = sumCostUsd(linesSince(logLines, since));
 
-  // Mục `P-007`. Chỉ PR **đã dò ra mốc** mới vào mục xung đột. Hai ca rơi
-  // ra ngoài và cả hai đều đúng: khoá có mà giá trị `null` là PR gộp sạch;
-  // khoá vắng hẳn là PR chưa dò. Ca thứ hai không xảy ra ở đường đang
-  // dùng — `measureConflicts` đặt khoá cho MỌI số PR — nhưng bên gọi có
-  // thể đưa vào một map dựng tay, nên bộ lọc phải chịu được cả hai. Số PR
-  // ở mục "PR đang mở" ngay trên vẫn đủ để thấy chênh lệch.
+  // Mục `P-007`. Ba ca của giá trị map, ba cách xử lý đúng:
+  //  - khoá vắng hẳn, hoặc giá trị `null`: PR gộp sạch (hoặc chưa dò nếu
+  //    dựng map bằng tay) — KHÔNG vào mục xung đột.
+  //  - `ConflictOrigin`: PR đang xung đột, vào mục kèm mốc kẹt.
+  //  - `ConflictProbeError` (`I-017`): dò riêng PR đó hỏng — vẫn vào mục,
+  //    với `origin: null` để dòng bản tin ghi "KHÔNG dò được mốc kẹt". Một
+  //    PR hỏng là PR CHƯA BIẾT, không phải PR sạch: nuốt nó đi là đúng nhóm
+  //    Z, nên nó phải hiện ra, không biến mất.
   const conflicts =
     origins === null
       ? null
       : conflictRows(
           snapshot.openPrs
             .filter((pr) => origins.get(pr.number) != null)
-            .map((pr) => ({
-              number: pr.number,
-              title: pr.title,
-              labels: labelNames(pr.labels),
-              origin: origins.get(pr.number)!,
-            })),
+            .map((pr) => {
+              const probe = origins.get(pr.number)!;
+              return {
+                number: pr.number,
+                title: pr.title,
+                labels: labelNames(pr.labels),
+                origin: isProbeError(probe) ? null : probe,
+                probeError: isProbeError(probe) ? probe.error : null,
+              };
+            }),
           now.toISOString(),
         );
 

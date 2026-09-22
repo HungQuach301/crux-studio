@@ -409,6 +409,31 @@ test('P-007 · collectMetrics chỉ đưa vào mục xung đột những PR ĐÃ
   }
 });
 
+test('I-017 · PR dò HỎNG hiện ra mục xung đột với "KHÔNG dò được mốc", không biến mất như PR sạch', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-probeerr-'));
+  try {
+    mkdirSync(join(root, 'ops', 'lanes', 'platform'), { recursive: true });
+    writeFileSync(join(root, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · x\n- status: ready\n');
+
+    const openPrs = [pr(65, 'claude/platform/P-004'), pr(66, 'claude/platform/P-003')];
+    const metrics = collectMetrics(
+      root,
+      { mergedPrs: [], openPrs, decisionIssues: [] },
+      NOW,
+      new Map([
+        // #65 sạch (biến mất khỏi mục); #66 dò hỏng → PHẢI hiện ra, hoursStuck null.
+        [65, null],
+        [66, { error: 'git merge-tree thoát 128: refusing to merge unrelated histories' }],
+      ]),
+    );
+
+    assert.deepEqual(metrics.conflicts?.map((row) => row.number), [66]);
+    assert.equal(metrics.conflicts?.[0]!.hoursStuck, null, 'PR hỏng không có mốc kẹt → hoursStuck null');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('P-007 · không truyền kết quả gộp thử thì conflicts là null, KHÔNG phải mảng rỗng', () => {
   const root = mkdtempSync(join(tmpdir(), 'crux-digest-conflict-'));
   try {
