@@ -406,3 +406,28 @@ Một bước đúng-đắn-bắt-buộc mà chỗ thực thi duy nhất là tr�
   - ⬜ **Còn treo, cần người/nền tảng đặt `CLAUDE_SESSION_URL`:** tool nay ghi `Claude-Session` khi biến môi trường có mặt, nhưng chưa lượt routine thật nào đặt biến đó, nên `Claude-Session` của commit gộp vẫn có thể vắng (khi đó `sessionTrailerMissing` báo ra). Đặt biến ở đầu lượt worker/integrator là việc nối dây tiếp theo; `Co-Authored-By` thì đã luôn có từ commit này.
 - **ảnh hưởng tới `VF-G14`:** phép kiểm của `G14` là "đọc job `trailer-warn` trên các PR do routine mở, trong một tuần". Chín commit thiếu trailer này nằm trong cửa sổ đó và **không phải** tín hiệu nền tảng ghi hỏng trailer — chúng là bước bị bỏ. `VF-G14` phải loại chín mã băm trên ra khỏi mẫu, nếu không nó kết luận sai về `G14`.
 - **mã mục nhận lúc 2026-09-22 06:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-023` là mã cao nhất trên `main` **và** trên cả 16 nhánh PR đang mở tại lúc nhận, nên `P-024` không đụng ai.
+
+### P-026 · Bước 0 chạy `integrator-resolve.ts` của **nhánh PR**, nên bản vá `P-024` không tới được nhánh nào
+`P-024` chuyển việc ghi trailer **vào trong** `ops/scripts/integrator-resolve.ts` để bỏ hẳn bước bù bằng tay. Nhưng bước 0 `checkout` nhánh PR **rồi mới** gọi `node ops/scripts/integrator-resolve.ts`, nên **bản thật sự chạy là bản nằm trên nhánh đó**, không phải bản trên `main`. Nhánh nào mở ra trước khi `P-024` vào `main` thì vẫn chạy bản cũ, và bản cũ không ghi trailer.
+
+Đo chứ không suy (lượt `crux-integrator` 2026-09-22 11:0x giờ VN): `git show <head>:ops/scripts/integrator-resolve.ts | grep -c CLAUDE_SESSION_URL` trả `3` trên `origin/main` (`09c91bb`) và `0` trên **cả 11** đầu nhánh PR đang mở **trước lần gộp của lượt đó** (`#39 #49 #56 #62 #65 #70 #71 #79 #81 #84 #89`).
+
+Ca tệ nhất là im lặng: bản cũ **không có** trường `sessionTrailerMissing`, nên nó trả `{"outcome":"clean","files":[]}` mà không dấu hiệu nào báo trailer đã hụt. Ba test của `P-024` không bắt được vì chúng chạy bản trên cây làm việc, tức bản mới. Commit gộp `c2388bf` của `#39` đã push trước khi phát hiện và **không sửa lại được** (`CLAUDE.md` mục 2 cấm force-push lên nhánh của người khác).
+
+Đây là **lần gặp thứ hai** của cùng một chữ ký (KF-010), nên theo `CLAUDE.md` mục 13 phải sửa ở spec/prompt/cơ chế, **không** vá từng lượt chạy bằng trí nhớ routine — đúng cái nguyên nhân gốc mà lần gặp thứ nhất đã chẩn đoán. Nếu xảy ra **lần thứ ba** thì mục này gắn `parked` và mở `🤖 [QĐ]`.
+
+Cùng hình dạng với **G17** ở một chỗ khác: *một luật nằm trong repo không tự áp cho chính lần gộp mang nó tới.*
+
+- deps: `P-024` (đã `review`)
+- risk: medium
+- status: ready
+- nguồn: `ops/known-failures.md` KF-010 (lần gặp 2); vòng soát ngữ cảnh sạch của PR `#110`; `ops/logs/platform/P-016.jsonl` dòng lượt 11:0x giờ VN; `CLAUDE.md` mục 6 và mục 13; giả định `G14`
+- tiêu chí xong:
+  - Bước 0 gọi **bản `integrator-resolve.ts` của `main`**, không phải bản trên nhánh PR — ví dụ trích `git show origin/main:ops/scripts/integrator-resolve.ts` ra file tạm rồi chạy, hoặc một `ops/scripts/` bọc ngoài làm đúng việc đó ở **một** chỗ. Chốt một cách, đừng để mỗi routine tự nghĩ.
+  - **Cổng độc lập với phiên bản script**, vì tiêu chí trên không cứu được các nhánh đang mở hôm nay: trước khi push, đọc lại commit gộp (`git log -1 --format='%(trailers:key=Claude-Session)'`) và **từ chối push** khi trống. Cổng này phải nằm trong code chạy từ `main`, không nằm trong văn bản prompt.
+  - Phụ lục **P3 bước 0b** và **P1 bước 0** của `CHARTER.md` nói cùng một cách gọi. Lệch nhau thì lượt sau lại chạy bản cũ. Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, **đừng đoán** (`CHARTER.md` các mục ngoài 1 và 3 là `automerge-delayed`).
+  - Đặt `CLAUDE_SESSION_URL` ở đầu lượt worker/integrator — đây chính là tiêu chí `⬜` còn treo của `P-024`, và nó là **nhánh nguyên nhân thứ hai** của cùng triệu chứng: biến vắng thì `Claude-Session` vắng dù script đã mới. Hai nhánh nguyên nhân phải được nói rõ, kẻo `VF-G14` quy nhầm.
+  - **Bằng chứng bằng chạy thật, không bằng lập luận:** dựng một nhánh mang bản `integrator-resolve.ts` **cũ** (không có `CLAUDE_SESSION_URL`), chạy bước 0 lên nó. Trước khi sửa: commit gộp ra đời không trailer và không gì đỏ. Sau khi sửa: cổng chặn push, hoặc commit gộp mang đủ hai trailer.
+  - Ghi kết quả vào `ops/known-failures.md` KF-010, dòng **Máy chặn từ nay**.
+- **ảnh hưởng tới `VF-G14`:** `c2388bf` phải bị loại khỏi mẫu, cùng lý do với chín mã băm mà `P-024` đã liệt kê — nó là ca này, không phải tín hiệu nền tảng ghi hỏng trailer. `trailer-warn` trả `success` trên `#39` dù commit không có trailer nào (job đặt `continue-on-error: true`, CHARTER mục 4), nên **không** dùng kết luận của job đó làm bằng chứng cho `G14` mà không đọc commit.
+- **mã mục nhận lúc 2026-09-22 11:3x giờ VN** (`ops/logs/README.md`, KF-005): `P-025` là mã cao nhất trên `main` **và** trên cả 16 nhánh PR đang mở tại lúc nhận (đo từng nhánh, `#109` giữ `P-025`), nên `P-026` không đụng ai.
