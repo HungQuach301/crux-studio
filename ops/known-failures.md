@@ -439,6 +439,20 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-015 · Kho phiên bị **shallow**, nên phép đo xung đột của bước 0 báo "unrelated histories" cho một nhánh hoàn toàn bình thường
+
+> Số **KF-015** chứ không phải KF-014: PR `#142` đang mở đã nhận **KF-014**. Nhận mã trước khi viết là cách hai worker không cùng lấy một số.
+
+- **Lần gặp:** 2 — PR `#42` lúc 2026-09-22T08:16:45Z (đã đính chính lúc 09:46:12Z), rồi PR `#66` lúc 13:27Z. Phát hiện lại ở lượt `crux-worker-1` ~13:40Z.
+- **Chữ ký:** `git merge-tree --write-tree refs/pr/<n> origin/main` thoát **128** với `fatal: refusing to merge unrelated histories`, trong khi PR đó không có gì bất thường. Kèm theo: `git rev-list --max-parents=0` cho `main` và cho nhánh ra **hai** root khác nhau.
+- **Nguyên nhân gốc:** phiên cloud clone kho ở dạng **nông** (`git rev-parse --is-shallow-repository` = `true`). Trên kho nông, `git rev-list --max-parents=0` trả về commit **biên bị ghép (grafted)** — commit cũ nhất bản clone có, đã bị cắt mất cha — chứ không phải root thật. Hai bản clone nông ở hai độ sâu khác nhau cho hai "root" khác nhau cho cùng một cây, và `merge-tree` không tìm được tổ tiên chung vì tổ tiên đó nằm ngoài phần lịch sử đã tải. Đây **không** phải lỗi của nhánh, và cũng không phải lỗi của `merge-tree`: phép đo chạy trên một lịch sử không đầy đủ.
+  Đo lại sau `git fetch --unshallow origin` cho PR `#66`: root của `main` và root của `refs/pr/66` **trùng nhau** (`99d6bcf`), `git merge-base origin/main refs/pr/66` = `a1abee9`, `measureConflicts` ra **không xung đột**.
+- **Vì sao nó đắt:** lần đầu nó sinh một comment báo động sai trên PR `#42` yêu cầu **chủ dự án** force-push dựng lại nhánh hoặc đóng PR mở lại — đúng thứ CHARTER mục 1.2 muốn tránh. Lần hai nó làm một PR `owner-merge` bị ghi nhầm là hỏng cấu trúc trong dòng log bước 0 và trong tiêu đề commit vào `main`.
+- **Đã sửa ở đâu:** *chưa sửa cơ chế* — mục `integration/I-017` nhận việc. Chỗ phải sửa là `fetchProbeRefs()` của `ops/scripts/conflict-watch.ts`: nó nạp `main` và đầu các PR trong một lần `git fetch`, nhưng **không** kiểm `--is-shallow-repository` và không unshallow, nên mọi bên gọi thừa hưởng phép đo sai. Vá bằng tay ở từng lượt (chạy `git fetch --unshallow` rồi đo lại) là vá sản phẩm, không phải sửa cơ chế — CLAUDE.md mục 13.
+- **Máy chặn từ nay:** chưa có. `I-017` phải mang theo bài kiểm tái hiện (bất biến I2): dựng một kho nông trong thư mục tạm, gọi `measureConflicts`, và bài kiểm đỏ nếu nó trả "xung đột"/ném lỗi cho một nhánh gộp sạch. Tới khi `I-017` xong, lớp chặn là dòng này: **bước 0 thấy `refusing to merge unrelated histories` thì kiểm `git rev-parse --is-shallow-repository` TRƯỚC khi kết luận bất cứ điều gì.**
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
