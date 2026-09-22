@@ -16,13 +16,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ALLOWED_NON_SCHEMA,
   SCHEMA_SUFFIX,
+  scanWorkshopContracts,
   workshopContractFiles,
   workshopContractProblems,
 } from '../scripts/check-workshop-contracts.ts';
@@ -94,6 +95,16 @@ test('hố 1 · file trong contracts/ không theo hậu tố thì bị bắt, RE
     }),
     [],
   );
+
+  // So theo TÊN file, không theo đường dẫn: `v1/README.md` cũng là một
+  // README. Báo nhầm thì người đọc học cách bỏ qua dòng báo.
+  assert.deepEqual(
+    problemsFor({
+      'workshops/topic/contracts/v1/ok.v1.schema.json': GOOD_SCHEMA,
+      'workshops/topic/contracts/v1/README.md': '# ghi chú',
+    }),
+    [],
+  );
 });
 
 test('hố 2 · thư mục con vẫn bị quét', () => {
@@ -157,5 +168,76 @@ test('nối thật vào `pnpm contracts`: script thoát KHÁC 0 và nói đúng 
   } finally {
     rmSync(bad, { recursive: true, force: true });
     rmSync(good, { recursive: true, force: true });
+  }
+});
+
+test('hố 4 · xưởng lạ không nằm trong WORKSHOPS thì bị bắt, không bị bỏ qua im lặng', () => {
+  // Ba hố trên đều nằm BÊN TRONG một xưởng kernel đã biết. Hố này ở tầng
+  // trên: cả thư mục xưởng nằm ngoài tầm quét.
+  const problems = problemsFor({
+    'workshops/topic/contracts/ok.v0.schema.json': GOOD_SCHEMA,
+    'workshops/research/contracts/novel.v0.schema.json': BAD_SCHEMA,
+  });
+  assert.ok(problems.some((p) => /workshops\/research\/ là xưởng lạ/.test(p)), problems.join('\n'));
+  // Và contract bên trong nó vẫn phải bị quét, không chỉ bị điểm danh.
+  assert.ok(problems.some((p) => p.includes('novel.v0.schema.json') && p.includes('oneOf')), problems.join('\n'));
+});
+
+test('gốc không có thư mục workshops/ là VẤN ĐỀ, không phải tập rỗng im lặng', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-wcontracts-'));
+  try {
+    const problems = workshopContractProblems(root);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /Không đọc được workshops\//);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('symlink trong contracts/ thành dòng vấn đề, KHÔNG bị lọc im lặng và KHÔNG ném', () => {
+  // Hai ca, cùng một luật. Ca gãy: `statSync` sẽ ném `ENOENT` ở đây, nên
+  // phép quét phải dùng `lstatSync`. Ca trỏ tới contract THẬT mới là ca
+  // nguy hiểm: lọc nó đi im lặng nghĩa là một schema có thật không bao giờ
+  // được kiểm từ khoá, và không gì đỏ — đúng nhóm Z.
+  for (const [label, target] of [
+    ['gãy', 'không-có-thật.json'],
+    ['trỏ tới file thật', 'thật.json'],
+  ] as const) {
+    const root = makeRoot({
+      'workshops/topic/contracts/ok.v0.schema.json': GOOD_SCHEMA,
+      'thật.json': BAD_SCHEMA,
+    });
+    try {
+      symlinkSync(join(root, target), join(root, 'workshops/topic/contracts/link.v0.schema.json'));
+      const problems = workshopContractProblems(root);
+      assert.equal(problems.length, 1, `${label}: ${problems.join('\n')}`);
+      assert.match(problems[0]!, /link\.v0\.schema\.json/);
+      assert.match(problems[0]!, /không phải file thường/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('`contracts` là FILE chứ không phải thư mục: báo ra, không chết giữa chừng', () => {
+  // Chết giữa chừng ở đây nghĩa là vấn đề của năm việc kia trong
+  // `check-contracts.ts` không bao giờ được in ra.
+  const problems = problemsFor({ 'workshops/topic/contracts': 'không phải thư mục' });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0]!, /không đọc được thư mục contract/);
+});
+
+test('một lượt quét trả cả số đếm lẫn vấn đề — hai hàm công khai đọc từ đó ra', () => {
+  const root = makeRoot({
+    'workshops/topic/contracts/ok.v0.schema.json': GOOD_SCHEMA,
+    'workshops/topic/contracts/novel.v0.schema.json': BAD_SCHEMA,
+  });
+  try {
+    const scan = scanWorkshopContracts(root);
+    assert.equal(scan.files.length, 2);
+    assert.deepEqual(scan.files, workshopContractFiles(root));
+    assert.deepEqual(scan.problems, workshopContractProblems(root));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

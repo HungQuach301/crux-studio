@@ -483,3 +483,23 @@ còn tệ hơn là không viết").
     bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`). Mỗi file giữ một ghi chú
     nói phép kiểm đó nay nằm ở đâu.
 - PR: `#95`
+
+### I-014 · Phạm vi quét contract vẫn buộc bằng quy ước thư mục, không bằng phép kiểm
+
+Tìm ra trong vòng soát của `I-013` (reviewer ngữ cảnh sạch, PR `#95`).
+
+`I-013` đưa `workshops/<tên>/contracts/**/*.schema.json` vào `pnpm contracts`. Phạm vi đó dừng ở **quy ước
+thư mục**: một `*.schema.json` đặt ở `workshops/<tên>/src/`, ở `packs/**`, hay bất cứ đâu khác vẫn ngoài
+tầm quét, và **không gì buộc** "file mà `src/*.ts` nạp" phải nằm trong tập được quét. Hôm nay hai bên trùng
+nhau vì quy ước, không vì một phép kiểm — đúng hình dạng nhóm **Z** một tầng nữa: đổi chỗ một file là phép
+kiểm biến mất mà mọi chỉ báo vẫn xanh.
+
+- deps: `I-013`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
+    hoặc bị đòi phải nằm trong `contracts/`, và có dòng vấn đề nếu không.
+  - Có test tái hiện: thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` **ngoài** `contracts/` thì
+    `pnpm contracts` đỏ.

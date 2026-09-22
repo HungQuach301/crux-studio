@@ -30,7 +30,7 @@ import {
   type WorkshopName,
 } from '@crux/kernel';
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
-import { workshopContractFiles, workshopContractProblems } from './check-workshop-contracts.ts';
+import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -117,9 +117,9 @@ if (existsSync(goldenRoot)) {
 // 5 · Fixture input.json không mang bản sao cấu hình
 problems.push(...fixtureInputProblems(root));
 
-// 6 · Contract của xưởng
-const workshopContracts = workshopContractFiles(root).length;
-problems.push(...workshopContractProblems(root));
+// 6 · Contract của xưởng — một lượt quét cho cả số đếm lẫn danh sách vấn đề
+const workshopContracts = scanWorkshopContracts(root);
+problems.push(...workshopContracts.problems);
 
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
@@ -127,7 +127,7 @@ if (problems.length > 0) {
 }
 
 process.stdout.write(
-  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${workshopContracts} contract xưởng, ` +
+  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${workshopContracts.files.length} contract xưởng, ` +
     `${checked} artifact hợp lệ, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
 );
