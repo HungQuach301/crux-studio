@@ -19,7 +19,8 @@ từng mở file này (WP-014 mục 3c: giới hạn nằm trong dữ liệu, kh
 
 > ⚠️ **Hai dòng đầu bảng, nhưng code chỉ tiêu thụ MỘT.** Cửa dừng `quotaGate` đọc `searchCallsPerDay` và
 > đếm **lần gọi**; nó không đếm **đơn vị**. Dòng "đơn vị mỗi lần gọi" hiện **không có bên tiêu thụ nào**
-> — `unitsPerCall` không tồn tại ở đâu trong workspace (đo 2026-09-22, giả định **G19**). Hệ quả cần
+> — `unitsPerCall` không tồn tại trong code (đo 2026-09-22, giả định **G19**; từ ghi chú này trở đi
+> tên đó chỉ có mặt trong văn xuôi tài liệu). Hệ quả cần
 > biết trước khi có người điền số thật: nếu Cloud Console hiển thị hạn mức theo **đơn vị** chứ không theo
 > **lần gọi**, thì giữa số đọc được và số code dùng có một **phép chia**, và phép chia đó là chỗ một sai
 > số đi vào mà không gì đỏ. Issue **#101** vì vậy xin hai số **nguyên bản như Console hiển thị**, không
