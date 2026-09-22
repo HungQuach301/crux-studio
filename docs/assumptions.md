@@ -294,7 +294,7 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 - **Nội dung:** phiên cloud của Claude **không** có quyền push file trong `.github/workflows/`.
 - **Nguồn:** có báo lỗi công khai. Đây cũng là một trong ba nhận định sai của bản C1 (điểm b) — bản C1 giả định ngược lại.
 - **Độ tin cậy:** `tài liệu nói vậy`
-- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/workflows/ci.yml` · `CLAUDE.md` · `.claude/hooks/guard.mjs`
+- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/workflows/ci.yml` · `ops/workflows/smoke-workflows.yml` · `CLAUDE.md` · `.claude/hooks/guard.mjs`
 - **Cách kiểm:** trong một nhánh vứt đi, thử ghi một file vào `.github/workflows/` và push. **Không merge.**
   > Lưu ý về cách kiểm: hook `guard.mjs` chặn chính agent ghi vào `.github/`, nên bài kiểm này **không thực hiện được từ một phiên agent bình thường** — và agent không được tự nới hook để kiểm. Bài kiểm cần chủ dự án chạy, hoặc cần một PR `owner-merge` mở một ngoại lệ hẹp cho đúng một file thử rồi đóng lại ngay.
 - **Dự phòng nếu giả định đúng:** giữ nguyên cơ chế sync và PAT — đang dùng.
