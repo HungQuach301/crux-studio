@@ -234,3 +234,36 @@ jobs:
             fi
           done < <(git rev-list "$RANGE")
           echo "Thiếu trailer: $MISSING commit. Đây là cảnh báo, không chặn."
+
+  # KF-014: tên model lọt vào khối trailer của commit message. Khác
+  # `trailer-warn` ngay phía trên ở hai điểm, và cả hai đều có chủ đích:
+  #
+  # 1. Job này CHẶN, không cảnh báo. `trailer-warn` mềm vì nó kiểm một giả
+  #    định về nền tảng (G14 — nền tảng có ghi trailer hay không); nền tảng
+  #    đổi cách ghi thì luật cứng ở đó sẽ chặn toàn bộ công việc. Còn ở đây
+  #    luật không phụ thuộc nền tảng: CLAUDE.md mục 6 cấm tên model trong
+  #    bất cứ thứ gì đẩy lên repo, và bên viết commit luôn sửa được.
+  # 2. Nó đọc NỘI DUNG trailer, không chỉ đếm trailer thiếu.
+  #
+  # Chỉ quét khoảng `base..HEAD` của PR, KHÔNG quét cả lịch sử: 12 trong 53
+  # commit của `main` đã mang tên model trước khi job này tồn tại (đo
+  # 2026-09-22), và quét cả lịch sử sẽ đỏ mọi PR vì lỗi của người khác. Vá
+  # lịch sử thì phải rewrite `main` — không làm. Luật này chặn từ đây về sau.
+  no-model-name:
+    name: no-model-name
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Chặn tên model trong khối trailer của commit
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          node ops/scripts/check-commit-trailers.ts "origin/$BASE_REF..HEAD"

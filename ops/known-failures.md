@@ -439,6 +439,19 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-014 · Tên model lọt vào repo qua khối trailer của commit message
+
+- **Lần gặp:** 12 commit trên `main` (đo 2026-09-22 bằng `ops/scripts/check-commit-trailers.ts` trên toàn bộ 53 commit của `main`). Lần gần nhất: `024c29d`, lượt `crux-worker-1` 2026-09-22T12:59Z. Sớm nhất đo được: `c4e6eb2`, 2026-09-21T19:54Z. Rải trên nhiều lượt routine khác nhau, không phải một phiên lạc.
+- **Chữ ký:** một dòng trailer `Co-Authored-By` (hoặc `Co-authored-by`) mang thêm tên model — `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`, `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`. Trái `CLAUDE.md` mục 6: *"Không ghi tên hay mã model vào commit message, mô tả PR, comment code hay bất cứ thứ gì đẩy lên repo."*
+- **Nguyên nhân gốc:** phiên agent nhận chỉ dẫn attribution từ **nền tảng** (ngoài repo) với tên model nằm sẵn trong dòng `Co-Authored-By`, trong khi luật của repo cấm đúng chỗ đó. Hai nguồn lệch nhau, và nguồn ngoài repo là nguồn agent đọc **trước** khi viết commit. Lớp chặn duy nhất đang có — `ops/test/integrator-resolve.test.ts` — chỉ phủ commit do `ops/scripts/integrator-resolve.ts` **sinh ra**; commit viết tay không đi qua tool đó nên không có gì kiểm. Job `trailer-warn` của `ops/workflows/ci.yml` chỉ đếm commit **thiếu** `Claude-Session`, không đọc nội dung trailer. Nhóm **Z**: hỏng mà không gì đỏ, và lặp 12 lần trước khi ai đo.
+- **Đã sửa ở đâu:** không vá lịch sử. 12 commit đã vào `main` và sửa chúng đòi rewrite `main` — cái giá cao hơn cái lợi, và `CLAUDE.md` mục 2 cấm force-push lên nhánh người khác. Chỗ sửa là **luật**: `CLAUDE.md` mục 6 đã nói đúng điều cần nói, nên phần thiếu là **máy chặn**, không phải câu luật. Cộng thêm một dòng trong mục 6 chỉ tới `KF-014`, để lần sau người đọc luật thấy luôn chỗ nó từng bị vi phạm.
+- **Máy chặn từ nay:** `ops/scripts/check-commit-trailers.ts` (`modelNameInTrailers`, `scanRange`) cộng job **`no-model-name`** trong `ops/workflows/ci.yml` — job **CHẶN**, chạy `node ops/scripts/check-commit-trailers.ts "origin/$BASE_REF..HEAD"` trên mọi PR. Bài kiểm: `ops/test/check-commit-trailers.test.ts`, 10 ca, chạy trong `pnpm test` (job `check`). Hai quyết định thiết kế đều có ca kiểm khoá:
+  1. **Quét theo khoá trailer, không quét cả thân commit.** Quét cả thân sẽ đỏ ngay ở chính bản vá này (mục này phải trích dòng sai làm chữ ký). Danh sách khoá đóng — mở sang "mọi dòng dạng `Khoá: giá trị`" sẽ bắt nhầm văn xuôi tiếng Việt (`Chữ ký:`, `Còn treo:`).
+  2. **Không lọc theo vị trí trong thân.** Bản đầu chỉ đọc "khối trailer" theo nghĩa git (đoạn cuối cùng toàn dòng trailer) và **để lọt đúng ca sai thật** `024c29d`: GitHub squash nối thêm một `Co-authored-by` của chính nó ở đoạn cuối, nên dòng sai nằm ở một đoạn **giữa**, cách bởi một dòng `---------`. Phép đo hẹp ra `EXIT=0` trên đúng commit nó phải bắt. Ca hồi quy dán nguyên hình dạng đó.
+- **Còn hở:** job chỉ quét `base..HEAD` của PR, nên 12 commit cũ trên `main` vẫn còn tên model — đây là nợ đã khai, không phải chỗ hở mới. Và phép quét chỉ phủ **commit message**; tên model trong mô tả PR, comment hay code chưa có máy chặn nào (mục 6 cấm cả những chỗ đó). Chặn nốt đáng một mục `platform` riêng.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
