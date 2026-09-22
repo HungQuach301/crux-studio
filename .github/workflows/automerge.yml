@@ -43,6 +43,12 @@ permissions:
   contents: write
   pull-requests: write
   actions: write
+  # `KF-017`: bước "Xét từng PR" đọc check run `fix-has-test` qua Checks API
+  # (`repos/…/commits/$HEAD/check-runs`, mục `P-009`). Scope `checks` là RIÊNG —
+  # ba quyền trên đều không bao nó. Thiếu dòng này thì `gh api` trả 403 ngay ở
+  # PR ĐẦU hàng đợi, `set -euo pipefail` giết cả bước, và không PR nào merge
+  # được. Đo được: 35 lượt đỏ liên tiếp, 14:45Z → 20:38Z ngày 2026-09-22.
+  checks: read
 
 # KF-004 push: merge ở đây sinh sự kiện `push` vào main, mà `main-ci.yml`,
 # `labels.yml`, `smoke-workflows.yml` và `.github/workflows/sync-workflows.yml`
