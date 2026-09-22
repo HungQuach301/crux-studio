@@ -26,7 +26,7 @@ import {
   needOwnerCount,
   openPrRows,
   parkedItems,
-  probeDelayedCommits,
+  probeDelayedHeadChanges,
   probeOrigins,
   renderDigestMetrics,
   rollupState,
@@ -474,20 +474,20 @@ test('P-027 · mỗi PR delayed một dòng, gần tới hạn trước, kèm s�
     null,
     new Map([
       // #39: đầu nhánh vừa đổi 20 phút trước — đồng hồ về 0.
-      [39, [{ sha: 'a', committedAt: '2026-09-21T17:40:00Z' }]],
+      [39, ['2026-09-21T17:40:00Z']],
       // #42: đứng yên 14 giờ — đã qua ngưỡng, nên dòng dặn là câu bình thường.
-      [42, [{ sha: 'b', committedAt: '2026-09-21T04:00:00Z' }]],
+      [42, ['2026-09-21T04:00:00Z']],
     ]),
   );
 
   assert.deepEqual(metrics.delayed?.map((row) => row.number), [42, 39]);
   assert.equal(metrics.delayed?.[1]!.hoursShort, 11.67);
-  assert.equal(metrics.delayed?.[1]!.reachedThreshold, false);
+  assert.equal(metrics.delayed?.[1]!.everReachedThreshold, false);
 
   const text = renderDigestMetrics(metrics);
   assert.match(text, /^Đang chờ merge: 2$/m);
-  assert.match(text, /#39 · visual · còn ít nhất 11\.67 giờ/m);
-  // #42 đã đủ giờ, nên dòng dặn là câu bình thường.
+  assert.match(text, /#39 · .*còn thiếu 11\.67/m);
+  // #42 đã từng đạt ngưỡng, nên dòng dặn là câu bình thường.
   assert.match(text, /comment `dừng` ngay trên PR đó/m);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -509,18 +509,18 @@ test('P-027 · hàng đợi delayed RỖNG ra map rỗng, không ra null — hai
   try {
     // Không PR nào mang nhãn: trả lời thật, và không đi qua git lần nào
     // (thư mục này không phải kho git, nên một lần `git fetch` sẽ ném).
-    const empty = probeDelayedCommits(root, { mergedPrs: [], openPrs: [pr(1, 'claude/platform/P-001')], decisionIssues: [] }, []);
+    const empty = probeDelayedHeadChanges(root, { mergedPrs: [], openPrs: [pr(1, 'claude/platform/P-001')], decisionIssues: [] }, []);
     assert.deepEqual(empty, new Map());
 
     // Có PR delayed nhưng git hỏng → `null`, và bản tin in CHƯA ĐO thay vì
     // kéo cả lượt chạy xuống theo.
-    const broken = probeDelayedCommits(
+    const broken = probeDelayedHeadChanges(
       root,
       { mergedPrs: [], openPrs: [pr(2, 'claude/platform/P-002', { labels: [{ name: 'automerge-delayed' }] })], decisionIssues: [] },
       [],
     );
     assert.equal(broken, null);
-    assert.equal(probeDelayedCommits(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, ['--no-delayed']), null);
+    assert.equal(probeDelayedHeadChanges(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, ['--no-delayed']), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -541,7 +541,7 @@ test('P-027 · bản tin KHÔNG khuyên "không làm gì thì nó tự vào main
       },
       NOW,
       null,
-      new Map([[39, [{ sha: 'a', committedAt: '2026-09-21T17:40:00Z' }]]]),
+      new Map([[39, ['2026-09-21T17:40:00Z']]]),
     );
     const text = renderDigestMetrics(metrics);
     assert.match(text, /Cửa delayed hiện CHƯA CHẢY/);
@@ -565,12 +565,13 @@ test('P-027 · PR đang xung đột KHÔNG hiện hai câu trái nhau trong bả
       },
       NOW,
       new Map([[109, { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true }]]),
-      new Map([[109, [{ sha: 'b', committedAt: '2026-09-21T17:40:00Z' }]]]),
+      new Map([[109, ['2026-09-21T17:40:00Z']]]),
     );
     const text = renderDigestMetrics(metrics);
-    assert.equal(metrics.delayed?.[0]!.conflicting, true);
-    assert.match(text, /xung đột — đồng hồ 12 giờ KHÔNG chạy/);
-    assert.doesNotMatch(text, /còn ít nhất/);
+    assert.match(text, /^- #109 · xung đột — đồng hồ 12 giờ KHÔNG chạy/m);
+    // Dòng "Đang chờ merge" của PR đó KHÔNG được kèm số giờ song song với
+    // mục "PR đang xung đột" ngay trên.
+    assert.doesNotMatch(text, /^- #109 · đổi đầu nhánh/m);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -592,12 +593,13 @@ test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, khô
       NOW,
       null,
       // #42 thiếu hẳn khoá.
-      new Map([[39, [{ sha: 'a', committedAt: '2026-09-21T17:40:00Z' }]]]),
+      new Map([[39, ['2026-09-21T17:40:00Z']]]),
     );
-    assert.equal(metrics.delayed?.length, 2, 'PR thiếu trong map vẫn phải được đếm');
+    assert.equal(metrics.delayed?.length, 2, 'PR thiếu trong map đo vẫn phải được đếm');
     const missing = metrics.delayed!.find((row) => row.number === 42)!;
-    assert.equal(missing.measured, false);
-    assert.match(renderDigestMetrics(metrics), /#42 · visual · CHƯA ĐO ĐƯỢC ĐẦU NHÁNH/);
+    assert.equal(missing.headChanges, 0);
+    assert.equal(missing.hoursShort, null);
+    assert.match(renderDigestMetrics(metrics), /#42 · không đọc được lần đổi đầu nhánh nào/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

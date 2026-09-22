@@ -53,20 +53,19 @@ import {
   conflictRows,
   fetchProbeRefs,
   measureConflicts,
-  prHeadRef,
   renderConflictRow,
   type ConflictOrigin,
   type ConflictRow,
 } from './conflict-watch.ts';
 import {
   DELAYED_LABEL,
-  branchHeadCommits,
-  delayedFlowRows,
-  renderDelayedFlowRow,
-  summarizeDelayedFlow,
-  type DelayedFlowRow,
-  type HeadCommit,
-} from './delayed-gate-flow.ts';
+  gateFlowRows,
+  gateFlowVerdict,
+  prHeadChanges,
+  renderGateFlowRow,
+  type GateFlowRow,
+} from './gate-flow.ts';
+import { DEFAULT_DELAY_HOURS } from '../invariants.merge-gate.ts';
 
 // --- Dạng dữ liệu GitHub (đúng dạng `gh … --json` trả về) ---
 
@@ -289,12 +288,15 @@ export interface DigestMetrics {
    */
   conflicts: ConflictRow[] | null;
   /**
-   * Mục **"Đang chờ merge"** của bản tin (phụ lục P2), đo bằng cơ chế của
-   * `P-027`. `null` — **không phải mảng rỗng** — khi lượt chạy không đo
-   * được đầu nhánh, cùng lý do với `conflicts`: một bản tin nói "0 PR đang
-   * chờ" trong khi 14 PR nằm kẹt là đúng nhóm lỗi Z.
+   * Mục **"Đang chờ merge"** của bản tin (phụ lục P2) — tiêu chí thứ hai của
+   * `P-027`, dựng trên phép đo đã có ở `ops/scripts/gate-flow.ts` (tiêu chí
+   * thứ nhất, lượt `crux-worker-3`). Chỉ PR mang nhãn `automerge-delayed`.
+   *
+   * `null` — **không phải mảng rỗng** — khi lượt chạy không đo được đầu
+   * nhánh, cùng lý do với `conflicts`: một bản tin nói "0 PR đang chờ"
+   * trong khi 14 PR nằm kẹt là đúng nhóm lỗi Z.
    */
-  delayed: DelayedFlowRow[] | null;
+  delayed: GateFlowRow[] | null;
   parked: ParkedItem[];
   decisions: DecisionRow[];
   cost: CostSummary;
@@ -354,22 +356,29 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
   if (metrics.delayed === null) {
     out.push('', 'Đang chờ merge: CHƯA ĐO — lượt chạy không đọc được đầu nhánh');
   } else {
+    const conflicting = new Set((metrics.conflicts ?? []).map((row) => row.number));
     out.push('', `Đang chờ merge: ${metrics.delayed.length}`);
-    for (const row of metrics.delayed) out.push(`- ${renderDelayedFlowRow(row)}`);
-    // Dòng dặn phải nói ĐÚNG trạng thái thật. "Không làm gì thì nó tự vào
-    // `main`" in vô điều kiện, ngay dưới các dòng ghi `CHƯA BAO GIỜ đủ
-    // ngưỡng`, là chỗ bản tin tự mâu thuẫn — và chủ dự án đọc bản tin đúng
-    // để quyết định *không làm gì* (KF-011).
-    const summary = summarizeDelayedFlow(metrics.delayed);
-    if (summary.reachedThreshold === 0 && summary.delayed > 0) {
+    for (const row of metrics.delayed) {
+      // Phụ lục P2: PR đang xung đột thì **thay** "còn mấy giờ" bằng lời nói
+      // về xung đột — đồng hồ 12 giờ không chạy khi đang xung đột (CHARTER
+      // 3.3), và mục "PR đang xung đột" ngay trên đã có số giờ kẹt. In cả
+      // hai là để bản tin tự mâu thuẫn trong một mục.
       out.push(
-        '  ⚠️ Cửa delayed hiện CHƯA CHẢY (KF-011, chờ `[QĐ]` #116): không PR nào ở trên tự vào `main` được. Gỡ kẹt cần một lần merge tay.',
-      );
-    } else {
-      out.push(
-        '  Không làm gì thì PR đủ giờ tự vào `main`; muốn giữ lại thì comment `dừng` ngay trên PR đó.',
+        conflicting.has(row.number)
+          ? `- #${row.number} · xung đột — đồng hồ ${DEFAULT_DELAY_HOURS} giờ KHÔNG chạy, xem mục "PR đang xung đột" · ${row.title}`
+          : `- ${renderGateFlowRow(row, DEFAULT_DELAY_HOURS)}`,
       );
     }
+    // Dòng dặn phải nói ĐÚNG trạng thái thật. "Không làm gì thì nó tự vào
+    // `main`" in vô điều kiện, ngay dưới các dòng ghi `CHƯA BAO GIỜ đạt
+    // ngưỡng`, là chỗ bản tin tự mâu thuẫn — và chủ dự án đọc bản tin đúng
+    // để quyết định *không làm gì* (KF-011).
+    const verdict = gateFlowVerdict(metrics.delayed);
+    out.push(
+      verdict.delayedCount > 0 && verdict.reachedThresholdCount === 0
+        ? '  ⚠️ Cửa delayed hiện CHƯA CHẢY (KF-011, chờ `[QĐ]` #116): không PR nào ở trên tự vào `main` được. Gỡ kẹt cần một lần merge tay.'
+        : '  Không làm gì thì PR đủ giờ tự vào `main`; muốn giữ lại thì comment `dừng` ngay trên PR đó.',
+    );
   }
 
   out.push('', `Mục parked: ${metrics.parked.length}`);
@@ -394,18 +403,19 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
 export type ConflictOrigins = ReadonlyMap<number, ConflictOrigin | null>;
 
 /**
- * Commit đầu nhánh của từng PR `automerge-delayed`, khoá là số PR (mục
- * `P-027`). Bên gọi truyền `null` cho cả tham số nghĩa là lượt chạy chưa đo
- * gì cả — bản tin khi đó in `CHƯA ĐO`, không in `0`.
+ * Mốc mỗi lần đổi đầu nhánh của từng PR `automerge-delayed`, **mới trước cũ
+ * sau**, khoá là số PR (mục `P-027`, dạng mà `gate-flow.ts` nhận). Bên gọi
+ * truyền `null` cho cả tham số nghĩa là lượt chạy chưa đo gì cả — bản tin
+ * khi đó in `CHƯA ĐO`, không in `0`.
  */
-export type DelayedCommits = ReadonlyMap<number, HeadCommit[]>;
+export type DelayedHeadChanges = ReadonlyMap<number, string[]>;
 
 export function collectMetrics(
   root: string,
   snapshot: GithubSnapshot,
   now: Date,
   origins: ConflictOrigins | null = null,
-  delayedCommits: DelayedCommits | null = null,
+  headChanges: DelayedHeadChanges | null = null,
 ): DigestMetrics {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -460,25 +470,21 @@ export function collectMetrics(
   // Mục `P-027`. Cùng luật với `conflicts` ngay trên: không đo được thì
   // `null`, không phải mảng rỗng.
   const delayed =
-    delayedCommits === null
+    headChanges === null
       ? null
-      : delayedFlowRows(
-          // KHÔNG lọc theo `delayedCommits.has(...)`: một PR mang nhãn mà
-          // thiếu trong map phải hiện ra ở hàng `CHƯA ĐO ĐƯỢC ĐẦU NHÁNH`,
-          // không được âm thầm rơi khỏi con số "Đang chờ merge: N".
+      : gateFlowRows(
+          // KHÔNG lọc theo `headChanges.has(...)`: một PR mang nhãn mà thiếu
+          // trong map phải hiện ra ở hàng "không đọc được lần đổi đầu nhánh
+          // nào", không được âm thầm rơi khỏi con số "Đang chờ merge: N".
           snapshot.openPrs.map((pr) => ({
             number: pr.number,
             title: pr.title,
-            headRefName: pr.headRefName,
             labels: labelNames(pr.labels),
-            commits: delayedCommits.get(pr.number) ?? [],
+            headChangesNewestFirst: headChanges.get(pr.number) ?? [],
           })),
           now.toISOString(),
-          // Mục `P-007` đã có dòng riêng cho PR xung đột; truyền tập đó sang
-          // để dòng "Đang chờ merge" thay số giờ bằng lời nói về xung đột,
-          // đúng như phụ lục P2 dặn — hai mục không được nói ngược nhau.
-          { conflicting: new Set((conflicts ?? []).map((row) => row.number)) },
-        );
+          DEFAULT_DELAY_HOURS,
+        ).filter((row) => row.isDelayed);
 
   return {
     since,
@@ -572,11 +578,11 @@ export function probeOrigins(root: string, snapshot: GithubSnapshot, argv: reado
  * `refs/pull/<n>/head` không nạp được, và một mục mới hạ được một bản tin
  * đang chạy là cái giá không đáng.
  */
-export function probeDelayedCommits(
+export function probeDelayedHeadChanges(
   root: string,
   snapshot: GithubSnapshot,
   argv: readonly string[],
-): DelayedCommits | null {
+): DelayedHeadChanges | null {
   if (argv.includes('--no-delayed')) return null;
   const numbers = snapshot.openPrs
     .filter((pr) => labelNames(pr.labels).some((label) => label.toLowerCase() === DELAYED_LABEL))
@@ -586,7 +592,19 @@ export function probeDelayedCommits(
   if (numbers.length === 0) return new Map();
   try {
     fetchProbeRefs(root, numbers);
-    return new Map(numbers.map((number) => [number, branchHeadCommits(root, prHeadRef(number))]));
+    const pairs: [number, string[]][] = [];
+    for (const number of numbers) {
+      // `prHeadChanges` ném cho PR không có commit nào ngoài `main`. Đó là
+      // một PR, không phải cả lượt chạy: bỏ nó ra khỏi map thì nó vẫn hiện
+      // ở hàng "không đọc được lần đổi đầu nhánh nào" (`collectMetrics`
+      // không lọc theo map), còn ném ra ngoài thì mất cả mục.
+      try {
+        pairs.push([number, prHeadChanges(root, number)]);
+      } catch (error) {
+        process.stderr.write(`PR #${number}: ${(error as Error).message}\n`);
+      }
+    }
+    return new Map(pairs);
   } catch (error) {
     process.stderr.write(
       `Không đo được đầu nhánh PR delayed, bản tin sẽ in CHƯA ĐO: ${(error as Error).message}\n`,
@@ -622,7 +640,7 @@ function main(): void {
     snapshot,
     new Date(),
     probeOrigins(root, snapshot, argv),
-    probeDelayedCommits(root, snapshot, argv),
+    probeDelayedHeadChanges(root, snapshot, argv),
   );
 
   process.stdout.write(argv.includes('--json') ? `${JSON.stringify(metrics, null, 2)}\n` : renderDigestMetrics(metrics));
