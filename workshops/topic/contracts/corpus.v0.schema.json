@@ -66,15 +66,27 @@
     },
     "quota": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "description": "Để lỏng theo CLAUDE.md mục 12 (contract v0 chỉ khoá trường bắt buộc tối thiểu, cho phép thêm trường). Các giới hạn chịu tải vẫn là trường có tên và có phép soát (`corpusProblems`), không nằm trong ghi chú — WP-014 mục 3c.",
       "required": ["limits", "spent"],
       "properties": {
         "limits": {
           "type": "object",
-          "additionalProperties": false,
+          "additionalProperties": true,
+          "description": "Để lỏng theo CLAUDE.md mục 12. `searchCallsPerDay` là số code tiêu thụ (cửa dừng đếm LẦN GỌI). `unitsPerDay` và `unitsPerCall` là hai số NGUYÊN BẢN đọc từ Cloud Console (issue #101): khi Console hiển thị hạn mức theo ĐƠN VỊ, chúng ghi được vào dữ liệu mà không phải quy đổi bằng tay, và `searchCallsPerDay` dẫn xuất bằng `deriveSearchCallsPerDay` (workshops/topic/src/corpus.ts), có phép soát buộc hai số khớp nhau (mục topic/T-012).",
           "required": ["searchCallsPerDay", "reserveFraction", "source", "checkedAt"],
           "properties": {
             "searchCallsPerDay": { "type": "integer", "minimum": 1 },
+            "unitsPerCall": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Số đơn vị quota mỗi lần gọi `search.list` tốn, đọc nguyên bản từ Console. Khi có cùng `unitsPerDay`, `searchCallsPerDay` phải bằng floor(unitsPerDay / unitsPerCall)."
+            },
+            "unitsPerDay": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Hạn mức đơn vị mỗi ngày, đọc nguyên bản từ Console khi Console hiển thị theo đơn vị chứ không theo lần gọi. Đi cặp với `unitsPerCall` để dẫn xuất `searchCallsPerDay`."
+            },
             "reserveFraction": {
               "type": "number",
               "minimum": 0,
