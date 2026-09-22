@@ -52,11 +52,13 @@ Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh s
 
 - deps: T-003
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec WP-011, sổ rủi ro R6 và R7
 - tiêu chí xong:
-  - So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi.
-  - Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi.
+  - ✅ So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi (`diffSnapshots` tách `revised`/`added`/`removed`; đổi từ/đến ô thiếu `null` tính là `revised`).
+  - ✅ Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi (`impactedClaims` + `buildChangeIssue` mang `episodeId`, `claimId`, con số đã phát hành và con số mới).
+- ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, bước 3): `workshops/topic/src/change-detect.ts` + contract tra ngược `workshops/topic/contracts/claim-source.v0.schema.json` + 15 test. Phân biệt ba loại thay đổi của WP-011 §3b (`new-period` không mở issue · `revision` · `definition-change` mức cao chạm mọi claim); ngưỡng tuyệt đối thắng phần trăm, gần 0 xử lý riêng; khử trùng theo `provider:seriesId:nextAsOfDate`; điều kiện dừng §5b (thiếu trường ràng buộc → `ClaimTraceError` nêu tên trường). `pnpm check` xanh 531/531, `pnpm replay` khớp snapshot 6/6.
+  - **Còn treo, ngoài phạm vi tiêu chí xong (nên giữ `review`, không `done`):** WP-011 §3 muốn một workflow `.github/workflows/detect-changes.yml` và §7 muốn "một issue thật được mở trong repo bằng dữ liệu giả". Cả hai là việc của runtime — agent không ghi `.github/` (CLAUDE.md mục 4) và Đợt 0 không mở issue thật; module trả nội dung issue như **dữ liệu**, người/runtime mở. Cũng chưa làm: kiểm **hạn** của chuỗi `annual-reset` (§5).
 
 ### T-005 · Thư viện mô hình và kiểm bốn cấp
 Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bốn cấp. WP này xây **công cụ**; nội dung tám mô hình do T-006 tạo.
