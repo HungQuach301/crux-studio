@@ -429,6 +429,16 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-013 · Hai PR xanh riêng lẻ, gộp vào `main` thì đỏ vì một bất biến mới gặp một vi phạm cũ
+
+- **Lần gặp:** 1 — `main` đỏ lúc 2026-09-22T10:12Z, ngay sau khi PR `#85` (`P-023`) merge.
+- **Chữ ký:** một PR thêm một **bất biến quét cả kho** (`P-023` thêm `ops/test/step0-log-path.test.ts`: không file code nào được neo vào một đường dẫn log bước 0 cố định), một PR **khác** thêm một file vi phạm bất biến đó (`P-027` thêm `ops/scripts/gate-flow.ts`, chú thích nhắc đích danh `ops/logs/platform/P-016.jsonl`). Mỗi nhánh chỉ mang **một** trong hai file, nên CI của từng PR **xanh**. Chỉ khi cả hai cùng vào `main` thì bất biến mới gặp file vi phạm → `pnpm check` đỏ ở `main`.
+- **Nguyên nhân gốc:** CI đo mỗi PR **so với `main` tại lúc PR đó chạy**, không so với `main` **sau** khi các PR đang mở khác đã merge. Một bất biến "quét cả kho" và một file mới nằm ở hai nhánh khác nhau là hai nửa của một mâu thuẫn ngữ nghĩa mà không phép đo per-PR nào thấy được — cùng hình dạng KF-009, nhưng ở tầng **nội dung** thay vì tầng `mergeable`. Nhóm **Z**: hỏng mà mọi chỉ báo per-PR đều xanh.
+- **Đã sửa ở đâu:** `ops/scripts/gate-flow.ts` — chú thích đổi từ tên file đích danh sang lời chung ("các dòng log bước 0"). Không đụng cơ chế của `gate-flow.ts` (nó vốn đã KHÔNG đọc file đó — chỉ chú thích nhắc tên); không revert `P-023` hay `P-027` (cả hai đều đúng, revert làm mất cơ chế thật). Forward-fix một dòng để `main` xanh ngay, đúng tinh thần "main đỏ thì sửa ngay" (CLAUDE.md 13).
+- **Máy chặn từ nay:** `ops/test/step0-log-path.test.ts` — bất biến quét-cả-kho của `P-023` (đã có) cộng một ca âm **đích danh** `gate-flow.ts` mới thêm ở bản sửa này, để lần sau ai đưa lại tên file vào đó thì đỏ với thông điệp trỏ thẳng KF-013. Chạy trong `pnpm test` (job `check` của CI). Lỗ hổng còn lại — không phép đo per-PR nào thấy mâu thuẫn "bất biến ở nhánh A, vi phạm ở nhánh B" **trước** merge — vẫn mở; chặn thật cần chạy `pnpm check` trên kết quả gộp thử của từng cặp PR đang mở, là việc lớn hơn một mục fix.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
