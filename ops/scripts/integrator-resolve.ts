@@ -25,14 +25,27 @@
  * không: lockfile là file dẫn xuất, nên nó được **tạo lại** từ các manifest
  * của cây vừa gộp — xem `ops/scripts/integrator-lockfile.ts`. Đây là lý do
  * làn gây xung đột không phải tự sửa lockfile: làn `integration` tạo lại.
+ *
+ * **Và gộp SẠCH cũng phải qua cổng lockfile** (mục `I-006`). `I-004` chỉ
+ * phủ ca lockfile *xung đột*; ca lockfile gộp sạch mà vẫn lệch manifest đã
+ * tái hiện được bằng chạy thật, và `pnpm check` ở máy không bắt được vì nó
+ * không chạy `pnpm install --frozen-lockfile`. Cổng nằm ở
+ * `guardLockfileAfterMerge` dưới đây và chạy ở mọi đường gộp có chạm
+ * lockfile, trước khi commit.
  */
 
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isLockfile, isManifest, isRootLockfile, regenerateLockfile } from './integrator-lockfile.ts';
+import {
+  isLockfile,
+  isManifest,
+  isRootLockfile,
+  regenerateLockfile,
+  verifyLockfileInstall,
+} from './integrator-lockfile.ts';
 import type { RegenerateOptions } from './integrator-lockfile.ts';
 
 export type ResolveOutcome = 'clean' | 'resolved' | 'aborted-ineligible' | 'aborted-error';
@@ -41,6 +54,53 @@ export interface ResolveResult {
   outcome: ResolveOutcome;
   files: string[];
   reason?: string;
+  /**
+   * Lockfile đã phải **tạo lại** sau khi gộp vì cổng `--frozen-lockfile` đỏ
+   * (mục `I-006`). Vắng mặt nghĩa là không phải tạo lại. Ghi chú của lượt
+   * chạy cần số này: một lần gộp `clean` mà vẫn phải sửa lockfile là tín
+   * hiệu đáng đọc, không phải chi tiết thừa.
+   */
+  lockfileRegenerated?: string[];
+  /**
+   * Mục `P-024`: commit gộp đã tạo NHƯNG thiếu URL phiên vì biến môi trường
+   * `CLAUDE_SESSION_URL` không được đặt. `Co-Authored-By` vẫn có trong commit;
+   * chỉ `Claude-Session` là vắng. Trường này để bên gọi **nói ra** chỗ thiếu
+   * trong ghi chú lượt chạy — thiếu mã phiên mà im lặng đúng là hình dạng
+   * KF-010 (bước bù bằng tay hụt mà không gì đỏ). Vắng mặt nghĩa là commit
+   * mang đủ cả hai trailer, hoặc lượt này không tạo commit nào.
+   */
+  sessionTrailerMissing?: boolean;
+}
+
+/**
+ * Trailer đồng tác giả, **trung tính model** và khoá cứng. Mục `P-024`: chỗ
+ * hụt ở KF-010 là commit gộp do tool tạo ra không mang trailer nào; ca tệ hơn
+ * đã sai thật trên `main` là `Co-Authored-By` có kèm tên model — trái
+ * `CLAUDE.md` mục 6. Dòng này không nội suy tên model từ bất cứ đâu, nên
+ * không có đường nào để tên model lọt vào.
+ */
+const CO_AUTHOR_TRAILER = 'Co-Authored-By: Claude <noreply@anthropic.com>';
+
+/** Biến môi trường mang URL phiên. Đọc lúc commit, không lúc nạp module. */
+const SESSION_URL_ENV = 'CLAUDE_SESSION_URL';
+
+/**
+ * Dựng đối số `-m` chứa khối trailer cho commit gộp (mục `P-024`).
+ * `Co-Authored-By` **luôn** có. `Claude-Session` chỉ có khi
+ * `CLAUDE_SESSION_URL` được đặt — mã phiên đọc từ môi trường, tool không tự
+ * bịa ra: UUID trong `CLAUDE_CODE_SESSION_ID` KHÔNG phải id của URL
+ * `.../session_…`, ghép nó vào sẽ ra một URL sai. Thiếu URL thì trả
+ * `sessionMissing: true` để bên gọi nói ra, không nuốt im.
+ *
+ * Hai dòng nằm chung MỘT đoạn `-m` (đoạn cuối của thông điệp), mỗi dòng đúng
+ * dạng `Khoá: giá trị`, nên git nhận ra đây là khối trailer — `git log
+ * --format=%(trailers:key=Claude-Session)` đọc lại được, đúng thứ
+ * `recheck-assumptions.ts` (G14) dựa vào.
+ */
+function trailerMessageArg(): { arg: string; sessionMissing: boolean } {
+  const url = (process.env[SESSION_URL_ENV] ?? '').trim();
+  if (url === '') return { arg: CO_AUTHOR_TRAILER, sessionMissing: true };
+  return { arg: `${CO_AUTHOR_TRAILER}\nClaude-Session: ${url}`, sessionMissing: false };
 }
 
 /**
@@ -118,6 +178,14 @@ function showOrEmpty(cwd: string, ref: string, file: string): string {
  * (ví dụ `origin/main`). Không bao giờ sửa `cwd` khi trả về
  * `aborted-ineligible` hoặc `aborted-error` — merge luôn được `--abort`
  * trước khi hàm trả về, nên cây làm việc quay lại đúng trạng thái ban đầu.
+ *
+ * Một ngoại lệ đã đo, ghi ra để bên gọi không bất ngờ: cổng lockfile của
+ * mục `I-006` **cài thật**, nên nó ghi vào `node_modules/` theo cây vừa
+ * gộp — kể cả ở những lượt kết thúc bằng `--abort`, khi cây đó không còn
+ * tồn tại nữa. `node_modules/` nằm trong `.gitignore` nên `git status` vẫn
+ * sạch và không có gì lọt vào commit, nhưng `pnpm check` chạy ngay sau một
+ * lượt huỷ sẽ đứng trên `node_modules` của cây đã huỷ; chạy
+ * `pnpm install --frozen-lockfile` trước nếu điều đó quan trọng.
  */
 export function resolveAdditiveMerge(
   cwd: string,
@@ -147,6 +215,122 @@ export function resolveAdditiveMerge(
   }
 }
 
+/**
+ * Kết quả của cổng lockfile sau khi gộp (mục `I-006`): hoặc merge đã bị
+ * huỷ và có sẵn `ResolveResult` để trả thẳng, hoặc gộp đi tiếp được, kèm
+ * danh sách lockfile đã phải tạo lại (rỗng là trường hợp thường).
+ */
+interface LockfileGuard {
+  aborted?: ResolveResult;
+  repaired: string[];
+}
+
+/**
+ * Mục `I-006` — **gộp được không có nghĩa là đúng.**
+ *
+ * `git merge` ghép `pnpm-lock.yaml` theo dòng, không hiểu YAML. Khi hai
+ * nhánh sửa hai vùng cách xa nhau trong lockfile, git gộp **sạch** — không
+ * một dấu xung đột nào — mà kết quả vẫn lệch với manifest sau khi gộp. Ca
+ * đã tái hiện bằng chạy thật (`ops/test/integrator-clean-merge-lockfile.test.ts`):
+ * một bên bỏ phụ thuộc cuối cùng còn dùng một gói, bên kia thêm phụ thuộc
+ * vào đúng gói đó ở một gói khác trong workspace. Gộp xong: `importers` trỏ
+ * tới một phép phân giải mà khối `packages:` không còn — `pnpm install
+ * --frozen-lockfile` đỏ với `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`, chính
+ * pnpm cũng nói "probably caused by a badly resolved merge conflict".
+ *
+ * Trước mục này, đường `clean` của tool commit thẳng rồi để bên gọi chạy
+ * `pnpm check` — mà `pnpm check` **không** chạy `--frozen-lockfile` (chỉ CI
+ * chạy). Nghĩa là integrator báo "xanh, đã push" rồi CI mới đỏ: đúng nhóm
+ * lỗi Z (`ops/known-failures.md`).
+ *
+ * Cổng chạy ở **mọi** đường gộp có chạm lockfile — cả `clean` lẫn union —
+ * và luôn chạy TRƯỚC khi commit, vì bản mồi để tạo lại nằm ở `MERGE_HEAD`
+ * và `MERGE_HEAD` biến mất ngay sau commit.
+ *
+ * Ba bước, đúng thứ tự tiêu chí xong của `I-006`: kiểm → tạo lại → kiểm
+ * lại. Còn đỏ sau khi tạo lại thì huỷ gộp và giao cho người
+ * (`aborted-ineligible`), không bao giờ push một lockfile chưa qua cổng.
+ */
+function guardLockfileAfterMerge(cwd: string, options: RegenerateOptions): LockfileGuard {
+  const changed = gitOrThrow(cwd, ['diff', '--cached', '--name-only'])
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  const lockfiles = changed.filter(isLockfile);
+  if (lockfiles.length === 0) return { repaired: [] };
+
+  // Cùng lý do với đường union: một lockfile không ở gốc repo thì `pnpm`
+  // chạy ở thư mục con sẽ không sinh lại nó — dừng, đừng "sửa" bằng một
+  // lệnh thoát 0 mà chẳng ghi gì.
+  const nested = lockfiles.find((file) => !isRootLockfile(file));
+  if (nested !== undefined) {
+    git(cwd, ['merge', '--abort']);
+    return {
+      repaired: [],
+      aborted: {
+        outcome: 'aborted-ineligible',
+        files: lockfiles,
+        reason: `${nested}: lockfile không nằm ở gốc repo — không kiểm và không sinh lại được sau khi gộp, cần người`,
+      },
+    };
+  }
+
+  // Lần gộp XOÁ lockfile (một bên bỏ pnpm, đổi vị trí workspace) thì không
+  // có gì để kiểm — và cổng này **cài thật**, mà `pnpm install` không thấy
+  // lockfile sẽ thoát 0 sau khi TỰ SINH một bản mới. Đã đo: chạy cổng ở ca
+  // này để lại một `pnpm-lock.yaml` untracked, tức hồi sinh đúng file mà
+  // một bên vừa cố ý xoá, và làm bẩn cây làm việc — trái hợp đồng ghi
+  // trong docstring của `resolveAdditiveMerge` và làm lượt gộp kế tiếp ra
+  // `aborted-error` "cây làm việc không sạch". Đi tiếp như trước mục
+  // `I-006`: không lockfile thì không có lockfile nào lệch manifest.
+  const present = lockfiles.filter((lock) => existsSync(join(cwd, lock)));
+  if (present.length === 0) return { repaired: [] };
+
+  const first = verifyLockfileInstall(cwd, options);
+  if (first.ok) return { repaired: [] };
+
+  const repaired: string[] = [];
+  for (const lock of present) {
+    const seed = gitOrThrow(cwd, ['show', `MERGE_HEAD:${lock}`]);
+    const regenerated = regenerateLockfile(cwd, lock, seed, options);
+    if (!regenerated.ok) {
+      git(cwd, ['merge', '--abort']);
+      return {
+        repaired: [],
+        aborted: {
+          outcome: regenerated.ineligible === true ? 'aborted-ineligible' : 'aborted-error',
+          files: lockfiles,
+          reason: `${first.reason}; tạo lại cũng không xong: ${regenerated.reason}`,
+        },
+      };
+    }
+    gitOrThrow(cwd, ['add', '--', lock]);
+    repaired.push(lock);
+  }
+
+  const second = verifyLockfileInstall(cwd, options);
+  if (!second.ok) {
+    git(cwd, ['merge', '--abort']);
+    // `ineligible` phân biệt hai ca mà bản tin đọc khác nhau: cổng CHẠY
+    // xong và nói lockfile còn lệch (`aborted-ineligible`, cần người) so
+    // với cổng KHÔNG chạy được (`aborted-error`, lỗi kỹ thuật). Gộp hai ca
+    // vào một câu là nói sai nguyên nhân cho người đọc.
+    return {
+      repaired: [],
+      aborted: {
+        outcome: second.ineligible === true ? 'aborted-ineligible' : 'aborted-error',
+        files: lockfiles,
+        reason:
+          second.ineligible === true
+            ? `lockfile vẫn lệch manifest SAU KHI đã tạo lại: ${second.reason}`
+            : `không kiểm lại được lockfile sau khi tạo lại: ${second.reason}`,
+      },
+    };
+  }
+
+  return { repaired };
+}
+
 function resolveAfterMergeAttempt(
   cwd: string,
   ontoRef: string,
@@ -156,9 +340,29 @@ function resolveAfterMergeAttempt(
   if (merge.status === 0) {
     const staged = gitOrThrow(cwd, ['diff', '--cached', '--name-only']).trim();
     if (staged !== '') {
-      gitOrThrow(cwd, ['commit', '--no-edit', '-m', `Gộp ${ontoRef} (integrator, không xung đột)`]);
+      // Mục `I-006`: gộp sạch KHÔNG có nghĩa là lockfile đúng. Cổng chạy
+      // trước commit, vì bản mồi để tạo lại nằm ở `MERGE_HEAD`.
+      const guard = guardLockfileAfterMerge(cwd, options);
+      if (guard.aborted !== undefined) return guard.aborted;
+      const repaired =
+        guard.repaired.length > 0 ? `, lockfile tạo lại: ${guard.repaired.join(', ')}` : '';
+      const trailer = trailerMessageArg();
+      gitOrThrow(cwd, [
+        'commit',
+        '--no-edit',
+        '-m',
+        `Gộp ${ontoRef} (integrator, không xung đột${repaired})`,
+        '-m',
+        trailer.arg,
+      ]);
       // outcome 'clean' + có commit mới: HEAD vừa đổi, caller nên chạy
       // pnpm check rồi push.
+      return {
+        outcome: 'clean',
+        files: [],
+        ...(guard.repaired.length > 0 ? { lockfileRegenerated: guard.repaired } : {}),
+        ...(trailer.sessionMissing ? { sessionTrailerMissing: true } : {}),
+      };
     } else {
       // `ontoRef` đã là tổ tiên của HEAD ("Already up to date") — không có
       // gì để gộp. `--no-ff` vẫn để lại một merge dở dang trống, huỷ nó.
@@ -329,14 +533,38 @@ function resolveAfterMergeAttempt(
     };
   }
 
+  // Mục `I-006`, áp cho CẢ đường union: lockfile có thể đổi vì gộp mà
+  // KHÔNG hề nằm trong danh sách xung đột — git ghép nó sạch trong khi một
+  // file khác vướng. Đường union cũ chỉ kiểm lockfile khi chính nó xung
+  // đột, nên đúng ca đó lọt qua. Cổng này cũng là bước "kiểm lại" thật sau
+  // khi `regenerateLockfile` vừa chạy ở trên: cổng rẻ bên trong hàm đó
+  // (`--lockfile-only --frozen-lockfile`) đã đo được là KHÔNG bắt một khối
+  // `packages:` thiếu.
+  const guard = guardLockfileAfterMerge(cwd, options);
+  if (guard.aborted !== undefined) return guard.aborted;
+
+  const regeneratedLocks = [...new Set([...lockfiles, ...guard.repaired])];
   const how = [
     additive.length > 0 ? `union thuần cộng thêm: ${additive.join(', ')}` : '',
-    lockfiles.length > 0 ? `lockfile tạo lại: ${lockfiles.join(', ')}` : '',
+    regeneratedLocks.length > 0 ? `lockfile tạo lại: ${regeneratedLocks.join(', ')}` : '',
   ]
     .filter((part) => part !== '')
     .join('; ');
-  gitOrThrow(cwd, ['commit', '--no-edit', '-m', `Gộp ${ontoRef} (integrator, ${how})`]);
-  return { outcome: 'resolved', files: conflicted };
+  const trailer = trailerMessageArg();
+  gitOrThrow(cwd, [
+    'commit',
+    '--no-edit',
+    '-m',
+    `Gộp ${ontoRef} (integrator, ${how})`,
+    '-m',
+    trailer.arg,
+  ]);
+  return {
+    outcome: 'resolved',
+    files: conflicted,
+    ...(regeneratedLocks.length > 0 ? { lockfileRegenerated: regeneratedLocks } : {}),
+    ...(trailer.sessionMissing ? { sessionTrailerMissing: true } : {}),
+  };
 }
 
 function main(): void {

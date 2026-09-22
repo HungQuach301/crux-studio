@@ -16,6 +16,26 @@
  * (`episodeId`, `channel`, `genre`, `locale`) cũng là bản sao, chỉ là bản sao
  * nằm trong phong bì artifact, nên chúng lệch được theo đúng cách cũ.
  *
+ * ## Nửa còn lại của Z16 (mục `integration/I-009`)
+ *
+ * Bản sao **pack** đã bỏ hẳn ở `I-008`, nhưng khối `upstream` của fixture vẫn
+ * là bản **chép** của `ops/golden/<tập>/snapshots/*.json` — và bản chép đó đã
+ * trôi thật (14 và 28 đường dẫn lệch, cộng một trường bắt buộc thiếu hẳn).
+ * Cùng hình dạng, cùng cách chặn: fixture khai `upstreamFrom` và artifact tới
+ * từ snapshot lúc chạy (`readInputFile` của kernel), nên **không còn bản chép
+ * nào để trôi**.
+ *
+ * `readInputFile` không cấm khối `upstream` khai thẳng, vì chạy một xưởng độc
+ * lập với artifact viết tay là chế độ CHARTER 5.4 nói tới. Luật chặt hơn nằm
+ * ở đây, nơi biết file nào là fixture **trong repo**: `upstreamCopyProblems`
+ * bắt một fixture repo khai thẳng artifact. Sửa chỗ này trước khi nới nó ra:
+ * một fixture repo mang artifact khai thẳng là Z16 quay lại nguyên vẹn.
+ *
+ * Phép so bối cảnh bên dưới đọc khối `upstream` **đã dựng xong** (kết quả của
+ * `readInputFile`), không đọc thô từ file: với `upstreamFrom` thì file không
+ * còn khối nào để đọc thô, mà phép so vẫn cần chạy — nó là thứ bắt một
+ * snapshot tập vàng khai bối cảnh lệch channel pack.
+ *
  * Thiếu fixture cũng là một vấn đề, không phải một lần bỏ qua im lặng: một
  * xưởng không có `input.json` thì mọi kiểm ở đây thành rỗng mà vẫn xanh
  * (`ops/known-failures.md` nhóm Z, cách 3). Cùng lý do đó, kiểm quét **mọi**
@@ -27,7 +47,8 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { WORKSHOPS, readInputFile } from '@crux/kernel';
+import { WORKSHOPS, readInputFile, type Envelope, type WorkshopName } from '@crux/kernel';
+import { DEFINITIONS } from './pipeline.ts';
 
 /** Các trường bối cảnh mà phong bì artifact chép lại từ tập và từ pack. */
 const CONTEXT_FIELDS = ['episodeId', 'channel', 'genre', 'locale'] as const;
@@ -41,23 +62,30 @@ export function fixtureInputPath(root: string, workshop: string): string {
  *
  * `label` đi vào mọi dòng vấn đề để người đọc biết file nào, không phải
  * đoán từ đường dẫn tuyệt đối trong thư mục tạm.
+ *
+ * `consumes` tới từ `definition.consumes` của xưởng, không từ file: fixture
+ * không còn khai danh sách xưởng cần nạp (mục `integration/I-011`).
  */
-export function inputFileProblems(root: string, path: string, label: string): string[] {
+export function inputFileProblems(
+  root: string,
+  path: string,
+  label: string,
+  consumes: readonly WorkshopName[],
+): string[] {
   let episode: Record<(typeof CONTEXT_FIELDS)[number], string>;
+  let upstream: Partial<Record<string, Envelope>>;
   try {
-    episode = readInputFile(root, path).episode;
+    const read = readInputFile(root, path, consumes);
+    episode = read.episode;
+    upstream = read.input.upstream;
   } catch (error) {
     return [`${label}: ${error instanceof Error ? error.message : String(error)}`];
   }
 
   const problems: string[] = [];
-  const file = JSON.parse(readFileSync(path, 'utf8')) as {
-    upstream?: Record<string, Record<string, unknown>>;
-  };
-
-  for (const [workshop, artifact] of Object.entries(file.upstream ?? {})) {
+  for (const [workshop, artifact] of Object.entries(upstream)) {
     for (const field of CONTEXT_FIELDS) {
-      const actual = artifact[field];
+      const actual = (artifact as unknown as Record<string, unknown>)[field];
       if (actual !== episode[field]) {
         problems.push(
           `${label}: artifact đầu vào của xưởng ${workshop} khai ${field} ` +
@@ -68,6 +96,63 @@ export function inputFileProblems(root: string, path: string, label: string): st
   }
 
   return problems;
+}
+
+/**
+ * Fixture **trong repo** không được mang artifact đầu vào khai thẳng: đó
+ * đúng là bản chép tập vàng mà `I-009` bỏ đi. Khai `upstreamFrom` thay vào.
+ *
+ * `upstream: {}` rỗng KHÔNG phải vấn đề — đó là cách một xưởng không tiêu thụ
+ * gì (`topic`) nói ra điều đó, và một object rỗng không có gì để trôi.
+ */
+export function upstreamCopyProblems(path: string, label: string): string[] {
+  let file: { upstream?: unknown };
+  try {
+    file = JSON.parse(readFileSync(path, 'utf8')) as { upstream?: unknown };
+  } catch {
+    // File hỏng JSON đã là một vấn đề `inputFileProblems` báo rồi, không báo hai lần.
+    return [];
+  }
+
+  const upstream = file.upstream;
+  if (typeof upstream !== 'object' || upstream === null || Array.isArray(upstream)) return [];
+
+  const names = Object.keys(upstream);
+  if (names.length === 0) return [];
+
+  return [
+    `${label}: khai thẳng artifact đầu vào của ${names.join(', ')} trong khoá "upstream". ` +
+      `Fixture trong repo phải trỏ tới tập vàng bằng "upstreamFrom": { "golden": "<tập>" } — ` +
+      `danh sách xưởng cần nạp suy từ definition.consumes, không khai ở fixture ` +
+      `(mục integration/I-011). Bản chép snapshot trôi mà vẫn hợp contract, nên không gì đỏ ` +
+      `(mục integration/I-009, hàng Z16 của ops/known-failures.md).`,
+  ];
+}
+
+/**
+ * `upstreamFrom.workshops` không còn được đọc: danh sách xưởng cần nạp suy từ
+ * `definition.consumes` (mục `integration/I-011`). Một danh sách sót lại
+ * trong fixture bị **bỏ qua im lặng** — người sửa tưởng nó điều khiển việc
+ * nạp, nhưng `readInputFile` nạp theo `consumes`. Đó đúng là bản chép thứ hai
+ * mà `I-011` bỏ đi, nên bắt nó ở đây thay vì để nó nằm im.
+ */
+export function upstreamFromWorkshopsProblems(path: string, label: string): string[] {
+  let file: { upstreamFrom?: unknown };
+  try {
+    file = JSON.parse(readFileSync(path, 'utf8')) as { upstreamFrom?: unknown };
+  } catch {
+    return [];
+  }
+
+  const from = file.upstreamFrom;
+  if (typeof from !== 'object' || from === null || Array.isArray(from)) return [];
+  if (!('workshops' in (from as Record<string, unknown>))) return [];
+
+  return [
+    `${label}: "upstreamFrom.workshops" không còn được đọc — danh sách xưởng cần nạp suy từ ` +
+      `definition.consumes (mục integration/I-011). Bỏ khoá này: một danh sách sót lại ` +
+      `lệch được với consumes mà không gì đỏ, đúng bản chép mà I-011 bỏ đi.`,
+  ];
 }
 
 /**
@@ -101,8 +186,11 @@ export function fixtureInputProblems(root: string): string[] {
       );
       continue;
     }
+    const consumes = DEFINITIONS[workshop].consumes;
     for (const { path, label } of fixtureInputFiles(root, workshop)) {
-      problems.push(...inputFileProblems(root, path, label));
+      problems.push(...inputFileProblems(root, path, label, consumes));
+      problems.push(...upstreamCopyProblems(path, label));
+      problems.push(...upstreamFromWorkshopsProblems(path, label));
     }
   }
   return problems;
@@ -122,6 +210,6 @@ if (isMain) {
     process.exit(1);
   }
   process.stdout.write(
-    `Fixture ok: ${fixtureInputCount(root)} file --input nạp pack từ packs/.\n`,
+    `Fixture ok: ${fixtureInputCount(root)} file --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
   );
 }

@@ -14,6 +14,8 @@
     "lint:workflows": "node ops/scripts/check-workflows.ts",
     "assumptions": "node ops/scripts/check-assumptions.ts",
     "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
+    "backlog:status": "node ops/scripts/backlog-status.ts",
+    "digest:metrics": "node ops/scripts/digest-metrics.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\" \"spike/**/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",
