@@ -487,6 +487,45 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-018 · Một lớp chặn mới, đúng luật, sẽ làm đỏ **13 trên 29** PR đang mở — và cách sửa duy nhất trong nhánh thì máy cấm agent làm
+
+> Số **KF-018**: `KF-014` thuộc PR `#142`, `KF-016` thuộc PR `#154`, `KF-017` thuộc PR `#162` — cả ba đang mở. Nhận mã trước khi viết (KF-005).
+>
+> ⚠️ Mục này **đã lấy nhầm `KF-017`** ở lần viết đầu, vì chỉ dò mã trên `main` và trên hai nhánh nhớ được, không dò **mọi** nhánh PR đang mở. Đúng chữ ký `KF-005`, và đúng chỗ mà `KF-005` nói là hay sai. Cách dò đúng, chạy chứ đừng nhớ:
+>
+> ```bash
+> for b in $(git branch -r | grep -v HEAD | grep origin/claude/ | sed 's/ *origin\///'); do
+>   git grep -h -oE "^## KF-[0-9]+" "origin/$b" -- ops/known-failures.md 2>/dev/null
+> done | sort -u -V | tail -1
+> ```
+
+- **Lần gặp:** 3 trên PR `#65` — 15:55Z, 17:45Z, rồi lượt `crux-worker-1` ~21:38Z. Hai lượt đầu ghi nó ra như một va chạm **giữa hai PR** (`#142` vào `main` trước `#65` thì `#65` đỏ). Lượt thứ ba đo trên **toàn bộ** PR đang mở và thấy nó không phải chuyện của một PR.
+- **Chữ ký:** `node ops/scripts/check-commit-trailers.ts "origin/main..origin/<nhánh>"` (bản trên nhánh của `#142`) thoát **1** với `tên model trong khối trailer — Co-Authored-By: Claude <Opus|Sonnet> … <noreply@anthropic.com>`, trên một PR mà **không ai vừa đụng vào** và `pnpm check` tại máy vẫn xanh.
+- **Đo, không suy (2026-09-22 ~21:45Z → ~22:0xZ, `origin/main = 5ded395`, chạy bản checker của nhánh `#142` trên từng nhánh PR đang mở):**
+
+  > ⚠️ Lần đo đầu của lượt này ra **28 / 11 / 21** và **sai**: nó lặng lẽ bỏ 8 PR log-only của làn `integration` ra khỏi mẫu số. Đo lại đủ **29** PR thì hai trong 8 PR đó (`#153`, `#164`) cũng dính. Số đúng là **30 / 13 / 29**. Ghi cả con số sai ra đây vì đó chính là chữ ký của lỗi này: một mẫu số thu hẹp không cố ý, và không gì đỏ.
+
+  | PR | commit vi phạm / tổng commit ngoài `main` |
+  |---|---|
+  | `#42` | **9 / 10** |
+  | `#112` | 4 / 7 |
+  | `#39` · `#49` · `#79` | 3 / 28 · 3 / 25 · 3 / 22 |
+  | `#56` · `#65` · `#81` · `#84` · `#89` | 1 mỗi PR |
+  | `#153` · `#157` · `#164` | **1 / 1** mỗi PR — commit vi phạm là commit **duy nhất** của PR |
+
+  Tổng: **30 commit vi phạm, trải trên 13 / 29 PR đang mở**. Sạch: `#66` `#109` `#117` `#120` `#129` `#142` `#149` `#150` `#151` `#154` `#155` `#156` `#159` `#160` `#161` `#162`.
+
+- **Nguyên nhân gốc:** không phải checker sai, và cũng không phải `#142` sai — `CLAUDE.md` mục 6 cấm tên model trong mọi thứ đẩy lên repo, `automerge.yml` merge bằng **squash** nên thân mọi commit của nhánh **có** tới `main`, vậy quét cả dải `origin/main..HEAD` là đúng thiết kế. Nguyên nhân là **thứ tự**: luật được viết ra *sau* khi 30 commit vi phạm đã nằm sẵn trong lịch sử của các nhánh đang mở, và không lớp nào dọn chúng trước khi lớp chặn bật.
+- **Vì sao nó đắt hơn vẻ ngoài:** `#142` mang nhãn `automerge-delayed` — **máy tự merge** sau 12 giờ CI xanh, không ai phải bấm gì. Khi nó vào `main` và `sync-workflows` chạy, 13 PR kia đỏ ở lượt CI kế tiếp và **không PR nào trong số đó merge được nữa**, trên một hàng đợi vốn đã tuần tự và vốn đã đứng vì `automerge` 403 (issue `#152`). Không có gì đỏ **lúc này**: CI xanh trên cả 13 PR, nhãn đúng, `#142` đúng luật. Đúng nhóm **Z** một lần nữa — lần này nhóm Z ở **thì tương lai**.
+- **Vì sao hai lượt trước không sửa, và vì sao lượt này cũng không:** cách sửa duy nhất nằm trong nhánh là viết lại thông điệp commit (`filter-branch --msg-filter` hoặc rebase) rồi **force-push**. `.claude/settings.json` chặn đúng hai lệnh đó trong `deny`: `Bash(git push --force:*)` và `Bash(git push -f:*)`. Theo `CLAUDE.md` mục 3, bị chặn **không phải lỗi cần lách**. Vậy đây không phải việc agent chọn không làm — đây là việc agent **không có quyền** làm, và ba lượt liên tiếp ghi lại cùng một chữ ký mà không ai gỡ được là đúng điều kiện `CLAUDE.md` mục 13 (lần thứ ba → mở `🤖 [QĐ]`).
+- **Đã sửa ở đâu:** *chưa sửa cơ chế* — mục `platform/P-030` nhận việc, và lựa chọn giữa các phương án là quyết định `reversible` ở issue `🤖 [QĐ] #165`. Ba đường đang cân: (a) chủ dự án force-push 13 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash, để thân commit cũ không bao giờ tới `main` — nhưng file đó là vùng `owner-merge`.
+- **Hai lỗi của chính lượt viết mục này, giữ lại vì cùng một hình dạng.** Cả hai do vòng soát ngữ cảnh sạch bắt, `pnpm check` **không** bắt được cái nào — không lớp máy nào soát nội dung tài liệu:
+  1. **Mẫu số thu hẹp không cố ý** (đã nói ở trên): 28 / 11 / 21 thay vì 30 / 13 / 29.
+  2. **Thay thế toàn cục làm hỏng bản ghi của mục khác.** Lần sửa số `11 → 13` chạy bằng `sed` trên cả file đã đổi luôn dòng cấp mã của mục **`P-023`** — *"`P-022` là mã cao nhất … trên cả **11** nhánh PR đang mở tại lúc nhận"* — một phép đo **lịch sử** lúc ~04:1x, không liên quan gì tới lượt này. Đã hoàn nguyên. Luật rút ra: sửa một con số đo được thì sửa **đúng chỗ đã viết nó ra**, đừng `sed` cả file — con số giống nhau ở hai chỗ không có nghĩa là cùng một phép đo.
+- **Máy chặn từ nay:** chưa có, và **cố ý chưa có**: thêm một lớp chặn nữa lúc này chỉ nhân đôi đúng vấn đề mà mục này mô tả. Tới khi `P-030` xong, lớp chặn là dòng này: **trước khi một lớp chặn mới quét `origin/main..HEAD` được bật, chạy nó trên MỌI nhánh PR đang mở trước** — nếu nó đỏ ở một PR mà không ai vừa đụng vào, thì lớp chặn đó cần một mốc ân hạn, không phải 13 lần viết lại lịch sử.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
