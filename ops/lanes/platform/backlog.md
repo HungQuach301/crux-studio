@@ -456,6 +456,8 @@ Số lần đổi đầu nhánh trong 24 giờ và khoảng trống lớn nhất
 
 **`#42` là ca đáng đọc kỹ nhất, vì nó cho thấy ngưỡng gần như không với tới được ngay cả khi không ai đụng vào PR.** Đầu nhánh đứng yên từ `2026-09-21T13:11:32Z` tới `2026-09-22T01:14:17Z` — 12h02m45s. CI xanh xong khoảng `13:12Z`, nên ngưỡng 12 giờ đạt khoảng `01:12Z`. `automerge.yml` chạy theo lịch **`cron: '23 * * * *'`**: lượt `00:23` còn sớm, lượt `01:23` thì đầu nhánh đã đổi hai lần. Cửa sổ sống của PR này rộng **khoảng 2 phút** và rơi đúng vào giữa hai lượt. Trượt.
 
+**Phản biện đã loại trừ — "repo còn non nên chưa PR nào kịp tới hạn":** không đúng. Cửa `automerge-delayed` ra đời cùng `D-C06`, vào `main` lúc `2026-09-21T08:30:56Z` (`git log -1 -- docs/decisions/D-C06.md`), tức đã **21 giờ** tại lúc đo. PR delayed cũ nhất (`#39`) đã mở **18 giờ**. Cả hai đều vượt xa ngưỡng 12 giờ, và **5/13** PR (`#39` 18,2h · `#42` 17,6h · `#49` 16,3h · `#56` 14,6h · `#65` 12,6h) đã mở hơn 12 giờ. Nếu cửa chảy thì ít nhất vài PR phải đã vào `main`.
+
 **Vì sao chưa ai bắt được:** hệ quả "đồng hồ đặt lại" **đã** được ghi — mô tả `#85` và `#39` đều nói ra, phụ lục P3 bước 0c dặn phải ghi vào ghi chú, P-026 nhắc tới nó trong một tiêu chí. Nhưng mọi chỗ đó ghi nó cho **một lượt**, như một khoản phí phải trả. Không chỗ nào cộng lại theo thời gian để hỏi câu duy nhất quan trọng: *ngưỡng có bao giờ tới không.* Số đo một lượt thì vô hại; số đo tích luỹ nói rằng cửa này đóng.
 
 **Quan hệ với `P-023` (PR `#85`) — đây là chỗ vòng lặp tự khoá:**
@@ -472,7 +474,7 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
 - risk: **high** — chặn mọi làn. Mục `ready` nào cũng nằm sau một PR không merge được; bước 3 của phụ lục P1 ra `idle` ở lượt này đúng vì lý do đó.
 - status: ready
 - nguồn: đo ở lượt `crux-worker-1` 2026-09-22 12:4x giờ VN; `ops/known-failures.md` **KF-011** và KF-009; `ops/invariants.merge-gate.ts`; `ops/workflows/automerge.yml`; CHARTER mục 3 (bất biến I4) và 3.3; phụ lục P1 bước 0, P3 bước 0b–0c
-- **cần chủ dự án trước khi làm:** gỡ kẹt ngay là một lần merge tay (đề xuất `#85`, vì nó cắt nguyên nhân gốc), và bản sửa lâu dài chạm `ops/invariants.*` (cửa `owner-merge`) hoặc CHARTER mục 3 (`irreversible`, CLAUDE.md mục 14). Issue `🤖 [QĐ]` kèm theo mục này.
+- **cần chủ dự án trước khi làm:** gỡ kẹt ngay là một lần merge tay (đề xuất `#85`, vì nó cắt nguyên nhân gốc), và bản sửa lâu dài chạm `ops/invariants.*` (cửa `owner-merge`) hoặc CHARTER mục 3 (`irreversible`, CLAUDE.md mục 14). Issue `🤖 [QĐ]` **#116** kèm theo mục này.
 - tiêu chí xong:
   - **Đo trước, sửa sau:** một lệnh trong `ops/scripts/` trả lời được "cửa `automerge-delayed` có chảy không" bằng số — với mỗi PR mang nhãn đó: khoảng trống đầu-nhánh-không-đổi dài nhất, số lần đặt lại đồng hồ, và số giờ còn thiếu so với ngưỡng. Nguồn là `git log --first-parent` cộng nhãn, **không** đọc văn xuôi trong `note` của log.
   - Bản tin ngày (phụ lục P2, mục "Đang chờ merge") nói **số giờ còn lại thật**, tính theo đồng hồ đã bị đặt lại — chứ không phải giờ kể từ lúc gắn nhãn. Dòng nào đã bị đặt lại quá N lần thì nói ra. Hiện bản tin không phân biệt hai thứ đó, nên một PR kẹt vĩnh viễn trông giống một PR sắp tới hạn.
