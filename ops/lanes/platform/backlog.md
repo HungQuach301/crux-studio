@@ -396,12 +396,13 @@ Một bước đúng-đắn-bắt-buộc mà chỗ thực thi duy nhất là tr�
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - nguồn: vòng soát ngữ cảnh sạch của PR `#93`; `ops/known-failures.md` KF-010; `CLAUDE.md` mục 6; giả định `G14`
 - tiêu chí xong:
-  - `integrator-resolve.ts` tự ghi trailer vào commit gộp nó tạo, ở **một** chỗ, không để routine bù tay. Mã phiên đọc từ môi trường; không có thì commit vẫn phải mang `Co-Authored-By`, và thiếu mã phiên phải **nói ra** trong kết quả trả về chứ không im lặng.
-  - Tên hay mã model **không** lọt vào trailer (`CLAUDE.md` mục 6). Đây là ca đã sai thật trên `main`: 47 dòng `Co-Authored-By: Claude Opus 5` và 9 dòng `Claude Sonnet 5` trong 40 commit gần nhất.
-  - Có test: gọi tool trên một cây dựng sẵn, đọc `git log -1 --format=%B` của commit gộp, khẳng định có đủ hai trailer và **không** có tên model. Test phải **đỏ thật** khi gỡ phần ghi trailer.
-  - `ops/known-failures.md` KF-010 cập nhật dòng **Máy chặn từ nay** bằng tên test đó.
+  - ✅ `integrator-resolve.ts` tự ghi trailer vào commit gộp nó tạo, ở **một** chỗ (`trailerMessageArg`, gọi ở cả đường `clean` lẫn `resolved`), không để routine bù tay. Mã phiên đọc từ môi trường `CLAUDE_SESSION_URL`; không có thì commit vẫn mang `Co-Authored-By`, và thiếu mã phiên trả `sessionTrailerMissing: true` trong `ResolveResult` — bên gọi (bước 0 phụ lục P1/P3) nói ra trong ghi chú, không nuốt im.
+  - ✅ Tên hay mã model **không** lọt vào trailer: hằng `CO_AUTHOR_TRAILER = 'Co-Authored-By: Claude <noreply@anthropic.com>'` khoá cứng, không nội suy tên model từ đâu. Tool KHÔNG dùng `CLAUDE_CODE_SESSION_ID` (là UUID, không phải id của URL `.../session_…`) để tránh ghi một URL sai.
+  - ✅ Có test: ba test mới ở `ops/test/integrator-resolve.test.ts` gọi tool trên cây dựng sẵn, đọc `git log -1 --format=%B` (và `%(trailers:key=Claude-Session)`) của commit gộp, khẳng định đủ hai trailer khi có URL, chỉ `Co-Authored-By` khi thiếu URL, và **không** có tên model. Đo được đỏ thật khi gỡ phần ghi trailer: 11 pass → 8 pass / 3 fail.
+  - ✅ `ops/known-failures.md` KF-010 cập nhật dòng **Máy chặn từ nay** bằng tên ba test đó.
+  - ⬜ **Còn treo, cần người/nền tảng đặt `CLAUDE_SESSION_URL`:** tool nay ghi `Claude-Session` khi biến môi trường có mặt, nhưng chưa lượt routine thật nào đặt biến đó, nên `Claude-Session` của commit gộp vẫn có thể vắng (khi đó `sessionTrailerMissing` báo ra). Đặt biến ở đầu lượt worker/integrator là việc nối dây tiếp theo; `Co-Authored-By` thì đã luôn có từ commit này.
 - **ảnh hưởng tới `VF-G14`:** phép kiểm của `G14` là "đọc job `trailer-warn` trên các PR do routine mở, trong một tuần". Chín commit thiếu trailer này nằm trong cửa sổ đó và **không phải** tín hiệu nền tảng ghi hỏng trailer — chúng là bước bị bỏ. `VF-G14` phải loại chín mã băm trên ra khỏi mẫu, nếu không nó kết luận sai về `G14`.
 - **mã mục nhận lúc 2026-09-22 06:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-023` là mã cao nhất trên `main` **và** trên cả 16 nhánh PR đang mở tại lúc nhận, nên `P-024` không đụng ai.
