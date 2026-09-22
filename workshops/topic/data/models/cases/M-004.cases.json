@@ -1,0 +1,34 @@
+[
+  {
+    "caseId": "cfr-404410-a-worker",
+    "params": {
+      "primaryInsuranceAmountUsd": 980.5,
+      "monthsBeforeFullRetirementAge": 44,
+      "firstTierNumerator": 5,
+      "firstTierDenominator": 9,
+      "secondTierNumerator": 5,
+      "secondTierDenominator": 12
+    },
+    "expected": {
+      "reductionUsd": 228.8,
+      "monthlyBenefitUsd": 751.7
+    },
+    "computedBy": "20 CFR 404.410(a), ví dụ 'Alex': PIA $980.50, nhận sớm 44 tháng — 'a total reduction of $228.78... rounded to $228.80... The resulting $751.70 is the monthly benefit payable.'"
+  },
+  {
+    "caseId": "cfr-404410-b-spouse",
+    "params": {
+      "primaryInsuranceAmountUsd": 412.4,
+      "monthsBeforeFullRetirementAge": 28,
+      "firstTierNumerator": 25,
+      "firstTierDenominator": 36,
+      "secondTierNumerator": 5,
+      "secondTierDenominator": 12
+    },
+    "expected": {
+      "reductionUsd": 80.2,
+      "monthlyBenefitUsd": 332.2
+    },
+    "computedBy": "20 CFR 404.410(b), ví dụ 'Ashley': trợ cấp vợ/chồng $412.40, sớm 28 tháng — 'The resulting $80.18 is rounded to $80.20... to determine the monthly benefit amount of $332.20.'"
+  }
+]

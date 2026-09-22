@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-006",
+  "version": "1.0",
+  "title": "Lãi suất tổng hợp của trái phiếu tiết kiệm Series I",
+  "question": "Lãi suất cố định và lạm phát nửa năm ghép lại thành lãi suất tổng hợp bao nhiêu cho một đợt phát hành I bond?",
+  "assumptions": [
+    "Số hạng tích (cố định × lạm phát nửa năm) là một phần của công thức TreasuryDirect, không phải phần dư làm tròn. Bỏ nó đi thì ví dụ chính thức không còn khớp.",
+    "Chặn dưới ở 0 là luật của TreasuryDirect khi giảm phát đủ sâu: 'we don't let that happen. We stop at zero.'",
+    "Làm tròn tới bốn chữ số thập phân ở dạng thập phân, tức hai chữ số ở dạng phần trăm — đúng như khối ví dụ trình bày.",
+    "Lãi suất cố định gắn với đợt phát hành và không đổi suốt đời trái phiếu; lạm phát nửa năm đổi mỗi sáu tháng.",
+    "GHI NHẬN MÂU THUẪN TRONG CHÍNH NGUỒN: trang TreasuryDirect mở đầu bằng 'The composite rate for I bonds issued from November 2025 through April 2026 is 4.03%', nhưng khối 'An example' ngay dưới lấy 0,90% và 1,67% rồi tự tính ra 4,26%. Ca kiểm dùng phép tính của khối ví dụ, vốn tự đủ và kiểm được; con số 4,03% ở câu mở đầu KHÔNG được dùng và cần một nguồn thứ hai xác nhận trước khi bất cứ tập nào phát ngôn về đợt phát hành đó."
+  ],
+  "parameters": [
+    {
+      "name": "fixedRatePct",
+      "unit": "percent",
+      "validRange": [
+        0,
+        10
+      ],
+      "defaultValue": 0.9,
+      "source": "treasurydirect/i-bond-rates"
+    },
+    {
+      "name": "semiannualInflationRatePct",
+      "unit": "percent",
+      "validRange": [
+        -10,
+        10
+      ],
+      "defaultValue": 1.67,
+      "source": "treasurydirect/i-bond-rates"
+    }
+  ],
+  "formula": "i-bond-composite-rate",
+  "outputs": [
+    {
+      "name": "compositeRatePct",
+      "unit": "percent",
+      "interpretation": "Lãi suất tổng hợp đã làm tròn — con số TreasuryDirect công bố."
+    },
+    {
+      "name": "compositeRateUnroundedPct",
+      "unit": "percent",
+      "interpretation": "Trước khi làm tròn. Giữ lại để thấy phần làm tròn lấy đi hay cho thêm bao nhiêu."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Khối 'An example' của TreasuryDirect khớp từng bước: 0,0090 + 0,0334 + 0,0001503 = 0,0425503, làm tròn thành 0,0426 tức 4,26%.",
+        "tolerancePct": 0.05,
+        "evidenceRef": "workshops/topic/data/models/cases/M-006.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "TreasuryDirect không có máy tính lãi suất tổng hợp riêng; bảng lịch sử lãi suất là nguồn đối chiếu tiếp theo, chưa chạy.",
+        "benchmarkUrl": "https://www.treasurydirect.gov/savings-bonds/i-bonds/i-bonds-interest-rates/"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}

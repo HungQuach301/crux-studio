@@ -33,9 +33,12 @@
  * Tiêu chí xong của `P-027` chốt nguồn: mốc mỗi lần đổi đầu nhánh lấy từ
  * `git log --first-parent --format=%cI` trên `refs/pull/<n>/head`, còn nhãn
  * do bên gọi đưa vào (từ API GitHub). KHÔNG đọc số giờ ra khỏi trường
- * `note` tiếng Việt của `ops/logs/platform/P-016.jsonl` — đó đúng là thứ
+ * `note` tiếng Việt của các dòng log bước 0 — đó đúng là thứ
  * hỏng im lặng ngay lần đầu ai viết khác đi một chữ, cùng lỗi mà
- * `conflict-watch.ts` (mục `P-007`) đã tránh khi đo mốc kẹt.
+ * `conflict-watch.ts` (mục `P-007`) đã tránh khi đo mốc kẹt. (Không nhắc
+ * đích danh một tên file log bước 0 ở đây là có chủ đích: bất biến của
+ * `P-023` cấm mọi file code neo vào một đường dẫn log bước 0 cố định —
+ * xem `ops/test/step0-log-path.test.ts` và `KF-013`.)
  *
  * `refs/pull/<n>/head` chứ không phải tên nhánh: một số PR routine mang tên
  * nhánh do nền tảng gán (`claude/<tên ngẫu nhiên>`, PR #62/#66/#70 là ca
