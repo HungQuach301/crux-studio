@@ -729,11 +729,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
 2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang **kẹt ở hàng đợi
    merge** — xung đột với main, HOẶC gộp sạch rồi chạy thử thì đỏ (mục P-025; PR loại này KHÔNG xung đột,
    nên đừng lọc theo chữ "xung đột" mà bỏ sót nó) — kèm số giờ kẹt và số lượt kẹt liên tiếp, cả
-   `aborted-ineligible` (mục P-022) lẫn `red-after-merge` (mục P-025), lấy qua `stuckStreak` của
-   `ops/scripts/pr-triage.ts`, đọc **các dòng bước 0** bằng `readRunLogs` trên cả `ops/logs` — từ mục
-   `P-023` chúng nằm ở `ops/logs/integration/step0-*.jsonl`, một file mỗi lượt, cộng các dòng cũ còn lại
-   ở `ops/logs/platform/P-016.jsonl`; đừng neo vào một tên file; PR có nhãn automerge-delayed kèm SỐ GIỜ
-   CÒN LẠI trước khi tự merge; các mục parked;
+   `aborted-ineligible` (mục P-022) lẫn `red-after-merge` (mục P-025). Hai chuỗi đó đọc từ **các dòng
+   bước 0**, bằng `readRunLogs` trên cả `ops/logs` — từ mục `P-023` chúng nằm ở
+   `ops/logs/integration/step0-*.jsonl`, một file mỗi lượt, cộng các dòng cũ còn lại ở
+   `ops/logs/platform/P-016.jsonl`; đừng neo vào một tên file. Có hai chuỗi rồi thì gộp lại bằng
+   `stuckStreak` của `ops/scripts/pr-triage.ts` (hàm thuần trên hai con số, nó KHÔNG tự đọc log);
+   PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3.
 
