@@ -137,12 +137,16 @@ jobs:
           #     nên một đường dẫn cố định là cách dấu hiệu này hỏng im lặng
           #     ngay lượt đầu tiên tên file đổi (nhóm Z). Thay vào đó quét
           #     CẢ `ops/logs` — như dấu hiệu số 4 ở trên — rồi lọc theo
-          #     trường `ref`: `<làn>/step0-…` là hình dạng mới, còn
-          #     `platform/P-016` là các dòng bước 0 CŨ. Giữ cả hai vì log
-          #     append-only: dòng cũ ở lại nguyên chỗ (P-023), và bỏ chúng
-          #     ra thì nhịp tim mất một nguồn mà không gì đỏ.
+          #     trường `ref`. Ba hình dạng, vì bước 0 đã đổi chỗ ghi hai
+          #     lần và log là append-only nên dòng cũ ở lại nguyên chỗ
+          #     (P-023): `<làn>/step0-…` là hình dạng hiện tại,
+          #     `<làn>/P3-run-…` là hình dạng trước đó, và `platform/P-016`
+          #     là file dùng chung cũ nhất. Bỏ hình dạng nào ra thì nhịp
+          #     tim mất một nguồn mà không gì đỏ — kể cả hình dạng hôm nay
+          #     không bao giờ thắng `max`, vì thứ tự đó chỉ đúng chừng nào
+          #     hình dạng mới còn được ghi.
           LAST_BEAT=$(find ops/logs -name '*.jsonl' -exec cat {} + 2>/dev/null \
-            | jq -s -r 'map(select((.ref // "") | test("(^|/)step0-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
+            | jq -s -r 'map(select((.ref // "") | test("(^|/)(step0|P3-run)-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
           if [ -z "$LAST_BEAT" ]; then
             add "Không đọc được dòng bước 0 nào trong \`ops/logs\` — không tính được nhịp tim của routine worker/integrator (dấu hiệu số 5, mục P-020). Hoặc chưa lượt nào ghi, hoặc hình dạng \`ref\` đã đổi."
           else
