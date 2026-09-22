@@ -473,9 +473,17 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
-## KF-017 · Một lớp chặn mới, đúng luật, sẽ làm đỏ **13 trên 29** PR đang mở — và cách sửa duy nhất trong nhánh thì máy cấm agent làm
+## KF-018 · Một lớp chặn mới, đúng luật, sẽ làm đỏ **13 trên 29** PR đang mở — và cách sửa duy nhất trong nhánh thì máy cấm agent làm
 
-> Số **KF-017**: `KF-014` đã thuộc PR `#142` đang mở, `KF-016` đã thuộc PR `#154` đang mở. Nhận mã trước khi viết (KF-005).
+> Số **KF-018**: `KF-014` thuộc PR `#142`, `KF-016` thuộc PR `#154`, `KF-017` thuộc PR `#162` — cả ba đang mở. Nhận mã trước khi viết (KF-005).
+>
+> ⚠️ Mục này **đã lấy nhầm `KF-017`** ở lần viết đầu, vì chỉ dò mã trên `main` và trên hai nhánh nhớ được, không dò **mọi** nhánh PR đang mở. Đúng chữ ký `KF-005`, và đúng chỗ mà `KF-005` nói là hay sai. Cách dò đúng, chạy chứ đừng nhớ:
+>
+> ```bash
+> for b in $(git branch -r | grep -v HEAD | grep origin/claude/ | sed 's/ *origin\///'); do
+>   git grep -h -oE "^## KF-[0-9]+" "origin/$b" -- ops/known-failures.md 2>/dev/null
+> done | sort -u -V | tail -1
+> ```
 
 - **Lần gặp:** 3 trên PR `#65` — 15:55Z, 17:45Z, rồi lượt `crux-worker-1` ~21:38Z. Hai lượt đầu ghi nó ra như một va chạm **giữa hai PR** (`#142` vào `main` trước `#65` thì `#65` đỏ). Lượt thứ ba đo trên **toàn bộ** PR đang mở và thấy nó không phải chuyện của một PR.
 - **Chữ ký:** `node ops/scripts/check-commit-trailers.ts "origin/main..origin/<nhánh>"` (bản trên nhánh của `#142`) thoát **1** với `tên model trong khối trailer — Co-Authored-By: Claude <Opus|Sonnet> … <noreply@anthropic.com>`, trên một PR mà **không ai vừa đụng vào** và `pnpm check` tại máy vẫn xanh.

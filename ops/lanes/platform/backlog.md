@@ -546,11 +546,11 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
 - deps: —
 - risk: high
 - status: blocked
-- nguồn: `ops/known-failures.md` KF-017; comment 15:55Z và 17:45Z trên PR `#65`; điểm 6 của vòng soát trên PR `#112` (18:53Z); `.claude/settings.json` phần `deny`; `CLAUDE.md` mục 6 và mục 13
+- nguồn: `ops/known-failures.md` KF-018; comment 15:55Z và 17:45Z trên PR `#65`; điểm 6 của vòng soát trên PR `#112` (18:53Z); `.claude/settings.json` phần `deny`; `CLAUDE.md` mục 6 và mục 13
 - tiêu chí xong:
   - Chốt một trong ba đường ở `🤖 [QĐ] #165`: (a) chủ dự án force-push 13 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash — lưu ý file đó là vùng `owner-merge`.
   - Làm theo đường đã chốt, **trước khi** `#142` vào `main`. Vào sau là đo lại 13 PR rồi gỡ từng cái, đắt hơn nhiều.
   - **Bằng chứng bằng chạy thật:** chạy checker của `#142` trên **mọi** nhánh PR đang mở, trước và sau. Trước: 13 PR đỏ. Sau: 0 PR đỏ — hoặc, nếu chọn (a), danh sách PR còn đỏ đúng bằng danh sách nhánh chưa được dựng lại, không PR nào ngoài danh sách đó.
-  - Luật chung ghi vào `ops/known-failures.md` KF-017: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
+  - Luật chung ghi vào `ops/known-failures.md` KF-018: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
-- **mã mục nhận lúc 2026-09-22 ~21:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-027` là mã cao nhất trên `main`, `P-028` (`#160`) và `P-029` (`#162`) đã thuộc hai PR đang mở, nên `P-030` không đụng ai.
+- **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
