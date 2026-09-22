@@ -139,9 +139,10 @@ function readUpstreamFromGolden(
   }
   if (consumes.length === 0) {
     throw new Error(
-      `File --input ${full} khai "upstreamFrom" nhưng xưởng tiêu thụ không consumes gì. ` +
-        `Xưởng không tiêu thụ artifact nào thì khai "upstream": {} — "upstreamFrom" với ` +
-        `danh sách rỗng không phân biệt được với "quên khai" (mục integration/I-009, I-011).`,
+      `File --input ${full} khai "upstreamFrom" nhưng "consumes" rỗng — hoặc xưởng không ` +
+        `tiêu thụ gì (thì khai "upstream": {}, không phải "upstreamFrom"), hoặc bên gọi ` +
+        `readInputFile quên truyền "definition.consumes". "upstreamFrom" với danh sách rỗng ` +
+        `không phân biệt được với "quên khai" (mục integration/I-009, I-011).`,
     );
   }
 
