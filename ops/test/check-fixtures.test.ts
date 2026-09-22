@@ -18,8 +18,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WORKSHOPS, type Envelope } from '@crux/kernel';
-import { fixtureInputProblems, inputFileProblems, upstreamCopyProblems } from '../scripts/check-fixtures.ts';
+import { WORKSHOPS, readInputFile, type Envelope } from '@crux/kernel';
+import {
+  fixtureInputProblems,
+  inputFileProblems,
+  upstreamCopyProblems,
+  upstreamFromWorkshopsProblems,
+  fixtureInputPath,
+} from '../scripts/check-fixtures.ts';
+import { DEFINITIONS } from '../scripts/pipeline.ts';
 
 /** Gốc repo, không phải cwd: `node --test` chạy được từ thư mục nào cũng đúng. */
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -76,10 +83,15 @@ function makeRoot(fixture: unknown | undefined): { root: string; path: string } 
   return { root, path };
 }
 
+/**
+ * Các test dưới đây khai `upstream` thẳng (không `upstreamFrom`), nên
+ * `consumes` không được dùng để nạp — truyền `[]` cho đúng ngữ nghĩa "không
+ * cần danh sách tiêu thụ ở đây" (mục `integration/I-011`).
+ */
 function problemsFor(fixture: unknown): string[] {
   const { root, path } = makeRoot(fixture);
   try {
-    return inputFileProblems(root, path, 'Fixture thử');
+    return inputFileProblems(root, path, 'Fixture thử', []);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -295,7 +307,7 @@ test('I-009 · fixture repo khai THẲNG artifact đầu vào thì ĐỎ — đ�
   try {
     // Bản chép này hợp contract VÀ khớp bối cảnh, nên hai lớp bắt của I-008 đều xanh…
     assert.deepEqual(
-      inputFileProblems(root, join(root, 'workshops', 'editorial', 'fixtures', 'input.json'), 'Fixture thử'),
+      inputFileProblems(root, join(root, 'workshops', 'editorial', 'fixtures', 'input.json'), 'Fixture thử', []),
       [],
     );
     // …và chỉ luật của I-009 mới bắt được nó.
@@ -320,7 +332,7 @@ test('I-009 · làm lệch MỘT trường của một artifact đầu vào đã
   try {
     // Hai lớp bắt của I-008 vẫn xanh với nó — đo, không phải đoán.
     assert.deepEqual(
-      inputFileProblems(root, join(root, 'workshops', 'editorial', 'fixtures', 'input.json'), 'Fixture thử'),
+      inputFileProblems(root, join(root, 'workshops', 'editorial', 'fixtures', 'input.json'), 'Fixture thử', []),
       [],
     );
     const problems = fixtureInputProblems(root);
@@ -345,7 +357,7 @@ test('I-009 · fixture repo trỏ tập vàng bằng `upstreamFrom` thì XANH', 
     editorial: {
       episodeId: 'ep-0001-stub',
       channel: SLUG,
-      upstreamFrom: { golden: 'ep-0001-stub', workshops: ['topic'] },
+      upstreamFrom: { golden: 'ep-0001-stub' },
     },
   });
   try {
@@ -360,7 +372,7 @@ test('I-009 · phép so bối cảnh vẫn chạy qua `upstreamFrom` — snapsho
     editorial: {
       episodeId: 'ep-0001-stub',
       channel: SLUG,
-      upstreamFrom: { golden: 'ep-0001-stub', workshops: ['topic'] },
+      upstreamFrom: { golden: 'ep-0001-stub' },
     },
   });
   try {
@@ -384,6 +396,76 @@ test('I-009 · `upstreamCopyProblems` đọc thô, nên nó bắt cả file mà 
   });
   try {
     assert.equal(upstreamCopyProblems(path, 'Fixture thử').length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── I-011 · danh sách xưởng tiêu thụ suy từ definition.consumes ───────────
+//
+// Trước mục này, mỗi fixture khai `upstreamFrom.workshops` — một bản chép thứ
+// hai của `definition.consumes`. Hai danh sách lệch nhau mà không gì đỏ. Cách
+// chặn: bỏ bản chép, nạp theo `consumes` do bên gọi truyền vào.
+
+test('I-011 · mỗi fixture repo nạp ĐÚNG definition.consumes của xưởng, khớp snapshot tập vàng', () => {
+  for (const workshop of WORKSHOPS) {
+    const consumes = DEFINITIONS[workshop].consumes;
+    const { input } = readInputFile(REPO_ROOT, fixtureInputPath(REPO_ROOT, workshop), consumes);
+    assert.deepEqual(
+      Object.keys(input.upstream).sort(),
+      [...consumes].sort(),
+      `xưởng ${workshop}: khối upstream phải đúng bằng definition.consumes`,
+    );
+    for (const name of consumes) {
+      assert.deepEqual(input.upstream[name], goldenArtifact(name), `${workshop} ← ${name}`);
+    }
+  }
+});
+
+test('I-011 · danh sách nạp đi theo consumes bên gọi, KHÔNG theo file — không còn bản chép để trôi', () => {
+  // Cùng MỘT fixture (chỉ khai "golden"), hai lời gọi với consumes khác nhau
+  // cho ra hai khối upstream khác nhau. Nếu file còn ghim danh sách thì lời
+  // gọi thứ hai đã không đổi được gì.
+  const root = makeRepoRoot({
+    release: { episodeId: 'ep-0001-stub', channel: SLUG, upstreamFrom: { golden: 'ep-0001-stub' } },
+  });
+  const path = fixtureInputPath(root, 'release');
+  try {
+    assert.deepEqual(
+      Object.keys(readInputFile(root, path, ['editorial']).input.upstream).sort(),
+      ['editorial'],
+    );
+    assert.deepEqual(
+      Object.keys(readInputFile(root, path, ['topic', 'assembly']).input.upstream).sort(),
+      ['assembly', 'topic'],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-011 · `upstreamFrom.workshops` sót lại trong fixture thì ĐỎ — nó bị bỏ qua im lặng', () => {
+  const root = makeRepoRoot({
+    editorial: {
+      episodeId: 'ep-0001-stub',
+      channel: SLUG,
+      upstreamFrom: { golden: 'ep-0001-stub', workshops: ['topic'] },
+    },
+  });
+  try {
+    // Danh sách sót không làm readInputFile đỏ (nó chỉ đọc "golden")…
+    assert.deepEqual(
+      inputFileProblems(root, fixtureInputPath(root, 'editorial'), 'Fixture thử', ['topic']),
+      [],
+    );
+    // …nên luật riêng của I-011 phải bắt nó.
+    const only = upstreamFromWorkshopsProblems(fixtureInputPath(root, 'editorial'), 'Fixture thử');
+    assert.equal(only.length, 1, only.join('\n'));
+    assert.match(only[0]!, /I-011/);
+    // Và nó nổi lên trong soát tổng của cả sáu fixture.
+    const problems = fixtureInputProblems(root);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /workshops/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
