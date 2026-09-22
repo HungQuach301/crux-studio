@@ -125,6 +125,9 @@ jobs:
             BASE=$(git merge-base origin/main "refs/remotes/pr/$NUM")
             git diff --name-only "$BASE" "refs/remotes/pr/$NUM" > "$PR_DIR/changed.txt"
             git archive "refs/remotes/pr/$NUM" | tar -x -C "$PR_DIR/head"
+            # Z9: vắng CHARTER.md ở SHA nền là hợp lệ — protected-area.ts coi
+            # đó là "không đối chiếu được" và trả cửa owner-merge (an toàn
+            # nhất), không phải một lỗi cần chặn ở đây.
             git show "$BASE:CHARTER.md" > "$PR_DIR/base-CHARTER.md" 2>/dev/null || true
             AREA=$(node ops/invariants.protected-area.ts \
               --changed "$PR_DIR/changed.txt" \
@@ -133,6 +136,15 @@ jobs:
             GATE=$(echo "$AREA" | jq -r .gate)
             echo "  cửa=$GATE · $(echo "$AREA" | jq -r '[.owner[], .delayed[]] | join(" · ") | if . == "" then "không chạm vùng bảo vệ" else . end')"
 
+            # Mục `P-009`: `ciConclusion` của cả run KHÔNG đủ để biết job
+            # `fix-has-test` đã xanh — job đó có thể `skipped` mà không làm
+            # cả run đỏ. Đọc riêng check run này trên đúng $HEAD. Không có
+            # check run nào tên đó (PR quá cũ, hoặc CI chưa từng chạy trên
+            # commit này) thì để `null` — `invariants.merge-gate.ts` coi
+            # `null` là "chưa kiểm", không phải "đã xanh".
+            FIX_HAS_TEST=$(gh api "repos/$REPO/commits/$HEAD/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select(.name == "fix-has-test" and .status == "completed")][0].conclusion // null')
+
             jq -n \
               --arg gate "$GATE" \
               --arg head "$HEAD" \
@@ -140,10 +152,12 @@ jobs:
               --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --argjson pr "$DATA" \
               --argjson ci "$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$HEAD&status=completed&per_page=1" --jq '.workflow_runs[0] // {}')" \
+              --arg fixHasTest "$FIX_HAS_TEST" \
               --argjson comments "$(gh pr view "$NUM" --repo "$REPO" --json comments --jq '[.comments[] | {author: .author.login, body: .body, createdAt: .createdAt}]')" \
               '{gate: $gate, labels: [$pr.labels[].name], draft: $pr.draft, mergeable: $pr.mergeable,
                 mergeableState: $pr.mergeable_state, headSha: $head, ciSha: ($ci.head_sha // null),
                 ciConclusion: ($ci.conclusion // null), ciCompletedAt: ($ci.updated_at // null),
+                fixHasTestConclusion: (if $fixHasTest == "null" then null else $fixHasTest end),
                 comments: $comments, owner: $owner, now: $now, delayHours: 12}' > "$PR_DIR/state.json"
 
             DECISION=$(node ops/invariants.merge-gate.ts "$PR_DIR/state.json")

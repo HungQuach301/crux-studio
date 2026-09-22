@@ -12,6 +12,8 @@
     "contracts": "node ops/scripts/check-contracts.ts",
     "lint:deps": "node ops/scripts/lint-deps.ts",
     "lint:workflows": "node ops/scripts/check-workflows.ts",
+    "check:tests": "node ops/scripts/check-test-coverage.ts",
+    "check:workflows-synced": "node ops/scripts/check-workflows-synced.ts",
     "assumptions": "node ops/scripts/check-assumptions.ts",
     "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
     "backlog:status": "node ops/scripts/backlog-status.ts",
@@ -21,7 +23,7 @@
     "replay": "node ops/scripts/replay.ts",
     "run:episode": "node ops/scripts/run-episode.ts",
     "run:workshop": "node ops/scripts/run-workshop.ts",
-    "check": "pnpm contracts && pnpm lint:deps && pnpm lint:workflows && pnpm assumptions && pnpm typecheck && pnpm test && pnpm replay"
+    "check": "pnpm contracts && pnpm lint:deps && pnpm lint:workflows && pnpm check:tests && pnpm assumptions && pnpm typecheck && pnpm test && pnpm replay"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
