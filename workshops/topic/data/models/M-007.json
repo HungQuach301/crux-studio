@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-007",
+  "version": "1.0",
+  "title": "Phần trợ cấp an sinh xã hội phải chịu thuế liên bang",
+  "question": "Với một mức thu nhập khác và một khoản trợ cấp an sinh nhất định, bao nhiêu phần trăm khoản trợ cấp đó rơi vào thu nhập chịu thuế?",
+  "assumptions": [
+    "Theo Worksheet 1 của IRS Pub 915; số dòng trong code giữ nguyên số dòng bản gốc để đối chiếu được với tờ khai.",
+    "Ngưỡng dòng 9 và số cộng thêm dòng 11 là tham số vì chúng đổi theo tình trạng khai thuế: $25.000/$9.000 cho người độc thân, $32.000/$12.000 cho khai chung.",
+    "Trần cứng ở dòng 18 (0,85 × trợ cấp) cắt mọi trường hợp — không bao giờ quá 85% khoản trợ cấp bị tính thuế.",
+    "Không xử lý khoản trả một lần cho năm trước (Worksheet 2 và 3 của Pub 915) và không xử lý ca khai riêng mà vẫn sống chung cả năm.",
+    "Mô hình trả về phần trợ cấp CHỊU THUẾ, không phải số thuế phải nộp trên phần đó."
+  ],
+  "parameters": [
+    {
+      "name": "netBenefitsUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        1000000
+      ],
+      "defaultValue": 5980,
+      "source": "irs/p915-worksheet-1-example-1"
+    },
+    {
+      "name": "otherIncomeUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000000
+      ],
+      "defaultValue": 28990,
+      "source": "irs/p915-worksheet-1-example-1"
+    },
+    {
+      "name": "taxExemptInterestUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000000
+      ],
+      "defaultValue": 0,
+      "source": "irs/p915-worksheet-1-line-4"
+    },
+    {
+      "name": "exclusionsUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000000
+      ],
+      "defaultValue": 0,
+      "source": "irs/p915-worksheet-1-line-5"
+    },
+    {
+      "name": "adjustmentsUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000000
+      ],
+      "defaultValue": 0,
+      "source": "irs/p915-worksheet-1-line-7"
+    },
+    {
+      "name": "baseAmountUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000
+      ],
+      "defaultValue": 25000,
+      "source": "irs/p915-worksheet-1-line-9"
+    },
+    {
+      "name": "secondThresholdAdderUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000
+      ],
+      "defaultValue": 9000,
+      "source": "irs/p915-worksheet-1-line-11"
+    }
+  ],
+  "formula": "taxable-social-security-benefits",
+  "outputs": [
+    {
+      "name": "taxableBenefitsUsd",
+      "unit": "usd",
+      "interpretation": "Phần trợ cấp vào thu nhập chịu thuế — dòng 6b của Form 1040."
+    },
+    {
+      "name": "provisionalIncomeUsd",
+      "unit": "usd",
+      "interpretation": "Thu nhập tạm tính ở dòng 8: nửa khoản trợ cấp cộng thu nhập khác và lãi miễn thuế. Đây là đại lượng quyết định ngưỡng."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Worksheet 1 điền sẵn của Example 1 khớp từng đô la: thu nhập tạm tính $31.980 và phần chịu thuế $2.990.",
+        "tolerancePct": 0.05,
+        "evidenceRef": "workshops/topic/data/models/cases/M-007.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "IRS Interactive Tax Assistant có mục tương đương nhưng đòi phiên tương tác. Chưa chạy đối chiếu: worksheet điền sẵn của Pub 915 đã dùng làm ca cấp 1.",
+        "benchmarkUrl": "https://www.irs.gov/pub/irs-pdf/p915.pdf"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}

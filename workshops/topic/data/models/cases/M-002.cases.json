@@ -1,0 +1,32 @@
+[
+  {
+    "caseId": "cfpb-buy-0p375-points",
+    "params": {
+      "loanAmountUsd": 180000,
+      "baseRatePct": 5,
+      "rateWithPointsPct": 4.875,
+      "pointsPct": 0.375,
+      "termMonths": 360
+    },
+    "expected": {
+      "monthlySavingsUsd": 14,
+      "pointsCostUsd": 675
+    },
+    "computedBy": "CFPB, Ask CFPB #136, bảng 'How points affect interest rates in different scenarios' — hàng 4,875%: 'You might agree to pay $675 more in closing costs... Over the life of the loan: Pay $14 less each month.'"
+  },
+  {
+    "caseId": "cfpb-lender-credit-0p375",
+    "params": {
+      "loanAmountUsd": 180000,
+      "baseRatePct": 5,
+      "rateWithPointsPct": 5.125,
+      "pointsPct": -0.375,
+      "termMonths": 360
+    },
+    "expected": {
+      "monthlySavingsUsd": -14,
+      "pointsCostUsd": -675
+    },
+    "computedBy": "CFPB, cùng bảng — hàng 5,125%: 'in exchange for $675 toward your closing costs... Over the life of the loan: Pay $14 more each month.'"
+  }
+]

@@ -100,6 +100,119 @@ export function runLogPath(root: string, lane: LaneName, id: string): string {
 }
 
 /**
+ * ## Dòng log của **bước 0** — mục `P-023`
+ *
+ * Bước 0 của phụ lục P3 (giải xung đột hàng đợi) chạy ở đầu **mọi** lượt
+ * worker và một lần mỗi lượt integrator. Nó không phải một **mục** backlog,
+ * nó là **một lượt chạy** — nên `D-C04` không phủ nó: mọi lượt của mọi
+ * routine cùng dồn vào một mã mục (`P-016`), tức là cùng **một file**.
+ *
+ * Hậu quả đã đo, không suy (giả định **G17**, trạng thái `sai`; `KF-009`):
+ * `merge=union` trong `.gitattributes` KHÔNG làm xung đột file log biến mất
+ * trong vận hành thật, vì GitHub không áp luật đó khi tự tính `mergeable`.
+ * Một dòng bước 0 vào `main` vì thế là mọi PR
+ * đang mở có dòng riêng trong file ấy **xung đột ngay** phía GitHub — và
+ * `automerge.yml` nghe đúng phía đó. Lượt integrator 04:05 giờ VN 2026-09-22 thấy 7 PR
+ * cùng đứng lại vì **một** dòng; lượt `crux-worker-1` 21:39Z sau đó thấy 8.
+ * Vòng này tự lặp mỗi lượt và nó nuốt đúng thứ `P-016` sinh ra để xoá.
+ *
+ * Cách ra khỏi vòng: **một lượt chạy, một file**. Hai lượt không bao giờ
+ * chạm cùng một file, nên không còn gì để xung đột — cùng lập luận mà
+ * `D-C04` đã dùng cho mục, áp cho lượt chạy.
+ *
+ * ### Một chỗ sinh ra tên file, không phải mỗi routine tự ghép
+ *
+ * Trước `P-023` đã có ba hình dạng khác nhau nằm cạnh nhau trong `ops/logs/`
+ * — `integration/P3-run-<ngày>T<giờ>`, `integration/P3-daily-<ngày>`,
+ * `platform/P1-step0-<ngày>T<giờ>h<phút>` — ba tiền tố, hai làn, hai độ mịn
+ * thời gian. Hai lượt trong cùng một giờ vẫn đụng nhau ở hình dạng thứ
+ * nhất. Vì vậy tên file do **đúng hàm này** sinh ra và không nơi nào khác
+ * ghép tay.
+ */
+
+/** Làn giữ mọi dòng bước 0, bất kể routine nào chạy nó (CHARTER mục 7: hàng đợi merge là việc của làn `integration`). */
+export const STEP0_LOG_LANE: LaneName = 'integration';
+
+/** Tiền tố của mọi mã log bước 0. Một tiền tố, để bên đọc lọc được bằng một phép so. */
+export const STEP0_LOG_PREFIX = 'step0';
+
+/** Tên routine chỉ được chứa ký tự an toàn cho tên file, và không chứa `-` phân đoạn nhầm chỗ nào ngoài chính nó. */
+const SAFE_RUNNER = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * `at` phải khai múi giờ tường minh: `Z` hoặc `±HH:MM`.
+ *
+ * `Date.parse('2026-09-21T21:39:22')` — không có ký hiệu múi giờ — được đọc
+ * theo **giờ địa phương của máy đang chạy**. Đo thật: cùng chuỗi đó cho
+ * `step0-2026-09-21T213922Z-…` với `TZ=UTC` và
+ * `step0-2026-09-21T143922Z-…` với `TZ=Asia/Ho_Chi_Minh`, tức đúng múi giờ
+ * vận hành của dự án. Ở đây tên file **chính là danh tính của lượt chạy**,
+ * nên lệch 7 tiếng không phải sai sót thẩm mỹ: hai lượt khác nhau có thể
+ * mang tên trùng, và một lượt mang tên khai sai giờ.
+ *
+ * `appendRunLog` chuẩn hoá `at` nên dòng bên trong vẫn đúng — chỉ tên file
+ * sai. Đúng nhóm Z: không gì đỏ. Vì vậy chặn ở đây, không chuẩn hoá ngầm.
+ * Năm phải đúng bốn chữ số, vì mọi phép cắt chuỗi dưới đây neo vào độ rộng
+ * đó (`toISOString` cho `±YYYYYY` với năm ngoài khoảng đó).
+ */
+const AT_WITH_ZONE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
+/**
+ * Mã log của **một lượt** bước 0: `step0-<YYYY-MM-DDTHHMMSSZ>-<routine>`.
+ *
+ * Mốc thời gian tới **giây** cộng tên routine: hai lượt đụng nhau chỉ khi
+ * cùng một routine chạy hai lần trong cùng một giây, điều không xảy ra.
+ * Dấu `:` của ISO bị bỏ vì `isSafeLogId` (và nhiều hệ file) không nhận nó —
+ * đó là lý do mã này không phải chuỗi ISO nguyên bản.
+ *
+ * Ném lỗi thay vì trả một mã gần đúng: một mã sai lặng lẽ đẩy dòng log vào
+ * file của lượt khác, và `misfiledLogLines` chỉ bắt được khi `lane` hoặc
+ * `ref` lệch — không bắt được hai lượt trộn vào một file.
+ */
+export function step0LogId(at: string, runner: string): string {
+  if (!SAFE_RUNNER.test(runner) || runner.includes('..')) {
+    throw new Error(`Tên routine không hợp lệ cho tên file log: ${JSON.stringify(runner)}`);
+  }
+  if (!AT_WITH_ZONE.test(at)) {
+    throw new Error(
+      `\`at\` của dòng bước 0 phải khai múi giờ tường minh (Z hoặc ±HH:MM) và năm bốn chữ số: ${JSON.stringify(at)}. ` +
+        'Thiếu múi giờ thì tên file đi theo giờ địa phương của máy đang chạy.',
+    );
+  }
+  // `normalizeAt` cho `YYYY-MM-DDTHH:MM:SS.sssZ`; bỏ `:` (tên file không
+  // nhận) và phần mili giây, còn `YYYYMMDDTHHMMSSZ`. Rồi chèn lại hai gạch
+  // nối của phần ngày, vì đó là phần người đọc bằng mắt nhiều nhất.
+  const stamp = normalizeAt(at).replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const id = `${STEP0_LOG_PREFIX}-${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6)}-${runner}`;
+  if (!isSafeLogId(id)) {
+    throw new Error(`Mã log bước 0 không hợp lệ: ${JSON.stringify(id)}`);
+  }
+  return id;
+}
+
+/** `true` nếu `id` là mã log của một lượt bước 0 — dùng để lọc, không để tin. */
+export function isStep0LogId(id: string): boolean {
+  return id.startsWith(`${STEP0_LOG_PREFIX}-`) && isSafeLogId(id);
+}
+
+/**
+ * Đường dẫn log của một lượt bước 0:
+ * `<root>/ops/logs/integration/step0-<mốc>-<routine>.jsonl`.
+ *
+ * Dòng ghi vào đây phải mang `lane: STEP0_LOG_LANE` và
+ * `ref: "<STEP0_LOG_LANE>/<mã>"`, nếu không `misfiledLogLines` sẽ đỏ — đó
+ * là chủ đích: hai luật phải khớp nhau chứ không mỗi bên một đằng.
+ */
+export function step0LogPath(root: string, at: string, runner: string): string {
+  return runLogPath(root, STEP0_LOG_LANE, step0LogId(at, runner));
+}
+
+/** `ref` đi kèm cho dòng bước 0 — ghép ở một chỗ, để bên ghi không tự đoán. */
+export function step0LogRef(at: string, runner: string): string {
+  return `${STEP0_LOG_LANE}/${step0LogId(at, runner)}`;
+}
+
+/**
  * Ghi một dòng. `at` được chuẩn hoá về UTC ngay lúc ghi, để bên đọc không
  * phải gặp hai dạng mốc thời gian trong cùng một cột.
  */
