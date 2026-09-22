@@ -511,10 +511,17 @@ kiểm biến mất mà mọi chỉ báo vẫn xanh.
 
 - deps: `I-013`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
+- PR: `#99`
 - tiêu chí xong:
-  - Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
-    hoặc bị đòi phải nằm trong `contracts/`, và có dòng vấn đề nếu không.
-  - Có test tái hiện: thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` **ngoài** `contracts/` thì
-    `pnpm contracts` đỏ.
+  - ✅ Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
+    việc số 7, `ops/scripts/check-schema-scope.ts`. Không dựa vào vị trí: chọn cách "kiểm mọi nơi" chứ
+    không "đòi nằm trong `contracts/`", vì `packs/` là chỗ hợp lệ cho schema của pack mà không có phép quét
+    `contracts/` riêng. Schema đã nằm trong `workshops/<tên>/contracts/` do việc số 6 lo, việc số 7 bỏ qua
+    để không kiểm hai lần.
+  - ✅ Có test tái hiện: thả một schema dùng `oneOf` (ngoài `SUPPORTED_KEYWORDS`) ở `workshops/topic/src/`
+    thì `pnpm contracts` đỏ. `ops/test/check-schema-scope.test.ts` bài *nối thật* chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát; đã kiểm đột biến: gỡ dòng nối ở
+    `check-contracts.ts` thì bài đó **đỏ** (`not ok`). Cùng bài đối chứng với schema sạch. Thêm bài cho
+    `packs/`, symlink trá hình, quét đệ quy, và ca "đã trong contracts/ thì không kiểm hai lần".
