@@ -39,23 +39,26 @@ Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập
 
 - deps: T-001
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-010, mục Lõi định lượng 1
 - tiêu chí xong:
-  - Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung.
-  - Mỗi ảnh chụp có `asOfDate` và băm nội dung; chạy lại cùng `asOfDate` cho ra cùng dữ liệu.
-  - Thiếu secret nguồn dữ liệu thì **DỪNG và báo tên secret thiếu**, không tự tạo secret.
+  - ✅ Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung (`workshops/topic/contracts/snapshot.v0.schema.json`, `workshops/topic/src/snapshot.ts` — `normalizeFred/Bls/Census` cùng trả `{period, value}` ISO date).
+  - ✅ Mỗi ảnh chụp có `asOfDate` và băm nội dung; `contentHash` không gồm `fetchedAt` nên chạy lại cùng `asOfDate` trên cùng dữ liệu cho ra cùng băm (test `sameData`, `chạy lại cùng asOfDate ...`).
+  - ✅ Thiếu secret thì `requireSecret` ném `MissingSecretError` mang đúng tên biến (`FRED_API_KEY`/`BLS_API_KEY`/`CENSUS_API_KEY`), chạy TRƯỚC mọi lần chạm mạng, không tự tạo secret (I1).
+- ✅ **Xong, 2026-09-22** (PR `#114`, lượt `crux-worker-3`): ba adapter + contract snapshot chung + 19 test. `pnpm check` xanh 511/511, `pnpm replay` khớp snapshot 6/6. Phần gọi API thật để lỏng qua `transport` tiêm vào — Đợt 0 không gọi API trả tiền (CHARTER mục 9), `transport` mặc định ném `LiveFetchNotWiredError`; xây thật khi tới runtime, cùng hình dạng với corpus/`T-011`. Chọn ba chuỗi ví dụ trong test (FRED `UNRATE`, BLS `LNS14000000`, Census `B25077_001E`) — kho chuỗi cụ thể cho từng tập lấp dần khi có khoá.
 
 ### T-004 · Phát hiện dữ liệu thay đổi và đính chính
 Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh sau công bố, tự mở issue chỉ đúng tập nào, claim nào, con số nào.
 
 - deps: T-003
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec WP-011, sổ rủi ro R6 và R7
 - tiêu chí xong:
-  - So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi.
-  - Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi.
+  - ✅ So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi (`diffSnapshots` tách `revised`/`added`/`removed`; đổi từ/đến ô thiếu `null` tính là `revised`).
+  - ✅ Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi (`impactedClaims` + `buildChangeIssue` mang `episodeId`, `claimId`, con số đã phát hành và con số mới).
+- ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, bước 3): `workshops/topic/src/change-detect.ts` + contract tra ngược `workshops/topic/contracts/claim-source.v0.schema.json` + 15 test. Phân biệt ba loại thay đổi của WP-011 §3b (`new-period` không mở issue · `revision` · `definition-change` mức cao chạm mọi claim); ngưỡng tuyệt đối thắng phần trăm, gần 0 xử lý riêng; khử trùng theo `provider:seriesId:nextAsOfDate`; điều kiện dừng §5b (thiếu trường ràng buộc → `ClaimTraceError` nêu tên trường). `pnpm check` xanh 531/531, `pnpm replay` khớp snapshot 6/6.
+  - **Còn treo, ngoài phạm vi tiêu chí xong (nên giữ `review`, không `done`):** WP-011 §3 muốn một workflow `.github/workflows/detect-changes.yml` và §7 muốn "một issue thật được mở trong repo bằng dữ liệu giả". Cả hai là việc của runtime — agent không ghi `.github/` (CLAUDE.md mục 4) và Đợt 0 không mở issue thật; module trả nội dung issue như **dữ liệu**, người/runtime mở. Cũng chưa làm: kiểm **hạn** của chuỗi `annual-reset` (§5).
 
 ### T-005 · Thư viện mô hình và kiểm bốn cấp
 Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bốn cấp. WP này xây **công cụ**; nội dung tám mô hình do T-006 tạo.
