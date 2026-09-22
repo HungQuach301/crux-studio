@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Sáu việc:
+ * Bảy việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -15,6 +15,11 @@
  *    từ khoá như contract của kernel — mục `integration/I-013`. Trước mục
  *    đó, việc số 2 chỉ nhìn `kernel/contracts/`, nên một contract xưởng
  *    dùng từ khoá validator chưa hiểu không làm gì đỏ.
+ * 7. MỌI `*.schema.json` dưới `workshops/` và `packs/` chịu phép kiểm từ
+ *    khoá, dù nằm ở thư mục nào — mục `integration/I-014`. Việc số 6 dừng ở
+ *    quy ước thư mục `contracts/`; một schema đặt ngoài đó (ở `src/`, ở
+ *    `packs/**`) vẫn thoát. Việc này quét phần còn lại để phạm vi kiểm buộc
+ *    bằng một phép kiểm, không bằng chỗ đặt file.
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -31,6 +36,7 @@ import {
 } from '@crux/kernel';
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 import { scanWorkshopContracts } from './check-workshop-contracts.ts';
+import { scanSchemaScope } from './check-schema-scope.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -121,6 +127,11 @@ problems.push(...fixtureInputProblems(root));
 const workshopContracts = scanWorkshopContracts(root);
 problems.push(...workshopContracts.problems);
 
+// 7 · Mọi schema dưới workshops/ và packs/ ngoài tầm việc số 6 vẫn phải qua
+// phép kiểm từ khoá — phạm vi buộc bằng phép kiểm, không bằng chỗ đặt file.
+const schemaScope = scanSchemaScope(root);
+problems.push(...schemaScope.problems);
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
@@ -128,6 +139,7 @@ if (problems.length > 0) {
 
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${workshopContracts.files.length} contract xưởng, ` +
+    `${schemaScope.files.length} schema ngoài contracts/ (workshops+packs) qua phép kiểm từ khoá, ` +
     `${checked} artifact hợp lệ, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
 );
