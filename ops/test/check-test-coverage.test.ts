@@ -45,6 +45,14 @@ test('Z11 · workshops/<tên>/test/ chỉ khớp đúng MỘT cấp tên xưởn
 // nhau: đọc `scripts.test` THẬT rồi đòi mỗi glob trong đó có một file mẫu
 // khớp `matchesTestGlob`. Thêm glob thứ năm mà quên luật thì bài này đỏ NGAY
 // trong `node --test`, không đợi ai chạy tới `pnpm check:tests`.
+//
+// GIỚI HẠN, ghi ra để người sau không tưởng bài này mạnh hơn thực tế: nó
+// chứng minh mỗi glob có ÍT NHẤT MỘT mẫu khớp, nên bắt được "thêm glob mà
+// quên luật". Nó KHÔNG bắt được chiều ngược lại — "luật hẹp hơn glob". Ví
+// dụ `workshops/**/test/**` cho phép `workshops/a/b/test/c.test.ts` mà luật
+// cố ý chặn (bài Z11 ngay dưới khẳng định điều đó), và `spike/**/test/**`
+// với `**` khớp 0 cấp sẽ phủ `spike/test/x.test.ts` mà regex từ chối. Đó là
+// thu hẹp CÓ CHỦ ĐÍCH, không phải lỗ hổng.
 test('KF-018 · mọi glob trong package.json scripts.test đều có luật tương ứng ở matchesTestGlob', () => {
   const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
@@ -56,7 +64,7 @@ test('KF-018 · mọi glob trong package.json scripts.test đều có luật tư
   // `*.test.ts` bằng một tên file thật. Mẫu phải khớp — nếu không, glob đó
   // đang nằm trong `package.json` mà `matchesTestGlob` không biết tới.
   for (const glob of globs) {
-    const sample = glob.replace(/\*\*/g, 'x').replace(/\*\.test\.ts$/, 'y.test.ts').replace(/\/\//g, '/');
+    const sample = glob.replace(/\*\*/g, 'x').replace(/\*\.test\.ts$/, 'y.test.ts');
     assert.ok(matchesTestGlob(sample), `glob ${glob} (mẫu ${sample}) không khớp luật nào ở matchesTestGlob`);
   }
 });
