@@ -418,13 +418,16 @@ Ca tệ nhất là im lặng: bản cũ **không có** trường `sessionTrailer
 
 Cùng hình dạng với **G17** ở một chỗ khác: *một luật nằm trong repo không tự áp cho chính lần gộp mang nó tới.*
 
-- deps: `P-024` (đã `review`)
+- deps: P-024
 - risk: medium
 - status: ready
 - nguồn: `ops/known-failures.md` KF-010 (lần gặp 2); vòng soát ngữ cảnh sạch của PR `#110`; `ops/logs/platform/P-016.jsonl` dòng lượt 11:0x giờ VN; `CLAUDE.md` mục 6 và mục 13; giả định `G14`
 - tiêu chí xong:
   - Bước 0 gọi **bản `integrator-resolve.ts` của `main`**, không phải bản trên nhánh PR — ví dụ trích `git show origin/main:ops/scripts/integrator-resolve.ts` ra file tạm rồi chạy, hoặc một `ops/scripts/` bọc ngoài làm đúng việc đó ở **một** chỗ. Chốt một cách, đừng để mỗi routine tự nghĩ.
-  - **Cổng độc lập với phiên bản script**, vì tiêu chí trên không cứu được các nhánh đang mở hôm nay: trước khi push, đọc lại commit gộp (`git log -1 --format='%(trailers:key=Claude-Session)'`) và **từ chối push** khi trống. Cổng này phải nằm trong code chạy từ `main`, không nằm trong văn bản prompt.
+  - **Cổng độc lập với phiên bản script**, vì tiêu chí trên không cứu được các nhánh đang mở hôm nay: trước khi push, đọc lại commit gộp (`git log -1 --format='%(trailers:key=Claude-Session)'`), và trống thì **tự `git commit --amend` thêm trailer**, không phải chặn. Cổng này nằm trong code chạy từ `main`, không nằm trong văn bản prompt.
+  - **Cổng đó KHÔNG được là luật cứng chặn push** — thứ tự và hành vi khi thiếu phải ghi rõ, nếu không nó làm kẹt cả hàng đợi: `CLAUDE_SESSION_URL` chưa đặt (tiêu chí dưới, vốn là tiêu chí `⬜` còn treo của `P-024`) thì `Claude-Session` rỗng ở **mọi** commit gộp, và một cổng "trống thì từ chối push" sẽ chặn **mọi** PR của bước 0 — hàng đợi KF-009 đứng im, đồng hồ 12 giờ của `automerge-delayed` không bao giờ tới hạn (CHARTER 3.3). Đúng hình dạng mà **CHARTER mục 4** đã cân nhắc và từ chối cho trailer (lý do `trailer-warn` để `continue-on-error: true`). Nên: amend rồi **đi tiếp**; chỉ từ chối push khi `Co-Authored-By` **cũng** vắng sau khi amend, tức tool hỏng thật chứ không phải thiếu biến môi trường. Thiếu riêng `Claude-Session` thì ghi `sessionTrailerMissing` vào ghi chú lượt và chạy tiếp.
+  - **Thứ tự bắt buộc:** tiêu chí `CLAUDE_SESSION_URL` (dưới) phải xong **trước** cổng trên. Danh sách này phẳng nên nói rõ ở đây, đừng để ai đọc thành song song.
+  - **Một tín hiệu quan sát được từ ngoài**, vì hai tiêu chí đầu vẫn do văn bản phụ lục P3/P1 gọi — tức vẫn là trí nhớ routine, và bỏ qua bước 0 thì không gì đỏ. Bước 0 ghi một trường **có cấu trúc** vào dòng log (ví dụ `resolverSource: "main" | "branch"` và `trailerAmended: true|false`), để lượt sau và `VF-G14` đọc được bằng máy mà không phải tin văn xuôi trong `note`. Đây là lỗ duy nhất còn hở của ca đã xảy ra.
   - Phụ lục **P3 bước 0b** và **P1 bước 0** của `CHARTER.md` nói cùng một cách gọi. Lệch nhau thì lượt sau lại chạy bản cũ. Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, **đừng đoán** (`CHARTER.md` các mục ngoài 1 và 3 là `automerge-delayed`).
   - Đặt `CLAUDE_SESSION_URL` ở đầu lượt worker/integrator — đây chính là tiêu chí `⬜` còn treo của `P-024`, và nó là **nhánh nguyên nhân thứ hai** của cùng triệu chứng: biến vắng thì `Claude-Session` vắng dù script đã mới. Hai nhánh nguyên nhân phải được nói rõ, kẻo `VF-G14` quy nhầm.
   - **Bằng chứng bằng chạy thật, không bằng lập luận:** dựng một nhánh mang bản `integrator-resolve.ts` **cũ** (không có `CLAUDE_SESSION_URL`), chạy bước 0 lên nó. Trước khi sửa: commit gộp ra đời không trailer và không gì đỏ. Sau khi sửa: cổng chặn push, hoặc commit gộp mang đủ hai trailer.
