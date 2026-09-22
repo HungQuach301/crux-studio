@@ -57,6 +57,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
+| G19 | `search.list` của YouTube Data API cho 100 lần gọi mỗi ngày, bucket riêng với `videos.insert` | `tài liệu nói vậy` | dự phòng đã viết sẵn · chặn phần XÂY corpus, không chặn phần đã làm của `T-008` | `VF-G19` |
 
 **`G12` đã kiểm xong ngày 2026-09-21** (mục `VF-G12`): ruleset `protect-main` đang bật thật, `main` trả `protected: true`, và `automerge.yml` vẫn merge được bằng `GITHUB_TOKEN` sau khi bật. Dự phòng không phải dùng, nhưng **không gỡ**. Đổi lại, năm **tên** status check nay chịu tải — xem mục `G12`.
 
@@ -468,3 +469,14 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 - **Cách kiểm lại:** lặp đúng hai dòng trong bảng trên. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi registry npm, mà các lệnh kiểm của repo phải chạy được khi không có mạng — một bài kiểm im lặng bỏ qua vì không ra được internet còn tệ hơn là không có bài kiểm nào. Mục `VF-G18` giữ phần kiểm định kỳ.
 - **Dự phòng — chưa cần viết sẵn:** nếu giả định này hoá ra sai, cơ chế `I-004` không mất an toàn, nó chỉ mất tính "ít xáo trộn nhất": lockfile vẫn khớp manifest và CI vẫn gác. Khi đó `integrator-lockfile.ts` chuyển sang `aborted-ineligible` cho mọi xung đột lockfile và giao lại cho người — một dòng sửa, hành vi quay về đúng như trước mục `I-004`.
 - **Trạng thái:** đã kiểm, đang được dùng. Kiểm lại khi nâng `pnpm` qua một phiên bản chính.
+
+## G19 · Hạn mức `search.list` của YouTube Data API
+
+- **Nội dung:** method `search.list` có bucket **riêng** 100 lần gọi mỗi ngày, mỗi lần 1 đơn vị, và mỗi trang kết quả tiếp theo tốn thêm một lần gọi. Bucket này không dùng chung với `videos.insert`, nên xây corpus không tranh quota với việc đăng video.
+- **Vì sao nó chịu tải:** toàn bộ ngân sách quota của corpus đối thủ (`packs/channels/us-personal-finance/quota-budget.md`) và cửa dừng `quotaGate` đứng trên con số 100. Sai theo hướng **thấp hơn** thì một lần xây corpus tiêu hết quota của ngày mà cửa dừng không kịp đóng — và vì `search.list` không dùng chung bucket với việc đăng, hỏng đó **không** lan sang lịch phát hành, nhưng nó vẫn làm mọi việc tìm kiếm khác trong ngày chết lặng.
+- **Nguồn:** tài liệu nhà cung cấp. **Chưa đọc Cloud Console** — WP-014 mục 7 đòi đúng việc đó, và phiên cloud không có project nào để mở.
+- **Độ tin cậy:** `tài liệu nói vậy`
+- **Phần phụ thuộc:** `workshops/topic/src/corpus.ts` · `packs/channels/us-personal-finance/quota-budget.md` · `ops/lanes/topic/backlog.md` (T-008, T-011)
+- **Cách kiểm:** mở Google Cloud Console của project, đọc hạn mức thật của `search.list`, so với 100. **Chỉ chủ dự án làm được** — cần tài khoản và một project có bật API. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi ra ngoài, mà các lệnh kiểm của repo phải chạy được khi không có mạng.
+- **Dự phòng — đã viết sẵn:** con số **không nằm trong code**. `quotaGate` nhận `searchCallsPerDay` và `reserveFraction` làm tham số, và cả hai đọc từ trường `quota.limits` của chính ảnh chụp corpus. Giả định sai thì sửa đúng một số trong dữ liệu, không sửa dòng code nào. Lớp thứ hai: mỗi corpus ghi `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 là lần ta đọc được hạn mức thật từ chính số đã tiêu.
+- **Trạng thái:** `tài liệu nói vậy`, giao làn `verify`, mục `VF-G19`. Phần đã làm của `T-008` (contract, kiểm mới lạ, ba đại lượng nhu cầu) **không** đứng trên giả định này — nó chạy trên corpus có sẵn và không gọi API. Phần **xây** corpus (`T-011`) thì có, và đang chặn ở chỗ khác nặng hơn: chưa có secret nào.

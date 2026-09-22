@@ -217,3 +217,20 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
     sinh lại → `semver@7.8.5`. Cùng một manifest `^7.0.0`, nên chênh lệch đo được chính là tác dụng bản mồi.
   - Kiểm lại khi nâng `pnpm` qua một phiên bản chính. Không đưa vào `pnpm check`: cần mạng, và một bài kiểm
     im lặng bỏ qua khi không có mạng còn tệ hơn không có bài kiểm.
+
+### VF-G19 · Hạn mức `search.list` của YouTube Data API là bao nhiêu
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: `docs/assumptions.md` G19; mục `topic/T-008`; spec WP-014 mục 3b và mục 7
+- kiểm: mở Google Cloud Console của project, đọc hạn mức thật của `search.list` (số lần gọi mỗi ngày và
+  đơn vị mỗi lần gọi), so với con số 100 đang dùng. **Chỉ chủ dự án làm được** — cần tài khoản và một
+  project đã bật API; phiên cloud không có project nào để mở.
+- dự phòng nếu sai: đã viết sẵn — hạn mức là **tham số**, đọc từ `quota.limits` của mỗi ảnh chụp corpus
+  chứ không viết cứng trong code. Sai thì sửa một số trong dữ liệu. Lớp hai: mỗi corpus ghi
+  `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 cũng là lần đọc được hạn mức
+  thật từ chính số đã tiêu.
+- tiêu chí xong: trạng thái G19 trong sổ chuyển sang `đã kiểm`, kèm ngày và con số đọc được. Hai dòng đầu
+  bảng trong `packs/channels/us-personal-finance/quota-budget.md` thay bằng số thật, và
+  `quota.limits.source` của corpus chuyển từ `vendor-docs` sang `console-measured` — đó là điều kiện còn
+  thiếu duy nhất để `T-008` đạt tiêu chí "hạn mức được đo, không được đoán".
