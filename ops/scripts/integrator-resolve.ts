@@ -61,6 +61,46 @@ export interface ResolveResult {
    * hiệu đáng đọc, không phải chi tiết thừa.
    */
   lockfileRegenerated?: string[];
+  /**
+   * Mục `P-024`: commit gộp đã tạo NHƯNG thiếu URL phiên vì biến môi trường
+   * `CLAUDE_SESSION_URL` không được đặt. `Co-Authored-By` vẫn có trong commit;
+   * chỉ `Claude-Session` là vắng. Trường này để bên gọi **nói ra** chỗ thiếu
+   * trong ghi chú lượt chạy — thiếu mã phiên mà im lặng đúng là hình dạng
+   * KF-010 (bước bù bằng tay hụt mà không gì đỏ). Vắng mặt nghĩa là commit
+   * mang đủ cả hai trailer, hoặc lượt này không tạo commit nào.
+   */
+  sessionTrailerMissing?: boolean;
+}
+
+/**
+ * Trailer đồng tác giả, **trung tính model** và khoá cứng. Mục `P-024`: chỗ
+ * hụt ở KF-010 là commit gộp do tool tạo ra không mang trailer nào; ca tệ hơn
+ * đã sai thật trên `main` là `Co-Authored-By` có kèm tên model — trái
+ * `CLAUDE.md` mục 6. Dòng này không nội suy tên model từ bất cứ đâu, nên
+ * không có đường nào để tên model lọt vào.
+ */
+const CO_AUTHOR_TRAILER = 'Co-Authored-By: Claude <noreply@anthropic.com>';
+
+/** Biến môi trường mang URL phiên. Đọc lúc commit, không lúc nạp module. */
+const SESSION_URL_ENV = 'CLAUDE_SESSION_URL';
+
+/**
+ * Dựng đối số `-m` chứa khối trailer cho commit gộp (mục `P-024`).
+ * `Co-Authored-By` **luôn** có. `Claude-Session` chỉ có khi
+ * `CLAUDE_SESSION_URL` được đặt — mã phiên đọc từ môi trường, tool không tự
+ * bịa ra: UUID trong `CLAUDE_CODE_SESSION_ID` KHÔNG phải id của URL
+ * `.../session_…`, ghép nó vào sẽ ra một URL sai. Thiếu URL thì trả
+ * `sessionMissing: true` để bên gọi nói ra, không nuốt im.
+ *
+ * Hai dòng nằm chung MỘT đoạn `-m` (đoạn cuối của thông điệp), mỗi dòng đúng
+ * dạng `Khoá: giá trị`, nên git nhận ra đây là khối trailer — `git log
+ * --format=%(trailers:key=Claude-Session)` đọc lại được, đúng thứ
+ * `recheck-assumptions.ts` (G14) dựa vào.
+ */
+function trailerMessageArg(): { arg: string; sessionMissing: boolean } {
+  const url = (process.env[SESSION_URL_ENV] ?? '').trim();
+  if (url === '') return { arg: CO_AUTHOR_TRAILER, sessionMissing: true };
+  return { arg: `${CO_AUTHOR_TRAILER}\nClaude-Session: ${url}`, sessionMissing: false };
 }
 
 /**
@@ -306,11 +346,14 @@ function resolveAfterMergeAttempt(
       if (guard.aborted !== undefined) return guard.aborted;
       const repaired =
         guard.repaired.length > 0 ? `, lockfile tạo lại: ${guard.repaired.join(', ')}` : '';
+      const trailer = trailerMessageArg();
       gitOrThrow(cwd, [
         'commit',
         '--no-edit',
         '-m',
         `Gộp ${ontoRef} (integrator, không xung đột${repaired})`,
+        '-m',
+        trailer.arg,
       ]);
       // outcome 'clean' + có commit mới: HEAD vừa đổi, caller nên chạy
       // pnpm check rồi push.
@@ -318,6 +361,7 @@ function resolveAfterMergeAttempt(
         outcome: 'clean',
         files: [],
         ...(guard.repaired.length > 0 ? { lockfileRegenerated: guard.repaired } : {}),
+        ...(trailer.sessionMissing ? { sessionTrailerMissing: true } : {}),
       };
     } else {
       // `ontoRef` đã là tổ tiên của HEAD ("Already up to date") — không có
@@ -506,11 +550,20 @@ function resolveAfterMergeAttempt(
   ]
     .filter((part) => part !== '')
     .join('; ');
-  gitOrThrow(cwd, ['commit', '--no-edit', '-m', `Gộp ${ontoRef} (integrator, ${how})`]);
+  const trailer = trailerMessageArg();
+  gitOrThrow(cwd, [
+    'commit',
+    '--no-edit',
+    '-m',
+    `Gộp ${ontoRef} (integrator, ${how})`,
+    '-m',
+    trailer.arg,
+  ]);
   return {
     outcome: 'resolved',
     files: conflicted,
     ...(regeneratedLocks.length > 0 ? { lockfileRegenerated: regeneratedLocks } : {}),
+    ...(trailer.sessionMissing ? { sessionTrailerMissing: true } : {}),
   };
 }
 
