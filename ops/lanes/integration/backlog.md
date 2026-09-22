@@ -581,7 +581,33 @@ nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu ti
     được chép lại cho câu trả lời sai — nên sửa ở đây thay vì mở mục riêng. `ci.yml` và `automerge.yml`
     đều truyền tham số này.
 
-### I-016 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
+### I-016 · `main` đỏ: hai PR xanh riêng lẻ, gộp vào nhau thì bất biến mới gặp vi phạm cũ (KF-013)
+
+`fix`. Tìm ra ở bước 0/bước 2 của một lượt worker (`crux-worker-2`, 2026-09-22 ~10:20Z): `main` đỏ ngay
+sau khi PR `#85` (`P-023`) merge lúc 10:12Z. `P-023` thêm bất biến "không file code nào neo vào một đường
+dẫn log bước 0 cố định" (`ops/test/step0-log-path.test.ts`), còn `P-027` (đã merge trước đó) thêm
+`ops/scripts/gate-flow.ts` với một chú thích nhắc đích danh `ops/logs/platform/P-016.jsonl`. Mỗi nhánh chỉ
+mang **một** trong hai file nên CI từng PR xanh; chỉ khi cả hai vào `main` bất biến mới gặp vi phạm. Nhóm
+**Z**, cùng họ với `KF-009` nhưng ở tầng nội dung thay vì `mergeable`.
+
+- risk: low
+- status: review
+- nguồn: lượt `crux-worker-2` 2026-09-22; `ops/known-failures.md` `KF-013`
+- PR: nhánh `claude/dreamy-ride-kvztso`
+- **Số hiệu I-016, không phải I-015:** `I-015` đã bị PR `#112` (`integration/readyNow`) nhận và PR đó còn mở.
+- tiêu chí xong:
+  - ✅ `main` xanh lại: `ops/scripts/gate-flow.ts` đổi chú thích từ tên file đích danh sang lời chung
+    ("các dòng log bước 0"). Không đụng cơ chế — `gate-flow.ts` vốn KHÔNG đọc file đó, chỉ chú thích nhắc
+    tên. Forward-fix một dòng, không revert `P-023`/`P-027` (cả hai đều đúng, revert làm mất cơ chế thật).
+  - ✅ Có test tái hiện (bất biến I2): `ops/test/step0-log-path.test.ts` — ca âm **đích danh** `gate-flow.ts`
+    thêm cạnh bất biến quét-cả-kho có sẵn của `P-023`. Đã kiểm đột biến: trả `gate-flow.ts` về bản `main`
+    thì cả hai bài **đỏ** (`not ok 4`, `not ok 5`); bản sửa thì xanh. `pnpm check` 684 pass / 0 fail; tập
+    vàng khớp snapshot.
+  - ⬜ Chặn thật lỗ hổng gốc — "bất biến ở nhánh A, vi phạm ở nhánh B, không phép đo per-PR nào thấy trước
+    merge" — vẫn để ngỏ: cần chạy `pnpm check` trên kết quả gộp thử của từng cặp PR đang mở, việc lớn hơn
+    một mục fix. Ghi ở `KF-013` dòng *Máy chặn từ nay*.
+
+### I-017 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
 
 Tìm ra trong vòng soát chéo của `I-015` (reviewer ngữ cảnh sạch, PR `#112`). `I-015` chữa chỗ worker đọc
 `deps` **sai**; hai chỗ dưới đây là `deps` và `status` **viết sai trong chính backlog**, và cả hai im lặng:

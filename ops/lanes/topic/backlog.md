@@ -39,47 +39,54 @@ Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập
 
 - deps: T-001
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-010, mục Lõi định lượng 1
 - tiêu chí xong:
-  - Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung.
-  - Mỗi ảnh chụp có `asOfDate` và băm nội dung; chạy lại cùng `asOfDate` cho ra cùng dữ liệu.
-  - Thiếu secret nguồn dữ liệu thì **DỪNG và báo tên secret thiếu**, không tự tạo secret.
+  - ✅ Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung (`workshops/topic/contracts/snapshot.v0.schema.json`, `workshops/topic/src/snapshot.ts` — `normalizeFred/Bls/Census` cùng trả `{period, value}` ISO date).
+  - ✅ Mỗi ảnh chụp có `asOfDate` và băm nội dung; `contentHash` không gồm `fetchedAt` nên chạy lại cùng `asOfDate` trên cùng dữ liệu cho ra cùng băm (test `sameData`, `chạy lại cùng asOfDate ...`).
+  - ✅ Thiếu secret thì `requireSecret` ném `MissingSecretError` mang đúng tên biến (`FRED_API_KEY`/`BLS_API_KEY`/`CENSUS_API_KEY`), chạy TRƯỚC mọi lần chạm mạng, không tự tạo secret (I1).
+- ✅ **Xong, 2026-09-22** (PR `#114`, lượt `crux-worker-3`): ba adapter + contract snapshot chung + 19 test. `pnpm check` xanh 511/511, `pnpm replay` khớp snapshot 6/6. Phần gọi API thật để lỏng qua `transport` tiêm vào — Đợt 0 không gọi API trả tiền (CHARTER mục 9), `transport` mặc định ném `LiveFetchNotWiredError`; xây thật khi tới runtime, cùng hình dạng với corpus/`T-011`. Chọn ba chuỗi ví dụ trong test (FRED `UNRATE`, BLS `LNS14000000`, Census `B25077_001E`) — kho chuỗi cụ thể cho từng tập lấp dần khi có khoá.
 
 ### T-004 · Phát hiện dữ liệu thay đổi và đính chính
 Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh sau công bố, tự mở issue chỉ đúng tập nào, claim nào, con số nào.
 
 - deps: T-003
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec WP-011, sổ rủi ro R6 và R7
 - tiêu chí xong:
-  - So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi.
-  - Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi.
+  - ✅ So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi (`diffSnapshots` tách `revised`/`added`/`removed`; đổi từ/đến ô thiếu `null` tính là `revised`).
+  - ✅ Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi (`impactedClaims` + `buildChangeIssue` mang `episodeId`, `claimId`, con số đã phát hành và con số mới).
+- ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, bước 3): `workshops/topic/src/change-detect.ts` + contract tra ngược `workshops/topic/contracts/claim-source.v0.schema.json` + 15 test. Phân biệt ba loại thay đổi của WP-011 §3b (`new-period` không mở issue · `revision` · `definition-change` mức cao chạm mọi claim); ngưỡng tuyệt đối thắng phần trăm, gần 0 xử lý riêng; khử trùng theo `provider:seriesId:nextAsOfDate`; điều kiện dừng §5b (thiếu trường ràng buộc → `ClaimTraceError` nêu tên trường). `pnpm check` xanh 531/531, `pnpm replay` khớp snapshot 6/6.
+  - **Còn treo, ngoài phạm vi tiêu chí xong (nên giữ `review`, không `done`):** WP-011 §3 muốn một workflow `.github/workflows/detect-changes.yml` và §7 muốn "một issue thật được mở trong repo bằng dữ liệu giả". Cả hai là việc của runtime — agent không ghi `.github/` (CLAUDE.md mục 4) và Đợt 0 không mở issue thật; module trả nội dung issue như **dữ liệu**, người/runtime mở. Cũng chưa làm: kiểm **hạn** của chuỗi `annual-reset` (§5).
 
 ### T-005 · Thư viện mô hình và kiểm bốn cấp
 Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bốn cấp. WP này xây **công cụ**; nội dung tám mô hình do T-006 tạo.
 
 - deps: T-003
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-012, mục Lõi định lượng 2
 - tiêu chí xong:
-  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy.
-  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7).
+  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy. ✅ `workshops/topic/src/model-runner.ts` (`runModel`) — không đọc đồng hồ hệ thống, không random; test chạy lặp lại và xen kẽ hai bộ tham số cho ra cùng kết quả từng chữ số.
+  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7). ✅ `workshops/topic/src/model-verify.ts`: `computeVerification` khai kiểu trả về `PendingOrFailed` (`'pending' | 'failed'`), không có giá trị `'verified'` nào để gán — khoá ở tầng kiểu (`tsc --noEmit`), không phải quy ước. `verifiedClaimProblems` chỉ ĐỌC LẠI một claim `verified` đã gõ tay, không bao giờ đặt.
+- công cụ: `workshops/topic/contracts/model.v0.schema.json` (contract, đóng — dữ liệu nội bộ xưởng, không phải payload envelope) · `workshops/topic/src/model-runner.ts` (registry công thức + chạy xác định) · `workshops/topic/src/model-verify.ts` (bốn cấp kiểm + trạng thái tổng hợp). `formula` trong contract là khoá tra registry, không phải biểu thức eval. T-006 đăng ký công thức thật và tạo `M-001.json`…`M-008.json`.
 
 ### T-006 · Tám mô hình định lượng đầu tiên
 Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra đời.
 
 - deps: T-005
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
-  - Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.**
-  - Công thức do agent soạn, có trích nguồn, và được một mô hình **khác họ, không phải Claude** tính lại độc lập. Lệch nhau thì mở `🤖 [QĐ]`.
-  - Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` với hai lựa chọn: thuê chuyên gia viết, hoặc bỏ mô hình đó.
-  - Mỗi mô hình có một issue `irreversible` tóm tắt (giả định, công thức, nguồn, kết quả đối chiếu) đọc được trong vài phút.
+  - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
+  - ⬜ **Chưa làm, chặn ngoài phạm vi mục này:** công thức được một mô hình **khác họ, không phải Claude** tính lại độc lập. Cơ chế là mục `platform/P-003`, mục đó cần secret `OPENAI_API_KEY` — chưa có trên repo, và PR #66 của nó đang chờ chủ dự án merge (issue #67). Cấp kiểm 4 (`llm-assumption-check`) của cả tám mô hình vì vậy ghi `pass: false` kèm lý do, và `verification.status` của cả tám là `pending`.
+  - ✅ Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` — **không mô hình nào rơi vào ca này**: cả tám đều có ví dụ tính sẵn đã công bố. Điều kiện kích hoạt không xảy ra nên không có issue nào phải mở.
+  - ⬜ **Chưa làm, cố ý, chờ tiêu chí 2:** mỗi mô hình một issue `irreversible` tóm tắt. Issue đó là đường duy nhất đưa `verification.status` lên `verified` (D-C02 điểm c), và phần "kết quả đối chiếu" của nó chính là thứ đang thiếu. Mở tám issue lúc cấp 4 còn `pass: false` là xin duyệt cho thứ chưa đủ bằng chứng, và tốn tám dòng bản tin (mặc định M8, rủi ro B11).
+- **Chưa chuyển `done`:** hai tiêu chí trên còn ⬜. Mục này ở `review` cho tới khi `P-003` chạy được; lúc đó phần còn lại là một lượt cơ học (chạy soát chéo, ghi bằng chứng cấp 4, mở issue tóm tắt).
+- **Hai mâu thuẫn trong chính nguồn, đã ghi chứ không nuốt** (xem `ops/known-failures.md` KF-012): TreasuryDirect in 4,03% trong khi khối ví dụ của chính nó tính ra 4,26%; IRS Pub 590-A có câu hướng dẫn dòng 4 không cùng thoả một cách đọc với ví dụ điền sẵn của chính nó ($6.830 so với $6.825). Cả hai nằm trong `assumptions` của file mô hình tương ứng để Fact & Risk Pass đọc được.
+- công cụ: `workshops/topic/data/models/M-001.json`…`M-008.json` (mô tả theo contract) · `cases/M-00N.cases.json` (ca kiểm cấp 1 kèm trích dẫn) · `workshops/topic/src/models.ts` (tám công thức + registry) · `workshops/topic/test/models.test.ts` (74 test: khớp nguồn, kiểm đột biến, biên, xác định, trần dung sai).
 
 ### T-007 · Sensitivity Pass
 Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng giá trị hợp lệ và tìm mọi điểm đảo chiều. Đây là chữ ký khác biệt của kênh, và là cách bù cho việc chủ dự án không sống ở thị trường Mỹ: không đoán tham số vùng miền, quét hết khoảng của nó.

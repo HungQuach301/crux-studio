@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-001",
+  "version": "1.0",
+  "title": "Tỷ lệ chi phí quỹ ăn mòn danh mục",
+  "question": "Một tỷ lệ chi phí cao hơn lấy đi bao nhiêu tiền của một danh mục sau N năm, so với cùng danh mục đó ở mức phí thấp hơn?",
+  "assumptions": [
+    "Phí được trừ vào số dư SAU khi danh mục đã tăng trưởng trong năm, không trừ thẳng vào lãi suất. Đây là cách SEC tính; cách trừ vào lãi suất cho $180.611 ở mức phí 1% trong khi bản tin công bố $179.000.",
+    "Lợi suất gộp và tỷ lệ chi phí không đổi suốt kỳ. Bản tin SEC khai rõ đây là danh mục giả định.",
+    "Tính gộp mỗi năm một lần, không có nộp thêm hay rút ra trong kỳ.",
+    "Không tính thuế, không tính phí giao dịch — chỉ riêng phí thường niên."
+  ],
+  "parameters": [
+    {
+      "name": "initialBalanceUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        1000000000
+      ],
+      "defaultValue": 100000,
+      "source": "sec-gov/ib-fees-expenses"
+    },
+    {
+      "name": "grossAnnualReturnPct",
+      "unit": "percent",
+      "validRange": [
+        -50,
+        50
+      ],
+      "defaultValue": 4,
+      "source": "sec-gov/ib-fees-expenses"
+    },
+    {
+      "name": "expenseRatioPct",
+      "unit": "percent",
+      "validRange": [
+        0,
+        5
+      ],
+      "defaultValue": 1,
+      "source": "sec-gov/ib-fees-expenses"
+    },
+    {
+      "name": "years",
+      "unit": "year",
+      "validRange": [
+        1,
+        60
+      ],
+      "defaultValue": 20,
+      "source": "sec-gov/ib-fees-expenses"
+    }
+  ],
+  "formula": "expense-ratio-drag",
+  "outputs": [
+    {
+      "name": "endingBalanceUsd",
+      "unit": "usd",
+      "interpretation": "Giá trị danh mục cuối kỳ sau khi đã trừ phí hằng năm."
+    },
+    {
+      "name": "endingBalanceNoFeeUsd",
+      "unit": "usd",
+      "interpretation": "Giá trị cuối kỳ của cùng danh mục đó nếu phí bằng 0 — mốc so sánh, không phải sản phẩm có thật."
+    },
+    {
+      "name": "totalFeeDragUsd",
+      "unit": "usd",
+      "interpretation": "Tổng số tiền phí lấy đi, gồm cả phần lợi suất mất đi vì số tiền đó không còn trong danh mục."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Ba con số SEC công bố ($208.000 · $198.000 · $179.000) đều khớp; lệch lớn nhất 0,199% ở ca 0,25%. Dung sai đặt 0,3% chứ không phải 0,5% là có tính toán: cách hiểu sai phổ biến nhất (trừ phí thẳng vào lãi suất) lệch 0,392% · 0,494% · 0,900%, nên ở mức 0,5% nó vẫn LỌT hai trong ba ca. Ở 0,3% công thức đúng đạt cả ba và cách hiểu sai trượt cả ba — cổng mới thật sự phân biệt được hai cách.",
+        "tolerancePct": 0.3,
+        "evidenceRef": "workshops/topic/data/models/cases/M-001.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "SEC có công cụ Mutual Fund Analyzer công khai. Chưa chạy đối chiếu: ba con số bản tin SEC in ra đã dùng làm ca cấp 1 theo D-C02 điểm a.",
+        "benchmarkUrl": "https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins/updated"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}
