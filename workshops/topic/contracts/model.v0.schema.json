@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://crux.studio/contracts/topic/model.v0.schema.json",
+  "title": "Mô hình định lượng tái dùng — v0",
+  "description": "Cơ sở của mọi con số phái sinh (mục backlog topic/T-005, spec WP-012, Lõi định lượng mục 2). Đóng (additionalProperties: false), khác payload envelope v0 vốn cố ý để lỏng — đây là dữ liệu nội bộ của xưởng topic, không phải phong bì artifact. `verification` giữ cả bốn cấp kiểm riêng (WP-012 mục 3b) thay vì một cấp duy nhất, để trạng thái tổng hợp tính được từ điều kiện của từng cấp (mục 3c) chứ không phải một khẳng định rời không có bằng chứng đi kèm.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "modelId", "version", "title", "question", "assumptions", "parameters", "formula", "outputs", "verification"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 0 },
+    "modelId": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/M-[0-9]{3}$",
+      "description": "`{genre}/M-{NNN}`, ví dụ `data-explainer/M-001`."
+    },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "question": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Câu hỏi mô hình trả lời — đủ dài để không phải một nhãn rút gọn."
+    },
+    "assumptions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Giả định không khai là lỗi (WP-012)."
+    },
+    "parameters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "unit", "validRange", "defaultValue", "source"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "unit": { "type": "string", "minLength": 1 },
+          "validRange": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "number" },
+            "description": "[min, max] đóng ở cả hai đầu. Tham số ngoài khoảng là lỗi tường minh — runner không kẹp về biên."
+          },
+          "defaultValue": { "type": "number" },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "claimId, khoá snapshot dạng `{publisher}/{seriesId}`, hoặc 'assumption'."
+          },
+          "geoVarying": {
+            "type": "boolean",
+            "description": "True thì Sensitivity Pass bắt buộc quét tham số này, và cấp kiểm 3 (triển khai thứ hai) trở thành bắt buộc cho mô hình."
+          }
+        }
+      }
+    },
+    "formula": {
+      "type": "string",
+      "minLength": 1,
+      "description": "KHOÁ tra vào một registry hàm đã đăng ký trong code (xem model-runner.ts) — KHÔNG phải biểu thức được eval. Nội dung công thức thật là việc của topic/T-006; T-005 chỉ xây cơ chế tra và chạy."
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "unit", "interpretation"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "unit": { "type": "string", "minLength": 1 },
+          "interpretation": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "tiers"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "verified", "failed"],
+          "description": "`verified` chỉ được GÕ TAY sau khi chủ dự án duyệt một issue `irreversible` (D-C02 điểm c, CHARTER mục 12 mặc định M7). Không hàm nào trong model-verify.ts có kiểu trả về cho phép giá trị này — xem docstring của file đó."
+        },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "approvedIssueUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Bắt buộc khi status = 'verified' — kiểm ở ops/scripts (verifiedClaimProblems), không kiểm được ở tầng schema vì validator của kernel không hỗ trợ if/then."
+        },
+        "tiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "required", "pass", "detail"],
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": ["hand-worked-case", "published-benchmark", "second-implementation", "llm-assumption-check"],
+                "description": "Bốn cấp ở WP-012 mục 2/3b, xếp theo độ tin cậy giảm dần. `llm-assumption-check` không bao giờ kiểm số học."
+              },
+              "required": { "type": "boolean" },
+              "pass": { "type": ["boolean", "null"] },
+              "detail": { "type": "string", "minLength": 1 },
+              "tolerancePct": { "type": "number", "minimum": 0 },
+              "evidenceRef": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Đường dẫn hay khoá tới file bằng chứng của cấp này (ca kiểm tay, kết quả triển khai thứ hai, báo cáo kiểm giả định)."
+              },
+              "checkedAt": { "type": "string", "format": "date-time" },
+              "benchmarkUrl": { "type": "string", "format": "uri" }
+            }
+          }
+        }
+      }
+    },
+    "publishedSheetUrl": { "type": "string", "format": "uri" },
+    "usedByEpisodes": { "type": "array", "items": { "type": "string" } }
+  }
+}
