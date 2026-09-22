@@ -160,6 +160,11 @@ jobs:
           # CHARTER được cắt theo MỤC, không theo file: chỉ mục 1 (mục tiêu)
           # và mục 3 (bất biến) mới cần chủ dự án. Vì vậy luật cần cả bản cũ
           # lẫn bản mới để biết diff rơi vào mục nào.
+          # Z9: CHARTER.md có thể chưa tồn tại ở SHA nền (repo rất cũ, hoặc
+          # nhánh base lạ). Vắng file là hợp lệ — protected-area.ts đọc
+          # `baseCharter === null` và coi như CHARTER.md chạm mục 1 hoặc 3,
+          # tức cửa `owner-merge`, phương án an toàn nhất khi không đối chiếu
+          # được (xem `charterSections === null` trong file đó).
           git show "origin/$BASE:CHARTER.md" > "$RUNNER_TEMP/base-CHARTER.md" 2>/dev/null || true
 
           AREA=$(node ops/invariants.protected-area.ts \
@@ -174,35 +179,37 @@ jobs:
           echo "::notice::cửa merge = $GATE"
           echo "$AREA" | jq -r '(.owner[] | "  owner-merge vì \(.)"), (.delayed[] | "  chờ vì \(.)")'
 
-          # `|| true` ở đây là chủ ý: gỡ một nhãn không có mặt không phải lỗi,
-          # và bước này phải chạy được ở cả lần đầu lẫn các lần sau (rà soát Z9).
+          # Gỡ một nhãn không có mặt không phải lỗi, và bước này phải chạy
+          # được ở cả lần đầu lẫn các lần sau — một hàm dùng chung để chỉ cần
+          # MỘT chỗ giải thích `|| true` cho toàn bộ khối dưới đây (rà soát Z9).
+          rm_label() { gh pr edit "$PR" --remove-label "$1" || true; }
+
           case "$GATE" in
             owner-merge)
               gh pr edit "$PR" --add-label owner-merge
-              gh pr edit "$PR" --remove-label automerge-delayed || true
-              gh pr edit "$PR" --remove-label automerge || true
+              rm_label automerge-delayed
+              rm_label automerge
               ;;
             automerge-delayed)
               gh pr edit "$PR" --add-label automerge-delayed
-              gh pr edit "$PR" --remove-label owner-merge || true
-              gh pr edit "$PR" --remove-label automerge || true
+              rm_label owner-merge
+              rm_label automerge
               ;;
             *)
-              gh pr edit "$PR" --remove-label owner-merge || true
-              gh pr edit "$PR" --remove-label automerge-delayed || true
+              rm_label owner-merge
+              rm_label automerge-delayed
               ;;
           esac
 
-          # `|| true` là chủ ý (rà soát Z9): `grep` trả 1 khi không khớp dòng
-          # nào, và dưới `set -o pipefail` điều đó giết cả job — một PR không
-          # chạm thư mục làn nào sẽ làm job gắn nhãn đỏ vì lý do không liên
-          # quan gì tới nội dung PR.
+          # Z9: `grep` trả 1 khi không khớp dòng nào, và dưới `set -o pipefail`
+          # điều đó giết cả job — một PR không chạm thư mục làn nào sẽ làm
+          # job gắn nhãn đỏ vì lý do không liên quan gì tới nội dung PR.
           LANES=$( (grep -Eo '^(workshops|ops/lanes)/[a-z]+' "$RUNNER_TEMP/changed.txt" || true) | sort -u | wc -l)
           echo "số làn bị chạm: $LANES"
           if [ "$LANES" -gt 1 ]; then
             gh pr edit "$PR" --add-label cross-lane
           else
-            gh pr edit "$PR" --remove-label cross-lane || true
+            rm_label cross-lane
           fi
 
   trailer-warn:
@@ -220,6 +227,8 @@ jobs:
       # Claude-Session chỉ được CẢNH BÁO. Cố ý không chặn: nếu nền tảng đổi
       # cách ghi trailer thì một luật cứng ở đây sẽ chặn toàn bộ công việc.
       - name: Cảnh báo commit thiếu trailer Claude-Session
+        # Z9: luật mềm (xem khối comment trên) — trailer thiếu chỉ cảnh báo,
+        # không chặn PR, nên chính bước cảnh báo cũng không được phép đỏ CI.
         continue-on-error: true
         run: |
           set -euo pipefail
