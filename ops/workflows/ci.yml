@@ -10,21 +10,26 @@ name: ci
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 permissions:
   contents: read
 # KF-004 pull_request: job `protected-area` gắn và gỡ nhãn bằng GITHUB_TOKEN,
-# và chính workflow này đăng ký `on: pull_request`. Hiện KHÔNG đứt, vì
-# `on.pull_request` đang dùng bộ types mặc định — `opened, synchronize,
-# reopened` — không có `labeled`. Nhãn do chính CI gắn vì thế không kích hoạt
-# lại CI, và đó là điều mong muốn: nếu có, nó sẽ thành vòng lặp.
+# và chính workflow này đăng ký `on: pull_request` với `labeled`/`unlabeled`
+# trong `types` (mục `P-009`) — hai đường đi KHÁC nhau cho cùng một hành
+# động "thêm nhãn":
 #
-# ⚠️ Mục `P-009` sẽ thêm `labeled` và `unlabeled` vào types, để bắt được
-# trường hợp nhãn `fix` gắn muộn. Lúc đó dòng khai báo này KHÔNG còn đúng:
-# nhãn do CI tự gắn sẽ không kích hoạt lại CI (GITHUB_TOKEN), còn nhãn do
-# người gắn thì có — hai đường đi khác nhau cho cùng một hành động. P-009
-# phải xử lý đúng chỗ đó, và viết lại dòng này.
+#   - Nhãn do CHÍNH job của workflow này gắn (`gh pr edit` bằng
+#     `GITHUB_TOKEN`) KHÔNG kích hoạt lại CI — GitHub cố ý không tính sự
+#     kiện do `GITHUB_TOKEN` sinh ra là một trigger mới, để tránh vòng lặp.
+#     Không đứt gì: đó vẫn là điều mong muốn cho các nhãn `owner-merge` /
+#     `automerge-delayed` / `cross-lane` mà job `protected-area` tự gắn.
+#   - Nhãn do NGƯỜI (hoặc một phiên agent gọi API bằng danh tính riêng, không
+#     phải `GITHUB_TOKEN` của chính run này) gắn/gỡ THÌ có kích hoạt lại CI.
+#     Đây là đường P-009 cần: nhãn `fix` gắn MUỘN (sau khi PR đã mở, CI đã
+#     chạy xong lượt đầu) giờ chạy lại toàn bộ CI, và job `fix-has-test` bên
+#     dưới đọc lại nhãn hiện tại qua API — không tin ảnh chụp cũ.
 
   # pull-requests: write đủ cho CẢ hai việc của job protected-area: gắn nhãn
   # lên PR, VÀ tạo nhãn của repo bằng `gh label create`. Đã kiểm bằng chạy
@@ -85,16 +90,50 @@ jobs:
     name: fix-has-test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    # KHÔNG khai `permissions:` riêng ở đây (bẫy KF-003/KF-008 đã sập một
+    # lần khi soát chéo PR này): một khối `permissions:` cấp JOB thay thế
+    # toàn bộ khối cấp WORKFLOW cho đúng job đó, không cộng thêm — quyền
+    # không liệt kê thành `none`, kể cả `contents`, làm `actions/checkout`
+    # hỏng với lỗi gây hiểu lầm "Repository not found" (404). Khối cấp
+    # workflow phía trên đã có sẵn CẢ HAI quyền job này cần —
+    # `contents: read` (cho checkout) và `pull-requests: write`, thoả luôn
+    # `pull-requests: read` (cho `gh api repos/.../pulls/$PR`) — nên không
+    # cần khai gì thêm ở đây.
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # BẤT BIẾN I2, vế thứ hai: PR có nhãn `fix` phải kèm test tái hiện lỗi.
       # Sửa lỗi mà không có test là mời lỗi đó quay lại.
-      - name: PR fix phải có test
-        if: contains(github.event.pull_request.labels.*.name, 'fix')
+      #
+      # Mục `P-009`: đọc nhãn hiện tại QUA API, không qua
+      # `github.event.pull_request.labels` — ảnh chụp đó cố định tại lúc
+      # workflow run BẮT ĐẦU, nên một PR mở trước rồi mới gắn `fix` sau (thứ
+      # tự phổ biến nhất khi agent mở PR nháp trước) sẽ đọc thấy nhãn đã có
+      # ở lần chạy MỚI (do `labeled` kích hoạt), nhưng đọc từ ảnh chụp cũ ở
+      # một lần chạy cũ hơn vẫn đang treo vẫn sai — API luôn là hiện tại.
+      - name: Đọc nhãn hiện tại qua API
+        id: labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          HAS_FIX=$(gh api "repos/$REPO/pulls/$PR" --jq '([.labels[].name] | index("fix")) != null')
+          echo "PR #$PR có nhãn fix: $HAS_FIX"
+          echo "has_fix=$HAS_FIX" >> "$GITHUB_OUTPUT"
+
+      # Bước này KHÔNG bao giờ dùng `if:` để bỏ qua (rà soát Z2/Z9 — một
+      # step `skipped` im lặng trông giống hệt một step đã kiểm và đã qua).
+      # Luôn chạy, tự in ra kết luận, và tự quyết định thoát 0 hay 1.
+      - name: PR fix phải có test
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.labels.outputs.has_fix }}" != "true" ]; then
+            echo "Không có nhãn fix, bỏ qua."
+            exit 0
+          fi
           git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
           CHANGED=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
           echo "$CHANGED"

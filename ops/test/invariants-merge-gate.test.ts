@@ -29,6 +29,7 @@ function pr(patch: Partial<MergeInput> = {}): MergeInput {
     ciSha: 'abc1234',
     ciConclusion: 'success',
     ciCompletedAt: GREEN,
+    fixHasTestConclusion: 'success',
     comments: [],
     owner: 'HungQuach301',
     now: '2026-09-21T13:00:00.000Z',
@@ -110,6 +111,38 @@ test('KF-002 · PR đang xung đột thì bỏ qua, không thử merge rồi đ�
 
 test('KF-002 · mergeable null là "chưa biết", không phải "merge được"', () => {
   assert.equal(decideMerge(pr({ mergeable: null })).outcome, 'recheck');
+});
+
+// ── Mục `P-009` — nhãn `fix` đòi job `fix-has-test` xanh trên đúng commit ──
+
+test('P-009 · PR nhãn fix mà job fix-has-test `skipped` thì KHÔNG merge dù ciConclusion tổng vẫn success', () => {
+  // Đúng ca lỗ hổng: bất biến I2 vế hai bị thủng vì workflow run tổng thể
+  // vẫn `success` khi step bị `if:` bỏ qua — job không skip nữa, nhưng cửa
+  // này vẫn phải tự đứng vững kể cả khi có nguồn khác báo `skipped`.
+  const decision = decideMerge(pr({ gate: 'open', labels: ['automerge', 'fix'], fixHasTestConclusion: 'skipped' }));
+  assert.equal(decision.outcome, 'skip');
+  assert.match(decision.reason, /fix-has-test/);
+});
+
+test('P-009 · PR nhãn fix mà không tìm thấy check run fix-has-test (null) thì không merge', () => {
+  const decision = decideMerge(pr({ gate: 'open', labels: ['automerge', 'fix'], fixHasTestConclusion: null }));
+  assert.equal(decision.outcome, 'skip');
+  assert.match(decision.reason, /không tìm thấy/);
+});
+
+test('P-009 · PR nhãn fix mà job fix-has-test failure thì không merge', () => {
+  const decision = decideMerge(pr({ gate: 'open', labels: ['automerge', 'fix'], fixHasTestConclusion: 'failure' }));
+  assert.equal(decision.outcome, 'skip');
+});
+
+test('P-009 · PR nhãn fix mà job fix-has-test success thì merge bình thường', () => {
+  const decision = decideMerge(pr({ gate: 'open', labels: ['automerge', 'fix'], fixHasTestConclusion: 'success' }));
+  assert.equal(decision.outcome, 'merge');
+});
+
+test('P-009 · PR không mang nhãn fix thì fixHasTestConclusion không cản gì, kể cả null', () => {
+  const decision = decideMerge(pr({ gate: 'open', labels: ['automerge'], fixHasTestConclusion: null }));
+  assert.equal(decision.outcome, 'merge');
 });
 
 // ── Lời `dừng` của chủ dự án ─────────────────────────────────────────────
