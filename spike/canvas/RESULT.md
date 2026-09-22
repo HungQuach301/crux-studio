@@ -31,8 +31,14 @@ merge vào `main`** rồi `sync-workflows` chép sang `.github/workflows/` (CHAR
 | 2 | Thời gian render 5.400 khung ở 1 worker | ≤ 25 phút | **6.4 phút** | ✅ đạt |
 | 3 | Chậm hơn render tĩnh cùng số khung | ≤ 3× | **0.94×** tính cả đường ống (71.2 so với 75.6 ms/khung) · **1.25×** tính riêng phần vẽ (3.2 so với 2.5 ms/khung) | ✅ đạt |
 | 4 | Chuyển động 30fps **không** mờ | clip xem được | `base-30-noblur.mp4`, 6.4 phút render | ⬜ chờ chủ dự án xem clip |
-| 5 | Chuyển động 30fps **có** mờ | clip xem được | `blur-30.mp4`, 9.1 phút render, 4 mẫu/khung | ⬜ chờ chủ dự án xem clip |
+| 5 | Chuyển động 30fps **có** mờ | clip xem được | `blur-30.mp4`, 8.9 phút render, 4 mẫu/khung | ⬜ chờ chủ dự án xem clip |
 | 6 | Chuyển động 60fps **không** mờ | clip xem được | `hi-60-noblur.mp4`, 12.2 phút render | ⬜ chờ chủ dự án xem clip |
+
+**Máy kiểm phép cộng mẫu mờ chuyển động:** độ sáng trung bình của clip có mờ là
+**52.62** so với **53.56** của clip không mờ —
+lệch -1.8%, ngưỡng ±3% → ✅ đúng là phép trung bình.
+Mờ chuyển động là phép trung bình các mẫu phụ nên nó gần như không được đổi độ sáng trung
+bình của cảnh. Phép kiểm này có vì bản đầu của spike đã sai đúng chỗ đó — xem phần cuối.
 
 **Chỉ số 4–6 cố ý để trống kết.** WP-003 mục 5 ghi rõ: không kết luận thay chủ dự án về
 ba chỉ số này, chỉ xuất clip và số đo. Clip là nhị phân nên không commit (CHARTER 5.3);
@@ -40,12 +46,12 @@ chúng đi ra qua artifact `spike-canvas` của workflow.
 
 ## Số đo từng cấu hình
 
-| Cấu hình | Khung | fps | Mẫu/khung | Tổng | ms/khung | — cảnh | — chụp | Đỉnh RSS | Clip |
-|---|---|---|---|---|---|---|---|---|---|
-| `base-30-noblur` | 5400 | 30 | 1 | 6.4 phút | 71.2 | 3.2 | 67.8 | 555 MB | 46.0 MB |
-| `static-30` | 5400 | 30 | 1 | 6.8 phút | 75.6 | 2.5 | 72.8 | 551 MB | 1.6 MB |
-| `blur-30` | 5400 | 30 | 4 | 9.1 phút | 101.3 | 29.9 | 71.2 | 558 MB | 39.1 MB |
-| `hi-60-noblur` | 10800 | 60 | 1 | 12.2 phút | 67.9 | 2.8 | 64.9 | 565 MB | 51.7 MB |
+| Cấu hình | Khung | fps | Mẫu/khung | Tổng | ms/khung | — cảnh | — chụp | Đỉnh RSS | Clip | Y trung bình |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `base-30-noblur` | 5400 | 30 | 1 | 6.4 phút | 71.2 | 3.2 | 67.8 | 555 MB | 46.0 MB | 53.56 |
+| `static-30` | 5400 | 30 | 1 | 6.8 phút | 75.6 | 2.5 | 72.8 | 551 MB | 1.6 MB | 49.83 |
+| `hi-60-noblur` | 10800 | 60 | 1 | 12.2 phút | 67.9 | 2.8 | 64.9 | 565 MB | 51.7 MB | 53.57 |
+| `blur-30` | 5400 | 30 | 4 | 8.9 phút | 99.1 | 26.9 | 71.9 | 558 MB | 45.7 MB | 52.62 |
 
 Hai cột `— cảnh` và `— chụp` tách tổng thời gian mỗi khung làm hai phần: thời gian nằm
 trong `renderFrame` của cảnh (vẽ thật), và thời gian nằm trong `Page.captureScreenshot`
@@ -112,6 +118,23 @@ hoàn toàn vào chỉ số 4–6, tức là vào mắt chủ dự án:
   gấp đôi (đo được: 12.2 phút so với 6.4 phút).
 
 **Kịch bản DỪNG không xảy ra.** Không phải viết lại ngữ pháp chuyển động.
+
+## Một lỗi nhóm Z mà spike này tự đâm phải
+
+Bản đầu cộng các mẫu mờ chuyển động bằng `globalAlpha = 1 / blurSamples` cố định. Nghe
+đúng, nhưng `source-over` không cho trung bình cộng: mẫu vẽ sau đè mẫu vẽ trước, nên với
+4 mẫu trọng số ra 0.105 / 0.141 / 0.188 / 0.250 thay vì đều nhau, và `(1 - 1/4)^4 = 31.6%`
+phần nền tối vẫn lọt qua. Kết quả: clip "có mờ chuyển động" thật ra là clip **tối đi**,
+không phải mờ đi — đo được là lệch 15.8% độ sáng.
+
+Đáng chú ý không phải lỗi, mà là **cách nó suýt lọt**: clip vẫn dựng xong, vẫn đủ 5.400
+khung, vẫn 180.000 giây, mọi số đo thời gian và bộ nhớ vẫn ra bình thường, `pnpm check`
+vẫn xanh. Chỉ số 5 lẽ ra được chấm trên một clip sai. Đúng nhóm **Z** trong
+`ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh.
+
+Đã sửa bằng trung bình chạy (`globalAlpha = 1 / (k + 1)`, trọng số đều nhau, cộng lại bằng
+1), và **cột `Y trung bình` cùng phép kiểm ở trên là máy canh chỗ đó từ nay** — không dựa
+vào việc lần sau lại có người nhìn kỹ hai khung hình cạnh nhau.
 
 ## Chạy lại
 
