@@ -525,3 +525,45 @@ kiểm biến mất mà mọi chỉ báo vẫn xanh.
     `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát; đã kiểm đột biến: gỡ dòng nối ở
     `check-contracts.ts` thì bài đó **đỏ** (`not ok`). Cùng bài đối chứng với schema sạch. Thêm bài cho
     `packs/`, symlink trá hình, quét đệ quy, và ca "đã trong contracts/ thì không kiểm hai lần".
+
+### I-015 · `deps` bị chặn bởi mục đã merge, và không lệnh nào trả lời "mục nào nhận được ngay"
+
+Tìm ra ở lượt `crux-worker-1` ngày 2026-09-22, khi duyệt cả mười làn theo `ops/lanes/priority.md` và
+**không** nhận được mục nào — đúng hình dạng mà `I-010` đã mô tả, một tầng nữa.
+
+`I-010` đã dựng `ops/scripts/backlog-status.ts` để phân biệt mục "đã vào `main` mà còn `review`" (`stale`)
+với mục cố ý giữ `review` (`held`). Nhưng nó để hở hai đầu, và chính `I-010` khai trước cả hai:
+
+1. **Không ai gọi `--fix`.** Mục đó ghi rõ "Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 là việc
+   của lượt sau". Tới lượt này vẫn chưa nối, nên tám mục (`editorial/E-001`, `integration/I-007`, `I-011`,
+   `I-013`, `I-014`, `platform/P-007`, `topic/T-001`, `verify/VF-G17`) nằm `stale` mà không gì chuyển chúng.
+2. **Worker vẫn phải đọc tay từng `deps`.** Báo cáo của tool trả lời "mục nào nên chuyển `done`", không
+   trả lời câu hỏi bước 3 của phụ lục P1 thật sự hỏi: *mục nào nhận được ngay*. Worker vì thế đối chiếu
+   `deps` bằng mắt, đúng cái mà `I-010` gọi là "tỉ lệ tự phát hiện: 0".
+
+Hệ quả đo được ở lượt này: `topic/T-003` (`deps: T-001`) đáng lẽ nhận được — `T-001` đã merge vào `main` —
+nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu tiên 3) trông như cạn việc. Cùng dạng với
+`editorial/E-003` (`deps: E-001`). Lượt chạy suýt in `idle` trong khi hàng đợi **không** cạn.
+
+Đây vẫn là nhóm lỗi **Z** (`ops/known-failures.md`): mọi chỉ báo xanh, chỉ hàng đợi việc là cạn giả.
+
+- deps: —
+- risk: low
+- nguồn: `I-010` (hai ô `⬜` còn lại); CHARTER phụ lục P1 bước 3, P3 bước 2; `ops/known-failures.md` nhóm Z
+- status: ready
+- tiêu chí xong:
+  - `ops/scripts/backlog-status.ts` đọc được `deps` của mỗi mục và trả thêm hai nhóm: `readyNow`
+    (mục `status: ready` mà **mọi** `deps` đã xong) và `blocked` (mục `ready` còn chờ, kèm danh sách
+    đang chờ ai). "Đã xong" tính cả mục `review` đang ở nhóm `stale` — nó đã vào `main` thật.
+  - Thận trọng theo đúng hướng của `I-010`: một `deps` **không tra được** thì mục bị coi là còn chờ và
+    hiện ra ở `blocked` kèm tên đoạn không tra được, **không** bị bỏ qua im lặng. Đoán sai theo hướng này
+    chỉ tốn một nhịp; đoán sai theo hướng kia nhận một mục mà nền móng của nó chưa có.
+  - Mã giả định dạng `G<số>` trong `deps` (ví dụ `audio/AU-001` ghi `deps: G7`) tra về mục `VF-G<số>` của
+    làn `verify` — đó là quy ước đang dùng thật trong backlog, viết ra thay vì để mỗi lượt tự suy.
+  - Test, gồm test âm: `deps` chưa xong thì mục **không** vào `readyNow`; `deps` là mục `stale` thì
+    **có**; `deps` là mục `held` thì **không**; `deps` không tra được thì **không**; mục `parked` hay
+    `review` không bao giờ vào `readyNow`.
+  - CHARTER phụ lục **P3 bước 2** gọi `pnpm backlog:status --fix` — chỗ `I-010` đã chỉ định.
+  - CHARTER phụ lục **P1 bước 3** đọc `readyNow` của lệnh đó thay vì đối chiếu `deps` bằng mắt, và
+    **không được in `idle`** khi `readyNow` còn mục chưa có nhánh, chưa có PR.
+  - **Không** đưa vào `pnpm check`: cùng lý do `I-010` đã viết — mục vừa merge còn `review` đúng một nhịp.
