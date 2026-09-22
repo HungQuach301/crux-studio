@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-002",
+  "version": "1.0",
+  "title": "Điểm hoà vốn của mortgage discount points",
+  "question": "Trả trước bao nhiêu điểm để hạ lãi suất thì mất bao nhiêu tháng mới hoà vốn, và mốc đó nằm trước hay sau lúc người vay bán nhà?",
+  "assumptions": [
+    "Khoản vay trả góp đều, lãi suất cố định suốt kỳ hạn; không trả trước hạn, không tái cấp vốn.",
+    "So sánh chỉ tính phần tiền trả hằng tháng gốc-và-lãi. Thuế bất động sản, bảo hiểm và ký quỹ giống nhau ở cả hai phương án nên triệt tiêu.",
+    "Điểm trả ở khâu chốt bằng tiền mặt, không cộng vào dư nợ. Cộng vào dư nợ là một mô hình khác.",
+    "pointsPct âm là lender credit — CFPB gọi thẳng là 'negative points'. Khi đó cả chi phí lẫn khoản tiết kiệm đổi dấu, nên breakEvenMonths vẫn dương.",
+    "Không chiết khấu dòng tiền về hiện tại: đây là điểm hoà vốn danh nghĩa, đúng như cách CFPB trình bày."
+  ],
+  "parameters": [
+    {
+      "name": "loanAmountUsd",
+      "unit": "usd",
+      "validRange": [
+        1000,
+        50000000
+      ],
+      "defaultValue": 180000,
+      "source": "cfpb/ask-136"
+    },
+    {
+      "name": "baseRatePct",
+      "unit": "percent",
+      "validRange": [
+        0,
+        25
+      ],
+      "defaultValue": 5,
+      "source": "cfpb/ask-136"
+    },
+    {
+      "name": "rateWithPointsPct",
+      "unit": "percent",
+      "validRange": [
+        0,
+        25
+      ],
+      "defaultValue": 4.875,
+      "source": "cfpb/ask-136"
+    },
+    {
+      "name": "pointsPct",
+      "unit": "percent",
+      "validRange": [
+        -5,
+        5
+      ],
+      "defaultValue": 0.375,
+      "source": "cfpb/ask-136"
+    },
+    {
+      "name": "termMonths",
+      "unit": "month",
+      "validRange": [
+        12,
+        480
+      ],
+      "defaultValue": 360,
+      "source": "cfpb/ask-136"
+    }
+  ],
+  "formula": "mortgage-points-break-even",
+  "outputs": [
+    {
+      "name": "monthlyPaymentBaseUsd",
+      "unit": "usd",
+      "interpretation": "Tiền trả hằng tháng ở lãi suất niêm yết, không điểm."
+    },
+    {
+      "name": "monthlyPaymentWithPointsUsd",
+      "unit": "usd",
+      "interpretation": "Tiền trả hằng tháng sau khi mua điểm (hoặc nhận lender credit)."
+    },
+    {
+      "name": "monthlySavingsUsd",
+      "unit": "usd",
+      "interpretation": "Chênh lệch mỗi tháng; âm nghĩa là trả nhiều hơn, đúng ca lender credit."
+    },
+    {
+      "name": "pointsCostUsd",
+      "unit": "usd",
+      "interpretation": "Tiền trả thêm ở khâu chốt; âm là tiền nhận về."
+    },
+    {
+      "name": "breakEvenMonths",
+      "unit": "month",
+      "interpretation": "Số tháng giữ khoản vay để hai phương án bằng nhau. Giữ lâu hơn thì mua điểm có lợi."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Hai ca của bảng CFPB khớp: chênh lệch tính ra $13,70 và −$13,80 so với '$14' và '$14 more' CFPB in ra. Dung sai 3% là để phủ đúng phần CFPB đã làm tròn về đơn vị đô la, không phải để nới cho công thức.",
+        "tolerancePct": 3,
+        "evidenceRef": "workshops/topic/data/models/cases/M-002.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "Có nhiều công cụ tính điểm công khai. Chưa chạy đối chiếu: bảng ví dụ của CFPB đã dùng làm ca cấp 1 theo D-C02 điểm a.",
+        "benchmarkUrl": "https://www.consumerfinance.gov/ask-cfpb/what-are-discount-points-and-lender-credits-and-how-do-they-work-en-136/"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}
