@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-003",
+  "version": "1.0",
+  "title": "APY của một khoản tiền gửi theo Regulation DD",
+  "question": "Một khoản lãi đã trả trên một số dư trong một số ngày nhất định tương đương APY bao nhiêu, theo đúng công thức luật buộc ngân hàng phải dùng?",
+  "assumptions": [
+    "Dùng công thức tổng quát của Phụ lục A, không dùng công thức rút gọn — công thức rút gọn chỉ đúng khi kỳ đúng 365 ngày.",
+    "365 ở tử số là hằng số của quy định, kể cả năm nhuận. Không được thay bằng 366.",
+    "interestEarnedUsd là lãi thực trả trong kỳ, đã tính gộp theo cách ngân hàng dùng. Mô hình này không tính gộp — nó quy đổi.",
+    "Gốc là số tiền được giả định đã gửi để kiếm ra khoản lãi đó, theo đúng cách Phụ lục A đặt vấn đề ở các tài khoản phân tầng."
+  ],
+  "parameters": [
+    {
+      "name": "interestEarnedUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        1000000000
+      ],
+      "defaultValue": 61.68,
+      "source": "ecfr/12-cfr-1030-app-a"
+    },
+    {
+      "name": "principalUsd",
+      "unit": "usd",
+      "validRange": [
+        0.01,
+        1000000000
+      ],
+      "defaultValue": 1000,
+      "source": "ecfr/12-cfr-1030-app-a"
+    },
+    {
+      "name": "termDays",
+      "unit": "day",
+      "validRange": [
+        1,
+        3650
+      ],
+      "defaultValue": 365,
+      "source": "ecfr/12-cfr-1030-app-a"
+    }
+  ],
+  "formula": "deposit-apy",
+  "outputs": [
+    {
+      "name": "apyPct",
+      "unit": "percent",
+      "interpretation": "Annual percentage yield theo 12 CFR 1030 Phụ lục A — con số luật buộc ngân hàng phải công bố."
+    },
+    {
+      "name": "periodYieldPct",
+      "unit": "percent",
+      "interpretation": "Lợi suất của riêng kỳ đó, chưa quy về năm. Bằng APY đúng khi kỳ là 365 ngày."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Tám ví dụ của Phụ lục A khớp, lệch lớn nhất 0,064% (do quy định in APY ở hai chữ số thập phân).",
+        "tolerancePct": 0.15,
+        "evidenceRef": "workshops/topic/data/models/cases/M-003.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "Công cụ công khai tương đương là máy tính APY của các ngân hàng. Chưa chạy đối chiếu: tám ví dụ trong chính quy định đã dùng làm ca cấp 1.",
+        "benchmarkUrl": "https://www.ecfr.gov/current/title-12/chapter-X/part-1030/appendix-Appendix%20A%20to%20Part%201030"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}
