@@ -63,6 +63,10 @@ export interface Corpus {
   quota: {
     limits: {
       searchCallsPerDay: number;
+      /** Đơn vị quota mỗi lần gọi `search.list` — số nguyên bản từ Console (#101). */
+      unitsPerCall?: number;
+      /** Hạn mức đơn vị mỗi ngày — số nguyên bản từ Console khi Console hiển thị theo đơn vị (#101). */
+      unitsPerDay?: number;
       reserveFraction: number;
       source: 'vendor-docs' | 'console-measured';
       checkedAt: string;
@@ -70,6 +74,84 @@ export interface Corpus {
     spent: { searchCalls: number };
   };
   videos: CorpusVideo[];
+}
+
+/**
+ * Dẫn xuất số lần gọi `search.list` mỗi ngày từ HAI số nguyên bản của
+ * Console: hạn mức đơn vị mỗi ngày chia cho số đơn vị mỗi lần gọi (mục
+ * `topic/T-012`, issue #101).
+ *
+ * Làm tròn **xuống** (`Math.floor`): dư đơn vị không đủ cho một lần gọi
+ * trọn vẹn thì không tính là một lần gọi được phép — nghi ngờ thì cho
+ * ÍT lần gọi hơn, để cửa dừng đóng sớm chứ không muộn (cùng hướng thận
+ * trọng với `reserveFraction` làm tròn lên trong `quotaGate`).
+ *
+ * Đây là chỗ DUY NHẤT làm phép quy đổi, có test riêng — thay cho việc một
+ * người quy đổi bằng tay rồi không để lại vết (issue #101 xin số nguyên
+ * bản đúng vì lý do này).
+ */
+export function deriveSearchCallsPerDay(unitsPerDay: number, unitsPerCall: number): number {
+  if (!Number.isInteger(unitsPerDay) || unitsPerDay < 1) {
+    throw new Error(`unitsPerDay phải là số nguyên dương, nhận ${JSON.stringify(unitsPerDay)}`);
+  }
+  if (!Number.isInteger(unitsPerCall) || unitsPerCall < 1) {
+    throw new Error(`unitsPerCall phải là số nguyên dương, nhận ${JSON.stringify(unitsPerCall)}`);
+  }
+  return Math.floor(unitsPerDay / unitsPerCall);
+}
+
+/**
+ * Hai dòng hạn mức của bảng `quota-budget.md` sau khi tách ra khỏi văn
+ * bản: số lần gọi mỗi ngày và số đơn vị mỗi lần gọi. Đây là các số HIỂN
+ * THỊ cho người đọc; `corpusProblems` buộc chúng khớp `quota.limits` của
+ * chính ảnh chụp corpus, để bảng và dữ liệu không trôi khỏi nhau (mục
+ * `topic/T-012`, cùng hình dạng phép soát đã dùng cho `spent`).
+ */
+export interface QuotaBudgetLimits {
+  searchCallsPerDay: number;
+  unitsPerCall: number;
+}
+
+/**
+ * Tách hai dòng hạn mức từ bảng "Bảng hạn mức" của `quota-budget.md`.
+ *
+ * Ném lỗi khi không tìm thấy đủ hai dòng, hoặc số không phải số nguyên
+ * dương: bảng đổi cách viết mà phép soát không theo kịp thì phải ĐỎ, không
+ * được im lặng đọc ra số cũ (đúng nhóm lỗi Z — hỏng mà mọi chỉ báo xanh).
+ * Neo vào nhãn tiếng Việt ổn định của cột đầu, không vào số thứ tự dòng.
+ */
+export function parseQuotaBudget(markdown: string): QuotaBudgetLimits {
+  let searchCallsPerDay: number | undefined;
+  let unitsPerCall: number | undefined;
+  for (const raw of markdown.split('\n')) {
+    const line = raw.trim();
+    if (!line.startsWith('|')) continue;
+    const cells = line.split('|').map((c) => c.trim());
+    // cells[0] rỗng (trước dấu | đầu), nhãn ở cells[1], giá trị ở cells[2].
+    const label = (cells[1] ?? '').toLowerCase();
+    const valueCell = cells[2] ?? '';
+    if (label.includes('số lần gọi mỗi ngày')) {
+      searchCallsPerDay = parseBudgetInt(valueCell, 'số lần gọi mỗi ngày');
+    } else if (label.includes('đơn vị mỗi lần gọi')) {
+      unitsPerCall = parseBudgetInt(valueCell, 'đơn vị mỗi lần gọi');
+    }
+  }
+  if (searchCallsPerDay === undefined) {
+    throw new Error('quota-budget.md: không tìm thấy dòng "số lần gọi mỗi ngày" trong bảng hạn mức.');
+  }
+  if (unitsPerCall === undefined) {
+    throw new Error('quota-budget.md: không tìm thấy dòng "đơn vị mỗi lần gọi" trong bảng hạn mức.');
+  }
+  return { searchCallsPerDay, unitsPerCall };
+}
+
+function parseBudgetInt(cell: string, label: string): number {
+  const match = cell.match(/-?\d+/);
+  const n = match ? Number.parseInt(match[0], 10) : Number.NaN;
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(`quota-budget.md: giá trị của "${label}" không phải số nguyên dương: ${JSON.stringify(cell)}`);
+  }
+  return n;
 }
 
 /**
@@ -129,10 +211,15 @@ export function validateCorpus(value: unknown): ValidationResult {
 }
 
 /**
- * Soát một corpus theo contract CỘNG bốn luật mà schema không diễn đạt được.
+ * Soát một corpus theo contract CỘNG các luật mà schema không diễn đạt được.
  * Trả danh sách vấn đề bằng tiếng Việt; rỗng nghĩa là sạch.
+ *
+ * `budget` (không bắt buộc): hai dòng hạn mức đọc từ `quota-budget.md`
+ * (`parseQuotaBudget`). Khi có, phép soát buộc chúng khớp `quota.limits` —
+ * cùng hình dạng phép soát đã dùng cho `spent` ở luật 4, nay phủ cả
+ * `limits` chứ không riêng `spent` (mục `topic/T-012`).
  */
-export function corpusProblems(value: unknown): string[] {
+export function corpusProblems(value: unknown, budget?: QuotaBudgetLimits): string[] {
   const problems: string[] = [];
   const result = validateCorpus(value);
   if (!result.valid) {
@@ -197,6 +284,40 @@ export function corpusProblems(value: unknown): string[] {
       problems.push(
         `${video.videoId}: publishedAt ${video.publishedAt} nằm ngoài cửa sổ ${corpus.scope.windowDays} ngày ` +
           `tính từ ${corpus.scope.asOf}. Cửa sổ đã khai phải đúng với dữ liệu trong file.`,
+      );
+    }
+  }
+
+  // 6 · Hai số nguyên bản của Console không được trôi khỏi số code tiêu thụ.
+  //     Khi corpus ghi CẢ `unitsPerDay` LẪN `unitsPerCall` (Console hiển thị
+  //     theo đơn vị), `searchCallsPerDay` phải đúng bằng phép dẫn xuất — nếu
+  //     không, phép chia đã bị làm bằng tay và trôi (issue #101).
+  const limits = corpus.quota.limits;
+  if (limits.unitsPerDay !== undefined && limits.unitsPerCall !== undefined) {
+    const derived = deriveSearchCallsPerDay(limits.unitsPerDay, limits.unitsPerCall);
+    if (derived !== limits.searchCallsPerDay) {
+      problems.push(
+        `quota.limits.searchCallsPerDay = ${limits.searchCallsPerDay} nhưng floor(unitsPerDay ${limits.unitsPerDay} ` +
+          `/ unitsPerCall ${limits.unitsPerCall}) = ${derived}. Con số code tiêu thụ phải dẫn xuất từ hai số ` +
+          'nguyên bản, không quy đổi bằng tay.',
+      );
+    }
+  }
+
+  // 7 · Bảng hạn mức của `quota-budget.md` không được trôi khỏi `quota.limits`
+  //     của corpus — cùng hình dạng phép soát của luật 4 (`spent`), nay phủ
+  //     cả `limits` (mục `topic/T-012`). Chỉ chạy khi bên gọi cấp `budget`.
+  if (budget !== undefined) {
+    if (budget.searchCallsPerDay !== limits.searchCallsPerDay) {
+      problems.push(
+        `quota-budget.md ghi ${budget.searchCallsPerDay} lần gọi mỗi ngày nhưng corpus có ` +
+          `quota.limits.searchCallsPerDay = ${limits.searchCallsPerDay}. Bảng và dữ liệu phải khớp.`,
+      );
+    }
+    if (limits.unitsPerCall !== undefined && budget.unitsPerCall !== limits.unitsPerCall) {
+      problems.push(
+        `quota-budget.md ghi ${budget.unitsPerCall} đơn vị mỗi lần gọi nhưng corpus có ` +
+          `quota.limits.unitsPerCall = ${limits.unitsPerCall}. Bảng và dữ liệu phải khớp.`,
       );
     }
   }
