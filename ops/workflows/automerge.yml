@@ -125,6 +125,9 @@ jobs:
             BASE=$(git merge-base origin/main "refs/remotes/pr/$NUM")
             git diff --name-only "$BASE" "refs/remotes/pr/$NUM" > "$PR_DIR/changed.txt"
             git archive "refs/remotes/pr/$NUM" | tar -x -C "$PR_DIR/head"
+            # Z9: vắng CHARTER.md ở SHA nền là hợp lệ — protected-area.ts coi
+            # đó là "không đối chiếu được" và trả cửa owner-merge (an toàn
+            # nhất), không phải một lỗi cần chặn ở đây.
             git show "$BASE:CHARTER.md" > "$PR_DIR/base-CHARTER.md" 2>/dev/null || true
             AREA=$(node ops/invariants.protected-area.ts \
               --changed "$PR_DIR/changed.txt" \

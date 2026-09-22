@@ -221,6 +221,7 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
   - **Mỗi luật mới phải có test âm.** Một luật chỉ có giá trị khi nó đỏ đúng lúc phải đỏ — đó là bài học của KF-003, nơi một luật đỏ nhầm đã suýt ép `ci.yml` khai thừa quyền.
   - Z1 **không** nằm trong mục này: đã xong ở P-011.
   - Mục này không đóng một lần. Mỗi đợt xong thì ghi vào bảng nhóm Z ở `ops/known-failures.md` — đổi cột phải từ cách làm sang ✅ kèm tên bài kiểm.
+- **Đợt 1 — xong.** Năm luật, mỗi luật kèm test âm (`ops/test/check-workflows.test.ts`, `ops/test/check-test-coverage.test.ts`, `ops/test/check-workflows-synced.test.ts`): `blocksMissingPipefail` (Z10), `testFilesMissedByGlob` qua script mới `pnpm check:tests` (Z11), `unsyncedWorkflows` qua script mới gọi riêng từ `main-ci.yml` — KHÔNG trong `pnpm check`, xem lý do trong chú thích đầu `ops/scripts/check-workflows-synced.ts` (Z3), `secretsUsedWithoutEmptyCheck` (Z5), `undocumentedSwallows` (Z9, kèm sửa 5 chỗ trong cây hiện tại để qua được chính luật mới). Chi tiết đầy đủ ở từng dòng bảng nhóm Z. Còn treo: Đợt 2 (Z2, Z8, Z13) và Đợt 3 (Z6, Z7, Z14).
 
 ### P-002 · `decision-relay.yml` và routine `crux-decision`
 Rút độ trễ trả lời quyết định từ một nhịp worker xuống vài phút.
