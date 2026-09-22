@@ -97,11 +97,57 @@ Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **
 
 - deps: T-002
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-014
 - tiêu chí xong:
-  - Corpus xây trong hạn mức quota, và hạn mức được đo, không được đoán.
-  - Kiểm mới lạ chạy tự động cho một thesis và trả về lý do, không chỉ trả về điểm.
+  - ⬜ **Corpus xây trong hạn mức quota, và hạn mức được đo, không được đoán.** Nửa "trong hạn mức" đã
+    xong và chạy được: `quotaGate` dừng ở mốc 20% dự trữ của WP-014 mục 5, trả lý do thay vì ném lỗi để
+    bản xây ghi được corpus một phần (mục 5b), và `corpusProblems` đỏ khi `quota.spent.searchCalls` lệch
+    tổng `pagesFetched` — số tiêu không khai tay được. Nửa "hạn mức được đo" thì **chưa**, và nó cần
+    người: đọc Google Cloud Console (giả định **G19**, mục `verify/VF-G19`). Tới lúc đó, con số trung
+    thực nằm trong chính dữ liệu — `quota.limits.source` khoá ở `vendor-docs`, không phải một dòng ghi
+    chú trong tài liệu. Phần **gọi API để xây** corpus tách sang `T-011`, đang chặn vì chưa có secret.
+  - ✅ **Kiểm mới lạ chạy tự động cho một thesis và trả về lý do, không chỉ trả về điểm.** `checkNovelty`
+    thuần, không gọi mạng, không đọc đồng hồ; `reasons` là trường bắt buộc có ít nhất một phần tử trong
+    contract, và mỗi lối ra nạp lý do trước khi chốt `verdict`. Bốn kiểm âm của WP-014 mục 6 có test
+    thật: `contradictingCount = 0` với `similarCount` cao ra `crowded-in-corpus` chứ không ra mới lạ;
+    corpus dưới ngưỡng ra `insufficient-corpus`; bình luận thô và tên người dùng bị `forbiddenKeyPaths`
+    chặn; hết bucket thì cửa quota đóng sạch.
+- ✅ **Đã làm, 2026-09-21** (lượt `crux-worker-2`): ba contract v0 trong `workshops/topic/contracts/`
+  (`corpus`, `novelty-check`, `demand-signal`), ba module trong `workshops/topic/src/`
+  (`corpus.ts`, `novelty.ts`, `demand.ts`), một corpus mẫu 38 video trong `workshops/topic/data/corpus/`,
+  bảng ngân sách quota ở `packs/channels/us-personal-finance/quota-budget.md`, và 38 test mới
+  (corpus 14, novelty 12, demand 12). Ba giới hạn
+  của WP-014 mục 3c được mã hoá thành **trường bắt buộc**, không thành ghi chú: `coverage.contentLevel`
+  khoá `metadata-only`; `verdict` không có giá trị `novel` và `limitation` bắt buộc dài ≥ 40 ký tự;
+  ba đại lượng nhu cầu bắt buộc mang `asOf`, `region`, `language`, `knownBias`.
+- ⬜ **Còn treo, cần người:** G19 (`VF-G19`) và secret nền tảng (`T-011`). Giữ `review`, không `done`.
+
+### T-011 · Xây corpus bằng API nền tảng — đang chặn vì chưa có secret
+Phần **gọi API** của WP-014, tách khỏi `T-008` vì nó chặn ở chỗ khác hẳn: không phải thiếu cơ chế, mà
+thiếu quyền. `T-008` đã để sẵn mọi thứ nó cần — contract `corpus.v0`, `quotaGate`, `corpusProblems` — nên
+mục này là phần nối dây, không phải phần thiết kế lại.
+
+Hai thứ còn thiếu, và không thứ nào agent tự lấy được:
+
+1. **Khoá API nền tảng** cho `search.list`. Chọn nhà cung cấp và ký điều khoản là `irreversible`
+   (CHARTER 2.3 nhóm 3); bật billing là nhóm 1.
+2. **`EMBEDDINGS_API_KEY`** cho phép so ngữ nghĩa. Thiếu nó, `checkNovelty` chạy bằng so **từ vựng** —
+   bỏ sót cách diễn đạt khác chữ, nên nó chệch về phía kết luận `novel-in-corpus`. Chệch đúng hướng nguy
+   hiểm, và câu đó đã nằm trong `limitation` của mọi kết quả.
+
+Giả định **G19** (hạn mức `search.list`) đứng dưới mục này ở mức `tài liệu nói vậy`; dự phòng đã viết sẵn
+nên nó không chặn, chỉ làm số tiêu cần đối chiếu lại sau lần chạy thật đầu tiên.
+
+- deps: T-008, G19
+- risk: high
+- status: blocked
+- nguồn: spec WP-014 mục 2b, 3, 5b; `docs/assumptions.md` G19; CHARTER 2.3 nhóm 1 và 3
+- tiêu chí xong:
+  - Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003`).
+  - Corpus xây ra đi qua `corpusProblems` sạch, và `quota.spent.searchCalls` là số đếm thật của lần chạy.
+  - Hết bucket giữa chừng thì ghi corpus một phần với `coverage.partial = true` và `partialReason` có
+    chữ — không hạ chất lượng truy vấn để lấp cho đủ số video (WP-014 mục 5b).
 
 ### T-009 · Thesis Engine
 Sinh thesis đạt chuẩn từ dữ liệu, đủ duy trì bank ≥15 mục khả dụng ở nhịp mục tiêu. Điều kiện tiên quyết của D-08 và là cổng chặn Mốc 3.
