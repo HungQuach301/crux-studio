@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://crux.studio/contracts/topic/snapshot.v0.schema.json",
+  "title": "Ảnh chụp một chuỗi dữ liệu có phiên bản — v0",
+  "description": "Contract snapshot CHUNG mà ba adapter (fred, bls, census) đều chuẩn hoá về (mục backlog topic/T-003, spec WP-010). Hai luật chịu tải của mục nằm trong chính contract, không nằm trong ghi chú: (1) asOfDate là mốc phiên bản — chạy lại cùng asOfDate cho ra cùng dữ liệu; (2) contentHash là băm nội dung của chính observations cộng metadata định danh, nên hai lần chụp cùng asOfDate ra cùng contentHash. provenance khoá 'api' hay 'hand-built' giống corpus.v0, để bên đọc thấy ngay snapshot thu từ API thật hay dựng tay khi chưa có khoá.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "snapshotId", "provider", "seriesId", "asOfDate", "fetchedAt", "provenance", "source", "unit", "frequency", "observations", "contentHash"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 0 },
+    "snapshotId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Định danh ổn định của ảnh chụp: `<provider>:<seriesId>:<asOfDate>`. Dẫn xuất từ ba trường dưới, không nhập tay."
+    },
+    "provider": {
+      "enum": ["fred", "bls", "census"],
+      "description": "Ba nhà cung cấp nhóm 1 (Fed/BLS/Census có API) của data-sources.md. Không xây adapter tổng quát — T-003 khoá đúng ba nhà này."
+    },
+    "seriesId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mã chuỗi/bảng theo cách nhà cung cấp gọi: FRED series id (UNRATE), BLS series id (LNS14000000), hay Census variable (B25077_001E)."
+    },
+    "asOfDate": {
+      "type": "string",
+      "format": "date",
+      "description": "Mốc phiên bản của ảnh chụp (vintage). Là KHOÁ tất định: chạy lại adapter cùng asOfDate trên cùng dữ liệu gốc phải cho ra cùng observations và cùng contentHash. Không phải fetchedAt — fetchedAt là lúc chạy, asOfDate là kỳ dữ liệu được chốt."
+    },
+    "fetchedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Lúc chạy adapter. KHÔNG vào contentHash: hai lần chụp cùng asOfDate ở hai thời điểm khác nhau vẫn phải trùng contentHash nếu dữ liệu gốc không đổi."
+    },
+    "provenance": {
+      "enum": ["api", "hand-built"],
+      "description": "Thu từ API nhà cung cấp, hay dựng tay để có dữ liệu chạy khi chưa có khoá. Cùng luật với corpus.v0: giới hạn lớn nhất của một file, nên đi theo file chứ không nằm trong README."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publisher", "datasetRef"],
+      "properties": {
+        "publisher": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Nhà công bố gốc, ví dụ 'U.S. Bureau of Labor Statistics'."
+        },
+        "datasetRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Bộ/bảng dữ liệu cụ thể, ví dụ 'CPS, Series LNS14000000' hoặc 'ACS 5-year, table B25077'."
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Đường dẫn trang metadata thật của chuỗi, nếu có."
+        }
+      }
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Đơn vị đo của giá trị, đọc từ nhà cung cấp: 'Percent', 'Dollars', 'Thousands of Persons'..."
+    },
+    "frequency": {
+      "enum": ["monthly", "quarterly", "annual", "other"],
+      "description": "Tần suất công bố. 'other' cho các nhịp không rơi vào ba nhịp thường gặp — không đoán cho khớp."
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["period", "value"],
+        "properties": {
+          "period": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Kỳ dữ liệu đã chuẩn hoá về ISO date (đầu kỳ), ví dụ '2026-05-01' cho tháng 5/2026."
+          },
+          "value": {
+            "type": ["number", "null"],
+            "description": "Giá trị đã ép về số. `null` khi nhà cung cấp báo thiếu (FRED '.', BLS chuỗi rỗng) — giữ ô lại chứ không bỏ, để so hai phiên bản thấy được ô nào từ có thành thiếu."
+          }
+        }
+      }
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 của nội dung dữ liệu (provider, seriesId, asOfDate, unit, frequency, observations) — KHÔNG gồm fetchedAt. Đây là phép kiểm 'chạy lại cùng asOfDate cho ra cùng dữ liệu': trùng asOfDate mà lệch contentHash là dữ liệu gốc đã đổi."
+    }
+  }
+}
