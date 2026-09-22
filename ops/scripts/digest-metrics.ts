@@ -63,6 +63,7 @@ import {
   branchHeadCommits,
   delayedFlowRows,
   renderDelayedFlowRow,
+  summarizeDelayedFlow,
   type DelayedFlowRow,
   type HeadCommit,
 } from './delayed-gate-flow.ts';
@@ -355,9 +356,20 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
   } else {
     out.push('', `Đang chờ merge: ${metrics.delayed.length}`);
     for (const row of metrics.delayed) out.push(`- ${renderDelayedFlowRow(row)}`);
-    out.push(
-      '  Không làm gì thì PR tự vào `main` khi đủ giờ; muốn giữ lại thì comment `dừng` ngay trên PR đó.',
-    );
+    // Dòng dặn phải nói ĐÚNG trạng thái thật. "Không làm gì thì nó tự vào
+    // `main`" in vô điều kiện, ngay dưới các dòng ghi `CHƯA BAO GIỜ đủ
+    // ngưỡng`, là chỗ bản tin tự mâu thuẫn — và chủ dự án đọc bản tin đúng
+    // để quyết định *không làm gì* (KF-011).
+    const summary = summarizeDelayedFlow(metrics.delayed);
+    if (summary.reachedThreshold === 0 && summary.delayed > 0) {
+      out.push(
+        '  ⚠️ Cửa delayed hiện CHƯA CHẢY (KF-011, chờ `[QĐ]` #116): không PR nào ở trên tự vào `main` được. Gỡ kẹt cần một lần merge tay.',
+      );
+    } else {
+      out.push(
+        '  Không làm gì thì PR đủ giờ tự vào `main`; muốn giữ lại thì comment `dừng` ngay trên PR đó.',
+      );
+    }
   }
 
   out.push('', `Mục parked: ${metrics.parked.length}`);
@@ -451,16 +463,21 @@ export function collectMetrics(
     delayedCommits === null
       ? null
       : delayedFlowRows(
-          snapshot.openPrs
-            .filter((pr) => delayedCommits.has(pr.number))
-            .map((pr) => ({
-              number: pr.number,
-              title: pr.title,
-              headRefName: pr.headRefName,
-              labels: labelNames(pr.labels),
-              commits: delayedCommits.get(pr.number)!,
-            })),
+          // KHÔNG lọc theo `delayedCommits.has(...)`: một PR mang nhãn mà
+          // thiếu trong map phải hiện ra ở hàng `CHƯA ĐO ĐƯỢC ĐẦU NHÁNH`,
+          // không được âm thầm rơi khỏi con số "Đang chờ merge: N".
+          snapshot.openPrs.map((pr) => ({
+            number: pr.number,
+            title: pr.title,
+            headRefName: pr.headRefName,
+            labels: labelNames(pr.labels),
+            commits: delayedCommits.get(pr.number) ?? [],
+          })),
           now.toISOString(),
+          // Mục `P-007` đã có dòng riêng cho PR xung đột; truyền tập đó sang
+          // để dòng "Đang chờ merge" thay số giờ bằng lời nói về xung đột,
+          // đúng như phụ lục P2 dặn — hai mục không được nói ngược nhau.
+          { conflicting: new Set((conflicts ?? []).map((row) => row.number)) },
         );
 
   return {

@@ -475,8 +475,8 @@ test('P-027 · mỗi PR delayed một dòng, gần tới hạn trước, kèm s�
     new Map([
       // #39: đầu nhánh vừa đổi 20 phút trước — đồng hồ về 0.
       [39, [{ sha: 'a', committedAt: '2026-09-21T17:40:00Z' }]],
-      // #42: đứng yên từ hôm qua — gần tới hạn hơn.
-      [42, [{ sha: 'b', committedAt: '2026-09-21T09:00:00Z' }]],
+      // #42: đứng yên 14 giờ — đã qua ngưỡng, nên dòng dặn là câu bình thường.
+      [42, [{ sha: 'b', committedAt: '2026-09-21T04:00:00Z' }]],
     ]),
   );
 
@@ -487,6 +487,7 @@ test('P-027 · mỗi PR delayed một dòng, gần tới hạn trước, kèm s�
   const text = renderDigestMetrics(metrics);
   assert.match(text, /^Đang chờ merge: 2$/m);
   assert.match(text, /#39 · visual · còn ít nhất 11\.67 giờ/m);
+  // #42 đã đủ giờ, nên dòng dặn là câu bình thường.
   assert.match(text, /comment `dừng` ngay trên PR đó/m);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -520,6 +521,83 @@ test('P-027 · hàng đợi delayed RỖNG ra map rỗng, không ra null — hai
     );
     assert.equal(broken, null);
     assert.equal(probeDelayedCommits(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, ['--no-delayed']), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · bản tin KHÔNG khuyên "không làm gì thì nó tự vào main" khi không PR nào đủ ngưỡng', () => {
+  // Đây là chỗ câu chữ sai gây thiệt hại trực tiếp nhất: chủ dự án đọc bản
+  // tin đúng để quyết định *không làm gì*, và KF-011 nói máy chưa một lần
+  // merge được PR delayed nào.
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(
+      root,
+      {
+        mergedPrs: [],
+        openPrs: [pr(39, 'claude/visual/V-001', { labels: [{ name: 'automerge-delayed' }] })],
+        decisionIssues: [],
+      },
+      NOW,
+      null,
+      new Map([[39, [{ sha: 'a', committedAt: '2026-09-21T17:40:00Z' }]]]),
+    );
+    const text = renderDigestMetrics(metrics);
+    assert.match(text, /Cửa delayed hiện CHƯA CHẢY/);
+    assert.doesNotMatch(text, /Không làm gì thì PR đủ giờ tự vào/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · PR đang xung đột KHÔNG hiện hai câu trái nhau trong bản tin', () => {
+  // Phụ lục P2: đồng hồ 12 giờ không chạy khi đang xung đột, nên dòng
+  // "Đang chờ merge" phải THAY số giờ, không in song song với mục P-007.
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(
+      root,
+      {
+        mergedPrs: [],
+        openPrs: [pr(109, 'claude/platform/P-025', { labels: [{ name: 'automerge-delayed' }] })],
+        decisionIssues: [],
+      },
+      NOW,
+      new Map([[109, { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true }]]),
+      new Map([[109, [{ sha: 'b', committedAt: '2026-09-21T17:40:00Z' }]]]),
+    );
+    const text = renderDigestMetrics(metrics);
+    assert.equal(metrics.delayed?.[0]!.conflicting, true);
+    assert.match(text, /xung đột — đồng hồ 12 giờ KHÔNG chạy/);
+    assert.doesNotMatch(text, /còn ít nhất/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, không biến mất khỏi đếm', () => {
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(
+      root,
+      {
+        mergedPrs: [],
+        openPrs: [
+          pr(39, 'claude/visual/V-001', { labels: [{ name: 'automerge-delayed' }] }),
+          pr(42, 'claude/visual/V-002', { labels: [{ name: 'automerge-delayed' }] }),
+        ],
+        decisionIssues: [],
+      },
+      NOW,
+      null,
+      // #42 thiếu hẳn khoá.
+      new Map([[39, [{ sha: 'a', committedAt: '2026-09-21T17:40:00Z' }]]]),
+    );
+    assert.equal(metrics.delayed?.length, 2, 'PR thiếu trong map vẫn phải được đếm');
+    const missing = metrics.delayed!.find((row) => row.number === 42)!;
+    assert.equal(missing.measured, false);
+    assert.match(renderDigestMetrics(metrics), /#42 · visual · CHƯA ĐO ĐƯỢC ĐẦU NHÁNH/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

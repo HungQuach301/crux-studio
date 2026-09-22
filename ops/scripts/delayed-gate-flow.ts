@@ -21,6 +21,20 @@
  * trúng một lượt. Vì vậy `hoursShort` ở đây là **số giờ còn thiếu ít nhất**,
  * không phải số giờ còn lại đúng bằng đồng hồ thật.
  *
+ * **Hai giả định ngầm, khai ra chứ không để ngầm** — cả hai đều làm kết
+ * luận "chắc chắn" ở trên yếu đi nếu vỡ:
+ *
+ * 1. **Lịch sử nhánh không bị viết lại.** `rebase`, `amend` hay force-push
+ *    đặt `%cI` về hiện tại, nên khoảng đứng yên đo được **co lại** và một
+ *    PR từng đủ ngưỡng có thể bị kết luận nhầm là chưa. `CLAUDE.md` mục 2
+ *    cấm force-push lên nhánh của người khác, nên ca này hiếm — nhưng hiếm
+ *    không phải là không.
+ * 2. **`headCommitsInWindow` đếm COMMIT, không đếm lần push.** Ba commit
+ *    push chung một lần chỉ đổi đầu nhánh **một** lần, tức đồng hồ chỉ về 0
+ *    một lần. Nên con số này là **cận trên** của số lần đặt lại, và nó chỉ
+ *    dùng để nói "PR này bị đụng dày tới mức nào", không dùng làm số lần
+ *    đặt lại chính xác.
+ *
  * **Nguồn dữ liệu là `git log --first-parent` cộng nhãn PR**, đúng như tiêu
  * chí xong đòi — **không** đọc văn xuôi trong trường `note` của
  * `ops/logs/**`. Lý do: `note` do agent viết tay mỗi lượt; tin nó thì phép
@@ -81,20 +95,44 @@ export interface DelayedFlowRow {
   title: string;
   /** `null` khi tên nhánh không theo dạng `claude/<lane>/<id>` — không đoán. */
   lane: LaneName | null;
-  /** Số lần đầu nhánh đổi trong cửa sổ đo. Mỗi lần là một lần đồng hồ về 0. */
-  clockResets: number;
+  /** Ngưỡng đã dùng để tính hàng này. Đi theo hàng để lớp render không tự đoán lại. */
+  delayHours: number;
+  /** Cửa sổ đã dùng cho `headCommitsInWindow`, cùng lý do. */
+  windowHours: number;
+  /**
+   * **Đo được hay không.** `false` nghĩa là nhánh không có commit nào ngoài
+   * `main` để mà đo — khi đó bốn trường dưới là `null`, và hàng này **không**
+   * được đếm vào `neverReached`. "Không đo được" và "chắc chắn chưa đủ" là
+   * hai chuyện khác nhau; gộp chúng là đúng nhóm Z, và là cùng luật mà
+   * `P-007` đã đặt cho `CHƯA DÒ`.
+   */
+  measured: boolean;
+  /** Số **commit** mới trong cửa sổ — **cận trên** của số lần đồng hồ về 0 (xem ghi chú 2 đầu file). */
+  headCommitsInWindow: number;
   /** Khoảng dài nhất đầu nhánh **không** đổi, tính bằng giờ. Cận trên của đồng hồ. */
-  longestStillHours: number;
+  longestStillHours: number | null;
   /** Đầu nhánh hiện tại đã đứng yên bao lâu. */
-  currentStillHours: number;
+  currentStillHours: number | null;
   /** Còn thiếu **ít nhất** mấy giờ so với ngưỡng. `0` nghĩa là đã đủ khoảng đứng yên. */
-  hoursShort: number;
+  hoursShort: number | null;
   /**
    * Đã từng có một khoảng đứng yên đạt ngưỡng chưa — tức cửa có bao giờ
    * **có thể** mở cho PR này không. `false` là câu trả lời chắc chắn
-   * "chưa"; `true` mới chỉ là "không loại trừ được".
+   * "chưa"; `true` mới chỉ là "không loại trừ được"; `null` là chưa đo được.
    */
-  reachedThreshold: boolean;
+  reachedThreshold: boolean | null;
+  /**
+   * Mốc commit mới nhất nằm ở **tương lai** so với `now` — đồng hồ máy lệch.
+   * Cùng luật với `clockSkew` của `conflict-watch.ts`: kẹp về 0 và nói ra,
+   * chứ không in một số giờ âm lên bản tin.
+   */
+  clockSkew: boolean;
+  /**
+   * PR đang xung đột với `main`. Phụ lục P2 dặn: khi đó đồng hồ 12 giờ
+   * **không chạy** (CHARTER 3.3), nên dòng bản tin phải **thay** "còn mấy
+   * giờ" bằng lời nói về xung đột — in cả hai là tự mâu thuẫn trong một mục.
+   */
+  conflicting: boolean;
 }
 
 export interface DelayedFlowSummary {
@@ -104,11 +142,15 @@ export interface DelayedFlowSummary {
   reachedThreshold: number;
   /** Bao nhiêu PR **chắc chắn** chưa từng đủ điều kiện về thời gian. */
   neverReached: number;
+  /** Bao nhiêu PR **không đo được** — không nằm trong hai ô trên. */
+  notMeasured: number;
 }
 
 export interface DelayedFlowOptions {
   delayHours?: number;
   windowHours?: number;
+  /** Số hiệu các PR đang xung đột với `main` (mục `P-007`). */
+  conflicting?: ReadonlySet<number>;
 }
 
 /**
@@ -122,25 +164,37 @@ export interface DelayedFlowOptions {
  * là cách chắc chắn để mọi PR trông như đã đạt ngưỡng.
  *
  * Nhánh chưa có commit nào ngoài `main` trả mảng rỗng: không đo được, và
- * mảng rỗng nói đúng điều đó.
+ * mảng rỗng nói đúng điều đó. Bên gọi phải phân biệt nó với "đo được và ra
+ * 0 giờ" — xem `measured` trong `DelayedFlowRow`.
+ *
+ * **Tự sắp giảm dần theo `committedAt` trước khi tính.** Đường đang dùng
+ * (`git log`) vốn đã mới-trước, nhưng một map dựng tay hoặc một cờ `git`
+ * đổi đi sẽ cho khoảng âm và `Math.max` lấy nhầm — im lặng, đúng nhóm Z.
+ * Sắp lại là một dòng, và sau đó khoảng âm **chỉ** còn có thể đến từ một
+ * commit mốc tương lai, tức đúng một nguyên nhân để bên gọi xử lý.
  */
 export function stillGapsHours(commits: readonly HeadCommit[], now: string): number[] {
   if (commits.length === 0) return [];
-  const gaps = [hoursBetween(commits[0]!.committedAt, now)];
-  for (let i = 0; i + 1 < commits.length; i += 1) {
-    gaps.push(hoursBetween(commits[i + 1]!.committedAt, commits[i]!.committedAt));
+  const sorted = [...commits].sort((a, b) => Date.parse(b.committedAt) - Date.parse(a.committedAt));
+  const gaps = [hoursBetween(sorted[0]!.committedAt, now)];
+  for (let i = 0; i + 1 < sorted.length; i += 1) {
+    gaps.push(hoursBetween(sorted[i + 1]!.committedAt, sorted[i]!.committedAt));
   }
   return gaps;
 }
 
 /**
- * Số lần đầu nhánh đổi trong `windowHours` giờ gần nhất.
+ * Số **commit** mới trong `windowHours` giờ gần nhất — **cận trên** của số
+ * lần đồng hồ về 0.
  *
- * Đếm commit chứ không đếm khoảng: mỗi commit mới **là** một lần đồng hồ về
- * 0 (`ciSha !== headSha` trong `invariants.merge-gate.ts`), kể cả commit
- * đầu tiên của nhánh.
+ * Mỗi lần đầu nhánh đổi là một lần đồng hồ về 0 (`ciSha !== headSha` trong
+ * `invariants.merge-gate.ts`). Nhưng một lần push mang nhiều commit chỉ đổi
+ * đầu nhánh **một** lần, còn ở đây đếm được **nhiều**. Không có cách nào
+ * suy ra ranh giới push từ `git log` một mình, nên hàm này khai thẳng chiều
+ * sai của nó — thổi phồng, không bỏ sót — thay vì hứa một con số nó không
+ * đo được. Tên hàm nói đúng thứ nó đếm.
  */
-export function clockResetsInWindow(
+export function headCommitsInWindow(
   commits: readonly HeadCommit[],
   now: string,
   windowHours: number = DEFAULT_WINDOW_HOURS,
@@ -151,18 +205,47 @@ export function clockResetsInWindow(
 /** Một dòng đo cho một PR. Bên gọi đã lọc nhãn; hàm này không lọc lại. */
 export function delayedFlowRow(pr: DelayedPrInput, now: string, options: DelayedFlowOptions = {}): DelayedFlowRow {
   const delayHours = options.delayHours ?? DEFAULT_DELAY_HOURS;
+  const windowHours = options.windowHours ?? DEFAULT_WINDOW_HOURS;
   const gaps = stillGapsHours(pr.commits, now);
-  const longestStillHours = gaps.length === 0 ? 0 : Math.max(...gaps);
-  const currentStillHours = gaps.length === 0 ? 0 : gaps[0]!;
-  return {
+  const base = {
     number: pr.number,
     title: pr.title,
     lane: laneFromBranch(pr.headRefName),
-    clockResets: clockResetsInWindow(pr.commits, now, options.windowHours),
+    delayHours,
+    windowHours,
+    headCommitsInWindow: headCommitsInWindow(pr.commits, now, windowHours),
+    conflicting: options.conflicting?.has(pr.number) === true,
+  };
+
+  // Không có commit nào để đo. KHÔNG rơi về 0: một hàng `0 giờ` kèm
+  // `reachedThreshold: false` là một khẳng định chắc rút ra từ chỗ trống, và
+  // nó sẽ được cộng thẳng vào con số "chắc chắn chưa từng đủ ngưỡng".
+  if (gaps.length === 0) {
+    return {
+      ...base,
+      measured: false,
+      longestStillHours: null,
+      currentStillHours: null,
+      hoursShort: null,
+      reachedThreshold: null,
+      clockSkew: false,
+    };
+  }
+
+  // Sau khi `stillGapsHours` đã sắp lại, khoảng âm chỉ còn có thể là commit
+  // mốc tương lai. Cùng luật với `conflictRows`: kẹp về 0 và nói ra, chứ
+  // không in `-4 giờ` lên bản tin.
+  const clockSkew = gaps[0]! < 0;
+  const currentStillHours = Math.max(gaps[0]!, 0);
+  const longestStillHours = Math.max(...gaps.map((gap) => Math.max(gap, 0)));
+  return {
+    ...base,
+    measured: true,
     longestStillHours,
     currentStillHours,
     hoursShort: Math.max(0, Math.round((delayHours - currentStillHours) * 100) / 100),
     reachedThreshold: longestStillHours >= delayHours,
+    clockSkew,
   };
 }
 
@@ -182,12 +265,25 @@ export function delayedFlowRows(
   return prs
     .filter((pr) => pr.labels.some((label) => label.toLowerCase() === DELAYED_LABEL))
     .map((pr) => delayedFlowRow(pr, now, options))
-    .sort((a, b) => a.hoursShort - b.hoursShort || a.number - b.number);
+    .sort((a, b) => {
+      // Hàng không đo được xếp **cuối** chứ không bị bỏ — cùng luật với
+      // `conflictRows`: "không đo được" là một trạng thái phải hiện ra.
+      if (a.hoursShort === null && b.hoursShort === null) return a.number - b.number;
+      if (a.hoursShort === null) return 1;
+      if (b.hoursShort === null) return -1;
+      return a.hoursShort - b.hoursShort || a.number - b.number;
+    });
 }
 
 export function summarizeDelayedFlow(rows: readonly DelayedFlowRow[]): DelayedFlowSummary {
-  const reached = rows.filter((row) => row.reachedThreshold).length;
-  return { delayed: rows.length, reachedThreshold: reached, neverReached: rows.length - reached };
+  const measured = rows.filter((row) => row.measured);
+  const reached = measured.filter((row) => row.reachedThreshold === true).length;
+  return {
+    delayed: rows.length,
+    reachedThreshold: reached,
+    neverReached: measured.length - reached,
+    notMeasured: rows.length - measured.length,
+  };
 }
 
 /**
@@ -198,14 +294,30 @@ export function summarizeDelayedFlow(rows: readonly DelayedFlowRow[]): DelayedFl
  * viễn trông giống hệt một PR sắp tới hạn. Chữ "ít nhất" không phải câu chữ
  * làm mềm: xem ghi chú đầu file, đây là cận dưới.
  */
-export function renderDelayedFlowRow(row: DelayedFlowRow, delayHours: number = DEFAULT_DELAY_HOURS): string {
+export function renderDelayedFlowRow(row: DelayedFlowRow): string {
   const parts = [`#${row.number}`, row.lane ?? 'không suy được làn'];
-  parts.push(row.hoursShort === 0 ? 'đủ giờ đứng yên' : `còn ít nhất ${row.hoursShort} giờ`);
-  parts.push(`đứng yên lâu nhất ${row.longestStillHours} giờ / ngưỡng ${delayHours}`);
-  if (row.clockResets >= RESET_ALERT_THRESHOLD) {
-    parts.push(`đồng hồ đặt lại ${row.clockResets} lần/24 giờ`);
+
+  if (!row.measured) {
+    // Không đo được thì KHÔNG nói gì về giờ, và tuyệt đối không nói "chưa
+    // bao giờ đủ ngưỡng" — đó là một khẳng định chắc rút ra từ chỗ trống.
+    parts.push('CHƯA ĐO ĐƯỢC ĐẦU NHÁNH');
+  } else if (row.conflicting) {
+    // Phụ lục P2: PR đang xung đột thì **thay** "còn mấy giờ" bằng lời nói
+    // về xung đột — đồng hồ 12 giờ không chạy khi đang xung đột (CHARTER
+    // 3.3). In cả hai là để bản tin tự mâu thuẫn trong một mục.
+    parts.push('xung đột — đồng hồ 12 giờ KHÔNG chạy, xem mục "PR đang xung đột"');
+  } else {
+    parts.push(row.hoursShort === 0 ? 'đủ giờ đứng yên' : `còn ít nhất ${row.hoursShort} giờ`);
   }
-  if (!row.reachedThreshold) parts.push('CHƯA BAO GIỜ đủ ngưỡng');
+
+  if (row.measured) {
+    parts.push(`đứng yên lâu nhất ${row.longestStillHours} giờ / ngưỡng ${row.delayHours}`);
+  }
+  if (row.headCommitsInWindow >= RESET_ALERT_THRESHOLD) {
+    parts.push(`${row.headCommitsInWindow} commit mới/${row.windowHours} giờ (cận trên của số lần đặt lại)`);
+  }
+  if (row.clockSkew) parts.push('⚠️ mốc commit nằm ở TƯƠNG LAI — đồng hồ lệch, số giờ kẹp về 0');
+  if (row.reachedThreshold === false) parts.push('CHƯA BAO GIỜ đủ ngưỡng');
   parts.push(row.title);
   return parts.join(' · ');
 }
@@ -290,7 +402,7 @@ function main(): void {
     return;
   }
   const out = [
-    `Cửa \`${DELAYED_LABEL}\`, đo lúc ${now}: ${summary.delayed} PR · ${summary.neverReached} PR chắc chắn chưa từng đủ ngưỡng`,
+    `Cửa \`${DELAYED_LABEL}\`, đo lúc ${now}: ${summary.delayed} PR · ${summary.neverReached} PR chắc chắn chưa từng đủ ngưỡng · ${summary.notMeasured} PR không đo được`,
   ];
   for (const row of rows) out.push(`- ${renderDelayedFlowRow(row)}`);
   process.stdout.write(`${out.join('\n')}\n`);
