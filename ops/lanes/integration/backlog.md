@@ -469,11 +469,17 @@ còn tệ hơn là không viết").
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
-  - `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/`.
-  - Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
-    test tái hiện, không chỉ có lời.
-  - Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
-    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`).
+  - ✅ `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/` —
+    việc số 6, `ops/scripts/check-workshop-contracts.ts`. Quét **đệ quy**, nên thư mục con không thoát.
+  - ✅ Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
+    test tái hiện, không chỉ có lời. `ops/test/check-workshop-contracts.test.ts` bài cuối chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát, kèm bài đối chứng với schema sạch.
+    Đã kiểm rằng bài đó **đỏ** khi gỡ dòng nối ở `check-contracts.ts` — quét đúng mà không ai gọi vẫn là
+    "không gì đỏ".
+  - ✅ Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
+    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`). Mỗi file giữ một ghi chú
+    nói phép kiểm đó nay nằm ở đâu.
+- PR: `#95`
