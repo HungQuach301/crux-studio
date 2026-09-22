@@ -30,6 +30,21 @@ name: notify
 on:
   issues:
     types: [opened, labeled, reopened]
+  # P-010 · gọi tay được, để `smoke-workflows.yml` chạy thử file này sau mỗi
+  # lần nó đổi trên `main`. Trước đây nó CHỈ có `on: issues`, nên nó là
+  # workflow duy nhất trong repo không có cách nào chạy thử — và nó lại là
+  # workflow chỉ chạy đúng lúc có chuyện (bản tin, cảnh báo), tức là lúc tệ
+  # nhất để phát hiện nó hỏng.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Chạy thử: in ra comment ĐỊNH viết, không bình luận gì'
+        type: boolean
+        default: true
+      issue:
+        description: 'Số issue để thử. Bỏ trống thì lấy issue digest/alert mới nhất.'
+        type: string
+        default: ''
 
 permissions:
   issues: write
@@ -38,7 +53,11 @@ jobs:
   mention:
     name: mention
     runs-on: ubuntu-latest
+    # Gọi tay thì không có `github.event.issue`, nên hai phép `contains`
+    # dưới đây đều sai và job sẽ bị bỏ qua — đúng cái làm nó không chạy thử
+    # được. Nhánh `workflow_dispatch` mở đường đó ra.
     if: >-
+      github.event_name == 'workflow_dispatch' ||
       contains(github.event.issue.labels.*.name, 'digest') ||
       contains(github.event.issue.labels.*.name, 'alert')
     steps:
@@ -46,11 +65,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          NUM: ${{ github.event.issue.number }}
+          NUM: ${{ github.event.issue.number || inputs.issue }}
           OWNER: HungQuach301
           MARKER: '<!-- crux-notify -->'
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
+          # Gọi tay mà không chỉ định issue: lấy issue digest/alert mới nhất
+          # để chạy thử vẫn đi qua đường thật (`gh issue view`, `gh issue
+          # list`, quyền `issues`). Không có issue nào thì dừng xanh — repo
+          # mới tinh không phải là một lỗi.
+          if [ -z "$NUM" ]; then
+            NUM=$(gh issue list --repo "$REPO" --state all --limit 1 \
+              --json number,labels \
+              --jq '[.[] | select(.labels | map(.name) | (index("digest") != null or index("alert") != null))][0].number // empty')
+          fi
+          if [ -z "$NUM" ]; then
+            echo "Không có issue digest/alert nào để thử. Không có gì để làm."
+            exit 0
+          fi
+          echo "Issue được xét: #$NUM"
+
           if gh issue view "$NUM" --repo "$REPO" --json comments \
               --jq '.comments[].body' | grep -qF "$MARKER"; then
             echo "Đã nhắc rồi. Không nhắc lại."
@@ -73,4 +108,10 @@ jobs:
             "Nhãn: $LABELS" \
             "" \
             "Trả lời bằng MỘT comment ngay trong issue này, dạng \`#19 A, #14 B\`. Comment của anh không có 🤖, nên agent nhận ra đó là câu trả lời của anh.")
+
+          if [ "$DRY_RUN" = "true" ]; then
+            printf 'CHẠY THỬ — KHÔNG bình luận.\nĐỊNH bình luận vào issue #%s:\n────────\n%s\n' "$NUM" "$BODY"
+            exit 0
+          fi
+
           gh issue comment "$NUM" --repo "$REPO" --body "$BODY"
