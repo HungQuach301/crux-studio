@@ -47,7 +47,8 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { WORKSHOPS, readInputFile, type Envelope } from '@crux/kernel';
+import { WORKSHOPS, readInputFile, type Envelope, type WorkshopName } from '@crux/kernel';
+import { DEFINITIONS } from './pipeline.ts';
 
 /** Các trường bối cảnh mà phong bì artifact chép lại từ tập và từ pack. */
 const CONTEXT_FIELDS = ['episodeId', 'channel', 'genre', 'locale'] as const;
@@ -61,12 +62,20 @@ export function fixtureInputPath(root: string, workshop: string): string {
  *
  * `label` đi vào mọi dòng vấn đề để người đọc biết file nào, không phải
  * đoán từ đường dẫn tuyệt đối trong thư mục tạm.
+ *
+ * `consumes` tới từ `definition.consumes` của xưởng, không từ file: fixture
+ * không còn khai danh sách xưởng cần nạp (mục `integration/I-011`).
  */
-export function inputFileProblems(root: string, path: string, label: string): string[] {
+export function inputFileProblems(
+  root: string,
+  path: string,
+  label: string,
+  consumes: readonly WorkshopName[],
+): string[] {
   let episode: Record<(typeof CONTEXT_FIELDS)[number], string>;
   let upstream: Partial<Record<string, Envelope>>;
   try {
-    const read = readInputFile(root, path);
+    const read = readInputFile(root, path, consumes);
     episode = read.episode;
     upstream = read.input.upstream;
   } catch (error) {
@@ -113,10 +122,36 @@ export function upstreamCopyProblems(path: string, label: string): string[] {
 
   return [
     `${label}: khai thẳng artifact đầu vào của ${names.join(', ')} trong khoá "upstream". ` +
-      `Fixture trong repo phải trỏ tới tập vàng bằng "upstreamFrom": ` +
-      `{ "golden": "<tập>", "workshops": [${names.map((n) => `"${n}"`).join(', ')}] } — ` +
-      `bản chép snapshot trôi mà vẫn hợp contract, nên không gì đỏ ` +
+      `Fixture trong repo phải trỏ tới tập vàng bằng "upstreamFrom": { "golden": "<tập>" } — ` +
+      `danh sách xưởng cần nạp suy từ definition.consumes, không khai ở fixture ` +
+      `(mục integration/I-011). Bản chép snapshot trôi mà vẫn hợp contract, nên không gì đỏ ` +
       `(mục integration/I-009, hàng Z16 của ops/known-failures.md).`,
+  ];
+}
+
+/**
+ * `upstreamFrom.workshops` không còn được đọc: danh sách xưởng cần nạp suy từ
+ * `definition.consumes` (mục `integration/I-011`). Một danh sách sót lại
+ * trong fixture bị **bỏ qua im lặng** — người sửa tưởng nó điều khiển việc
+ * nạp, nhưng `readInputFile` nạp theo `consumes`. Đó đúng là bản chép thứ hai
+ * mà `I-011` bỏ đi, nên bắt nó ở đây thay vì để nó nằm im.
+ */
+export function upstreamFromWorkshopsProblems(path: string, label: string): string[] {
+  let file: { upstreamFrom?: unknown };
+  try {
+    file = JSON.parse(readFileSync(path, 'utf8')) as { upstreamFrom?: unknown };
+  } catch {
+    return [];
+  }
+
+  const from = file.upstreamFrom;
+  if (typeof from !== 'object' || from === null || Array.isArray(from)) return [];
+  if (!('workshops' in (from as Record<string, unknown>))) return [];
+
+  return [
+    `${label}: "upstreamFrom.workshops" không còn được đọc — danh sách xưởng cần nạp suy từ ` +
+      `definition.consumes (mục integration/I-011). Bỏ khoá này: một danh sách sót lại ` +
+      `lệch được với consumes mà không gì đỏ, đúng bản chép mà I-011 bỏ đi.`,
   ];
 }
 
@@ -151,9 +186,11 @@ export function fixtureInputProblems(root: string): string[] {
       );
       continue;
     }
+    const consumes = DEFINITIONS[workshop].consumes;
     for (const { path, label } of fixtureInputFiles(root, workshop)) {
-      problems.push(...inputFileProblems(root, path, label));
+      problems.push(...inputFileProblems(root, path, label, consumes));
       problems.push(...upstreamCopyProblems(path, label));
+      problems.push(...upstreamFromWorkshopsProblems(path, label));
     }
   }
   return problems;
