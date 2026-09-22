@@ -42,7 +42,8 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - dự phòng nếu sai: giảm xuống 2 worker.
 
 ### VF-G5 · Quota phút Actions và dung lượng artifact
-- deps: —
+- deps: V-002, A-001
+- ⬜ **`deps` viết ra ngày 2026-09-21 (lượt `crux-worker-2`), trước đó để `—`:** dòng `kiểm` dưới đây vốn đã đòi kết quả của `V-002` và `A-001`, nhưng `deps: —` khiến bước 3 của phụ lục P1 coi mục này là nhận được, rồi lượt nào cũng phải tự đọc dòng `kiểm` mà bỏ qua bằng phán đoán — đúng nhóm lỗi **Z**. Nay luật cơ học khớp với thực tế, không cần phán đoán nữa.
 - risk: high
 - status: ready
 - kiểm: đo phút Actions của một lần render thử (dùng kết quả V-002 và A-001).
@@ -105,10 +106,25 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G10 · Phiên cloud có ghi được `.github/workflows` không
 - deps: —
 - risk: low
-- status: ready
+- status: parked
 - kiểm: trong một nhánh vứt đi, thử ghi một file vào `.github/workflows/` và push. **Không merge.**
 - dự phòng nếu đúng như giả định: giữ nguyên cơ chế sync và PAT.
 - nếu ghi được ổn định: có thể gỡ bỏ cơ chế sync và PAT, **thông qua một quyết định riêng** — không tự gỡ.
+- ⬜ **`parked` — bài kiểm này agent không chạy được, và không phải vì thiếu thời gian.** Chính cách kiểm ("ghi một file vào `.github/workflows/`") là việc mà **hai** nguồn thẩm quyền cấm tuyệt đối: phụ lục P1 của CHARTER ("Tuyệt đối không: … sửa `.github/`") và `CLAUDE.md` mục 4. Lớp chặn máy cũng đang sống: đo lại trong chính lượt worker `crux-worker-2` 2026-09-21 ~22:25Z, một lệnh **đọc** vô hại (`cat .github/workflows/ci.yml | head -3`) đã bị `.claude/hooks/guard.mjs` chặn với đúng câu *"CHẶN — Agent không ghi vào .github/ (CHARTER 3.2, giả định G10)"*. Đi vòng qua hook bằng công cụ khác (API GitHub thay cho Bash) là **lách lớp chặn**, đúng thứ `CLAUDE.md` mục 3 gọi tên; không làm.
+- ⬜ **Dữ liệu gián tiếp, đo kỹ rồi vẫn KHÔNG kết luận được.** `git log origin/main -- .github/` (tới `c7179c6`) trả **3** commit, không phải 2:
+  | commit | ai | thật sự ghi `.github/`? |
+  |---|---|---|
+  | `9b97cea`, `9928c75` | `crux-sync` (workflow sync, PAT `WORKFLOW_SYNC_TOKEN`) | **có** |
+  | `939ebb0` | committer `GitHub <noreply@github.com>` — commit **gốc** của lịch sử đang thấy, bản squash của PR #15 | **không**: nó không có cha, nên cả cây hiện ra dạng `A` (thêm mới), gồm 7 file `.github/workflows/*.yml` đã tồn tại từ trước |
+
+  Kiểm chéo đầu nhánh thật của PR #15 (`git show --stat refs/pull/15/head`, `c5a164a`): diff của nó **không** chạm `.github/` — chỉ `.gitattributes`, `docs/`, `ops/`. Nên `939ebb0` là hiệu ứng của gốc lịch sử, không phải một lần ghi.
+
+  **Cạm bẫy đo, ghi lại để lượt sau không vấp:** `git diff-tree -r --name-status <sha>` trả **rỗng** cho commit gốc; phải thêm `--root`, hoặc dùng `git log -- <đường dẫn>`. Bản đầu của chính mục này đếm hụt đúng vì chỗ đó.
+
+  Kết luận đúng: dữ liệu này **không nói được gì** về việc phiên agent có quyền ghi `.github/` hay không — chưa phiên nào thử, vì hook chặn. Không dùng nó để đẩy G10 về `đúng` hay `sai`; G10 giữ độ tin cậy `tài liệu nói vậy`.
+- vì sao `parked` chứ không phải `ready`: để `ready` thì mọi lượt worker đều nhận mục này ở bước 3 rồi dừng ở đúng chỗ cũ mà không ai thấy — đúng nhóm lỗi **Z** (hỏng mà không gì đỏ). Đây **không** phải chữ ký lỗi lặp lần thứ ba (`CLAUDE.md` mục 13) mà là một chỗ chặn cứng nhìn ra được ngay ở lần thử đầu.
+- hệ quả: **không chặn làn nào.** Dự phòng "giữ nguyên cơ chế sync và PAT" đang chạy thật và không phụ thuộc câu trả lời; biết G10 đúng hay sai chỉ mở đường **gỡ** cơ chế đó, mà chính dòng trên đã ghi là "không tự gỡ". Giá trị của bài kiểm vì thế thấp, còn giá của nó là nới một lớp chặn (CHARTER 2.3 nhóm 5).
+- mở lại thành `ready` khi: có câu trả lời cho issue **#88** (chủ dự án tự chạy bài kiểm, hoặc duyệt một ngoại lệ hẹp có thời hạn trong `guard.mjs` bằng PR `owner-merge`). Lời hứa "tôi sẽ đề xuất riêng" về G10 nằm ở issue #5 từ 2026-09-20 và chưa lượt nào thực hiện — issue #88 là việc đó.
 
 ### VF-G11 · Hook và luật deny có hiệu lực trong routine và thread không
 - deps: —
@@ -197,3 +213,20 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
     sinh lại → `semver@7.8.5`. Cùng một manifest `^7.0.0`, nên chênh lệch đo được chính là tác dụng bản mồi.
   - Kiểm lại khi nâng `pnpm` qua một phiên bản chính. Không đưa vào `pnpm check`: cần mạng, và một bài kiểm
     im lặng bỏ qua khi không có mạng còn tệ hơn không có bài kiểm.
+
+### VF-G19 · Hạn mức `search.list` của YouTube Data API là bao nhiêu
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: `docs/assumptions.md` G19; mục `topic/T-008`; spec WP-014 mục 3b và mục 7
+- kiểm: mở Google Cloud Console của project, đọc hạn mức thật của `search.list` (số lần gọi mỗi ngày và
+  đơn vị mỗi lần gọi), so với con số 100 đang dùng. **Chỉ chủ dự án làm được** — cần tài khoản và một
+  project đã bật API; phiên cloud không có project nào để mở.
+- dự phòng nếu sai: đã viết sẵn — hạn mức là **tham số**, đọc từ `quota.limits` của mỗi ảnh chụp corpus
+  chứ không viết cứng trong code. Sai thì sửa một số trong dữ liệu. Lớp hai: mỗi corpus ghi
+  `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 cũng là lần đọc được hạn mức
+  thật từ chính số đã tiêu.
+- tiêu chí xong: trạng thái G19 trong sổ chuyển sang `đã kiểm`, kèm ngày và con số đọc được. Hai dòng đầu
+  bảng trong `packs/channels/us-personal-finance/quota-budget.md` thay bằng số thật, và
+  `quota.limits.source` của corpus chuyển từ `vendor-docs` sang `console-measured` — đó là điều kiện còn
+  thiếu duy nhất để `T-008` đạt tiêu chí "hạn mức được đo, không được đoán".

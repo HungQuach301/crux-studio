@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://crux.studio/contracts/topic/novelty-check.v0.schema.json",
+  "title": "Kết quả kiểm mới lạ — v0",
+  "description": "WP-014 mục 3c.2: contradictingCount = 0 KHÔNG chứng minh mới lạ. Vì vậy verdict không có giá trị 'novel' — chỉ 'novel-in-corpus' — và `limitation` là trường bắt buộc có chữ. `reasons` bắt buộc có ít nhất một phần tử: tiêu chí xong của T-008 đòi kiểm trả về LÝ DO, không chỉ trả về điểm.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "thesisId", "checkedAt", "corpusRef", "scope", "verdict", "reasons", "similarCount", "contradictingCount", "limitation"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 0 },
+    "thesisId": { "type": "string", "minLength": 1 },
+    "checkedAt": { "type": "string", "format": "date-time" },
+    "corpusRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpusId", "builtAt", "videoCount"],
+      "properties": {
+        "corpusId": { "type": "string", "minLength": 1 },
+        "builtAt": { "type": "string", "format": "date-time" },
+        "videoCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regions", "languages", "windowDays", "asOf"],
+      "properties": {
+        "regions": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[A-Z]{2}$" } },
+        "languages": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 2 } },
+        "windowDays": { "type": "integer", "minimum": 1 },
+        "asOf": { "type": "string", "format": "date-time" }
+      }
+    },
+    "verdict": {
+      "enum": ["novel-in-corpus", "contested-in-corpus", "crowded-in-corpus", "insufficient-corpus"],
+      "description": "Không có giá trị 'novel'. Mỗi giá trị đọc là một phát biểu về CORPUS ĐÃ KIỂM, không phải về thế giới."
+    },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "detail"],
+        "properties": {
+          "code": {
+            "enum": [
+              "corpus-below-minimum",
+              "corpus-partial",
+              "corpus-stale",
+              "similar-above-threshold",
+              "similar-below-threshold",
+              "contradicting-found",
+              "contradicting-none",
+              "scope-narrow"
+            ]
+          },
+          "detail": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "similarCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Số video nói CÙNG chuyện và KHÔNG nói ngược. Một video vừa trùng đề tài vừa phản biện được đếm vào `contradictingCount`, không đếm vào đây — hai số này rời nhau, cộng lại ra tổng số video trùng đề tài."
+    },
+    "contradictingCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Số video trùng đề tài VÀ mang dấu hiệu nói ngược. Bằng 0 không chứng minh điều gì — xem `limitation`."
+    },
+    "matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["videoId", "overlap", "stance"],
+        "properties": {
+          "videoId": { "type": "string", "minLength": 1 },
+          "overlap": { "type": "number", "minimum": 0, "maximum": 1 },
+          "stance": { "enum": ["similar", "contradicting"] }
+        }
+      }
+    },
+    "limitation": {
+      "type": "string",
+      "minLength": 40,
+      "description": "WP-014 mục 5: cấm tuyên bố 'chưa ai công bố'. Câu này phải nói rõ phạm vi X và ngày Y. minLength chặn ca điền cho có."
+    }
+  }
+}

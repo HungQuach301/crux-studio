@@ -57,6 +57,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
+| G19 | `search.list` của YouTube Data API cho 100 lần gọi mỗi ngày, bucket riêng với `videos.insert` | `tài liệu nói vậy` | dự phòng đã viết sẵn · chặn phần XÂY corpus, không chặn phần đã làm của `T-008` | `VF-G19` |
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G7`, `G14`) đã kiểm được một phần — cũng ở dưới; `G2` và `G14` ngay trong Đợt 0. `G7` là ca đáng chú ý nhất: phần chưa kiểm không phải vì chưa ai làm, mà vì **phiên cloud không ra được các trang điều khoản** (mục `VF-G7`). `G11` đã kiểm **xong** phần routine ngày 2026-09-21, mục `VF-G11`.
 
@@ -283,7 +284,10 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
   > Lưu ý về cách kiểm: hook `guard.mjs` chặn chính agent ghi vào `.github/`, nên bài kiểm này **không thực hiện được từ một phiên agent bình thường** — và agent không được tự nới hook để kiểm. Bài kiểm cần chủ dự án chạy, hoặc cần một PR `owner-merge` mở một ngoại lệ hẹp cho đúng một file thử rồi đóng lại ngay.
 - **Dự phòng nếu giả định đúng:** giữ nguyên cơ chế sync và PAT — đang dùng.
 - **Nếu hoá ra ghi được ổn định:** có thể gỡ bỏ cơ chế sync và PAT, **thông qua một quyết định riêng**. Agent không tự gỡ: việc đó đổi cách toàn bộ workflow tới được GitHub.
-- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10`.
+- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10` — mục đó nay `parked` (2026-09-21, lượt `crux-worker-2`).
+- ⬜ **Vì sao `parked`:** cách kiểm ở trên là đúng thứ phụ lục P1 của CHARTER và `CLAUDE.md` mục 4 cấm tuyệt đối, và lớp chặn máy vẫn sống — đo lại trong lượt worker 2026-09-21 ~22:25Z, `guard.mjs` chặn cả một lệnh **đọc** `.github/workflows/ci.yml`. Đi vòng qua hook bằng công cụ khác là lách lớp chặn, không làm. Bài kiểm cần chủ dự án chạy, hoặc cần một ngoại lệ hẹp có thời hạn trong `guard.mjs` qua PR `owner-merge` — nới lớp chặn là CHARTER 2.3 nhóm 5. Issue **#88** nêu ba phương án; lời hứa "đề xuất riêng" về G10 có từ issue #5 (2026-09-20) và tới nay mới thực hiện.
+- ⬜ **Dữ liệu gián tiếp, đo kỹ rồi vẫn KHÔNG kết luận được:** `git log origin/main -- .github/` (tới `c7179c6`) trả **3** commit — `9b97cea` và `9928c75` của `crux-sync` (PAT `WORKFLOW_SYNC_TOKEN`) là ghi thật; `939ebb0` là commit **gốc** của lịch sử đang thấy (committer `GitHub <noreply@github.com>`, bản squash của PR #15), không có cha nên cả cây hiện ra dạng `A`, gồm 7 file `.github/workflows/*.yml` đã tồn tại từ trước — đầu nhánh thật của PR #15 (`c5a164a`) **không** chạm `.github/`. Cạm bẫy đo: `git diff-tree -r --name-status <sha>` trả rỗng cho commit gốc, phải có `--root`. Dữ liệu này không nói được gì về quyền của phiên agent — chưa phiên nào thử, vì hook chặn — nên độ tin cậy giữ nguyên `tài liệu nói vậy`.
+- **Không chặn làn nào:** dự phòng "giữ nguyên cơ chế sync và PAT" đang chạy thật; câu trả lời chỉ mở đường **gỡ** cơ chế đó, mà việc gỡ vốn đã cần một quyết định riêng.
 
 ## G11 · Hook và luật deny có hiệu lực trong routine và thread
 
@@ -450,3 +454,14 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 - **Cách kiểm lại:** lặp đúng hai dòng trong bảng trên. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi registry npm, mà các lệnh kiểm của repo phải chạy được khi không có mạng — một bài kiểm im lặng bỏ qua vì không ra được internet còn tệ hơn là không có bài kiểm nào. Mục `VF-G18` giữ phần kiểm định kỳ.
 - **Dự phòng — chưa cần viết sẵn:** nếu giả định này hoá ra sai, cơ chế `I-004` không mất an toàn, nó chỉ mất tính "ít xáo trộn nhất": lockfile vẫn khớp manifest và CI vẫn gác. Khi đó `integrator-lockfile.ts` chuyển sang `aborted-ineligible` cho mọi xung đột lockfile và giao lại cho người — một dòng sửa, hành vi quay về đúng như trước mục `I-004`.
 - **Trạng thái:** đã kiểm, đang được dùng. Kiểm lại khi nâng `pnpm` qua một phiên bản chính.
+
+## G19 · Hạn mức `search.list` của YouTube Data API
+
+- **Nội dung:** method `search.list` có bucket **riêng** 100 lần gọi mỗi ngày, mỗi lần 1 đơn vị, và mỗi trang kết quả tiếp theo tốn thêm một lần gọi. Bucket này không dùng chung với `videos.insert`, nên xây corpus không tranh quota với việc đăng video.
+- **Vì sao nó chịu tải:** toàn bộ ngân sách quota của corpus đối thủ (`packs/channels/us-personal-finance/quota-budget.md`) và cửa dừng `quotaGate` đứng trên con số 100. Sai theo hướng **thấp hơn** thì một lần xây corpus tiêu hết quota của ngày mà cửa dừng không kịp đóng — và vì `search.list` không dùng chung bucket với việc đăng, hỏng đó **không** lan sang lịch phát hành, nhưng nó vẫn làm mọi việc tìm kiếm khác trong ngày chết lặng.
+- **Nguồn:** tài liệu nhà cung cấp. **Chưa đọc Cloud Console** — WP-014 mục 7 đòi đúng việc đó, và phiên cloud không có project nào để mở.
+- **Độ tin cậy:** `tài liệu nói vậy`
+- **Phần phụ thuộc:** `workshops/topic/src/corpus.ts` · `packs/channels/us-personal-finance/quota-budget.md` · `ops/lanes/topic/backlog.md` (T-008, T-011)
+- **Cách kiểm:** mở Google Cloud Console của project, đọc hạn mức thật của `search.list`, so với 100. **Chỉ chủ dự án làm được** — cần tài khoản và một project có bật API. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi ra ngoài, mà các lệnh kiểm của repo phải chạy được khi không có mạng.
+- **Dự phòng — đã viết sẵn:** con số **không nằm trong code**. `quotaGate` nhận `searchCallsPerDay` và `reserveFraction` làm tham số, và cả hai đọc từ trường `quota.limits` của chính ảnh chụp corpus. Giả định sai thì sửa đúng một số trong dữ liệu, không sửa dòng code nào. Lớp thứ hai: mỗi corpus ghi `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 là lần ta đọc được hạn mức thật từ chính số đã tiêu.
+- **Trạng thái:** `tài liệu nói vậy`, giao làn `verify`, mục `VF-G19`. Phần đã làm của `T-008` (contract, kiểm mới lạ, ba đại lượng nhu cầu) **không** đứng trên giả định này — nó chạy trên corpus có sẵn và không gọi API. Phần **xây** corpus (`T-011`) thì có, và đang chặn ở chỗ khác nặng hơn: chưa có secret nào.
