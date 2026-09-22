@@ -222,6 +222,95 @@ export function scanWorkshopContracts(root: string): ContractScan {
   return scan;
 }
 
+/** Các gốc mà một `*.schema.json` lạc chỗ có thể trốn — mục `integration/I-014`. */
+export const STRAY_SCAN_ROOTS = ['workshops', 'packs'] as const;
+
+/**
+ * Hố mà `I-013` để lại (mục `integration/I-014`): `scanWorkshopContracts`
+ * chỉ soi `workshops/<tên>/contracts/`. Một `*.schema.json` thả ở
+ * `workshops/<tên>/src/`, ở `packs/**`, hay bất cứ đâu ngoài `contracts/`
+ * vẫn thoát cả hai phép kiểm từ khoá (`check-contracts.ts` việc 2 và việc
+ * 6) — đúng nhóm **Z**, chỉ lùi thêm một tầng so với `I-013`: phạm vi quét
+ * vẫn buộc bằng **quy ước thư mục**, không bằng một phép kiểm.
+ *
+ * Luật đóng hố: một `*.schema.json` chỉ hợp lệ khi nằm trong
+ * `workshops/<tên>/contracts/` — đúng vùng `scanWorkshopContracts` quét.
+ * Tìm thấy ở bất cứ đâu khác dưới `workshops/` hoặc `packs/` là một VẤN ĐỀ:
+ * schema đó phải chuyển vào `contracts/`. Và nó vẫn bị **kiểm từ khoá tại
+ * chỗ** — cùng cặp "vấn đề cấu trúc + kiểm nội dung" của hố 4, để một
+ * schema lạc chỗ dùng từ khoá lạ không thoát chỉ bằng cách nằm sai chỗ.
+ *
+ * Không ném: `check-contracts.ts` gom vấn đề của mọi việc rồi in một lần,
+ * nên một ngoại lệ ở đây sẽ giấu mất phần còn lại. Một gốc không đọc được
+ * là một dòng vấn đề, không phải một tập rỗng im lặng.
+ */
+export function scanStraySchemas(root: string): string[] {
+  const problems: string[] = [];
+  for (const scanRoot of STRAY_SCAN_ROOTS) {
+    const base = join(root, scanRoot);
+    if (!existsSync(base)) continue;
+
+    let entries: string[];
+    try {
+      entries = readdirSync(base, { recursive: true, encoding: 'utf8' });
+    } catch (error) {
+      problems.push(`${scanRoot}/: không đọc được để dò schema lạc chỗ — ${describe(error)}`);
+      continue;
+    }
+
+    for (const entry of entries.sort()) {
+      if (!entry.endsWith(SCHEMA_SUFFIX)) continue;
+
+      // Chuẩn hoá dấu phân cách để so đúng trên mọi HĐH.
+      const parts = entry.split(/[\\/]/);
+      // Phụ thuộc đã cài không phải mã của repo: workspace symlink
+      // `node_modules/@crux/kernel/contracts/*.schema.json` vào từng xưởng,
+      // và đó là contract của kernel, đã được việc 2 kiểm — không phải
+      // schema lạc chỗ. Không bỏ qua thì `pnpm contracts` đỏ trên repo sạch.
+      if (parts.includes('node_modules')) continue;
+      // Vùng hợp lệ duy nhất là `workshops/<tên>/contracts/**` — đúng thứ
+      // `scanWorkshopContracts` đã quét và kiểm từ khoá. Bỏ qua ở đây để
+      // không báo trùng một file đã có người canh.
+      if (scanRoot === 'workshops' && parts[1] === 'contracts') continue;
+
+      const label = join(scanRoot, entry);
+      const full = join(base, entry);
+
+      let stat;
+      try {
+        // `lstatSync`, không `statSync`: một symlink gãy tên `*.schema.json`
+        // ném `ENOENT` ở `statSync` và giết cả lượt in vấn đề.
+        stat = lstatSync(full);
+      } catch (error) {
+        problems.push(`${label}: không đọc được — ${describe(error)}`);
+        continue;
+      }
+
+      problems.push(
+        `${label}: \`*${SCHEMA_SUFFIX}\` nằm ngoài \`workshops/<tên>/contracts/\` nên ngoài tầm ` +
+          `kiểm từ khoá. Chuyển vào \`contracts/\` của xưởng, hoặc đổi hậu tố nếu không phải schema.`,
+      );
+
+      // Symlink, fifo… không đọc nội dung — đã có dòng vấn đề cấu trúc trên.
+      if (!stat.isFile()) continue;
+
+      let schema: unknown;
+      try {
+        schema = JSON.parse(readFileSync(full, 'utf8'));
+      } catch (error) {
+        problems.push(`${label}: không đọc được JSON — ${describe(error)}`);
+        continue;
+      }
+      if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) continue;
+      const unknown = unsupportedKeywords(schema);
+      if (unknown.length > 0) {
+        problems.push(`${label}: dùng từ khoá validator chưa hỗ trợ: ${unknown.join(', ')}`);
+      }
+    }
+  }
+  return problems;
+}
+
 /**
  * Các file contract của mọi xưởng, xếp theo tên xưởng rồi theo tên file —
  * thứ tự ổn định để dòng vấn đề không đổi chỗ giữa hai lần chạy.

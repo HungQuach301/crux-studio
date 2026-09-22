@@ -23,6 +23,8 @@ import { fileURLToPath } from 'node:url';
 import {
   ALLOWED_NON_SCHEMA,
   SCHEMA_SUFFIX,
+  STRAY_SCAN_ROOTS,
+  scanStraySchemas,
   scanWorkshopContracts,
   workshopContractFiles,
   workshopContractProblems,
@@ -239,5 +241,114 @@ test('một lượt quét trả cả số đếm lẫn vấn đề — hai hàm 
     assert.deepEqual(scan.problems, workshopContractProblems(root));
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── I-014 · schema lạc chỗ ngoài `contracts/` ──────────────────────────────
+// `I-013` (việc 6) mới đóng đúng vùng `workshops/<tên>/contracts/`. Phạm vi
+// vẫn buộc bằng quy ước thư mục: một `*.schema.json` thả ở `src/` hay
+// `packs/**` thoát cả việc 2 lẫn việc 6 — Z lùi thêm một tầng.
+
+function strayProblemsFor(files: Record<string, unknown>): string[] {
+  const root = makeRoot(files);
+  try {
+    return scanStraySchemas(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test('I-014 · schema lạc trong workshops/<tên>/src/ thì bị bắt, kèm kiểm từ khoá', () => {
+  // Đúng ca tái hiện tiêu chí xong: từ khoá ngoài SUPPORTED_KEYWORDS, nằm
+  // NGOÀI contracts/. Hai dòng: một vấn đề cấu trúc (lạc chỗ) + một vấn đề
+  // nội dung (oneOf) — cùng cặp mà hố 4 dùng.
+  const problems = strayProblemsFor({ 'workshops/topic/src/novel.v0.schema.json': BAD_SCHEMA });
+  assert.equal(problems.length, 2, problems.join('\n'));
+  assert.ok(problems.some((p) => /novel\.v0\.schema\.json/.test(p) && /ngoài/.test(p)), problems.join('\n'));
+  assert.ok(problems.some((p) => /novel\.v0\.schema\.json/.test(p) && /oneOf/.test(p)), problems.join('\n'));
+});
+
+test('I-014 · schema lạc trong packs/** thì bị bắt', () => {
+  const problems = strayProblemsFor({ 'packs/genres/data-explainer/format.schema.json': GOOD_SCHEMA });
+  // `packs/` không có quy ước `contracts/`, nên MỌI schema ở đó là lạc chỗ.
+  // Từ khoá sạch nên chỉ một dòng — vấn đề cấu trúc.
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0]!, /format\.schema\.json/);
+  assert.match(problems[0]!, new RegExp(SCHEMA_SUFFIX.replace(/\./g, '\\.')));
+});
+
+test('I-014 · schema ĐÚNG chỗ (workshops/<tên>/contracts/) KHÔNG bị báo trùng', () => {
+  // Vùng này đã có `scanWorkshopContracts` canh; `scanStraySchemas` không
+  // được nói lại, kể cả thư mục con.
+  assert.deepEqual(strayProblemsFor({ 'workshops/topic/contracts/ok.v0.schema.json': GOOD_SCHEMA }), []);
+  assert.deepEqual(strayProblemsFor({ 'workshops/topic/contracts/v1/ok.v1.schema.json': GOOD_SCHEMA }), []);
+});
+
+test('I-014 · một `contracts/` lồng sai chỗ (workshops/<tên>/sub/contracts/) vẫn là lạc chỗ', () => {
+  // `scanWorkshopContracts` chỉ quét `workshops/<tên>/contracts/`, nên
+  // `workshops/topic/sub/contracts/` KHÔNG được canh — phải bị bắt ở đây.
+  const problems = strayProblemsFor({ 'workshops/topic/sub/contracts/x.v0.schema.json': GOOD_SCHEMA });
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0]!, /sub\/contracts\/x\.v0\.schema\.json|sub[\\/]contracts[\\/]x\.v0\.schema\.json/);
+});
+
+test('I-014 · JSON hỏng ở schema lạc chỗ được báo ra, không ném', () => {
+  const problems = strayProblemsFor({ 'workshops/topic/src/broken.v0.schema.json': '{ "type": ' });
+  assert.equal(problems.length, 2, problems.join('\n'));
+  assert.ok(problems.some((p) => /ngoài/.test(p)), problems.join('\n'));
+  assert.ok(problems.some((p) => /không đọc được JSON/.test(p)), problems.join('\n'));
+});
+
+test('I-014 · symlink `*.schema.json` ngoài contracts/ thành dòng vấn đề, không ném', () => {
+  const root = makeRoot({ 'thật.json': BAD_SCHEMA });
+  try {
+    mkdirSync(join(root, 'workshops/topic/src'), { recursive: true });
+    symlinkSync(join(root, 'thật.json'), join(root, 'workshops/topic/src/link.v0.schema.json'));
+    const problems = scanStraySchemas(root);
+    // Chỉ dòng cấu trúc: symlink không đọc nội dung nên không kiểm từ khoá.
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0]!, /link\.v0\.schema\.json/);
+    assert.match(problems[0]!, /ngoài/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-014 · node_modules bị bỏ qua — phụ thuộc đã cài không phải mã repo', () => {
+  // Workspace symlink `node_modules/@crux/kernel/contracts/*.schema.json`
+  // vào từng xưởng; đó là contract của kernel (việc 2 đã kiểm), không phải
+  // schema lạc chỗ. Bỏ sót thì `pnpm contracts` đỏ trên repo sạch.
+  assert.deepEqual(
+    strayProblemsFor({ 'workshops/topic/node_modules/@crux/kernel/contracts/envelope.schema.json': GOOD_SCHEMA }),
+    [],
+  );
+});
+
+test('I-014 · repo thật KHÔNG có schema lạc chỗ', () => {
+  assert.deepEqual(scanStraySchemas(REPO_ROOT), []);
+  // Và hai gốc quét đúng là hai gốc mục này khai.
+  assert.deepEqual([...STRAY_SCAN_ROOTS], ['workshops', 'packs']);
+});
+
+test('I-014 · nối thật vào `pnpm contracts`: schema lạc chỗ làm script thoát KHÁC 0', () => {
+  // Phép quét đúng mà không ai gọi vẫn là "không gì đỏ". Chạy chính
+  // check-contracts.ts trên gốc tạm và đọc ĐÚNG dòng của mình.
+  const script = join(REPO_ROOT, 'ops', 'scripts', 'check-contracts.ts');
+  const bad = makeRoot({
+    'workshops/topic/contracts/ok.v0.schema.json': GOOD_SCHEMA,
+    'workshops/topic/src/novel.v0.schema.json': BAD_SCHEMA,
+  });
+  const good = makeRoot({ 'workshops/topic/contracts/ok.v0.schema.json': GOOD_SCHEMA });
+  try {
+    const red = spawnSync(process.execPath, [script], { cwd: bad, encoding: 'utf8' });
+    assert.notEqual(red.status, 0);
+    assert.match(red.stderr, /src[\\/]novel\.v0\.schema\.json/);
+    assert.match(red.stderr, /ngoài/);
+
+    const control = spawnSync(process.execPath, [script], { cwd: good, encoding: 'utf8' });
+    assert.doesNotMatch(control.stderr, /novel\.v0\.schema\.json/);
+  } finally {
+    rmSync(bad, { recursive: true, force: true });
+    rmSync(good, { recursive: true, force: true });
   }
 });

@@ -15,6 +15,10 @@
  *    từ khoá như contract của kernel — mục `integration/I-013`. Trước mục
  *    đó, việc số 2 chỉ nhìn `kernel/contracts/`, nên một contract xưởng
  *    dùng từ khoá validator chưa hiểu không làm gì đỏ.
+ * 7. Không `*.schema.json` nào trốn ngoài `contracts/` — mục
+ *    `integration/I-014`. Việc 6 vẫn buộc phạm vi bằng quy ước thư mục: một
+ *    schema thả ở `workshops/<tên>/src/` hay `packs/**` thoát cả việc 2 lẫn
+ *    việc 6. Việc này buộc nó phải nằm trong `contracts/`, bằng phép kiểm.
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -30,7 +34,7 @@ import {
   type WorkshopName,
 } from '@crux/kernel';
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
-import { scanWorkshopContracts } from './check-workshop-contracts.ts';
+import { scanWorkshopContracts, scanStraySchemas } from './check-workshop-contracts.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -120,6 +124,9 @@ problems.push(...fixtureInputProblems(root));
 // 6 · Contract của xưởng — một lượt quét cho cả số đếm lẫn danh sách vấn đề
 const workshopContracts = scanWorkshopContracts(root);
 problems.push(...workshopContracts.problems);
+
+// 7 · Schema lạc chỗ ngoài contracts/ (mục integration/I-014)
+problems.push(...scanStraySchemas(root));
 
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);

@@ -511,10 +511,15 @@ kiểm biến mất mà mọi chỉ báo vẫn xanh.
 
 - deps: `I-013`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
-  - Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
-    hoặc bị đòi phải nằm trong `contracts/`, và có dòng vấn đề nếu không.
-  - Có test tái hiện: thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` **ngoài** `contracts/` thì
-    `pnpm contracts` đỏ.
+  - ✅ Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
+    hoặc bị đòi phải nằm trong `contracts/`, và có dòng vấn đề nếu không. **Làm bằng cả hai:**
+    `scanStraySchemas` (`ops/scripts/check-workshop-contracts.ts`) bắt mọi `*.schema.json` ngoài
+    `workshops/<tên>/contracts/` bằng một dòng vấn đề *và* kiểm từ khoá tại chỗ — cùng cặp "cấu trúc + nội
+    dung" của hố 4. Nối vào `pnpm contracts` ở việc 7 của `check-contracts.ts`. `node_modules` bị loại (phụ
+    thuộc đã cài, không phải mã repo).
+  - ✅ Có test tái hiện: thả `oneOf` (ngoài `SUPPORTED_KEYWORDS`) ở `workshops/topic/src/` thì
+    `check-contracts.ts` thoát khác 0 và nói đúng tên file — `ops/test/check-workshop-contracts.test.ts`,
+    khối `I-014`.
