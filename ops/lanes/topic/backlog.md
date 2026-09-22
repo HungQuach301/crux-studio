@@ -39,12 +39,13 @@ Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập
 
 - deps: T-001
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-010, mục Lõi định lượng 1
 - tiêu chí xong:
-  - Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung.
-  - Mỗi ảnh chụp có `asOfDate` và băm nội dung; chạy lại cùng `asOfDate` cho ra cùng dữ liệu.
-  - Thiếu secret nguồn dữ liệu thì **DỪNG và báo tên secret thiếu**, không tự tạo secret.
+  - ✅ Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung (`workshops/topic/contracts/snapshot.v0.schema.json`, `workshops/topic/src/snapshot.ts` — `normalizeFred/Bls/Census` cùng trả `{period, value}` ISO date).
+  - ✅ Mỗi ảnh chụp có `asOfDate` và băm nội dung; `contentHash` không gồm `fetchedAt` nên chạy lại cùng `asOfDate` trên cùng dữ liệu cho ra cùng băm (test `sameData`, `chạy lại cùng asOfDate ...`).
+  - ✅ Thiếu secret thì `requireSecret` ném `MissingSecretError` mang đúng tên biến (`FRED_API_KEY`/`BLS_API_KEY`/`CENSUS_API_KEY`), chạy TRƯỚC mọi lần chạm mạng, không tự tạo secret (I1).
+- ✅ **Xong, 2026-09-22** (PR `#114`, lượt `crux-worker-3`): ba adapter + contract snapshot chung + 19 test. `pnpm check` xanh 511/511, `pnpm replay` khớp snapshot 6/6. Phần gọi API thật để lỏng qua `transport` tiêm vào — Đợt 0 không gọi API trả tiền (CHARTER mục 9), `transport` mặc định ném `LiveFetchNotWiredError`; xây thật khi tới runtime, cùng hình dạng với corpus/`T-011`. Chọn ba chuỗi ví dụ trong test (FRED `UNRATE`, BLS `LNS14000000`, Census `B25077_001E`) — kho chuỗi cụ thể cho từng tập lấp dần khi có khoá.
 
 ### T-004 · Phát hiện dữ liệu thay đổi và đính chính
 Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh sau công bố, tự mở issue chỉ đúng tập nào, claim nào, con số nào.
