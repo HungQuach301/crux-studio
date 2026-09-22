@@ -61,12 +61,17 @@ function describe(error: unknown): string {
 }
 
 /**
- * Đã do việc số 6 (`check-workshop-contracts.ts`) quét:
- * `workshops/<tên>/contracts/**`. So khớp bằng đường dẫn tương đối dùng dấu
- * `/`, đúng thứ `walk` dưới đây dựng ra.
+ * Thư mục mà việc số 6 (`check-workshop-contracts.ts`) **độc quyền** quét:
+ * `workshops/<tên>/contracts` (rồi đệ quy bên trong). `walk` cắt ở đúng ranh
+ * giới thư mục này, KHÔNG đi vào — nên cả file thường LẪN dòng vấn đề
+ * (symlink trá hình chẳng hạn) trong đó đều thuộc về một mình việc số 6,
+ * không bị báo hai lần. Cắt ở thư mục, không lọc ở danh sách file cuối, vì
+ * dòng vấn đề symlink phát ngay trong lúc `walk` — lọc sau không gỡ được nó.
+ *
+ * So khớp bằng đường dẫn tương đối dùng dấu `/`, đúng thứ `walk` dựng ra.
  */
-function coveredByWorkshopScan(relPosix: string): boolean {
-  return /^workshops\/[^/]+\/contracts\//.test(relPosix);
+function isWorkshopContractsDir(relPosix: string): boolean {
+  return /^workshops\/[^/]+\/contracts$/.test(relPosix);
 }
 
 /**
@@ -99,6 +104,9 @@ function walk(root: string, rel: string, out: string[], problems: string[]): voi
       continue;
     }
     if (stat.isDirectory()) {
+      // Việc số 6 độc quyền cây `workshops/<tên>/contracts/` — không đi vào,
+      // để một file (hay symlink) trong đó không bị hai việc cùng báo.
+      if (isWorkshopContractsDir(childRel)) continue;
       walk(root, childRel, out, problems);
     } else if (stat.isFile()) {
       if (childRel.endsWith(SCHEMA_SUFFIX)) out.push(childRel);
@@ -127,7 +135,9 @@ export function scanSchemaScope(root: string): SchemaScopeScan {
     walk(root, scopeRoot, found, problems);
   }
 
-  const files = found.filter((rel) => !coveredByWorkshopScan(rel)).sort();
+  // `walk` đã cắt cây `workshops/<tên>/contracts/` ở ranh giới thư mục, nên
+  // `found` không bao giờ chứa file thuộc việc số 6 — chỉ cần sắp cho ổn định.
+  const files = found.sort();
 
   for (const rel of files) {
     let schema: unknown;

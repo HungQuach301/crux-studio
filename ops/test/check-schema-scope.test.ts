@@ -109,6 +109,22 @@ test('schema TRONG workshops/<tên>/contracts/ KHÔNG bị việc số 7 kiểm 
   }
 });
 
+test('symlink trong workshops/<tên>/contracts/ KHÔNG bị việc số 7 báo (việc số 6 độc quyền cây đó)', () => {
+  // Regression: trước khi cắt cây ở ranh giới thư mục, `walk` đệ quy vào
+  // contracts/ và phát dòng vấn đề symlink NGAY tại đó, nên một symlink trá
+  // hình bị BÁO HAI LẦN (việc 6 và việc 7). Việc 7 phải im lặng cho cây này.
+  const root = makeRoot({ 'thật.json': BAD_SCHEMA });
+  try {
+    mkdirSync(join(root, 'workshops/topic/contracts'), { recursive: true });
+    symlinkSync(join(root, 'thật.json'), join(root, 'workshops/topic/contracts/link.v0.schema.json'));
+    const scan = scanSchemaScope(root);
+    assert.deepEqual(scan.files, [], scan.files.join(', '));
+    assert.deepEqual(scan.problems, [], scan.problems.join('\n'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('nối thật vào `pnpm contracts`: script thoát KHÁC 0 và nói đúng tên file', () => {
   // Phép quét đúng mà không ai gọi thì vẫn là "không gì đỏ". Bài này chạy
   // chính `ops/scripts/check-contracts.ts` với `cwd` là gốc tạm. Nó than
