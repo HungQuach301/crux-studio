@@ -12,7 +12,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   corpusProblems,
+  deriveSearchCallsPerDay,
   forbiddenKeyPaths,
+  parseQuotaBudget,
   quotaGate,
   validateCorpus,
   MIN_CORPUS_VIDEOS,
@@ -23,8 +25,16 @@ const CORPUS_PATH = fileURLToPath(
   new URL('../data/corpus/us-personal-finance-2026-09-01.json', import.meta.url),
 );
 
+const BUDGET_PATH = fileURLToPath(
+  new URL('../../../packs/channels/us-personal-finance/quota-budget.md', import.meta.url),
+);
+
 function loadCorpus(): Corpus {
   return JSON.parse(readFileSync(CORPUS_PATH, 'utf8')) as Corpus;
+}
+
+function loadBudget(): string {
+  return readFileSync(BUDGET_PATH, 'utf8');
 }
 
 test('WP-014 kiểm 1: corpus mẫu hợp contract và sạch mọi phép soát', () => {
@@ -122,6 +132,76 @@ test('searchCalls phải bằng tổng pagesFetched — mỗi trang là một l�
 
   const lying = { ...corpus, quota: { ...corpus.quota, spent: { searchCalls: pages + 5 } } };
   assert.ok(corpusProblems(lying).some((p) => p.includes('pagesFetched')));
+});
+
+test('T-012: deriveSearchCallsPerDay chia đơn vị/ngày cho đơn vị/lần gọi, làm tròn XUỐNG', () => {
+  // Ca Console hiển thị theo đơn vị: 10000 đơn vị/ngày, 100 đơn vị/lần gọi → 100 lần gọi.
+  assert.equal(deriveSearchCallsPerDay(10000, 100), 100);
+  // Ca của bảng hiện tại: 100 đơn vị/ngày, 1 đơn vị/lần gọi → 100 lần gọi.
+  assert.equal(deriveSearchCallsPerDay(100, 1), 100);
+  // Ca KHÔNG chia hết: phải làm tròn xuống, không lên — nghi ngờ thì cho ít lần gọi hơn.
+  assert.equal(deriveSearchCallsPerDay(100, 3), 33);
+  assert.equal(deriveSearchCallsPerDay(1000, 3), 333);
+  // Số không hợp lệ thì ném, không trả số rác.
+  assert.throws(() => deriveSearchCallsPerDay(100, 0));
+  assert.throws(() => deriveSearchCallsPerDay(-1, 1));
+});
+
+test('T-012: searchCallsPerDay phải khớp phép dẫn xuất khi corpus có cả hai số đơn vị', () => {
+  const corpus = loadCorpus();
+  // Khớp: 100 đơn vị/ngày ÷ 1 = 100.
+  const consistent = structuredClone(corpus);
+  consistent.quota.limits.unitsPerDay = 100;
+  consistent.quota.limits.unitsPerCall = 1;
+  assert.deepEqual(corpusProblems(consistent), []);
+
+  // Lệch: 300 đơn vị/ngày ÷ 3 = 100, nhưng searchCallsPerDay khai 100 vẫn khớp;
+  // đổi searchCallsPerDay lệch khỏi phép chia thì đỏ.
+  const drifted = structuredClone(corpus);
+  drifted.quota.limits.unitsPerDay = 300;
+  drifted.quota.limits.unitsPerCall = 3;
+  drifted.quota.limits.searchCallsPerDay = 90; // đúng phải là 100
+  assert.ok(corpusProblems(drifted).some((p) => p.includes('floor(unitsPerDay')));
+});
+
+test('T-012: parseQuotaBudget đọc đúng hai dòng hạn mức từ bảng thật', () => {
+  const budget = parseQuotaBudget(loadBudget());
+  assert.equal(budget.searchCallsPerDay, 100);
+  assert.equal(budget.unitsPerCall, 1);
+});
+
+test('T-012: parseQuotaBudget ĐỎ khi bảng thiếu dòng hoặc số không hợp lệ', () => {
+  assert.throws(() => parseQuotaBudget('# không có bảng nào'), /số lần gọi mỗi ngày/);
+  assert.throws(
+    () =>
+      parseQuotaBudget(
+        '| `search.list` — số lần gọi mỗi ngày | không phải số | x | y |\n' +
+          '| Đơn vị mỗi lần gọi `search.list` | 1 | x | y |',
+      ),
+    /không phải số nguyên dương/,
+  );
+});
+
+test('T-012: bảng quota-budget.md và quota.limits của corpus không trôi khỏi nhau', () => {
+  const corpus = loadCorpus();
+  const budget = parseQuotaBudget(loadBudget());
+  // Bảng thật + corpus thật phải khớp — nếu ai đổi một bên mà quên bên kia, test này đỏ.
+  assert.deepEqual(corpusProblems(corpus, budget), []);
+
+  // Gỡ phép soát = không truyền budget: ca lệch dưới đây sẽ KHÔNG bị bắt, chứng minh
+  // phép soát thứ 7 là thứ duy nhất bắt được (test đỏ thật khi gỡ).
+  const driftBudget = { searchCallsPerDay: 200, unitsPerCall: 1 };
+  assert.deepEqual(corpusProblems(corpus), [], 'không có budget thì luật 7 không chạy');
+  assert.ok(
+    corpusProblems(corpus, driftBudget).some((p) => p.includes('lần gọi mỗi ngày')),
+    'bảng lệch số lần gọi → đỏ',
+  );
+
+  const driftUnits = { searchCallsPerDay: 100, unitsPerCall: 2 };
+  assert.ok(
+    corpusProblems(corpus, driftUnits).some((p) => p.includes('đơn vị mỗi lần gọi')),
+    'bảng lệch đơn vị/lần gọi → đỏ',
+  );
 });
 
 test('hạn mức khai rõ nguồn: corpus mẫu nói thẳng số CHƯA đọc từ Cloud Console', () => {

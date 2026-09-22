@@ -184,7 +184,7 @@ Nhân đây, một lệch luật có trước mục này: `additionalProperties:
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát ngữ cảnh sạch của PR `#100`; issue `#101`; giả định **G19** (`docs/assumptions.md`); mục `verify/VF-G19`; `CLAUDE.md` mục 12 (contract-first, contract v0 để lỏng) và mục 13 (sửa ở chỗ sinh ra lỗi, không vá sản phẩm)
 - **cửa merge:** chạm `workshops/topic/contracts/**`, không chạm `kernel/contracts/**` — chạy `node ops/invariants.protected-area.ts`, đừng đoán
 - tiêu chí xong:
@@ -193,3 +193,4 @@ Nhân đây, một lệch luật có trước mục này: `additionalProperties:
   - `corpusProblems` đỏ khi hai dòng hạn mức của `quota-budget.md` lệch `quota.limits` của corpus — cùng hình dạng phép kiểm đã dùng cho `spent`. Test phải **đỏ thật** khi gỡ phép kiểm đó.
   - Nới `additionalProperties` ở `quota` và `quota.limits` cho đúng `CLAUDE.md` mục 12, hoặc ghi rõ tại chỗ vì sao ca này cố ý siết.
   - Lớp dự phòng 429 của G19: hoặc có code đọc hạn mức thật ra từ `quota.spent.searchCalls` khi nhà cung cấp trả 429, hoặc sổ giả định sửa lại cho đúng là lớp hai **chưa tồn tại**. Không để câu khai đứng một mình.
+- ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, PR đang mở): (a) `corpus.v0.schema.json` thêm `unitsPerCall`/`unitsPerDay` vào `quota.limits`; `deriveSearchCallsPerDay` (làm tròn xuống, có test kèm ca không chia hết) là chỗ duy nhất quy đổi; `corpusProblems` đỏ khi `searchCallsPerDay` lệch phép dẫn xuất. (b) `parseQuotaBudget` + `corpusProblems(corpus, budget)` buộc hai dòng hạn mức của `quota-budget.md` khớp `quota.limits` — cùng hình dạng phép soát của `spent`, test đỏ thật khi gỡ; corpus mẫu thêm `unitsPerCall: 1` khớp bảng. (c) `additionalProperties` ở `quota` và `quota.limits` nới thành `true` (CLAUDE.md mục 12). (d) G19 khai rõ lớp dự phòng 429 **chưa có code** (đo `grep 429` = 0), thuộc `T-011` đang chặn vì chưa có secret. `pnpm check` xanh 489/489, `pnpm replay` khớp tập vàng 6/6. Còn treo: hai số Console thật vẫn chờ #101 (`VF-G19` `parked`); khi có, agent điền `unitsPerDay`/`unitsPerCall` và đổi `source` sang `console-measured`.
