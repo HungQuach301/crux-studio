@@ -378,7 +378,7 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
 
 - deps: `I-009`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
 - tiêu chí xong:
   - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
@@ -387,6 +387,21 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
   - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
     nó đang kiểm thì không kiểm gì.
   - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
+- **Đã làm:**
+  - Chọn phương án **bỏ bản chép**, đúng khuyến nghị "nếu làm được". `UpstreamFrom` bỏ trường `workshops`;
+    fixture chỉ khai `{ "golden": "<tập>" }`. `readInputFile(root, path, consumes)` nhận danh sách xưởng
+    cần nạp từ bên gọi: CLI truyền `definition.consumes` (`kernel/src/cli.ts`), năm fixture `upstreamFrom`
+    bỏ mảng `workshops`, năm stub test truyền `definition.consumes`. Một nguồn duy nhất
+    (`definition.consumes` ở `workshops/<tên>/src/index.ts`), không còn bản chép thứ hai để trôi.
+  - `check-fixtures.ts` lấy `consumes` từ `DEFINITIONS` của `pipeline.ts` (nơi DUY NHẤT được import nhiều
+    xưởng, bất biến I3) — không tự chép lại danh sách. `pipeline.ts` export `DEFINITIONS` cho việc này.
+  - Danh sách viết cứng trong `kernel/test/input.test.ts` (bài "sáu fixture … khớp ĐÚNG snapshot") đã hết:
+    chuyển sang `ops/test/check-fixtures.test.ts`, lấy `consumes` từ `DEFINITIONS`, không khai tay.
+  - Kiểm đỏ thật, đo bằng chạy thật: (a) đổi `consumes` của một xưởng thì `inputs`/`inputsHash` của output
+    đổi theo, tập vàng replay đỏ ngay (`pnpm check`) — đo với `release` bỏ `topic`: snapshot `release` lệch
+    ở `inputsHash`. (b) `upstreamFrom.workshops` sót lại trong fixture nay **đỏ** ở `pnpm contracts`
+    (`upstreamFromWorkshopsProblems`), không còn bị bỏ qua im lặng như trước.
+  - `ops/known-failures.md` hàng **Z16**: ghi phần `upstreamFrom.workshops` đã bỏ ở `I-011`.
 
 ### I-012 · Bài kiểm G14 quét cả nhánh đã merge, nên nó kêu oan và sẽ kêu mãi mãi
 

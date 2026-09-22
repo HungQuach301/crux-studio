@@ -1,15 +1,10 @@
 {
-  "$note": "🤖 Fixture chạy độc lập xưởng release (CHARTER 5.4): node workshops/release/src/run.ts --input workshops/release/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel (mục integration/I-008); artifact đầu vào nạp từ snapshot tập vàng theo upstreamFrom, KHÔNG chép vào đây — bản chép trôi mà không gì đỏ (mục integration/I-009, hàng Z16 của ops/known-failures.md).",
+  "$note": "🤖 Fixture chạy độc lập xưởng release (CHARTER 5.4): node workshops/release/src/run.ts --input workshops/release/fixtures/input.json --json. Pack nạp từ packs/ theo trường channel (mục integration/I-008); artifact đầu vào nạp từ snapshot tập vàng theo upstreamFrom, KHÔNG chép vào đây (mục integration/I-009, hàng Z16 của ops/known-failures.md). Danh sách xưởng cần nạp suy từ definition.consumes, KHÔNG khai ở đây — khai tay là bản chép thứ hai của consumes và lệch được mà không gì đỏ (mục integration/I-011).",
   "episodeId": "ep-0001-stub",
   "channel": "us-personal-finance",
   "genre": "data-explainer",
   "locale": "en-US",
   "upstreamFrom": {
-    "golden": "ep-0001-stub",
-    "workshops": [
-      "topic",
-      "editorial",
-      "assembly"
-    ]
+    "golden": "ep-0001-stub"
   }
 }
