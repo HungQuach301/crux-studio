@@ -1,0 +1,35 @@
+[
+  {
+    "caseId": "irs590b-age75",
+    "params": {
+      "priorYearEndBalanceUsd": 100000,
+      "applicableDenominator": 24.6
+    },
+    "expected": {
+      "rmdUsd": 4065
+    },
+    "computedBy": "IRS Pub 590-B (2025), mục Table III: 'Your applicable denominator is 24.6. Your required minimum distribution for 2026 would be $4,065 ($100,000 ÷ 24.6).'"
+  },
+  {
+    "caseId": "irs590b-justin-2025",
+    "params": {
+      "priorYearEndBalanceUsd": 38400,
+      "applicableDenominator": 26.5
+    },
+    "expected": {
+      "rmdUsd": 1450
+    },
+    "computedBy": "IRS Pub 590-B (2025), ví dụ 'Justin': 'He figured his required minimum distribution of $1,450 for 2025 ($38,400 ÷ 26.5).'"
+  },
+  {
+    "caseId": "irs590b-justin-2026",
+    "params": {
+      "priorYearEndBalanceUsd": 34800,
+      "applicableDenominator": 26.5
+    },
+    "expected": {
+      "rmdUsd": 1313
+    },
+    "computedBy": "IRS Pub 590-B (2025), cùng ví dụ, năm sau: 'Justin figured his required minimum distribution of $1,313 for 2026 ($34,800 ÷ 26.5).'"
+  }
+]
