@@ -46,7 +46,9 @@ pnpm --filter @crux/workshop-topic run start -- --episode ep-0001-stub   # chạ
 
 # PR này thuộc cửa merge nào (D-C06)? Chạy, đừng đoán:
 git diff --name-only origin/main...HEAD > /tmp/changed.txt
-node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .
+git show origin/main:CHARTER.md > /tmp/base-CHARTER.md   # BẮT BUỘC khi PR chạm CHARTER.md
+node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head . \
+  --base-charter /tmp/base-CHARTER.md
 ```
 
 **Không** có lệnh nào trong repo gọi API trả tiền ở Đợt 0. Mọi xưởng đang ở `impl: stub`.
@@ -162,7 +164,7 @@ Tám luật này do máy thực thi. Không lách, không tắt, không thêm ng
 - **`owner-merge`** — chỉ chủ dự án merge: `CHARTER.md` **mục 1 và mục 3** · `ops/invariants.*` · `.claude/settings.json` · `.claude/hooks/**` · `ops/workflows/automerge.yml` · `.github/**` · mọi workflow **dùng secret** hoặc **phát hành**.
 - **`automerge-delayed`** — máy merge sau 12 giờ CI xanh: `CHARTER.md` các mục khác · `CLAUDE.md` · `docs/decisions/**` · `docs/spec/**` · `kernel/contracts/**` · phần còn lại của `.claude/**` và `ops/workflows/**`.
 
-Đừng đọc bảng này bằng mắt rồi đoán — chạy `node ops/invariants.protected-area.ts` (mục 1). Luật cắt `CHARTER.md` theo **mục**, không theo file, nên mắt thường không phân được.
+Đừng đọc bảng này bằng mắt rồi đoán — chạy `node ops/invariants.protected-area.ts` (mục 1). **Chạm `CHARTER.md` thì phải truyền `--base-charter`**: thiếu nó, tool không đối chiếu được mục nào đổi nên trả `owner-merge` cho mọi thay đổi CHARTER — an toàn nhưng sai, và `ci.yml` lẫn `automerge.yml` đều truyền (mục `I-015`). Luật cắt `CHARTER.md` theo **mục**, không theo file, nên mắt thường không phân được.
 
 ## 11. Luật mềm — cảnh báo, không chặn (CHARTER mục 4)
 

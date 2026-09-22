@@ -684,7 +684,11 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
 7. Trong cùng PR: cập nhật backlog (status: review) và ops/logs/<lane>/<id>.jsonl (có costUsd). Chuyển PR khỏi trạng thái nháp.
    Gắn nhãn theo cửa merge (CHARTER mục 3, D-C06). Không đoán: chạy
    `git diff --name-only origin/main...HEAD > /tmp/changed.txt` rồi
-   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`:
+   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`.
+   PR có chạm `CHARTER.md` thì thêm `--base-charter <bản CHARTER.md trên main>` (`git show origin/main:CHARTER.md`):
+   thiếu nó tool không biết mục nào đổi nên trả `owner-merge` cho mọi thay đổi CHARTER — an toàn nhưng sai, và cả
+   `ci.yml` lẫn `automerge.yml` đều truyền tham số này.
+   Các cửa:
    open → automerge · automerge-delayed → automerge-delayed · owner-merge → owner-merge cộng issue 🤖 [QĐ].
    CI gắn lại nhãn theo đúng luật đó, nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
 8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn bảy nhóm; mọi thứ khác làm ngay theo khuyến nghị.
