@@ -77,8 +77,8 @@
         "properties": {
           "period": {
             "type": "string",
-            "minLength": 1,
-            "description": "Kỳ dữ liệu đã chuẩn hoá về ISO date (đầu kỳ), ví dụ '2026-05-01' cho tháng 5/2026."
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "Kỳ dữ liệu đã chuẩn hoá về ISO date (đầu kỳ), ví dụ '2026-05-01' cho tháng 5/2026. Ràng buộc ISO nằm trong contract chứ không chỉ trong ghi chú."
           },
           "value": {
             "type": ["number", "null"],
