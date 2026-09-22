@@ -39,7 +39,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 | Mã | Giả định | Độ tin cậy | Trạng thái | Mục kiểm |
 |---|---|---|---|---|
-| G1 | Tài khoản có Claude Code Projects | `suy luận` | giao làn `verify` | `VF-G1` |
+| G1 | Tài khoản có Claude Code Projects | `suy luận` | mệnh đề CHƯA kiểm được; hệ quả vận hành đã đo và đã có bài kiểm canh | `VF-G1` |
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
@@ -71,11 +71,36 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 - **Nội dung:** tài khoản của chủ dự án có tính năng Claude Code Projects, nên thread do Project khởi chạy được song song với routine.
 - **Nguồn:** chưa có. Đây là suy luận từ mô tả sản phẩm.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · CHARTER phụ lục P1 (số worker và nhịp chạy)
+- **Độ tin cậy:** `suy luận` — **không đổi**, và đây là chỗ dễ nhầm nhất của mục này.
+
+  Lượt `VF-G1` ngày 2026-09-21 đo được nhiều thứ, nhưng **không phần nào của chính mệnh đề "tài khoản có Claude Code Projects" được kiểm**. Thứ đo được là một *hệ quả* mà phụ lục P1 treo lên G1, và hệ quả ấy **không phân biệt được** Projects với ba routine hourly rời nhau. Nâng lên `đã kiểm một phần` (bản đầu của lượt này đã làm, vòng soát chéo bắt lại) là nới một cổng thật: CHARTER 11.1 luật 2 cấm xây mục backlog trên giả định còn `suy luận`, nên đổi nhãn sẽ mở cổng đó ra bằng bằng chứng không đỡ nổi nó. Khác với `G2`, nơi phần lõi của **chính mệnh đề** đã chạy thật.
+- **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · `ops/scripts/recheck-assumptions.ts` · CHARTER phụ lục P1 (số worker và nhịp chạy)
 - **Cách kiểm:** mở `claude.ai/code`, xem có tạo được Project không. **Chỉ chủ dự án làm được** — agent không thấy trang cấu hình tài khoản.
 - **Dự phòng:** Plan B — chỉ dùng routines. Nhịp chạy chuyển sang cấu hình mặc định của P1: 2 worker, preset hourly. Không mất gì về mặt kiến trúc, chỉ chậm hơn.
-- **Trạng thái:** giao làn `verify`, mục `VF-G1`. Hỏi trong issue `🤖 [QĐ]` về các giả định cần chủ dự án.
+
+**Giả định này có hai vế, và chỉ một vế kiểm được từ trong repo.** Tách ra vì gộp lại thì vế đo được bị vế không đo được giữ mãi ở `suy luận`:
+
+| Vế | Kiểm được từ repo? | Trạng thái |
+|---|---|---|
+| (a) Tài khoản **có tính năng** Claude Code Projects | **không** — trang cấu hình tài khoản | vẫn `suy luận`, hỏi ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) |
+| (b) **Hệ quả vận hành** mà phụ lục P1 treo lên G1: chạy được cấu hình 3 worker hay phải lùi về Plan B 2 worker | **có** — `ops/logs/**` (bất biến I8) | **đã kiểm, 2026-09-21** |
+
+- **Bằng chứng cho vế (b), 2026-09-21 (lượt `crux-worker-2`), đo từ `ops/logs/**`, không đọc tài liệu:** **ba** worker chạy thật trong cửa sổ quan sát — `crux-worker-1` (4 lượt), `crux-worker-2` (8 lượt), `crux-worker-3` (5 lượt) — cộng `crux-integrator` 13 lượt, nhịp **trung vị 1,0 giờ** (8 trên 12 khoảng cách nằm trong 0,9–1,1 giờ; bốn khoảng còn lại 1,9 / 2,9 / 1,1 / 1,0 — phần lệch là các lượt không để lại dòng log, xem giới hạn (1) ngay dưới). Tức là **cấu hình 3 worker đang chạy**.
+
+  **Đọc đúng phạm vi của kết luận này — Plan B có hai vế:** "chỉ dùng routines" **và** "2 worker, preset hourly". Quan sát trên bác được **đúng vế sau** (không phải 2 worker). Vế "chỉ dùng routines" thì nó **không** bác được, và còn tương thích hoàn toàn với Plan B: thứ đo được là các routine tên `crux-worker-<N>` — đúng tên routine của phụ lục P1 — chạy ở độ phân giải giờ. Nói "Plan B chưa phải dùng tới" là vượt bằng chứng; nói đúng phải là **phần "2 worker" của Plan B không mô tả hiện trạng**.
+- **Giới hạn của bằng chứng, khai trước:**
+  1. Con số là **cận dưới, không phải số đúng**. Phụ lục P1 bước 3 bảo worker không nhận được mục nào thì in `idle` và kết thúc **không commit gì** — lượt đó không để lại dòng log. Khoảng cách 7,0 / 5,0 / 4,1 giờ giữa các lượt quan sát được gần như chắc chắn là các lượt `idle` không ghi gì, chứ không phải routine đứng im.
+  2. Vì (1), **nhịp thật của từng worker không chốt được** từ log. Nhịp trung vị đo được của ba worker là 4,0 / 2,0 / 2,6 giờ, nhưng các khoảng 7,0 và 7,2 giờ xen giữa những khoảng 0,9 giờ cho thấy đó là khoảng cách giữa các lượt **có ghi log**, không phải nhịp chạy. Chốt được đúng một điều: có ít nhất ba worker, và chúng chạy ở độ phân giải giờ chứ không phải 3 giờ một lượt như phụ lục P1 mô tả cho cấu hình 3 worker.
+  3. **Một dòng log tính cho đúng một routine — tên xuất hiện đầu tiên**, vì dòng log mở bằng chính routine viết nó. Bản đầu của bài kiểm đếm *mọi* tên nhắc trong `note` và sai ngay ở dòng log đầu tiên của chính mục này: dòng ấy **kể lại** số lượt của cả bốn routine nên tự tính thành một lượt cho từng routine. Báo cáo worker nhắc tên routine khác là chuyện thường (bước 0 của phụ lục P3 luôn nhắc `crux-integrator`), nên lỗi đó sẽ lặp mãi nếu không chặn. Luật "tên đầu tiên" sai theo chiều **an toàn**: nó chỉ làm phép đếm nhỏ đi, nên không bao giờ che được một đội đã tụt về Plan B.
+  3. Quan sát này **không** chứng minh vế (a). Ba routine hourly rời nhau cho đúng cùng một quan sát. Nó chỉ nói cấu hình đang chạy là cấu hình nào, và đó đúng là thứ phụ lục P1 cần biết.
+- **Kiểm tự động:** `worker-fleet-cadence` — **bài kiểm này canh vế dự phòng, không đi chứng minh mệnh đề**, đúng cùng kiểu với bài kiểm của `G17` ("không đi tìm lại kết luận đã có, mà canh các điều kiện dự phòng đang đứng lên trên"). Nó đọc `ops/logs/**` bằng `readRunLogs` của kernel (không tự `cat`: thứ tự dòng trong file không mang nghĩa), gom các dòng log nhắc tên routine thành từng **lượt** (hai dòng cách nhau quá 50 phút là hai lượt), rồi đếm số worker rời nhau trong cửa sổ 7 ngày tính lùi từ dòng log **mới nhất**.
+
+  Cửa sổ neo vào dòng log mới nhất chứ không vào `now`: neo vào `now` thì một bản clone cũ, hoặc một tuần repo nằm yên, tự đẩy bài kiểm sang `sai` vì một lý do chẳng dính gì tới G1.
+
+  Chiều kết luận hẹp có chủ đích, theo đúng giới hạn (1) ở trên: **≥ 3 worker → `khớp`** (cấu hình 3 worker còn sống); **1–2 worker mà cửa sổ vẫn có dòng nhắc routine → `sai`** (đội đã tụt về Plan B, phụ lục P1 và sổ đang ghi một cấu hình không còn tồn tại); **không dòng nào nhắc routine → `◦ chưa quan sát được`, không phải `khớp`** — tên routine nằm trong `note` dạng văn xuôi, nên đổi quy ước ghi `note` phải ra "chưa quan sát được", không được ra "vẫn ổn". Đây là cùng bài học fail-open của danh sách trắng `isToolCommit` ở mục `G14`.
+
+  Thiếu hẳn thư mục `ops/logs/` thì bài kiểm **ném lỗi** và ra `⚠ … KHÔNG CHẠY ĐƯỢC` (mục `I-005`), không ra `◦`: `listLogFiles` của kernel trả mảng rỗng cho thư mục không tồn tại, nên nếu không chặn thì "chưa quét được" in ra y hệt "quét rồi không thấy gì".
+- **Trạng thái:** vế (b) **đã kiểm** bằng chạy thật và nay có bài kiểm hồi quy chạy lại mỗi thứ Hai. Vế (a) vẫn giao làn `verify` mục `VF-G1` và vẫn chờ chủ dự án ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) (mở từ 2026-09-20, chưa có câu trả lời).
 
 ## G2 · `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci`
 
@@ -434,7 +459,7 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
   Lần quan sát thứ hai tách biến sạch hơn lần đầu, và đó là lý do nó đáng ghi riêng: `base.sha` của `#75` **đúng bằng** `main` tại lúc đo (`296869b`), nên `dirty` không thể là trạng thái cũ GitHub chưa tính lại; và file **duy nhất** mà nhánh với `main` cùng chạm là `ops/logs/platform/P-016.jsonl`, vốn đã khai `merge=union`. Bật/tắt đúng một biến trên cùng một phép đo: union bật → `EXIT=0`; ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes` (thắng `.gitattributes` trong cây) → `EXIT=1`, `CONFLICT (content) in ops/logs/platform/P-016.jsonl`; xoá dòng đó đi → `EXIT=0` trở lại. Và một **đối chứng chặt hơn**, vì `-merge` là *unset* nên git rơi về trình merge nhị phân và luôn báo xung đột (kèm `warning: Cannot merge binary files`, dù file là văn bản thuần): chạy lại với `merge=text` — trình văn bản thường — vẫn `EXIT=1`, `CONFLICT (content)`, **không** cảnh báo nhị phân. Chênh lệch giữa hai phía đúng là do luật union, không phải do cách tắt luật.
 
   **Hệ quả:** `.gitattributes` một mình không bao giờ đủ, vì lớp tự merge chỉ nghe **một** phía — phía GitHub, phía không áp luật. Ghi đầy đủ ở `ops/known-failures.md` **KF-009**. Kết luận này **không** làm đổi trạng thái giả định nào: G17 đã `sai` và đã chuyển dự phòng từ trước. Nó siết thêm lý do dự phòng (`P-016`, bước 0 của phụ lục P3) phải chạy ở đầu **mọi** lượt worker chứ không phải một lần mỗi ngày.
-- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes` · `ops/scripts/recheck-assumptions.ts`
+- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes` · `ops/scripts/recheck-assumptions.ts` · `kernel/src/log.ts` · `ops/test/step0-log-path.test.ts` (mục `P-023`: hình dạng "một lượt chạy, một file" cho dòng bước 0 được **thúc đẩy bởi** G17 — nếu G17 hết `sai`, hình dạng này vẫn đúng và vẫn nên giữ, nó chỉ bớt cấp bách)
 - **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04`, log tách tới mức mục nên hai PR khác mục không còn dùng chung file — ca kiểm phải là hai lần chạy của **cùng một mục** (`ops/logs/<lane>/<id>.jsonl`), hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai. **Đã thực hiện, hai lần độc lập** (2026-09-22 và 2026-09-21 19:38Z) — hai câu trả lời **đúng là khác nhau**, cả hai đã ghi ở phần độ tin cậy trên.
 - **Kiểm tự động:** `union-merge-order` — dựng hai repo git thật trong thư mục tạm, khác nhau **đúng một điều kiện**: nhánh đã mang `.gitattributes` trước lần gộp hay chưa. Bài kiểm không đi tìm lại kết luận `sai` đã có, mà canh **hai điều kiện dự phòng đang đứng lên trên**: (1) luật do `main` mang tới vẫn KHÔNG áp cho chính lần gộp mang nó tới — nếu git đổi hành vi này thì G17 hết `sai`; (2) union VẪN cứu được lần gộp khi nhánh đã mang sẵn luật — nếu hỏng thì `.gitattributes` thành đồ trang trí và KF-005 phải viết lại. Phần *GitHub tự tính `mergeable`* thì **không** tự kiểm được ở đây: nó cần hai PR thật trên GitHub. Phần đó nay **đã trả lời bằng quan sát** (xem độ tin cậy ở trên và `KF-009`) chứ không bằng bài kiểm tự động — và nó vẫn sẽ không tự kiểm được, nên thứ canh nó là bước 0 của phụ lục P3 cộng dòng log bắt buộc, không phải `pnpm recheck:assumptions`.
 - **Dự phòng — đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được mọi lần gộp **sau khi** nhánh đã mang luật — không mất gì. Nhưng nó không còn được coi là cơ chế chính. Cơ chế chính chuyển sang mục `P-016`: routine integrator **tự gộp `main`** vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Việc giải xung đột trở thành việc của máy, không phải việc của người.
