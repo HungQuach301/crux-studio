@@ -19,7 +19,7 @@
  * Từ `I-009`, fixture trỏ tập vàng bằng `upstreamFrom` và tự đi theo
  * snapshot, nên một PR `--update` đúng luật chỉ chạm `ops/golden/**`.
  *
- * ## Ngoại lệ, và vì sao đúng ba thư mục này
+ * ## Ngoại lệ, và vì sao đúng hai thư mục này
  *
  * "Không kèm thay đổi nào khác" đọc theo mặt chữ thì **không PR nào hợp lệ
  * được**: bất biến I8 đòi mọi lần chạy ghi một dòng `ops/logs/<lane>/<id>.jsonl`,
@@ -42,6 +42,27 @@
 const GOLDEN_PREFIX = 'ops/golden/';
 
 /**
+ * `git diff --name-only` **không** in đường dẫn trần khi tên file có ký tự
+ * ngoài ASCII: `core.quotePath` mặc định `true`, nên nó in
+ * `"ops/golden/t\341\272\255p.json"` — có dấu ngoặc kép bao ngoài.
+ *
+ * Bỏ qua chi tiết đó thì luật này **fail-open**, đúng chiều nguy hiểm nhất:
+ * `isGoldenFile` thấy ký tự đầu là `"` nên kết luận PR không chạm tập vàng,
+ * và một PR `--update` kèm code đi qua **im lặng**. Đúng nhóm Z mà chính
+ * file này sinh ra để chống — nên gỡ dấu ngoặc ở đây, và bên gọi (CI) còn
+ * truyền thêm `-c core.quotePath=false` làm lớp thứ hai.
+ *
+ * Repo này viết tài liệu tiếng Việt, nên một file `ops/golden/**` đặt tên
+ * có dấu là chuyện xảy ra được, không phải ca giả tưởng.
+ */
+function unquote(path: string): string {
+  const trimmed = path.trim();
+  return trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2
+    ? trimmed.slice(1, -1)
+    : trimmed;
+}
+
+/**
  * Những tiền tố được phép đi cùng một PR cập nhật tập vàng. Xem lý do ở
  * khối chú thích đầu file — mỗi dòng ở đây phải là một chỗ mà `pnpm replay`
  * chứng minh được là nó không đọc.
@@ -50,7 +71,7 @@ export const ALLOWED_ALONGSIDE_GOLDEN = ['ops/logs/', 'ops/lanes/'] as const;
 
 /** `true` nếu đường dẫn nằm trong tập vàng. */
 export function isGoldenFile(path: string): boolean {
-  return path.startsWith(GOLDEN_PREFIX);
+  return unquote(path).startsWith(GOLDEN_PREFIX);
 }
 
 /**
@@ -64,7 +85,7 @@ export function isGoldenFile(path: string): boolean {
  * `git diff --name-only` in ra.
  */
 export function goldenOnlyProblems(changedFiles: readonly string[]): string[] {
-  const changed = changedFiles.map((path) => path.trim()).filter((path) => path.length > 0);
+  const changed = changedFiles.map(unquote).filter((path) => path.length > 0);
   if (!changed.some(isGoldenFile)) return [];
 
   return changed
@@ -90,8 +111,22 @@ if (isMain) {
     process.stdin.on('error', reject);
   });
 
-  const changed = input.split('\n');
-  const touchesGolden = changed.some((path) => isGoldenFile(path.trim()));
+  const changed = input.split('\n').filter((path) => path.trim().length > 0);
+
+  // "Chưa nhìn thấy gì" KHÁC "đã nhìn và không thấy tập vàng" — bài học Z15
+  // của chính sổ này: một bài kiểm không được tự khai "không có gì để xem"
+  // khi nó chưa nhìn. Một PR luôn có ít nhất một file đổi, nên đầu vào rỗng
+  // nghĩa là bên gọi đưa nhầm phạm vi (base ref lệch, `git diff` chạy xong
+  // mà không so gì) — và cái đó phải ĐỎ, không được xanh im lặng.
+  if (changed.length === 0) {
+    process.stderr.write(
+      'Không nhận được đường dẫn nào qua stdin. Một PR luôn có ít nhất một file đổi, nên đây là ' +
+        'phạm vi so sai (base ref lệch?), KHÔNG phải "PR không chạm tập vàng". Đỏ thay vì xanh im lặng (Z15).\n',
+    );
+    process.exit(1);
+  }
+
+  const touchesGolden = changed.some(isGoldenFile);
 
   // Không bao giờ im lặng: mọi nhánh đều in ra kết luận của nó (rà soát Z2
   // và Z9 — một bước không nói gì trông y hệt một bước đã kiểm và đã qua).

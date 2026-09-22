@@ -312,11 +312,22 @@ jobs:
       # một luật viết thẳng ở đây tự nó không chặn được gì; chỗ đặt luật
       # phải là chỗ test đọc được.
       #
-      # Bước này KHÔNG bao giờ dùng `if:` để bỏ qua (rà soát Z2): nó luôn
+      # BƯỚC này KHÔNG bao giờ dùng `if:` để bỏ qua (rà soát Z2): nó luôn
       # chạy và tự in ra kết luận của mình, kể cả khi PR không chạm tập vàng.
+      #
+      # Phân biệt với `if:` mức JOB ở trên — job vẫn ra `skipped` trên một
+      # `workflow_dispatch`, và đó chính là ca `if:` mức job mà bảng nhóm Z
+      # còn để ngỏ (phần còn lại của Z2). Ba job khác của file này
+      # (`fix-has-test`, `protected-area`, `trailer-warn`) cùng khuôn đó.
+      #
+      # `-c core.quotePath=false`: mặc định `git` in tên file có ký tự ngoài
+      # ASCII dưới dạng `"ops/golden/t\341\272\255p.json"` — có ngoặc kép
+      # bao ngoài, và một luật so tiền tố sẽ fail-OPEN với nó. Script còn tự
+      # gỡ ngoặc làm lớp thứ hai; hai lớp vì chiều hỏng này im lặng.
       - name: PR cập nhật tập vàng phải đi một mình
         run: |
           set -euo pipefail
           git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
-          git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
+          git -c core.quotePath=false diff --name-only \
+            "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
             | node ops/scripts/check-golden-pr.ts

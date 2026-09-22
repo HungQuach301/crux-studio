@@ -77,3 +77,22 @@ test('Z13 · dòng rỗng và khoảng trắng thừa của `git diff --name-onl
     [],
   );
 });
+
+test('Z13 · TEST ÂM: đường dẫn bị `git` bọc ngoặc kép vẫn được nhận là tập vàng', () => {
+  // `core.quotePath` mặc định `true`, nên tên file có dấu tiếng Việt ra
+  // dạng `"ops/golden/t\341\272\255p.json"`. Bỏ qua dấu ngoặc thì luật
+  // FAIL-OPEN: PR `--update` kèm code đi qua im lặng — đúng nhóm Z mà luật
+  // này sinh ra để chống, nên đây là chiều phải có test.
+  const quoted = '"ops/golden/t\\341\\272\\255p.json"';
+  assert.equal(isGoldenFile(quoted), true);
+  assert.deepEqual(goldenOnlyProblems([quoted, 'workshops/topic/src/stub.ts']), [
+    'workshops/topic/src/stub.ts',
+  ]);
+});
+
+test('Z13 · dấu ngoặc kép cũng được gỡ ở phía file lạ, không chỉ phía tập vàng', () => {
+  assert.deepEqual(
+    goldenOnlyProblems(['ops/golden/snap.json', '"workshops/topic/src/t\\341p.ts"']),
+    ['workshops/topic/src/t\\341p.ts'],
+  );
+});

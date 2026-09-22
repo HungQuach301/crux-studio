@@ -40,8 +40,6 @@ const HEADING = /^## (G\d+) · (.+)$/gm;
 export interface LedgerSection {
   /** Mã giả định, ví dụ `G17`. */
   code: string;
-  /** Phần chữ sau dấu `·` trên dòng heading. */
-  title: string;
   /** Thân mục — KHÔNG gồm dòng heading, và dừng ở ranh giới kế tiếp. */
   body: string;
 }
@@ -60,6 +58,6 @@ export function sliceLedgerSections(ledger: string): LedgerSection[] {
   return headings.map((heading) => {
     const start = heading.index! + heading[0].length;
     const end = boundaries.find((offset) => offset > heading.index!) ?? ledger.length;
-    return { code: heading[1]!, title: heading[2]!, body: ledger.slice(start, end) };
+    return { code: heading[1]!, body: ledger.slice(start, end) };
   });
 }
