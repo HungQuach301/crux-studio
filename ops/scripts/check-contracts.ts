@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Năm việc:
+ * Tám việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -11,6 +11,18 @@
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
  * 5. Fixture `input.json` nạp pack từ `packs/` và không mang bản sao cấu
  *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008` và `I-009`).
+ * 6. Contract của xưởng (`workshops/<tên>/contracts/`) chịu cùng phép kiểm
+ *    từ khoá như contract của kernel — mục `integration/I-013`. Trước mục
+ *    đó, việc số 2 chỉ nhìn `kernel/contracts/`, nên một contract xưởng
+ *    dùng từ khoá validator chưa hiểu không làm gì đỏ.
+ * 7. MỌI `*.schema.json` dưới `workshops/` và `packs/` chịu phép kiểm từ
+ *    khoá, dù nằm ở thư mục nào — mục `integration/I-014`. Việc số 6 dừng ở
+ *    quy ước thư mục `contracts/`; một schema đặt ngoài đó (ở `src/`, ở
+ *    `packs/**`) vẫn thoát. Việc này quét phần còn lại để phạm vi kiểm buộc
+ *    bằng một phép kiểm, không bằng chỗ đặt file.
+ * 8. Mỗi `title-formulas.json` dưới `packs/channels/` hợp contract và không
+ *    có `id` trùng; `titles[].formula` của artifact `release` đối chiếu
+ *    được với danh sách thật của đúng kênh nó khai — mục `release/R-001`.
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -26,6 +38,8 @@ import {
   type WorkshopName,
 } from '@crux/kernel';
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
+import { scanWorkshopContracts } from './check-workshop-contracts.ts';
+import { scanSchemaScope } from './check-schema-scope.ts';
 import {
   allTitleFormulasPackProblems,
   releaseFormulaProblems,
@@ -128,7 +142,16 @@ if (existsSync(goldenRoot)) {
 // 5 · Fixture input.json không mang bản sao cấu hình
 problems.push(...fixtureInputProblems(root));
 
-// 6 · title-formulas.json của mỗi kênh (mục release/R-001) — kênh nào cũng soát, không hardcode tên
+// 6 · Contract của xưởng — một lượt quét cho cả số đếm lẫn danh sách vấn đề
+const workshopContracts = scanWorkshopContracts(root);
+problems.push(...workshopContracts.problems);
+
+// 7 · Mọi schema dưới workshops/ và packs/ ngoài tầm việc số 6 vẫn phải qua
+// phép kiểm từ khoá — phạm vi buộc bằng phép kiểm, không bằng chỗ đặt file.
+const schemaScope = scanSchemaScope(root);
+problems.push(...schemaScope.problems);
+
+// 8 · title-formulas.json của mỗi kênh (mục release/R-001) — kênh nào cũng soát, không hardcode tên
 const titleFormulas = allTitleFormulasPackProblems(root);
 problems.push(...titleFormulas.problems);
 
@@ -145,7 +168,9 @@ if (releaseFormulaNotes.length > 0) {
 }
 
 process.stdout.write(
-  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
+  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${workshopContracts.files.length} contract xưởng, ` +
+    `${schemaScope.files.length} schema ngoài contracts/ (workshops+packs) qua phép kiểm từ khoá, ` +
+    `${checked} artifact hợp lệ, ` +
     `${titleFormulas.checked} title-formulas.json, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
 );

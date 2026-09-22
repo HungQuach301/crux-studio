@@ -17,6 +17,26 @@ từng mở file này (WP-014 mục 3c: giới hạn nằm trong dữ liệu, kh
 | Phần dự trữ không được đụng (`reserveFraction`) | 0.2 | WP-014 mục 5 (luật của dự án, không phải hạn mức của nhà cung cấp) | — |
 | Số lần gọi dùng được mỗi ngày | 80 | dẫn xuất: `100 − ceil(100 × 0,2)` | — |
 
+> ⚠️ **Hai dòng đầu bảng: cửa dừng vẫn chỉ tiêu thụ `searchCallsPerDay`, nhưng cả hai số nay đều ghi
+> được vào dữ liệu.** Cửa dừng `quotaGate` đọc `searchCallsPerDay` và đếm **lần gọi**; nó không đếm
+> **đơn vị**. Từ mục `topic/T-012`, `quota.limits` trong `corpus.v0.schema.json` **có** trường
+> `unitsPerCall` (và `unitsPerDay` khi Console hiển thị theo đơn vị) — hai số **nguyên bản** của issue
+> **#101** ghi thẳng vào ảnh chụp corpus, không phải quy đổi bằng tay trước. Phép chia từ đơn vị sang
+> lần gọi nằm ở đúng một chỗ có test: `deriveSearchCallsPerDay` (`workshops/topic/src/corpus.ts`), làm
+> tròn **xuống**; và `corpusProblems` đỏ khi `searchCallsPerDay` lệch `floor(unitsPerDay / unitsPerCall)`.
+> Nhờ vậy phép chia — chỗ một sai số từng đi vào mà không gì đỏ — nay có lưới.
+>
+> Issue **#101** vẫn xin hai số **nguyên bản như Console hiển thị**, không xin số đã quy đổi. Mục
+> `verify/VF-G19` đang `parked` cho tới khi có hai số đó (#101); khi có, agent điền `unitsPerDay`/
+> `unitsPerCall`, `searchCallsPerDay` dẫn xuất bằng hàm trên, và đổi `quota.limits.source` sang
+> `console-measured`.
+>
+> **Bảng và dữ liệu không trôi khỏi nhau — nay cả hai dòng hạn mức, không riêng `spent`.** `corpusProblems`
+> nhận hai dòng hạn mức đã tách từ chính bảng này (`parseQuotaBudget`) và đỏ khi chúng lệch `quota.limits`
+> của ảnh chụp corpus — cùng hình dạng phép soát đã dùng cho `quota.spent.searchCalls` ở mục "Một lần xây
+> corpus tiêu bao nhiêu" dưới đây (mục `topic/T-012`). Sửa số ở bảng mà quên sửa dữ liệu, hoặc ngược lại,
+> là đỏ ngay ở `pnpm test`.
+
 Bucket của `search.list` **riêng** với bucket của `videos.insert`, nên việc xây corpus không tranh quota
 với việc đăng video. Điều đó nghĩa là một corpus chạy quá tay không làm hỏng lịch phát hành — nhưng nó
 vẫn tiêu hết phần tìm kiếm của ngày hôm đó.
