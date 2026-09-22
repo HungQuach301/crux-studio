@@ -249,6 +249,13 @@ jobs:
   # commit của `main` đã mang tên model trước khi job này tồn tại (đo
   # 2026-09-22), và quét cả lịch sử sẽ đỏ mọi PR vì lỗi của người khác. Vá
   # lịch sử thì phải rewrite `main` — không làm. Luật này chặn từ đây về sau.
+  #
+  # Và trong khoảng đó, script còn bỏ qua commit tạo TRƯỚC `GRACE_CUTOFF`
+  # (`2026-09-22T22:00:00Z`) — quyết định `🤖 [QĐ] #165` phương án B. Cùng một
+  # lý do, ở quy mô các nhánh đang mở: 30 commit trên 13 / 29 PR đã mang tên
+  # model trước khi luật này bật, và không lượt agent nào sửa được chúng
+  # (`git push --force` bị `.claude/settings.json` chặn ở `deny`). Số commit
+  # được ân hạn LUÔN in ra ở đầu ra của job, kể cả khi sạch.
   no-model-name:
     name: no-model-name
     runs-on: ubuntu-latest
