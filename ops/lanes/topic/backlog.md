@@ -170,3 +170,26 @@ Thay stub bằng bản thật, qua tập vàng.
 - tiêu chí xong:
   - Tập vàng chạy lại xanh với `impl: v1`, băng ghi có phản hồi thật đã ghi lại.
   - Cổng chất lượng đầu ra riêng của xưởng có ngưỡng khai trong cấu hình, không nằm trong code.
+
+### T-012 · Contract corpus không có chỗ đặt "đơn vị mỗi lần gọi", và bảng quota trôi tự do khỏi `quota.limits`
+Ba chỗ rò cùng một gốc, tìm ra trong vòng soát ngữ cảnh sạch của PR `#100` (mục `verify/VF-G19`). Cả ba đều **đo được**, không phải suy luận, và cả ba đều là hình dạng nhóm **Z** — hỏng mà mọi chỉ báo đều xanh.
+
+**(a) Contract từ chối ghi con số mà issue #101 đang xin.** `quota.limits` trong `workshops/topic/contracts/corpus.v0.schema.json` có `additionalProperties: false` và đúng bốn trường (`searchCallsPerDay`, `reserveFraction`, `source`, `checkedAt`). Không có `unitsPerCall`. Nên khi chủ dự án dán hai số đọc từ Cloud Console vào #101, con số thứ hai **không lưu được vào dữ liệu** — nó buộc phải quy đổi bằng tay thành `searchCallsPerDay`, và bước quy đổi đó không để lại vết ở đâu. Giả định **G19** là chỗ phép chia ấy đi vào.
+
+Nhân đây, một lệch luật có trước mục này: `additionalProperties: false` ở `quota` và `quota.limits` ngược với `CLAUDE.md` mục 12 — *"payload contract v0 để lỏng: chỉ trường bắt buộc tối thiểu, cho phép thêm trường"*. Siết sớm ở đúng chỗ số đo còn chưa đọc xong.
+
+**(b) Phép kiểm "bảng và dữ liệu không trôi khỏi nhau" chỉ phủ `spent`, không phủ `limits`.** `packs/channels/us-personal-finance/quota-budget.md` tự khẳng định bảng không trôi khỏi dữ liệu được, vì `corpusProblems` đỏ khi `quota.spent.searchCalls` lệch tổng `pagesFetched`. Đọc `workshops/topic/src/corpus.ts`: phép kiểm đó có thật, ở dòng 172–174, nhưng **chỉ cho `spent`**. Hai dòng hạn mức của bảng (`100` lần gọi mỗi ngày, `1` đơn vị mỗi lần gọi) không có phép kiểm nào buộc chúng khớp `quota.limits` — sửa bảng mà quên sửa dữ liệu, hoặc ngược lại, không gì đỏ.
+
+**(c) Lớp dự phòng thứ hai của G19 là văn xuôi, chưa có code.** `docs/assumptions.md` (G19) khai lớp hai: *"mỗi corpus ghi `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 là lần ta đọc được hạn mức thật từ chính số đã tiêu"*. Đo: `grep -rn "429" workshops/ kernel/ ops/scripts/` ra **0 kết quả**. Lớp một (hạn mức là tham số) đã kiểm và đúng; lớp hai thì chưa tồn tại. `CLAUDE.md` mục 7 cho phép xây trên giả định chưa kiểm **chỉ khi** phương án dự phòng đã viết sẵn — nên khoảng cách giữa hai lớp này phải đóng hoặc phải khai đúng là chưa có.
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: vòng soát ngữ cảnh sạch của PR `#100`; issue `#101`; giả định **G19** (`docs/assumptions.md`); mục `verify/VF-G19`; `CLAUDE.md` mục 12 (contract-first, contract v0 để lỏng) và mục 13 (sửa ở chỗ sinh ra lỗi, không vá sản phẩm)
+- **cửa merge:** chạm `workshops/topic/contracts/**`, không chạm `kernel/contracts/**` — chạy `node ops/invariants.protected-area.ts`, đừng đoán
+- tiêu chí xong:
+  - `quota.limits` nhận `unitsPerCall` (và `unitsPerDay` nếu Console hiển thị theo đơn vị), để **hai số nguyên bản** của #101 ghi được vào dữ liệu mà không phải quy đổi bằng tay trước.
+  - `quotaGate` hoặc một hàm cạnh nó **dẫn xuất** `searchCallsPerDay` từ hai số đó khi có, thay vì để người quy đổi. Có test cho đúng phép chia, kèm ca đơn vị không chia hết.
+  - `corpusProblems` đỏ khi hai dòng hạn mức của `quota-budget.md` lệch `quota.limits` của corpus — cùng hình dạng phép kiểm đã dùng cho `spent`. Test phải **đỏ thật** khi gỡ phép kiểm đó.
+  - Nới `additionalProperties` ở `quota` và `quota.limits` cho đúng `CLAUDE.md` mục 12, hoặc ghi rõ tại chỗ vì sao ca này cố ý siết.
+  - Lớp dự phòng 429 của G19: hoặc có code đọc hạn mức thật ra từ `quota.spent.searchCalls` khi nhà cung cấp trả 429, hoặc sổ giả định sửa lại cho đúng là lớp hai **chưa tồn tại**. Không để câu khai đứng một mình.
