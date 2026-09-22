@@ -13,6 +13,12 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
+# P-010 dry-run: gọi tay file này KHÔNG chạm được tới tác dụng phụ nào. Hai
+# job duy nhất có tác dụng phụ — `fix-has-test` và `protected-area`, cả hai
+# gắn và gỡ nhãn — đều khoá sau `if: github.event_name == 'pull_request'`.
+# Một lần `workflow_dispatch` vì thế chỉ chạy `check` và `secret-scan`, tức
+# là đúng phần đáng chạy thử và không phần nào khác. Thêm một `inputs.dry_run`
+# ở đây sẽ là một cờ không bao giờ đổi gì.
 permissions:
   contents: read
 # KF-004 pull_request: job `protected-area` gắn và gỡ nhãn bằng GITHUB_TOKEN,

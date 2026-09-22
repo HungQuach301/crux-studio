@@ -29,8 +29,12 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { externalSideEffects, hasDryRunInput, hasWorkflowDispatch } from './smoke-workflows.ts';
+
 const dir = join(process.cwd(), 'ops', 'workflows');
 const problems: string[] = [];
+/** Luật mềm (CHARTER mục 4): in ra, không làm đỏ. */
+const warnings: string[] = [];
 
 export interface RunBlock {
   startLine: number;
@@ -304,6 +308,45 @@ export const EXTERNAL_CONSUMERS: ReadonlyMap<string, readonly string[]> = new Ma
   ['push', ['.github/workflows/sync-workflows.yml']],
 ]);
 
+/**
+ * Mục `P-010` — workflow có tác dụng phụ ra ngoài mà không có `inputs.dry_run`.
+ *
+ * Luật **mềm** (CHARTER mục 4): cảnh báo, KHÔNG chặn. Lý do nó không chặn:
+ * `.github/workflows/sync-workflows.yml` nằm ngoài tầm agent (CHARTER 3.2,
+ * giả định G10), nên có ít nhất một workflow trong hệ thống mà luật này
+ * không bao giờ sửa được. Một luật cứng mà biết trước là có ngoại lệ không
+ * sửa được thì hoặc phải khai ngoại lệ, hoặc phải chặn toàn bộ công việc —
+ * cả hai đều tệ hơn một cảnh báo được đọc.
+ *
+ * Hệ quả của việc thiếu `dry_run`: `smoke-workflows.yml` phải chọn giữa gọi
+ * THẬT (gây tác dụng phụ thật mỗi lần workflow đó đổi) hoặc không gọi. Với
+ * workflow merge thì nó từ chối gọi — xem `planSmokeRuns` nhánh `refused` —
+ * nên thiếu `dry_run` ở đó nghĩa là workflow ấy KHÔNG được chạy thử lần nào.
+ */
+export function missingDryRun(file: string, source: string): string | null {
+  if (file === 'sync-workflows.yml') return null;
+  const effects = externalSideEffects(source);
+  if (effects.length === 0) return null;
+  // Miễn trừ phải VIẾT RA LÝ DO, cùng khuôn với `# KF-004 <sự kiện>: …` ở
+  // trên và vì cùng một lẽ: một cờ `true` thì ai cũng bật được mà không
+  // nghĩ, một câu lý do thì không. `[^\S\n]` chứ không phải `\s` — `\s`
+  // nuốt cả xuống dòng, nên một khai báo RỖNG sẽ khớp ký tự đầu của dòng kế
+  // tiếp và coi như đã có lý do.
+  if (/#[^\S\n]*P-010[^\S\n]+dry-run[^\S\n]*:[^\S\n]*\S/.test(source)) return null;
+  if (!hasWorkflowDispatch(source)) {
+    return (
+      `có tác dụng phụ ra ngoài (${effects.join(', ')}) và KHÔNG có \`workflow_dispatch\` — ` +
+      'không cách nào chạy thử được sau khi merge (mục `P-010`). Thêm `workflow_dispatch` kèm `inputs.dry_run`.'
+    );
+  }
+  if (hasDryRunInput(source)) return null;
+  return (
+    `có tác dụng phụ ra ngoài (${effects.join(', ')}) nhưng không khai \`inputs.dry_run\` — ` +
+    '`smoke-workflows.yml` sẽ phải gọi nó ở chế độ THẬT, hoặc từ chối gọi hẳn (mục `P-010`).\n' +
+    '      Xử lý: thêm `inputs.dry_run`, HOẶC khai lý do:  # P-010 dry-run: <vì sao gọi thật vẫn vô hại>'
+  );
+}
+
 export interface BrokenChain {
   event: string;
   what: string;
@@ -483,6 +526,9 @@ if (isMain) {
         problems.push(`${file} — khối \`permissions\` ${missing}`);
       }
 
+      const dryRun = missingDryRun(file, source);
+      if (dryRun !== null) warnings.push(`${file} — ${dryRun}`);
+
       for (const chain of brokenEventChains(source, consumersByEvent)) {
         problems.push(
           `${file} — ${chain.what} bằng GITHUB_TOKEN sinh ra sự kiện \`${chain.event}\`, ` +
@@ -532,10 +578,21 @@ if (isMain) {
     rmSync(scratch, { recursive: true, force: true });
   }
 
+  // Cảnh báo in TRƯỚC lỗi, và in cả khi có lỗi: một luật mềm bị nuốt mất
+  // vì có luật cứng đỏ cùng lúc là một luật mềm không tồn tại.
+  if (warnings.length > 0) {
+    process.stderr.write(
+      `Cảnh báo (luật mềm, KHÔNG chặn — CHARTER mục 4):\n${warnings.map((w) => `  - ${w}`).join('\n')}\n`,
+    );
+  }
+
   if (problems.length > 0) {
     process.stderr.write(`Workflow có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
     process.exit(1);
   }
 
-  process.stdout.write(`Workflow ok: ${files.length} file, ${blockCount} khối run được kiểm bằng bash -n.\n`);
+  process.stdout.write(
+    `Workflow ok: ${files.length} file, ${blockCount} khối run được kiểm bằng bash -n` +
+      `${warnings.length > 0 ? `, ${warnings.length} cảnh báo` : ''}.\n`,
+  );
 }
