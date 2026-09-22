@@ -355,8 +355,9 @@ là làn chết đói nặng nhất.
     xếp nó vào `unmerged` và **không** đụng tới. Đây là lựa chọn có chủ ý: nới luật khớp để vớt ca này
     sẽ vớt luôn `P-014` (commit `platform: rà soát … (P-014)`), mà `P-014` **chưa** xong — nó vẫn
     `ready`. Chuyển `P-015` sang `done` là việc đọc tay một lần, không phải việc của máy.
-  - ⬜ Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (xem trên). Tới khi đó, tool phải được
-    gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
+  - ✅ **Đã nối ở mục `I-015`** (lượt `crux-worker-1`, 2026-09-22): `pnpm backlog:status --fix` nay nằm
+    trong phụ lục P3 bước 2, và phụ lục P1 bước 3 đọc `readyNow` thay vì đối chiếu `deps` bằng mắt. Mục
+    này vẫn `review` vì hai ô `⬜` còn lại bên dưới chưa xong.
   - ⬜ `I-001` ghi ngưỡng bỏ PR nháp là **72 giờ**, trong khi CHARTER phụ lục P1 bước 3 và CLAUDE.md
     mục 2 ghi **24 giờ**. Lệch này có từ trước mục `I-010`, không sửa ở đây để không trộn phạm vi.
 

@@ -102,15 +102,68 @@ export interface BacklogItem {
   hasHoldMarker: boolean;
   /** Dòng `- status: …`, hoặc `null` nếu mục không khai `status`. */
   statusLine: number | null;
+  /**
+   * Dòng `- deps: …` đã tách thành từng phần phụ thuộc. Mảng rỗng nghĩa là
+   * mục không phụ thuộc gì (`- deps: —`) **hoặc** không khai `deps` — hai ca
+   * này không phân biệt được bằng quy ước hiện có của backlog, và cả hai đều
+   * nghĩa là "không chờ ai".
+   */
+  deps: DepRef[];
+}
+
+/** Một phần phụ thuộc trong dòng `- deps:`. */
+export interface DepRef {
+  /** Đoạn nguyên văn — giữ lại để báo cáo đúng chỗ không tra được. */
+  raw: string;
+  /** Mã mục tra ra từ đoạn đó, hoặc `null` khi đoạn không chứa mã nào. */
+  id: string | null;
 }
 
 const HEADING = /^###\s+(\S+)([^\n]*)$/;
 const STATUS = /^-\s*status:\s*(\S+)\s*$/;
+const DEPS = /^-\s*deps:\s*(.*)$/;
+
+/**
+ * Mã mục như backlog đang viết thật: `T-001`, `V-004b`, `AU-004`, `VF-G17`,
+ * và mã giả định trần `G7` (dạng `audio/AU-001` đang dùng).
+ *
+ * Cố ý KHÔNG khớp `D-C06` (mã quyết định) hay ngày `2026-09-21`: cả hai đều
+ * xuất hiện trong thân mục, và khớp nhầm một trong hai sẽ sinh ra một phần
+ * phụ thuộc không bao giờ tra được, tức một mục không bao giờ nhận được.
+ */
+const ITEM_CODE = /\b(?:[A-Z]{1,3}-G\d+|[A-Z]{1,3}-\d+[a-z]?|G\d+)\b/;
 
 /** Thân mục có dấu treo nào không. So không phân biệt hoa thường. */
 export function hasHoldMarker(body: string): boolean {
   const lowered = body.toLowerCase();
   return HOLD_MARKERS.some((marker) => lowered.includes(marker));
+}
+
+/**
+ * Tách giá trị của dòng `- deps:` thành từng phần phụ thuộc.
+ *
+ * Hai luật, cả hai đều rút ra từ cách backlog đang viết thật chứ không từ
+ * một quy ước lý tưởng:
+ *
+ * 1. **Chỉ cắt ở dấu phẩy.** `visual/V-004` ghi
+ *    `- deps: V-003 · bộ công cụ đã có ở …` — dấu `·` ở đó ngăn mã mục với
+ *    lời giải thích, không ngăn hai phần phụ thuộc. Cắt ở `·` sẽ sinh ra một
+ *    đoạn toàn lời văn, không tra được, và `V-004` sẽ chờ vĩnh viễn.
+ * 2. **Mỗi đoạn lấy mã ĐẦU TIÊN.** Nhờ đó lời giải thích đi kèm trong cùng
+ *    đoạn không ảnh hưởng gì.
+ *
+ * Đoạn không chứa mã nào giữ `id: null` — bên gọi coi đó là **chưa xong**
+ * chứ không bỏ qua, xem `readyQueue`.
+ */
+export function parseDeps(value: string): DepRef[] {
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || /^[—–-]$/.test(trimmed)) return [];
+
+  return trimmed
+    .split(',')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
+    .map((segment) => ({ raw: segment, id: ITEM_CODE.exec(segment)?.[0] ?? null }));
 }
 
 /**
@@ -143,12 +196,22 @@ export function parseBacklog(content: string): BacklogItem[] {
       }
     }
 
+    let deps: DepRef[] = [];
+    for (const line of body) {
+      const m = DEPS.exec(line);
+      if (m) {
+        deps = parseDeps(m[1]!);
+        break;
+      }
+    }
+
     return {
       id: start.id,
       title: start.title,
       status,
       hasHoldMarker: hasHoldMarker(body.join('\n')),
       statusLine,
+      deps,
     };
   });
 }
@@ -223,6 +286,114 @@ export function reviewFindings(
     }));
 }
 
+/** Một làn cộng nội dung backlog của nó — đầu vào của `readyQueue`. */
+export interface LaneBacklog {
+  lane: string;
+  content: string;
+}
+
+/** Một mục `ready` cộng danh sách nó còn đang chờ. */
+export interface QueueEntry {
+  lane: string;
+  id: string;
+  title: string;
+  /** Phần phụ thuộc chưa xong, đã viết thành chuỗi đọc được. Rỗng = nhận được ngay. */
+  waitingOn: string[];
+}
+
+/**
+ * Mục này đã xong **thật** chưa, theo nghĩa một `deps` trỏ vào nó được mở
+ * khoá?
+ *
+ * Hai ca tính là xong:
+ *
+ * - `status: done` — không phải bàn.
+ * - `status: review` mà `classify` xếp vào `stale` — tức có commit hoàn
+ *   thành trên `main`, không bị revert, và thân mục không còn dấu treo. Mục
+ *   đó đã vào `main` thật; giữ nó chặn `deps` chỉ vì chưa ai chạy
+ *   `--fix` chính là nhóm lỗi Z mà `I-010` và `I-015` chữa.
+ *
+ * Mọi ca khác — `ready`, `parked`, `review` còn `held`, mục không đọc được
+ * `status` — đều là **chưa xong**. Lệch về hướng này có giá một nhịp chờ;
+ * lệch về hướng kia nhận một mục mà nền móng của nó chưa có.
+ */
+function isSatisfied(item: BacklogItem, lane: string, subjects: readonly string[]): boolean {
+  if (item.status === 'done') return true;
+  if (item.status !== 'review') return false;
+  const merged =
+    hasCompletionCommit(lane, item.id, subjects) && !hasRevertCommit(lane, item.id, subjects);
+  return classify(item, merged) === 'stale';
+}
+
+/**
+ * Trả lời đúng câu hỏi bước 3 của phụ lục P1 hỏi: **mục nào nhận được ngay**.
+ *
+ * Vì sao cần một lệnh cho việc này, chứ không để worker đọc tay: `I-010`
+ * dựng được phép đo "mục nào nên chuyển `done`" nhưng dừng ở đó, nên worker
+ * vẫn phải tự đối chiếu từng dòng `deps` bằng mắt. Lượt `crux-worker-1`
+ * ngày 2026-09-22 suýt in `idle` trong khi `topic/T-003` và `editorial/E-003`
+ * đều đã nhận được — `deps` của chúng (`T-001`, `E-001`) đã vào `main` mà
+ * backlog còn đọc là `review`. Hàng đợi **cạn giả**, và mọi chỉ báo vẫn xanh.
+ *
+ * Kết quả KHÔNG xếp theo `ops/lanes/priority.md`: thứ tự giữa các làn là
+ * việc chủ dự án chỉnh bằng tay trong file đó, và đọc nó ở đây sẽ biến một
+ * bảng người-sửa thành một phép phân tích cú pháp dễ vỡ. Lệnh này trả lời
+ * phần máy trả lời được (`deps` đã xong chưa); worker vẫn duyệt theo thứ tự
+ * của `priority.md` và vẫn tự kiểm "đã có nhánh hay PR mở chưa" — câu đó
+ * cần mạng, không nằm trong kho.
+ */
+export function readyQueue(
+  backlogs: readonly LaneBacklog[],
+  subjects: readonly string[],
+): { readyNow: QueueEntry[]; blocked: QueueEntry[] } {
+  const parsed = backlogs.map((backlog) => ({
+    lane: backlog.lane,
+    items: parseBacklog(backlog.content),
+  }));
+
+  const index = new Map<string, { lane: string; id: string; satisfied: boolean }>();
+  for (const { lane, items } of parsed) {
+    for (const item of items) {
+      if (index.has(item.id)) continue;
+      index.set(item.id, { lane, id: item.id, satisfied: isSatisfied(item, lane, subjects) });
+    }
+  }
+
+  /** `deps: G7` trỏ tới mục `verify/VF-G7` — quy ước đang dùng thật trong backlog. */
+  const lookup = (id: string) => index.get(id) ?? index.get(`VF-${id}`);
+
+  const readyNow: QueueEntry[] = [];
+  const blocked: QueueEntry[] = [];
+
+  for (const { lane, items } of parsed) {
+    for (const item of items) {
+      if (item.status !== 'ready') continue;
+
+      const waitingOn: string[] = [];
+      for (const dep of item.deps) {
+        if (dep.id === null) {
+          waitingOn.push(`${dep.raw} (không tra được)`);
+          continue;
+        }
+        const target = lookup(dep.id);
+        if (target === undefined) {
+          waitingOn.push(`${dep.id} (không có mục này)`);
+          continue;
+        }
+        // In mã mục THẬT (`verify/VF-G7`), không in mã như `deps` viết
+        // (`G7`): người đọc phải tìm được mục đang chặn mà không cần biết
+        // quy ước rút gọn.
+        if (!target.satisfied) waitingOn.push(`${target.lane}/${target.id}`);
+      }
+
+      const entry: QueueEntry = { lane, id: item.id, title: item.title, waitingOn };
+      (waitingOn.length === 0 ? readyNow : blocked).push(entry);
+    }
+  }
+
+  return { readyNow, blocked };
+}
+
 /**
  * Đổi `- status: review` thành `- status: done` cho đúng danh sách `ids`.
  *
@@ -272,6 +443,7 @@ function main(): void {
 
   const findings: StatusFinding[] = [];
   const written: string[] = [];
+  const backlogs: LaneBacklog[] = [];
 
   for (const lane of laneDirs(lanesRoot)) {
     const file = join(lanesRoot, lane, 'backlog.md');
@@ -284,6 +456,7 @@ function main(): void {
 
     const laneFindings = reviewFindings(lane, content, subjects);
     findings.push(...laneFindings);
+    backlogs.push({ lane, content });
 
     if (!fix) continue;
     const stale = laneFindings.filter((f) => f.verdict === 'stale').map((f) => f.id);
@@ -293,6 +466,11 @@ function main(): void {
     writeFileSync(file, next, 'utf8');
     written.push(lane);
   }
+
+  // Đọc hàng đợi trên nội dung TRƯỚC `--fix`: `readyQueue` đã tự coi mục
+  // `stale` là xong, nên hai đường cho cùng một câu trả lời — và báo cáo
+  // không phụ thuộc vào việc lượt này có chạy `--fix` hay không.
+  const { readyNow, blocked } = readyQueue(backlogs, subjects);
 
   const by = (verdict: ItemVerdict) =>
     findings.filter((f) => f.verdict === verdict).map((f) => `${f.lane}/${f.id}`);
@@ -306,6 +484,11 @@ function main(): void {
         unknown: by('unknown'),
         fixed: fix ? by('stale') : [],
         backlogUpdated: written,
+        readyNow: readyNow.map((entry) => `${entry.lane}/${entry.id}`),
+        blocked: blocked.map((entry) => ({
+          item: `${entry.lane}/${entry.id}`,
+          waitingOn: entry.waitingOn,
+        })),
       },
       null,
       2,
