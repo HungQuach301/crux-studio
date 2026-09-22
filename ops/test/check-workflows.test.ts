@@ -17,6 +17,7 @@ import {
   missingPermissions,
   brokenEventChains,
   subscribedEvents,
+  missingDryRun,
   runBlocks,
   blocksMissingPipefail,
   secretsUsedWithoutEmptyCheck,
@@ -416,6 +417,90 @@ test('KF-004 · workflow sinh sự kiện `push` mà không khai báo thì đỏ
   assert.equal(found.length, 1, JSON.stringify(found));
   assert.equal(found[0]!.event, 'push');
   assert.deepEqual(found[0]!.consumers, ['.github/workflows/sync-workflows.yml']);
+});
+
+// ── Luật MỀM: thiếu inputs.dry_run (mục P-010) ───────────────────────────
+
+test('P-010 · workflow có tác dụng phụ mà thiếu dry_run thì CẢNH BÁO', () => {
+  const source = [
+    'name: x',
+    'on:',
+    '  workflow_dispatch:',
+    '',
+    'permissions:',
+    '  issues: write',
+    '',
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh issue create --title x --body y',
+    '',
+  ].join('\n');
+  const warning = missingDryRun('x.yml', source);
+  assert.notEqual(warning, null);
+  assert.match(warning!, /inputs\.dry_run/);
+});
+
+test('P-010 · có dry_run thì im', () => {
+  const source = [
+    'name: x',
+    'on:',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      dry_run:',
+    '        type: boolean',
+    '        default: false',
+    '',
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh issue create --title x --body y',
+    '',
+  ].join('\n');
+  assert.equal(missingDryRun('x.yml', source), null);
+});
+
+test('P-010 · workflow chỉ ĐỌC thì không bị cảnh báo — luật đỏ nhầm ép khai cờ vô nghĩa', () => {
+  const source = 'name: x\non:\n  workflow_dispatch:\n\njobs:\n  j:\n    steps:\n      - run: gh pr list --json number\n';
+  assert.equal(missingDryRun('x.yml', source), null);
+});
+
+test('P-010 · thiếu cả workflow_dispatch thì cảnh báo nói đúng chỗ đó', () => {
+  const source = 'name: x\non:\n  issues:\n    types: [opened]\n\njobs:\n  j:\n    steps:\n      - run: gh issue comment 1 --body y\n';
+  const warning = missingDryRun('x.yml', source);
+  assert.notEqual(warning, null);
+  assert.match(warning!, /KHÔNG có `workflow_dispatch`/);
+});
+
+test('P-010 · miễn trừ phải KÈM LÝ DO — một khai báo rỗng không đủ', () => {
+  // Cùng khuôn với `# KF-004 <sự kiện>: …`: bắt gõ ra lý do là chủ ý. Một
+  // khai báo cụt sẽ khớp ký tự đầu của DÒNG SAU nếu regex dùng `\s`, nên
+  // bài này canh đúng chỗ đó.
+  const body = [
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh issue create --title x --body y',
+    '',
+  ].join('\n');
+  const head = 'name: x\non:\n  workflow_dispatch:\n\n';
+
+  assert.notEqual(missingDryRun('x.yml', `${head}# P-010 dry-run:\n${body}`), null, 'khai rỗng KHÔNG được chấp nhận');
+  assert.equal(
+    missingDryRun('x.yml', `${head}# P-010 dry-run: job ghi khoá sau if: github.event_name == 'pull_request'\n${body}`),
+    null,
+    'khai kèm lý do thì im',
+  );
+});
+
+test('P-010 · cây thật không còn cảnh báo nào — cảnh báo thường trực là cảnh báo bị bỏ qua', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  const left: string[] = [];
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const warning = missingDryRun(file, readFileSync(join(dir, file), 'utf8'));
+    if (warning !== null) left.push(`${file} — ${warning}`);
+  }
+  assert.deepEqual(left, []);
 });
 
 // ── Z10 · thiếu `set -euo pipefail` ──────────────────────────────────────

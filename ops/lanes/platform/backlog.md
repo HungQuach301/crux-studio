@@ -301,7 +301,7 @@ Hệ quả đã xảy ra thật hai lần: `labels` run #1 hỏng vì thiếu `c
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: `ops/known-failures.md` KF-003; CHARTER 3.2 (giả định G10); rủi ro B7
 - tiêu chí xong:
   - Một workflow mới, `smoke-workflows.yml`, chạy khi `main` đổi trong `ops/workflows/**` — **sau** khi `sync-workflows` chép xong, không chạy song song với nó.
@@ -311,6 +311,31 @@ Hệ quả đã xảy ra thật hai lần: `labels` run #1 hỏng vì thiếu `c
   - Workflow nào đỏ thì mở **một** issue nhãn `alert` liệt kê đủ: tên workflow, link lần chạy, và dòng lỗi đầu tiên. Một issue cho cả lần push, không phải một issue mỗi workflow.
   - Chạy thử **không được** đụng tới `automerge` ở chế độ thật trong bất kỳ hoàn cảnh nào. Có test cho riêng điều này.
   - `pnpm lint:workflows` thêm một luật: workflow trong `ops/workflows/` có tác dụng phụ ra ngoài mà **không** có `inputs.dry_run` thì cảnh báo (chưa chặn, vì `sync-workflows.yml` nằm ngoài tầm agent).
+
+**Đã làm — đối chiếu từng tiêu chí:**
+
+| Tiêu chí | Ở đâu |
+|---|---|
+| `smoke-workflows.yml`, chạy khi `main` đổi trong `ops/workflows/**`, sau sync | `ops/workflows/smoke-workflows.yml` · `ops/invariants.post-merge-dispatch.ts` |
+| xác định **đúng** workflow vừa đổi | `git diff --name-only <sha>^ <sha> -- ops/workflows/` → `changedWorkflowFiles` |
+| gọi `dry_run` nếu có, gọi thường nếu không | `planSmokeRuns` |
+| không có `workflow_dispatch` → ghi rõ, liệt kê trong issue | `planSmokeRuns` nhánh `notDispatchable` |
+| `inputs.dry_run` cho `labels`, `notify`, `watchdog`, `automerge` | bốn file đó, cộng `main-ci.yml` |
+| chế độ thử in ra việc nó **định** làm | mỗi file, nhánh `[ "$DRY_RUN" = "true" ]`; có test khoá lại |
+| **một** issue `alert` cho cả lần push, kèm tên + link + dòng lỗi đầu | `alertIssueBody` |
+| không đụng `automerge` ở chế độ thật, có test riêng | `NEVER_REAL_DISPATCH` + `MERGE_PATTERNS`, 5 test |
+| luật cảnh báo trong `pnpm lint:workflows` | `missingDryRun` |
+
+**Hai chỗ làm khác tiêu chí, có lý do, không làm lặng lẽ:**
+
+1. **Không dùng `workflow_run` trên `sync-workflows`** để khai thứ tự. Chưa ai trong repo kiểm bằng chạy thật rằng một lần chạy `sync-workflows` do `GITHUB_TOKEN` gọi có sinh ra `workflow_run` hay không — và cả nhóm **KF-004** sinh ra từ đúng loại giả định đó (CHARTER 11.1 luật 3). Thứ tự được bảo đảm bằng thứ **kiểm được**: bước "Chờ sync" đối chiếu nội dung `.github/workflows/` với `ops/workflows/` và không gọi gì cho tới khi hai bên khớp. Hai đường vào (`push` cho người merge, gọi tường minh từ `automerge` cho máy merge) phủ cả hai cách `ops/workflows/**` tới được `main`.
+2. **Miễn trừ luật cảnh báo phải viết lý do ra** (`# P-010 dry-run: …`) thay vì chỉ có danh sách cứng. Cùng khuôn với `# KF-004 <sự kiện>: …` đã có, và cùng lý do: một cờ thì ai cũng bật được mà không nghĩ. `ci.yml` là ca đầu tiên dùng nó — mọi job có tác dụng phụ của nó đều khoá sau `if: github.event_name == 'pull_request'`, nên một lần gọi tay không chạm tới được.
+
+**Chưa kiểm được ở đây, và đó là bản chất của mục này.** Nói chính xác hơn bản viết đầu (soát chéo sửa lại): `smoke-workflows.yml` **không** chạy ở lần merge của chính PR này. Workflow chạy theo sự kiện `push` là bản nằm trong `.github/workflows/` **tại commit đó**, mà file này còn mới — nó chỉ được `sync-workflows` chép vào rồi chạy ở lần `ops/workflows/**` đổi **kế tiếp**. Mọi bằng chứng ở đây là bằng chứng ở chỗ rẻ hơn: 19 test cho phần quyết định, 6 bài phá thử đo được là **đỏ đúng lúc phải đỏ**, và phần bash chọn commit đã chạy thật trên một repo git dựng riêng cho ba ca (commit sync, một lượt merge nhiều PR, phần lệch theo nội dung).
+
+**Lượt worker sau phải đọc đúng lần chạy thật đó trước khi coi mục này `done`** — và đó cũng là lúc biết `automerge.yml` gọi một workflow vừa được THÊM có 404 hay không (đã xử lý bằng cảnh báo có lý do, chưa kiểm thật).
+
+**Một chỗ để lại cho mục sau, không tự mở rộng PR này:** `automerge.yml` gọi `smoke-workflows.yml` **một lần cho cả lượt** và không truyền `-f sha=`. PR này đã bịt hai lối "xanh sai" nguy hiểm nhất từ phía `smoke-workflows.yml` (lùi qua commit sync bằng `git log --no-walk`; hợp với phần lệch nội dung so với `.github/workflows/`), nhưng cách sạch là `automerge.yml` truyền sha của **từng** commit merge. Đáng một mục `platform` riêng.
 
 ### P-011 · Chuỗi báo động phải tới được điện thoại, không phụ thuộc workflow thứ hai — **ưu tiên cao**
 DoD Đợt 0 đòi "một cảnh báo thử của watchdog tới được điện thoại". Nó **chưa tới**. `watchdog` run #1 xanh, issue #8 mở đúng nhãn — nhưng `notify.yml` chưa từng chạy lần nào, vì GitHub không kích hoạt workflow từ sự kiện do `GITHUB_TOKEN` tạo ra. Xem **KF-004**.
