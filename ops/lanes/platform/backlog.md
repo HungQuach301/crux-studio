@@ -104,7 +104,7 @@ Chỉ dẫn 3 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
 - deps: P-005
 - risk: low
-- status: ready
+- status: review
 - nguồn: issue #17, chỉ dẫn 3; CHARTER phụ lục P2
 - tiêu chí xong:
   - Bản tin có mục **Tiến độ**: số mục `done` trong 24 giờ · số mục còn lại theo từng đợt · thông lượng trung bình 3 ngày · ngày dự kiến xong từng đợt · **nút thắt hiện tại là máy hay người**.

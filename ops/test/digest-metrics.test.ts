@@ -21,7 +21,9 @@ import {
   UNKNOWN_LANE,
   classifyDecision,
   collectMetrics,
+  computeProgress,
   decisionRows,
+  laneFromTitle,
   mergedByLane,
   needOwnerCount,
   openPrRows,
@@ -31,6 +33,8 @@ import {
   rollupState,
   type GhPr,
 } from '../scripts/digest-metrics.ts';
+import type { BacklogItem } from '../scripts/backlog-status.ts';
+import type { LaneName, RunLogLine } from '@crux/kernel';
 import { conflictRows } from '../scripts/conflict-watch.ts';
 
 const NOW = new Date('2026-09-21T18:00:00.000Z');
@@ -243,6 +247,14 @@ function baseMetrics(over: Partial<Parameters<typeof renderDigestMetrics>[0]> = 
     parked: [],
     decisions: [],
     cost: { cost24h: 0, total: 0, budget: 600, percent: 0 },
+    progress: {
+      doneLast24h: 0,
+      done3d: 0,
+      throughputPerDay: 0,
+      byBatch: [],
+      bottleneck: 'không tắc' as const,
+      routineRuns24h: 0,
+    },
     ...over,
   };
 }
@@ -460,4 +472,116 @@ test('P-007 · dò xung đột hỏng thì bản tin rơi về CHƯA DÒ, KHÔNG
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// --- Tiến độ (mục `platform/P-019`) ---
+
+function item(id: string, status: string): BacklogItem {
+  return { id, status, title: id, hasHoldMarker: status === 'parked', statusLine: 1 };
+}
+
+function step0Line(at: string): RunLogLine {
+  return { at, lane: 'platform', kind: 'lane', ref: 'platform/P-016', status: 'ok', durationMs: 0, costUsd: 0 };
+}
+
+test('laneFromTitle: lấy làn từ tiêu đề `[lane] id`, null khi không theo mẫu hoặc làn lạ', () => {
+  assert.equal(laneFromTitle('[platform] P-024 — abc'), 'platform');
+  assert.equal(laneFromTitle('[visual] V-001 — x'), 'visual');
+  assert.equal(laneFromTitle('Gộp origin/main (integrator, không xung đột)'), null);
+  assert.equal(laneFromTitle('[bogus] X-1 — y'), null);
+});
+
+test('computeProgress: đếm mục done 24h/3d và thông lượng, chỉ tính PR mang mã mục', () => {
+  const now = new Date('2026-09-22T12:00:00.000Z');
+  const merged: GhPr[] = [
+    { number: 1, title: '[platform] P-001 — a', headRefName: 'x', mergedAt: '2026-09-22T06:00:00Z' }, // 24h
+    { number: 2, title: '[visual] V-001 — b', headRefName: 'x', mergedAt: '2026-09-20T13:00:00Z' }, // 3d, ngoài 24h
+    { number: 3, title: 'Gộp origin/main', headRefName: 'x', mergedAt: '2026-09-22T06:00:00Z' }, // không mã mục
+    { number: 4, title: '[platform] P-002 — c', headRefName: 'x', mergedAt: '2026-09-10T06:00:00Z' }, // ngoài 3d
+  ];
+  const p = computeProgress(new Map(), merged, [], 0, 0, now);
+  assert.equal(p.doneLast24h, 1);
+  assert.equal(p.done3d, 2);
+  assert.equal(p.throughputPerDay, 0.67);
+});
+
+test('computeProgress: mục còn lại và parked gom theo đợt (suy từ làn), done không tính', () => {
+  const now = new Date('2026-09-22T12:00:00.000Z');
+  const itemsByLane = new Map<LaneName, BacklogItem[]>([
+    ['platform', [item('P-1', 'ready'), item('P-2', 'review'), item('P-3', 'done'), item('P-4', 'parked')]],
+    ['visual', [item('V-1', 'ready'), item('V-2', 'done')]],
+  ]);
+  const p = computeProgress(itemsByLane, [], [], 0, 0, now);
+  const d0 = p.byBatch.find((b) => b.batch === 'Đợt 0')!;
+  const d1 = p.byBatch.find((b) => b.batch === 'Đợt 1')!;
+  assert.equal(d0.remaining, 2);
+  assert.equal(d0.parked, 1);
+  assert.equal(d1.remaining, 1);
+  assert.equal(d1.parked, 0);
+});
+
+test('computeProgress: chiếu ngày xong theo thông lượng của đợt; null khi 3 ngày không mục nào done', () => {
+  const now = new Date('2026-09-22T12:00:00.000Z');
+  const merged: GhPr[] = [
+    { number: 1, title: '[visual] V-1 — a', headRefName: 'x', mergedAt: '2026-09-21T00:00:00Z' },
+    { number: 2, title: '[visual] V-2 — a', headRefName: 'x', mergedAt: '2026-09-21T00:00:00Z' },
+    { number: 3, title: '[audio] AU-1 — a', headRefName: 'x', mergedAt: '2026-09-21T00:00:00Z' },
+  ];
+  const itemsByLane = new Map<LaneName, BacklogItem[]>([
+    ['visual', [item('V-3', 'ready'), item('V-4', 'ready'), item('V-5', 'ready'), item('V-6', 'ready')]],
+    ['platform', [item('P-1', 'ready')]],
+  ]);
+  const p = computeProgress(itemsByLane, merged, [], 0, 0, now);
+  const d1 = p.byBatch.find((b) => b.batch === 'Đợt 1')!;
+  const d0 = p.byBatch.find((b) => b.batch === 'Đợt 0')!;
+  assert.equal(d1.done3d, 3);
+  assert.equal(d1.projectedDone, '2026-09-26'); // now + ceil(4 / 1) = 4 ngày
+  assert.equal(d0.projectedDone, null); // còn việc mà 3 ngày không mục nào done
+});
+
+test('computeProgress: đợt hết việc thì dự kiến xong là hôm nay', () => {
+  const now = new Date('2026-09-22T12:00:00.000Z');
+  const itemsByLane = new Map<LaneName, BacklogItem[]>([['platform', [item('P-1', 'done')]]]);
+  const d0 = computeProgress(itemsByLane, [], [], 0, 0, now).byBatch.find((b) => b.batch === 'Đợt 0')!;
+  assert.equal(d0.remaining, 0);
+  assert.equal(d0.projectedDone, '2026-09-22');
+});
+
+test('computeProgress: nút thắt người đứng trước máy; đếm đúng lượt bước 0 trong 24 giờ', () => {
+  const now = new Date('2026-09-22T12:00:00.000Z');
+  const logs: RunLogLine[] = [
+    step0Line('2026-09-22T06:00:00.000Z'), // trong 24h
+    step0Line('2026-09-22T00:30:00.000Z'), // trong 24h
+    step0Line('2026-09-20T06:00:00.000Z'), // ngoài 24h
+    { at: '2026-09-22T06:00:00.000Z', lane: 'platform', kind: 'stage', ref: 'platform/P-016', status: 'ok', durationMs: 0, costUsd: 0 }, // kind stage
+    { at: '2026-09-22T06:00:00.000Z', lane: 'visual', kind: 'lane', ref: 'visual/V-001', status: 'ok', durationMs: 0, costUsd: 0 }, // ref khác
+  ];
+  assert.equal(computeProgress(new Map(), [], logs, 0, 0, now).routineRuns24h, 2);
+  assert.equal(computeProgress(new Map(), [], [], 2, 5, now).bottleneck, 'người'); // người thắng máy
+  assert.equal(computeProgress(new Map(), [], [], 0, 3, now).bottleneck, 'máy');
+  assert.equal(computeProgress(new Map(), [], [], 0, 0, now).bottleneck, 'không tắc');
+});
+
+test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí xong của P-019', () => {
+  const text = renderDigestMetrics(
+    baseMetrics({
+      progress: {
+        doneLast24h: 3,
+        done3d: 6,
+        throughputPerDay: 2,
+        byBatch: [
+          { batch: 'Đợt 0', remaining: 5, parked: 1, done3d: 2, projectedDone: '2026-09-25' },
+          { batch: 'Đợt 1', remaining: 8, parked: 0, done3d: 4, projectedDone: null },
+        ],
+        bottleneck: 'người',
+        routineRuns24h: 12,
+      },
+    }),
+  );
+  assert.match(text, /^Tiến độ$/m);
+  assert.match(text, /^- Mục done 24 giờ: 3 · thông lượng 3 ngày: 2 mục\/ngày$/m);
+  assert.match(text, /^- Đợt 0: 5 mục còn lại \(1 parked\) · dự kiến xong: 2026-09-25$/m);
+  assert.match(text, /^- Đợt 1: 8 mục còn lại · dự kiến xong: chưa đủ dữ liệu để chiếu$/m);
+  assert.match(text, /^- Nút thắt hiện tại: người$/m);
+  assert.match(text, /^- Lượt chạy routine 24 giờ: 12 \(số để kiểm giả định G3\)$/m);
 });
