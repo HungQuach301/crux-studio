@@ -718,6 +718,9 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      Mỗi reversible đã làm theo khuyến nghị một dòng. Phủ quyết bằng "hoàn tác #N" trong 24 giờ.
 
    Đang chờ merge
+     Số giờ lấy từ `pnpm delayed:flow` (mục P-027), ĐỪNG tự tính: đồng hồ 12 giờ đếm từ lần CI xanh
+     trên ĐẦU NHÁNH HIỆN TẠI, nên mỗi commit gộp của bước 0 đặt nó về 0. Giờ kể từ lúc gắn nhãn là
+     con số sai, và nó làm một PR kẹt vĩnh viễn trông giống một PR sắp tới hạn (KF-011).
      Mỗi PR automerge-delayed một dòng: link · còn mấy giờ · chạm gì trong vùng bảo vệ.
      Nói rõ: không làm gì thì nó tự vào main; muốn giữ lại thì comment "dừng" ngay trên PR đó.
      PR nào đang xung đột (mục P-022): thay "còn mấy giờ" bằng "xung đột, kẹt <giờ> giờ" — đồng hồ 12
