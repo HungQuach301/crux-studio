@@ -210,3 +210,101 @@ test('CLI: exit code 2 khi không tự giải được', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ─────────────────────────────────────── Mục `P-024` · trailer commit gộp ──
+//
+// KF-010: commit gộp do tool tạo ra đời không mang trailer, và bước bù bằng
+// tay đã hụt một lượt (9 commit thiếu `Claude-Session`). Việc ghi trailer
+// nay nằm TRONG tool. Test này gọi tool trên cây dựng sẵn rồi đọc
+// `git log -1 --format=%B` — và phải ĐỎ THẬT khi gỡ phần ghi trailer.
+
+/** Đặt `CLAUDE_SESSION_URL` cho một lần chạy rồi trả lại giá trị cũ. */
+function withSessionUrl<T>(value: string | undefined, fn: () => T): T {
+  const key = 'CLAUDE_SESSION_URL';
+  const prev = process.env[key];
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+  try {
+    return fn();
+  } finally {
+    if (prev === undefined) delete process.env[key];
+    else process.env[key] = prev;
+  }
+}
+
+/** main tiến ở file không liên quan, feature thêm dòng — gộp sạch, tạo commit. */
+function cleanMergeFixture(dir: string): void {
+  git(dir, ['checkout', '-q', 'main']);
+  writeFileSync(join(dir, 'other.txt'), 'khong-lien-quan\nmain-them\n', 'utf8');
+  git(dir, ['commit', '-q', '-am', 'main thêm dòng ở other.txt']);
+  git(dir, ['checkout', '-q', 'feature']);
+  writeFileSync(join(dir, 'shared.log'), 'dong-goc-1\ndong-goc-2\nfeature-them\n', 'utf8');
+  git(dir, ['commit', '-q', '-am', 'feature thêm dòng ở shared.log']);
+}
+
+test('commit gộp SẠCH mang Co-Authored-By trung tính model, và Claude-Session khi có URL phiên', () => {
+  const dir = initRepo();
+  try {
+    cleanMergeFixture(dir);
+    const result = withSessionUrl('https://claude.ai/code/session_01TEST', () =>
+      resolveAdditiveMerge(dir, 'main'),
+    );
+    assert.equal(result.outcome, 'clean');
+    assert.equal(result.sessionTrailerMissing, undefined, 'có URL phiên thì không được báo thiếu');
+
+    const body = git(dir, ['log', '-1', '--format=%B']);
+    assert.match(body, /Co-Authored-By: Claude <noreply@anthropic\.com>/, 'thiếu Co-Authored-By');
+    assert.match(body, /Claude-Session: https:\/\/claude\.ai\/code\/session_01TEST/, 'thiếu Claude-Session');
+    // Tên model KHÔNG được lọt vào trailer (CLAUDE.md mục 6; ca đã sai thật
+    // trên main là `Co-Authored-By` có kèm tên model).
+    assert.ok(!/Opus|Sonnet|Haiku/i.test(body), `tên model lọt vào commit: ${body}`);
+
+    // git đọc lại được như một khối trailer thật, đúng thứ recheck-assumptions
+    // (G14) dựa vào — không chỉ là chuỗi nằm trong thân.
+    const session = git(dir, ['log', '-1', '--format=%(trailers:key=Claude-Session,valueonly=true)']).trim();
+    assert.equal(session, 'https://claude.ai/code/session_01TEST');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('commit gộp UNION (resolved) cũng mang đủ hai trailer', () => {
+  const dir = initRepo();
+  try {
+    git(dir, ['checkout', '-q', 'main']);
+    writeFileSync(join(dir, 'shared.log'), 'dong-goc-1\ndong-goc-2\nmain-them\n', 'utf8');
+    git(dir, ['commit', '-q', '-am', 'main thêm dòng ở shared.log']);
+    git(dir, ['checkout', '-q', 'feature']);
+    writeFileSync(join(dir, 'shared.log'), 'dong-goc-1\ndong-goc-2\nfeature-them\n', 'utf8');
+    git(dir, ['commit', '-q', '-am', 'feature thêm dòng ở shared.log']);
+
+    const result = withSessionUrl('https://claude.ai/code/session_01UNION', () =>
+      resolveAdditiveMerge(dir, 'main'),
+    );
+    assert.equal(result.outcome, 'resolved');
+
+    const body = git(dir, ['log', '-1', '--format=%B']);
+    assert.match(body, /Co-Authored-By: Claude <noreply@anthropic\.com>/, 'thiếu Co-Authored-By');
+    assert.match(body, /Claude-Session: https:\/\/claude\.ai\/code\/session_01UNION/, 'thiếu Claude-Session');
+    assert.ok(!/Opus|Sonnet|Haiku/i.test(body), `tên model lọt vào commit: ${body}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('thiếu URL phiên: commit vẫn mang Co-Authored-By, và kết quả NÓI RA chỗ thiếu', () => {
+  const dir = initRepo();
+  try {
+    cleanMergeFixture(dir);
+    const result = withSessionUrl(undefined, () => resolveAdditiveMerge(dir, 'main'));
+    assert.equal(result.outcome, 'clean');
+    assert.equal(result.sessionTrailerMissing, true, 'thiếu mã phiên phải nói ra, không nuốt im');
+
+    const body = git(dir, ['log', '-1', '--format=%B']);
+    assert.match(body, /Co-Authored-By: Claude <noreply@anthropic\.com>/, 'Co-Authored-By phải luôn có');
+    assert.ok(!/Claude-Session:/.test(body), 'không có URL thì không được bịa ra trailer Claude-Session');
+    assert.ok(!/Opus|Sonnet|Haiku/i.test(body), `tên model lọt vào commit: ${body}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
