@@ -65,11 +65,12 @@ Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bố
 
 - deps: T-003
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-012, mục Lõi định lượng 2
 - tiêu chí xong:
-  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy.
-  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7).
+  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy. ✅ `workshops/topic/src/model-runner.ts` (`runModel`) — không đọc đồng hồ hệ thống, không random; test chạy lặp lại và xen kẽ hai bộ tham số cho ra cùng kết quả từng chữ số.
+  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7). ✅ `workshops/topic/src/model-verify.ts`: `computeVerification` khai kiểu trả về `PendingOrFailed` (`'pending' | 'failed'`), không có giá trị `'verified'` nào để gán — khoá ở tầng kiểu (`tsc --noEmit`), không phải quy ước. `verifiedClaimProblems` chỉ ĐỌC LẠI một claim `verified` đã gõ tay, không bao giờ đặt.
+- công cụ: `workshops/topic/contracts/model.v0.schema.json` (contract, đóng — dữ liệu nội bộ xưởng, không phải payload envelope) · `workshops/topic/src/model-runner.ts` (registry công thức + chạy xác định) · `workshops/topic/src/model-verify.ts` (bốn cấp kiểm + trạng thái tổng hợp). `formula` trong contract là khoá tra registry, không phải biểu thức eval. T-006 đăng ký công thức thật và tạo `M-001.json`…`M-008.json`.
 
 ### T-006 · Tám mô hình định lượng đầu tiên
 Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra đời.
