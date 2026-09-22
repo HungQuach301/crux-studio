@@ -451,3 +451,29 @@ oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue
     Ba test `collectCommits` cũ (mục `I-005`, `I-007`) cập nhật để tự khai nhánh nào có PR mở, không gọi
     `gh` thật trong test.
   - `ops/known-failures.md` hàng **Z15**: thêm đoạn "Sửa tiếp ở mục `I-012`".
+
+### I-013 · Contract của xưởng nằm ngoài tầm quét của `pnpm contracts`
+
+Tìm ra trong vòng soát của `topic/T-008` (reviewer ngữ cảnh sạch, PR `#91`).
+
+`ops/scripts/check-contracts.ts` chạy `unsupportedKeywords` trên phong bì cộng sáu payload v0 của
+`kernel/contracts/`, và chỉ thế. Mục `T-008` thêm ba contract ở `workshops/topic/contracts/` — đúng luật
+phân định của CLAUDE.md mục 12, vì corpus và kiểm mới lạ không trung tính với thể loại lẫn kênh, nên chúng
+không thuộc `kernel/`. Nhưng thư mục đó **không ai quét**.
+
+`T-008` tự bù bằng ba test gọi `unsupportedKeywords` cho ba schema của nó. Cơ chế bù đó là **opt-in**:
+contract thứ tư thả vào `workshops/*/contracts/` mà tác giả quên viết test tương ứng thì nó dùng từ khoá
+validator chưa hiểu, ràng buộc im lặng không được kiểm, và **không gì đỏ**. Đúng hình dạng nhóm **Z** —
+và đúng cái mà chính `pnpm contracts` tồn tại để chặn ("một ràng buộc được viết ra nhưng không được kiểm
+còn tệ hơn là không viết").
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/`.
+  - Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
+    test tái hiện, không chỉ có lời.
+  - Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
+    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`).
