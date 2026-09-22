@@ -77,13 +77,16 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
 
 - deps: T-005
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
-  - Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.**
-  - Công thức do agent soạn, có trích nguồn, và được một mô hình **khác họ, không phải Claude** tính lại độc lập. Lệch nhau thì mở `🤖 [QĐ]`.
-  - Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` với hai lựa chọn: thuê chuyên gia viết, hoặc bỏ mô hình đó.
-  - Mỗi mô hình có một issue `irreversible` tóm tắt (giả định, công thức, nguồn, kết quả đối chiếu) đọc được trong vài phút.
+  - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
+  - ⬜ **Chưa làm, chặn ngoài phạm vi mục này:** công thức được một mô hình **khác họ, không phải Claude** tính lại độc lập. Cơ chế là mục `platform/P-003`, mục đó cần secret `OPENAI_API_KEY` — chưa có trên repo, và PR #66 của nó đang chờ chủ dự án merge (issue #67). Cấp kiểm 4 (`llm-assumption-check`) của cả tám mô hình vì vậy ghi `pass: false` kèm lý do, và `verification.status` của cả tám là `pending`.
+  - ✅ Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` — **không mô hình nào rơi vào ca này**: cả tám đều có ví dụ tính sẵn đã công bố. Điều kiện kích hoạt không xảy ra nên không có issue nào phải mở.
+  - ⬜ **Chưa làm, cố ý, chờ tiêu chí 2:** mỗi mô hình một issue `irreversible` tóm tắt. Issue đó là đường duy nhất đưa `verification.status` lên `verified` (D-C02 điểm c), và phần "kết quả đối chiếu" của nó chính là thứ đang thiếu. Mở tám issue lúc cấp 4 còn `pass: false` là xin duyệt cho thứ chưa đủ bằng chứng, và tốn tám dòng bản tin (mặc định M8, rủi ro B11).
+- **Chưa chuyển `done`:** hai tiêu chí trên còn ⬜. Mục này ở `review` cho tới khi `P-003` chạy được; lúc đó phần còn lại là một lượt cơ học (chạy soát chéo, ghi bằng chứng cấp 4, mở issue tóm tắt).
+- **Hai mâu thuẫn trong chính nguồn, đã ghi chứ không nuốt** (xem `ops/known-failures.md` KF-012): TreasuryDirect in 4,03% trong khi khối ví dụ của chính nó tính ra 4,26%; IRS Pub 590-A có câu hướng dẫn dòng 4 không cùng thoả một cách đọc với ví dụ điền sẵn của chính nó ($6.830 so với $6.825). Cả hai nằm trong `assumptions` của file mô hình tương ứng để Fact & Risk Pass đọc được.
+- công cụ: `workshops/topic/data/models/M-001.json`…`M-008.json` (mô tả theo contract) · `cases/M-00N.cases.json` (ca kiểm cấp 1 kèm trích dẫn) · `workshops/topic/src/models.ts` (tám công thức + registry) · `workshops/topic/test/models.test.ts` (74 test: khớp nguồn, kiểm đột biến, biên, xác định, trần dung sai).
 
 ### T-007 · Sensitivity Pass
 Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng giá trị hợp lệ và tìm mọi điểm đảo chiều. Đây là chữ ký khác biệt của kênh, và là cách bù cho việc chủ dự án không sống ở thị trường Mỹ: không đoán tham số vùng miền, quét hết khoảng của nó.
