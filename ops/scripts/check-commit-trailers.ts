@@ -172,21 +172,29 @@ export interface ScanResult {
 }
 
 /**
- * Quét mọi commit trong `range` (dạng `origin/main..HEAD`) **tạo từ `cutoff`
- * trở đi**. Đọc từng commit một qua `--format=%cI%n%B` thay vì một lần
+ * Quét mọi commit trong `range` (dạng `origin/main..HEAD`) có **ít nhất một**
+ * trong hai mốc (`%cI` giờ committer, `%aI` giờ author) nằm từ `cutoff` trở
+ * đi. Đọc từng commit một qua `--format=%cI%n%aI%n%B` thay vì một lần
  * `git log` rồi tự cắt: thân commit có thể chứa bất cứ ký tự phân cách nào ta
- * chọn, và tự cắt là chỗ hỏng im lặng. `%cI` thì an toàn để làm dòng đầu —
- * nó không bao giờ chứa xuống dòng.
+ * chọn, và tự cắt là chỗ hỏng im lặng. Hai mốc thì an toàn để làm hai dòng
+ * đầu — chúng không bao giờ chứa xuống dòng.
  *
- * ## Vì sao mốc so theo giờ **committer** (`%cI`), không phải giờ author (`%aI`)
+ * ## Vì sao xét CẢ HAI mốc, không chọn một
  *
  * Hai mốc lệch nhau thật: commit `bb146e6` của PR #157 có `%aI 18:40:15Z`
- * nhưng `%cI 18:41:20Z`. Chọn `%cI` vì nó là lúc **commit object hiện tại**
- * ra đời, nên nó nghiêng về phía **quét**: một commit cũ bị viết lại
- * (amend/rebase/cherry-pick) nhận `%cI` mới và mất ân hạn — đúng điều ta
- * muốn, vì lượt viết lại nó có thể sửa trailer luôn. `%aI` thì giữ nguyên qua
- * mọi lần viết lại, tức ân hạn theo được vô hạn. Nghi ngờ thì nghiêng về phía
- * quét, cùng luật với `isInScanScope`.
+ * nhưng `%cI 18:41:20Z`. Và mỗi mốc một mình đều có đường lách, cả hai đo
+ * được bằng chạy thật:
+ *
+ * - Chỉ `%aI`: giờ author giữ nguyên qua amend/rebase/cherry-pick, nên một
+ *   commit cũ vi phạm mang ân hạn theo được **vô hạn**.
+ * - Chỉ `%cI`: `GIT_COMMITTER_DATE='2026-09-22T21:00:00Z' git commit …` tạo
+ *   một commit **mới tinh** mà `%cI` nằm trước mốc — vi phạm mới đi lọt hoàn
+ *   toàn. `git rebase --committer-date-is-author-date` cho cùng kết quả.
+ *
+ * Xét `||` nên một commit chỉ được ân hạn khi **cả hai** mốc đều trước
+ * `cutoff` — tức chỉ commit thật sự đã có từ trước. Nghi ngờ thì nghiêng về
+ * phía quét, cùng luật với `isInScanScope`. Điều này **không** làm đỏ lại 30
+ * commit cũ: `%aI` của chúng cũng nằm trước mốc (đo trên cả 29 nhánh PR).
  */
 export function scanRange(cwd: string, range: string, cutoff: string = GRACE_CUTOFF): ScanResult {
   const list = spawnSync('git', ['rev-list', range], { cwd, encoding: 'utf8' });
@@ -198,21 +206,25 @@ export function scanRange(cwd: string, range: string, cutoff: string = GRACE_CUT
   let graced = 0;
   let scanned = 0;
   for (const sha of list.stdout.split('\n').map((s) => s.trim()).filter(Boolean)) {
-    const show = spawnSync('git', ['log', '-1', '--format=%cI%n%B', sha], { cwd, encoding: 'utf8' });
+    const show = spawnSync('git', ['log', '-1', '--format=%cI%n%aI%n%B', sha], { cwd, encoding: 'utf8' });
     if (show.status !== 0) {
       throw new Error(`git log ${sha} lỗi: ${(show.stderr || '').trim()}`);
     }
-    const newline = show.stdout.indexOf('\n');
-    if (newline === -1) {
-      throw new Error(`git log ${sha}: không đọc được mốc %cI — đầu ra ${JSON.stringify(show.stdout)}`);
+    const firstNewline = show.stdout.indexOf('\n');
+    const secondNewline = firstNewline === -1 ? -1 : show.stdout.indexOf('\n', firstNewline + 1);
+    if (secondNewline === -1) {
+      throw new Error(
+        `git log ${sha}: không đọc được hai mốc %cI/%aI — đầu ra ${JSON.stringify(show.stdout)}`,
+      );
     }
-    const committedAt = show.stdout.slice(0, newline).trim();
-    if (!isInScanScope(committedAt, cutoff)) {
+    const committedAt = show.stdout.slice(0, firstNewline).trim();
+    const authoredAt = show.stdout.slice(firstNewline + 1, secondNewline).trim();
+    if (!isInScanScope(committedAt, cutoff) && !isInScanScope(authoredAt, cutoff)) {
       graced += 1;
       continue;
     }
     scanned += 1;
-    const line = modelNameInTrailers(show.stdout.slice(newline + 1));
+    const line = modelNameInTrailers(show.stdout.slice(secondNewline + 1));
     if (line !== null) offenders.push({ sha, line: line.trim() });
   }
   return { offenders, graced, scanned };

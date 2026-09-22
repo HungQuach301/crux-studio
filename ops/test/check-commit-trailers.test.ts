@@ -237,9 +237,9 @@ test('KF-014 · HAI CHIỀU trên lịch sử git thật: commit CŨ không đ�
   }
 });
 
-test('KF-014 · viết lại một commit cũ làm nó MẤT ân hạn (mốc theo %cI, không phải %aI)', () => {
-  // `%aI` giữ nguyên qua amend/rebase, nên chọn `%aI` là để ân hạn theo được vô
-  // hạn. Ca này khoá lựa chọn `%cI`: giữ nguyên giờ AUTHOR cũ, chỉ đổi giờ
+test('KF-014 · viết lại một commit cũ làm nó MẤT ân hạn (chiều %cI)', () => {
+  // `%aI` giữ nguyên qua amend/rebase, nên xét MỘT MÌNH `%aI` là để ân hạn theo
+  // được vô hạn. Ca này khoá chiều `%cI`: giữ nguyên giờ AUTHOR cũ, chỉ đổi giờ
   // COMMITTER sang sau mốc → commit phải đỏ trở lại.
   const dir = mkdtempSync(join(tmpdir(), 'kf014-amend-'));
   const cutoff = '2026-09-22T22:00:00Z';
@@ -275,6 +275,88 @@ test('KF-014 · viết lại một commit cũ làm nó MẤT ân hạn (mốc th
     const after = scanRange(dir, `${base}..HEAD`, cutoff);
     assert.equal(after.offenders.length, 1, 'commit đã viết lại thì MẤT ân hạn và đỏ trở lại');
     assert.equal(after.graced, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('KF-014 · commit MỚI backdate GIT_COMMITTER_DATE vẫn bị bắt (chiều %aI)', () => {
+  // Lỗ do vòng soát ngữ cảnh sạch tìm ra: xét MỘT MÌNH `%cI` thì
+  // `GIT_COMMITTER_DATE=<trước mốc> git commit` tạo một commit MỚI TINH mà phép
+  // quét bỏ qua hoàn toàn — một job CHẶN bị lách bằng một biến môi trường.
+  // `git rebase --committer-date-is-author-date` cho cùng kết quả.
+  //
+  // Đây là chiều ngược của ca ngay trên: ở đó `%cI` cứu, ở đây `%aI` cứu. Hai ca
+  // cộng lại khoá luật `isInScanScope(cI) || isInScanScope(aI)` từ cả hai phía —
+  // bỏ vế nào thì một trong hai đỏ.
+  const dir = mkdtempSync(join(tmpdir(), 'kf014-backdate-'));
+  const cutoff = '2026-09-22T22:00:00Z';
+  try {
+    const git = (args: string[], env: Record<string, string> = {}) =>
+      execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, ...env } });
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.com']);
+    git(['config', 'user.name', 'Test']);
+
+    writeFileSync(join(dir, 'a.txt'), 'a\n');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'nền', '-m', GOOD_TRAILER], {
+      GIT_COMMITTER_DATE: '2026-09-20T00:00:00Z',
+      GIT_AUTHOR_DATE: '2026-09-20T00:00:00Z',
+    });
+    const base = git(['rev-parse', 'HEAD']).trim();
+
+    // Vi phạm MỚI: giờ author sau mốc (lúc thật), giờ committer bị đẩy về trước mốc.
+    writeFileSync(join(dir, 'b.txt'), 'b\n');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'mới nhưng backdate', '-m', REAL_BAD_TRAILER], {
+      GIT_COMMITTER_DATE: '2026-09-22T21:00:00Z',
+      GIT_AUTHOR_DATE: '2026-09-22T23:00:00Z',
+    });
+    const sneaky = git(['rev-parse', 'HEAD']).trim();
+    assert.equal(git(['log', '-1', '--format=%cI']).trim().startsWith('2026-09-22T21:'), true, 'giờ committer đã bị đẩy về trước mốc');
+
+    const result = scanRange(dir, `${base}..HEAD`, cutoff);
+    assert.equal(result.offenders.length, 1, 'commit backdate KHÔNG được ân hạn');
+    assert.equal(result.offenders[0]!.sha, sneaky);
+    assert.equal(result.graced, 0);
+    assert.equal(result.scanned, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('KF-014 · ân hạn chỉ khi CẢ HAI mốc đều trước cutoff', () => {
+  // Ca âm đi kèm ca trên: cả `%cI` lẫn `%aI` đều trước mốc thì vẫn ân hạn — nếu
+  // không thì 30 commit cũ trên 13 PR lại đỏ và phương án B của #165 mất tác dụng.
+  const dir = mkdtempSync(join(tmpdir(), 'kf014-both-'));
+  const cutoff = '2026-09-22T22:00:00Z';
+  try {
+    const git = (args: string[], env: Record<string, string> = {}) =>
+      execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, ...env } });
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.com']);
+    git(['config', 'user.name', 'Test']);
+
+    writeFileSync(join(dir, 'a.txt'), 'a\n');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'nền', '-m', GOOD_TRAILER], {
+      GIT_COMMITTER_DATE: '2026-09-20T00:00:00Z',
+      GIT_AUTHOR_DATE: '2026-09-20T00:00:00Z',
+    });
+    const base = git(['rev-parse', 'HEAD']).trim();
+
+    // Hình dạng thật của #157: hai mốc lệch nhau một phút, cả hai trước mốc.
+    writeFileSync(join(dir, 'b.txt'), 'b\n');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'cũ thật', '-m', REAL_BAD_TRAILER], {
+      GIT_COMMITTER_DATE: '2026-09-22T18:41:20Z',
+      GIT_AUTHOR_DATE: '2026-09-22T18:40:15Z',
+    });
+
+    const result = scanRange(dir, `${base}..HEAD`, cutoff);
+    assert.deepEqual(result.offenders, [], 'cả hai mốc trước cutoff thì vẫn ân hạn');
+    assert.equal(result.graced, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

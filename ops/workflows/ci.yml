@@ -256,6 +256,10 @@ jobs:
   # model trước khi luật này bật, và không lượt agent nào sửa được chúng
   # (`git push --force` bị `.claude/settings.json` chặn ở `deny`). Số commit
   # được ân hạn LUÔN in ra ở đầu ra của job, kể cả khi sạch.
+  #
+  # Ân hạn chỉ khi CẢ HAI mốc (`%cI` và `%aI`) đều trước cutoff — mỗi mốc một
+  # mình đều có đường lách, xem `scanRange`. Và ân hạn bám vào mốc commit nên
+  # nó DỄ VỠ: cập nhật nhánh bằng `merge` thì giữ, bằng `rebase` thì mất.
   no-model-name:
     name: no-model-name
     runs-on: ubuntu-latest
