@@ -364,6 +364,18 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 ---
 
+## KF-011 · Trailer `Co-Authored-By` mang tên model, và squash merge đưa nó vào lịch sử `main` không lấy lại được
+
+- **Lần gặp:** nhiều — **21 trong 51** commit trên `main` (đo 2026-09-22 bằng `git log origin/main --format='%H' | while read h; do git log -1 --format='%B' $h | grep -qE 'Claude (Opus|Sonnet|Haiku) [0-9.]+' && echo $h; done | wc -l`). Phân bố tên: `Claude Opus 5` 49 lần, `Claude Sonnet 5` 9, `Claude Opus 4.8` 7 (đếm theo số lần xuất hiện, kể cả nhiều dòng trong một thân commit squash).
+- **Chữ ký:** `git log -1 --format='%B' <sha> | grep -E 'Claude (Opus|Sonnet|Haiku) [0-9.]+'` có kết quả. Thường ở dòng `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` cuối thân commit.
+- **Nguyên nhân gốc:** nền tảng Claude Code phát cho mỗi phiên một hướng dẫn attribution mặc định, và hướng dẫn đó **chèn tên model vào dòng `Co-Authored-By`**. `CLAUDE.md` mục 6 cấm tuyệt đối ("Không ghi tên hay mã model vào commit message, mô tả PR, comment code hay bất cứ thứ gì đẩy lên repo"), và luật của repo **thắng** hướng dẫn mặc định đó — nhưng chỗ thực thi duy nhất là trí nhớ của agent đang chạy, nên nó hụt. Cùng hình dạng với `KF-010`: một bước bắt buộc mà không có máy nào chặn thì sẽ hụt.
+- **Vì sao không gì đỏ:** không kiểm tra nào trong `pnpm check` hay CI đọc thân commit của nhánh để tìm tên model. `trailer-warn` chỉ kiểm trailer có **mặt** hay không, không kiểm **nội dung** nó. Đúng nhóm **Z**.
+- **Vì sao nó nặng hơn phần lớn lỗi khác:** `automerge.yml` merge bằng **squash**, nên thân commit của nhánh đi vào lịch sử `main`. Một PR revert **không** lấy lại được dòng đó — khác mọi thay đổi khác trong repo, vốn "nằm trong git nên revert được" (CHARTER 2.3). 21 commit đã vào rồi thì ở lại.
+- **Đã sửa ở đâu:** mục `P-025` sửa **hai commit của chính nhánh nó** về `Co-Authored-By: Claude <noreply@anthropic.com>` (amend + force-push nhánh của chính mình, không phải nhánh người khác) trước khi rời trạng thái nháp. Không sửa lịch sử `main` và không force-push nhánh của PR khác — `CLAUDE.md` mục 2 cấm.
+- **Máy chặn từ nay:** ⬜ **CHƯA CÓ** — và mục này chưa xong cho tới khi có. Lớp chặn duy nhất đang tồn tại là hằng `CO_AUTHOR_TRAILER` trong `ops/scripts/integrator-resolve.ts` cộng ba test của `P-024` ở `ops/test/integrator-resolve.test.ts`, nhưng nó chỉ phủ commit do **tool** tạo, không phủ commit do **agent** tạo — tức không phủ 21 ca ở trên. Cần một mục backlog làn `platform` cho một job CI đọc thân mọi commit của nhánh PR và **cảnh báo** (luật mềm, CHARTER mục 4 — không chặn, cùng lý do `trailer-warn` không chặn). Ghi ra chỗ thiếu này thay vì đánh dấu xong: `P-025` đã hết phạm vi của nó, và luật ở đầu file nói mục không có dòng "Máy chặn từ nay" thì chưa xong.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
