@@ -298,13 +298,12 @@ test('parseDeps: đoạn không chứa mã nào thì id là null, KHÔNG bị b�
   assert.equal(deps[0]!.raw, 'xong phần nền đã');
 });
 
-test('parseBacklog: `deps` đi kèm mục, mặc định là mảng rỗng', () => {
+test('parseBacklog: `deps` đi kèm mục', () => {
   const items = parseBacklog('### D-020 · Có deps\n- deps: D-001, D-002\n- status: ready\n');
   assert.deepEqual(
-    items[0]!.deps.map((d) => d.id),
+    items[0]!.deps?.map((d) => d.id),
     ['D-001', 'D-002'],
   );
-  assert.deepEqual(parseBacklog('### D-021 · Không khai deps\n- status: ready\n')[0]!.deps, []);
 });
 
 const QUEUE_DEMO = [
@@ -428,7 +427,7 @@ test('readyQueue: mục không ở `ready` không bao giờ vào hàng đợi', 
   }
 });
 
-test('readyQueue: trên backlog THẬT của kho, `topic/T-003` nhận được — ca đã bắt lỗi thật', () => {
+test('readyQueue: dựng lại cặp `T-001`/`T-003` đã suýt làm worker in `idle`', () => {
   // Lượt `crux-worker-1` ngày 2026-09-22 suýt in `idle` vì `T-001` đã merge
   // mà backlog còn đọc là `review`. Phép thử này dựng lại đúng cặp đó.
   const topic = [
@@ -446,4 +445,60 @@ test('readyQueue: trên backlog THẬT của kho, `topic/T-003` nhận được 
     queue.readyNow.map((e) => e.id),
     ['T-003'],
   );
+});
+
+test('parseDeps: một đoạn chứa NHIỀU mã thì lấy tất cả, không lấy mỗi mã đầu', () => {
+  // Lấy mã đầu là lệch về hướng nguy hiểm: mở khoá một mục trong khi một
+  // nền móng khác của nó chưa xong. `ops/lanes/README.md` cho phép viết lời
+  // giải thích sau dấu `·`, nên đoạn hai mã là ca sẽ tới.
+  assert.deepEqual(
+    parseDeps('V-003 · cùng với V-002').map((d) => d.id),
+    ['V-003', 'V-002'],
+  );
+});
+
+test('parseBacklog: KHÔNG khai `deps` khác hẳn `deps: —`', () => {
+  assert.deepEqual(parseBacklog('### D-022 · Có dòng deps\n- deps: —\n- status: ready\n')[0]!.deps, []);
+  assert.equal(parseBacklog('### D-023 · Không có dòng deps\n- status: ready\n')[0]!.deps, null);
+  // Thụt lề sai là ca thật làm dòng `deps` biến mất — `DEPS` neo ở cột 0.
+  assert.equal(parseBacklog('### D-024 · Deps thụt lề\n  - deps: D-001\n- status: ready\n')[0]!.deps, null);
+});
+
+test('readyQueue: mục không khai `deps` bị CHẶN và nói rõ lý do, không tự mở khoá', () => {
+  const queue = readyQueue(
+    [{ lane: 'demo', content: '### D-030 · Quên khai deps\n- status: ready\n' }],
+    [],
+  );
+  assert.deepEqual(queue.readyNow, []);
+  assert.deepEqual(queue.blocked[0]?.waitingOn, ['không khai `deps`']);
+});
+
+test('readyQueue: hai làn dùng chung một mã thì in ra, không im lặng', () => {
+  const queue = readyQueue(
+    [
+      { lane: 'alpha', content: '### D-040 · Mục của alpha\n- deps: —\n- status: ready\n' },
+      { lane: 'beta', content: '### D-040 · Mục trùng mã ở beta\n- deps: —\n- status: ready\n' },
+    ],
+    [],
+  );
+  assert.deepEqual(queue.duplicateIds, ['alpha/D-040 ↔ beta/D-040']);
+});
+
+test('readMainSubjects: kho NÔNG thì ném, không trả danh sách cụt', () => {
+  // Ca thật đã đo ngày 2026-09-22: phiên cloud clone nông, `git log` đọc
+  // được 50 trên 86 tiêu đề, và 6 mục đã `done` không thấy commit của mình.
+  // Trả danh sách cụt ở đây làm mọi mục phụ thuộc chúng biến mất khỏi
+  // `readyNow` mà không gì đỏ.
+  const origin = tempRepo(['[demo] D-001 — xong', '[demo] D-002 — xong'], 'main');
+  const dir = mkdtempSync(join(tmpdir(), 'backlog-shallow-'));
+  try {
+    const clone = spawnSync('git', ['clone', '--depth', '1', `file://${origin}`, dir], {
+      encoding: 'utf8',
+    });
+    assert.equal(clone.status, 0, clone.stderr);
+    assert.throws(() => readMainSubjects(dir), /nông \(shallow\)/);
+  } finally {
+    rmSync(origin, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

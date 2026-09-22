@@ -44,6 +44,10 @@ pnpm replay                                  # tập vàng, không gọi API, so
 pnpm replay -- --update                      # CẬP NHẬT snapshot — chỉ trong PR riêng, có giải thích
 pnpm --filter @crux/workshop-topic run start -- --episode ep-0001-stub   # chạy một xưởng
 
+# Mục nào nhận được ngay? Chạy, đừng đối chiếu `deps` bằng mắt (mục I-015):
+pnpm backlog:status          # lấy trường `readyNow`; `blocked` nói mục nào còn chờ ai
+pnpm backlog:status --fix    # chuyển mục đã vào `main` mà còn `review` sang `done` — việc của integrator
+
 # PR này thuộc cửa merge nào (D-C06)? Chạy, đừng đoán:
 git diff --name-only origin/main...HEAD > /tmp/changed.txt
 git show origin/main:CHARTER.md > /tmp/base-CHARTER.md   # BẮT BUỘC khi PR chạm CHARTER.md
@@ -58,6 +62,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 ## 2. Luật nhánh và PR
 
 - **Một mục backlog = một nhánh = một PR.** Không gộp hai mục vào một PR.
+- Chọn mục bằng `pnpm backlog:status`, lấy trường `readyNow` — **không** đối chiếu `deps` bằng mắt (mục `I-015`). Mục còn `status: review` mà PR của nó đã vào `main` không chặn `deps`; lệnh đó đã tính. Duyệt các làn theo `ops/lanes/priority.md` và nhận mục `readyNow` đầu tiên chưa có nhánh, chưa có PR mở. Kho clone nông thì lệnh **ném lỗi** thay vì trả danh sách cụt — chạy `git fetch --unshallow origin main` rồi gọi lại.
 - Tên nhánh: `claude/<lane>/<id>` — ví dụ `claude/visual/V-003`. Làn là một trong: `kernel`, `platform`, `verify`, `integration`, `topic`, `editorial`, `visual`, `audio`, `assembly`, `release`.
 - Nhận việc: tạo nhánh và **PR nháp** ngay từ đầu, tiêu đề `[<lane>] <id> — <tóm tắt>`. Đó là cách báo cho các worker khác biết mục đã có người nhận.
 - Thấy PR đang mở cho một mục thì **không nhận lại** mục đó. Ngoại lệ: PR nháp không có commit mới quá 24 giờ thì coi như bỏ.

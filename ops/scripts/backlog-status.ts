@@ -104,11 +104,14 @@ export interface BacklogItem {
   statusLine: number | null;
   /**
    * Dòng `- deps: …` đã tách thành từng phần phụ thuộc. Mảng rỗng nghĩa là
-   * mục không phụ thuộc gì (`- deps: —`) **hoặc** không khai `deps` — hai ca
-   * này không phân biệt được bằng quy ước hiện có của backlog, và cả hai đều
-   * nghĩa là "không chờ ai".
+   * `- deps: —`, tức không chờ ai.
+   *
+   * `null` nghĩa là mục **không khai** `deps` — ca khác hẳn, và cố ý không
+   * gộp vào mảng rỗng. `DEPS` neo ở cột 0, nên một dòng `deps` thụt lề sai
+   * sẽ biến mất; gộp hai ca lại thì mục đó **tự mở khoá im lặng**, đúng
+   * nhóm lỗi Z mà `I-015` chữa. Đối xứng với `statusLine: null`.
    */
-  deps: DepRef[];
+  deps: DepRef[] | null;
 }
 
 /** Một phần phụ thuộc trong dòng `- deps:`. */
@@ -131,7 +134,7 @@ const DEPS = /^-\s*deps:\s*(.*)$/;
  * xuất hiện trong thân mục, và khớp nhầm một trong hai sẽ sinh ra một phần
  * phụ thuộc không bao giờ tra được, tức một mục không bao giờ nhận được.
  */
-const ITEM_CODE = /\b(?:[A-Z]{1,3}-G\d+|[A-Z]{1,3}-\d+[a-z]?|G\d+)\b/;
+const ITEM_CODE = /\b(?:[A-Z]{1,3}-G\d+|[A-Z]{1,3}-\d+[a-z]?|G\d+)\b/g;
 
 /** Thân mục có dấu treo nào không. So không phân biệt hoa thường. */
 export function hasHoldMarker(body: string): boolean {
@@ -163,7 +166,15 @@ export function parseDeps(value: string): DepRef[] {
     .split(',')
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0)
-    .map((segment) => ({ raw: segment, id: ITEM_CODE.exec(segment)?.[0] ?? null }));
+    .flatMap((segment): DepRef[] => {
+      const codes = [...segment.matchAll(ITEM_CODE)].map((m) => m[0]);
+      // Đoạn không có mã nào vẫn ra MỘT phần phụ thuộc, `id: null` — bên
+      // gọi coi là chưa xong và in lý do ra. Đoạn có nhiều mã ra NHIỀU
+      // phần: lấy mỗi mã đầu tiên là lệch về hướng nguy hiểm (mở khoá một
+      // mục trong khi một nền móng khác của nó chưa xong).
+      if (codes.length === 0) return [{ raw: segment, id: null }];
+      return codes.map((id) => ({ raw: segment, id }));
+    });
 }
 
 /**
@@ -196,7 +207,7 @@ export function parseBacklog(content: string): BacklogItem[] {
       }
     }
 
-    let deps: DepRef[] = [];
+    let deps: DepRef[] | null = null;
     for (const line of body) {
       const m = DEPS.exec(line);
       if (m) {
@@ -345,16 +356,24 @@ function isSatisfied(item: BacklogItem, lane: string, subjects: readonly string[
 export function readyQueue(
   backlogs: readonly LaneBacklog[],
   subjects: readonly string[],
-): { readyNow: QueueEntry[]; blocked: QueueEntry[] } {
+): { readyNow: QueueEntry[]; blocked: QueueEntry[]; duplicateIds: string[] } {
   const parsed = backlogs.map((backlog) => ({
     lane: backlog.lane,
     items: parseBacklog(backlog.content),
   }));
 
   const index = new Map<string, { lane: string; id: string; satisfied: boolean }>();
+  const duplicateIds: string[] = [];
   for (const { lane, items } of parsed) {
     for (const item of items) {
-      if (index.has(item.id)) continue;
+      const seen = index.get(item.id);
+      if (seen !== undefined) {
+        // `deps` không phân giải theo làn, nên hai làn dùng chung một mã là
+        // ca mở khoá nhầm mà không gì đỏ. Hôm nay chưa có ca nào; in ra để
+        // ngày có thì nó không im lặng.
+        duplicateIds.push(`${seen.lane}/${item.id} ↔ ${lane}/${item.id}`);
+        continue;
+      }
       index.set(item.id, { lane, id: item.id, satisfied: isSatisfied(item, lane, subjects) });
     }
   }
@@ -370,7 +389,8 @@ export function readyQueue(
       if (item.status !== 'ready') continue;
 
       const waitingOn: string[] = [];
-      for (const dep of item.deps) {
+      if (item.deps === null) waitingOn.push('không khai `deps`');
+      for (const dep of item.deps ?? []) {
         if (dep.id === null) {
           waitingOn.push(`${dep.raw} (không tra được)`);
           continue;
@@ -391,7 +411,7 @@ export function readyQueue(
     }
   }
 
-  return { readyNow, blocked };
+  return { readyNow, blocked, duplicateIds };
 }
 
 /**
@@ -418,8 +438,31 @@ export function applyFix(
   return { content: lines.join('\n'), changed };
 }
 
-/** Tiêu đề commit trên `main`. Ưu tiên `origin/main`, lùi về `main` khi chạy ở kho không có remote. */
+/**
+ * Tiêu đề commit trên `main`. Ưu tiên `origin/main`, lùi về `main` khi chạy
+ * ở kho không có remote.
+ *
+ * **Kho nông (`--depth`) thì NÉM, không trả danh sách cụt.** Đo được trên
+ * chính kho này ngày 2026-09-22: phiên cloud clone nông, `git log` chỉ đọc
+ * được 50 tiêu đề, và **6** mục đã `done` không thấy commit hoàn thành của
+ * mình. Hôm đó vô hại vì cả 6 đều đã `done`; một mục còn `review` mà commit
+ * merge của nó rơi ngoài biên nông sẽ bị xếp `unmerged` **im lặng**, và mọi
+ * mục phụ thuộc nó biến mất khỏi `readyNow` — đúng "hàng đợi cạn giả" mà
+ * `I-015` sinh ra để chữa. Cùng bài học với `I-005`/`I-007`: cấm im lặng
+ * lẫn lộn "chưa quét được" với "quét rồi không thấy gì".
+ */
 export function readMainSubjects(cwd: string = process.cwd()): string[] {
+  const shallow = spawnSync('git', ['rev-parse', '--is-shallow-repository'], {
+    cwd,
+    encoding: 'utf8',
+  });
+  if (shallow.status === 0 && shallow.stdout.trim() === 'true') {
+    throw new Error(
+      'kho đang ở dạng nông (shallow): lịch sử `main` không đủ để kết luận mục nào đã merge. ' +
+        'Chạy `git fetch --unshallow origin main` rồi gọi lại.',
+    );
+  }
+
   for (const ref of ['origin/main', 'main']) {
     const result = spawnSync('git', ['log', '--format=%s', ref], { cwd, encoding: 'utf8' });
     if (result.status === 0) {
@@ -470,7 +513,7 @@ function main(): void {
   // Đọc hàng đợi trên nội dung TRƯỚC `--fix`: `readyQueue` đã tự coi mục
   // `stale` là xong, nên hai đường cho cùng một câu trả lời — và báo cáo
   // không phụ thuộc vào việc lượt này có chạy `--fix` hay không.
-  const { readyNow, blocked } = readyQueue(backlogs, subjects);
+  const { readyNow, blocked, duplicateIds } = readyQueue(backlogs, subjects);
 
   const by = (verdict: ItemVerdict) =>
     findings.filter((f) => f.verdict === verdict).map((f) => `${f.lane}/${f.id}`);
@@ -484,7 +527,10 @@ function main(): void {
         unknown: by('unknown'),
         fixed: fix ? by('stale') : [],
         backlogUpdated: written,
-        readyNow: readyNow.map((entry) => `${entry.lane}/${entry.id}`),
+        // Kèm tên mục: phụ lục P1 bước 3 đòi dán `readyNow` vào báo cáo khi
+        // in `idle`, và một danh sách mã trần không đọc được.
+        readyNow: readyNow.map((entry) => `${entry.lane}/${entry.id} — ${entry.title}`),
+        duplicateIds,
         blocked: blocked.map((entry) => ({
           item: `${entry.lane}/${entry.id}`,
           waitingOn: entry.waitingOn,

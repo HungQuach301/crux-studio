@@ -550,8 +550,10 @@ nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu ti
 
 - deps: —
 - risk: low
-- nguồn: `I-010` (hai ô `⬜` còn lại); CHARTER phụ lục P1 bước 3, P3 bước 2; `ops/known-failures.md` nhóm Z
-- status: ready
+- nguồn: `I-010` (hai phần chưa đánh dấu xong của nó); CHARTER phụ lục P1 bước 3, P3 bước 2; `ops/known-failures.md` nhóm Z
+- status: review
+- **cửa merge: `automerge-delayed`** — chạm `CHARTER.md` (mục phụ lục) và `CLAUDE.md`, không chạm mục 1 hay mục 3.
+  Đo bằng `node ops/invariants.protected-area.ts --changed … --base-charter …`, đừng đoán.
 - tiêu chí xong:
   - `ops/scripts/backlog-status.ts` đọc được `deps` của mỗi mục và trả thêm hai nhóm: `readyNow`
     (mục `status: ready` mà **mọi** `deps` đã xong) và `blocked` (mục `ready` còn chờ, kèm danh sách
@@ -568,3 +570,39 @@ nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu ti
   - CHARTER phụ lục **P1 bước 3** đọc `readyNow` của lệnh đó thay vì đối chiếu `deps` bằng mắt, và
     **không được in `idle`** khi `readyNow` còn mục chưa có nhánh, chưa có PR.
   - **Không** đưa vào `pnpm check`: cùng lý do `I-010` đã viết — mục vừa merge còn `review` đúng một nhịp.
+  - `readMainSubjects` **ném** khi kho đang ở dạng nông thay vì trả một danh sách cụt: cùng bài học
+    "cấm im lặng" của `I-005`/`I-007`. Đo được ngày nhận mục — phiên cloud clone nông, `git log` đọc
+    được 50 trên 86 tiêu đề, 6 mục đã `done` không thấy commit hoàn thành của mình. Hôm đó vô hại vì
+    cả 6 đều `done`; một mục còn `review` rơi ngoài biên nông sẽ kéo cả nhánh phụ thuộc của nó ra khỏi
+    `readyNow` mà không gì đỏ.
+  - **Cùng phạm vi, khai ra chứ không để lẫn:** lệnh đo cửa merge chép trong `CLAUDE.md` mục 1 và
+    CHARTER phụ lục P1 bước 7 thiếu `--base-charter`, nên nó trả `owner-merge` cho **mọi** thay đổi
+    `CHARTER.md`. Cùng một hình dạng lỗi với phần trên — một chỉ dẫn "đừng đoán, chạy lệnh" mà lệnh
+    được chép lại cho câu trả lời sai — nên sửa ở đây thay vì mở mục riêng. `ci.yml` và `automerge.yml`
+    đều truyền tham số này.
+
+### I-016 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
+
+Tìm ra trong vòng soát chéo của `I-015` (reviewer ngữ cảnh sạch, PR `#112`). `I-015` chữa chỗ worker đọc
+`deps` **sai**; hai chỗ dưới đây là `deps` và `status` **viết sai trong chính backlog**, và cả hai im lặng:
+
+1. **Vòng phụ thuộc có thật đang nằm trên `main`:** `release/R-002` ghi `deps: R-001, G6`, còn
+   `verify/VF-G6` ghi `deps: R-002`. Hai mục chờ nhau vĩnh viễn. `readyQueue` xếp cả hai vào `blocked`
+   và không nói gì thêm — đọc báo cáo không thấy đó là một vòng.
+2. **`status` ngoài tập hợp lệ:** làn `topic` có mục ghi `status: blocked`, không thuộc
+   `ready · claimed · review · done · parked` (`ops/lanes/README.md`, CHARTER 2.1). `readyQueue` xử lý
+   an toàn (coi là chưa xong) nhưng `reviewFindings` cũng không in nó ra, nên mục đó biến mất khỏi mọi
+   báo cáo.
+
+Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi việc là sai.
+
+- deps: I-015
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - `readyQueue` (hoặc một phép kiểm cạnh nó) phát hiện vòng phụ thuộc và in ra thành một nhóm riêng,
+    kèm đường đi của vòng. Test dựng một vòng hai mục và một vòng ba mục.
+  - Mục có `status` ngoài tập hợp lệ ra một nhóm riêng trong báo cáo, **không** bị lọc đi im lặng —
+    cùng luật với nhóm `unknown` của `I-010`. Test âm: `status: blocked` phải hiện ra.
+  - Hai ca dữ liệu thật ở trên được sửa trong chính PR của mục này, hoặc khai rõ vì sao giữ nguyên.

@@ -17,8 +17,8 @@ Mỗi làn một thư mục, mỗi làn một `backlog.md`. **Phân vùng theo l
 ## Luật
 
 - **Một mục = một nhánh = một PR.** Không gộp.
-- Worker nhận mục đầu tiên có `status: ready`, mọi `deps` đã `done`, chưa có nhánh và chưa có PR mở. Nhận xong đổi thành `claimed` ngay trong PR nháp.
-- **Đừng đối chiếu `deps` bằng mắt** — chạy `pnpm backlog:status` và lấy trường `readyNow` (mục `I-015`, CHARTER phụ lục P1 bước 3). Một `deps` trỏ vào mục còn `status: review` mà PR của nó đã vào `main` **không** chặn: lệnh đó tính nó là đã xong, và `pnpm backlog:status --fix` ở bước dọn dẹp của integrator sẽ chuyển nó sang `done`.
+- Worker nhận mục đầu tiên có `status: ready`, mọi `deps` đã xong, chưa có nhánh và chưa có PR mở. Nhận xong đổi thành `claimed` ngay trong PR nháp.
+- **Đừng đối chiếu `deps` bằng mắt** — chạy `pnpm backlog:status` và lấy trường `readyNow` (mục `I-015`, CHARTER phụ lục P1 bước 3). "Đã xong" ở dòng trên nghĩa là `status: done`, **hoặc** còn `review` mà PR của mục đó đã vào `main` thật: lệnh trên tính cả ca thứ hai, và `pnpm backlog:status --fix` ở bước dọn dẹp của integrator chuyển nó sang `done`.
 - Mục nào phụ thuộc một **giả định** chưa kiểm thì `deps` ghi mã giả định (ví dụ `G7`). Không xây trên giả định "suy luận" chưa kiểm, trừ khi phương án dự phòng đã viết sẵn (CHARTER 11.1 luật 2).
 - Cùng một chữ ký lỗi ba lần trên một mục → `parked` + issue `🤖 [QĐ]` + chuyển sang mục khác. Làn không dừng.
 - Backlog **do agent tự sinh và chia nhỏ** từ CHARTER và spec. Chủ dự án chỉnh được bất cứ lúc nào bằng cách sửa file.
