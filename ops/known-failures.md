@@ -347,7 +347,33 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 - **Đối chứng chặt hơn, để không ai mở lại câu hỏi vì một dòng cảnh báo:** nhánh đối chứng ở trên dùng `-merge`, vốn là *unset* — git rơi về trình merge nhị phân và **luôn** báo xung đột, kèm `warning: Cannot merge binary files`, dù file này là văn bản thuần (0 byte NUL). Nên phép đo được chạy lại với `ops/logs/**/*.jsonl merge=text`, tức trình merge văn bản thường: **`EXIT=1`, `CONFLICT (content)`, không cảnh báo nhị phân**. Kết luận không đổi — chênh lệch giữa hai phía đúng là do luật `merge=union`, không phải do cách tắt luật.
 - **Đây là câu trả lời của `VF-G17`** (`ops/lanes/verify/backlog.md`), câu hỏi "GitHub có dùng `.gitattributes` khi tự tính `mergeable` không": **không**. Mục đó đã **chốt** ngày 2026-09-22 sau lần đo thứ hai, và `docs/assumptions.md` mục `G17` không còn câu hỏi nào treo. Ghi chú trong chính `.gitattributes` ("chưa được chứng minh là có ảnh hưởng tới trạng thái `mergeable` GitHub tự tính") nay có bằng chứng, và nó ngả về phía xấu. Sổ giả định `G17` đã ở trạng thái **`sai`** và đã chuyển dự phòng, nên kết luận này **không** làm đổi trạng thái giả định nào — nó siết chặt thêm lý do dự phòng phải tồn tại.
 - **Đã sửa ở đâu:** không phải sửa — dự phòng đã có sẵn và đang chạy đúng: mục `P-016`, bước 0 của phụ lục P3. Integrator gộp `main` vào nhánh PR, `git` áp union ở phía có áp union, commit gộp mới làm GitHub tính lại và PR hết `dirty`. Điều KF này thêm là **vì sao** bước đó không bao giờ thừa: `.gitattributes` một mình không đủ, và sẽ không bao giờ đủ.
-- **Máy chặn từ nay:** không chặn được ở phía ta — hành vi nằm ở phía GitHub. Thứ canh nó là bước 0 của P3, chạy ở đầu **mọi** lượt worker và một lần mỗi lượt integrator, cộng dòng log bắt buộc ở `ops/logs/platform/P-016.jsonl` (bất biến I8). Hệ quả phải nhớ khi đọc bản tin: một PR `automerge-delayed` bị ca này chạm sẽ **đặt lại đồng hồ 12 giờ** mỗi lần integrator gộp cho nó (CHARTER 3.3) — chậm là giá của việc merge được, không phải dấu hiệu hỏng.
+- **Máy chặn từ nay:** không chặn được ở phía ta — hành vi nằm ở phía GitHub. Thứ canh nó là bước 0 của P3, chạy ở đầu **mọi** lượt worker và một lần mỗi lượt integrator, cộng dòng log bắt buộc (bất biến I8). Hệ quả phải nhớ khi đọc bản tin: một PR `automerge-delayed` bị ca này chạm sẽ **đặt lại đồng hồ 12 giờ** mỗi lần integrator gộp cho nó (CHARTER 3.3) — chậm là giá của việc merge được, không phải dấu hiệu hỏng.
+
+**Cập nhật 2026-09-21 21:39Z (lượt `crux-worker-1`, mục `P-023`) · chính DÒNG LOG của bước 0 là thứ sinh ra vòng lặp, và nó đã được cắt.**
+
+Điều bản ghi trên chưa nói ra: dòng log mà bước 0 bắt buộc phải ghi đi vào `ops/logs/platform/P-016.jsonl` — **một file dùng chung cho mọi lượt của mọi routine**. Ghép với hành vi GitHub ở trên, nó thành một vòng tự nuôi:
+
+1. Một lượt bước 0 giải xong N PR và ghi một dòng vào file dùng chung.
+2. PR mang dòng đó vào `main`.
+3. Mọi PR đang mở có dòng riêng trong file ấy lập tức `dirty` phía GitHub.
+4. Lượt sau lại giải, lại ghi một dòng, lại khoá.
+
+**Đo được, không suy:** lượt `crux-integrator` 04:05 giờ VN 2026-09-22 thấy **7 PR** cùng đứng lại một lúc, cả 7 ở đúng file này, nguyên nhân là **một dòng duy nhất** mà `bfccc8c` mang tới. Lượt `crux-worker-1` 21:39Z ngay sau đó — sau khi PR ghi log của lượt giải trước vào `main` — thấy **8 PR** (#39, #49, #56, #65, #70, #71, #79, #81), tất cả xung đột ở đúng một file, tất cả `EXIT=0` ở phép đo có union và `EXIT=1` ở phép đo tắt union. Quy mô **tăng** sau mỗi lượt giải, vì mỗi lượt giải đẻ thêm một dòng.
+
+**Nguyên nhân gốc thật sự, tách khỏi hành vi GitHub:** `D-C04` tách log tới mức **mục**, nhưng bước 0 không phải một mục — nó là **một lượt chạy**, nên mọi lượt dồn vào mã mục `P-016`. Tức là bước 0 chưa từng nằm trong phạm vi mà `D-C04` đã sửa.
+
+**Đã sửa:** một lượt chạy, một file — `ops/logs/integration/step0-<YYYY-MM-DDTHHMMSSZ>-<routine>.jsonl`, sinh ra bởi đúng một hàm của kernel (`step0LogPath` / `step0LogRef`), không routine nào tự ghép. Hai lượt không bao giờ chạm cùng một file, nên không còn gì để xung đột — cùng lập luận `D-C04` dùng cho mục, áp cho lượt chạy. Dòng cũ trong `P-016.jsonl` ở lại nguyên (append-only); `readRunLogs` gom theo thư mục nên bên đọc tự thấy cả hai chỗ.
+
+**Bằng chứng bằng chạy thật, không bằng lập luận** (`ops/test/step0-log-path.test.ts`): dựng repo git thật mang sẵn `.gitattributes` union, hai nhánh cùng mang một dòng bước 0, một bên vào `main` trước, rồi đo `git merge-tree --write-tree` ở **cả hai** chế độ.
+
+| Hình dạng | union BẬT (git ở máy) | union TẮT (mô phỏng GitHub) |
+|---|---|---|
+| **Trước** — file dùng chung mang mã mục | `EXIT=0` | **`EXIT=1`**, `CONFLICT (content) in ops/logs/platform/P-016.jsonl` |
+| **Sau** — một file cho mỗi lượt | `EXIT=0` | **`EXIT=0`** |
+
+Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó đi thì bài kiểm chỉ còn nói "hai file khác nhau thì không xung đột" — đúng nhưng rỗng, và nó xanh cả khi ai đó lặng lẽ đưa dòng bước 0 quay về file dùng chung. Đã phá thật để kiểm: đổi hình dạng "sau" về file dùng chung → **đúng bài đó đỏ**.
+
+**Một lớp chặn nữa, cho chiều hỏng còn lại:** một bên đọc neo vào tên file cố định sẽ hỏng im lặng ở lượt đầu tiên tên file đổi. `ops/test/step0-log-path.test.ts` quét `ops/scripts/**` và `kernel/src/**` và đỏ nếu file code nào nhắc tới một đường dẫn log bước 0 cố định.
 
 ---
 
@@ -383,6 +409,33 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 - **Đã sửa ở đâu:** mục `P-027` (`ops/lanes/platform/backlog.md`) — kèm issue `🤖 [QĐ]` **#116**, vì cả hai phương án sửa đều chạm vùng bảo vệ: (A) bước 0 đo lại bằng `git merge-tree` trước khi tin `mergeable_state` và không gộp PR mà `git` nói là sạch — phải đi cùng `P-023`, một mình không đủ; (B) đồng hồ không tính lại vì commit gộp của bước 0 — chạm `ops/invariants.merge-gate.ts`, cửa `owner-merge`, và có thể đọc thành sửa ý nghĩa bất biến I4, tức `irreversible`.
 - **Phép đo đã có (lượt `crux-worker-3` 2026-09-22):** `node ops/scripts/gate-flow.ts --prs <file.json>` trả lời "cửa `automerge-delayed` có chảy không" bằng số — `longestStableHours` (khoảng trống đầu-nhánh-không-đổi dài nhất), `clockResets` (số lần đặt lại đồng hồ), `hoursShort` (số giờ còn thiếu) cho mỗi PR mang nhãn, đọc từ `git log --first-parent` trên `refs/pull/<n>/head` cộng nhãn từ đầu vào — KHÔNG đọc văn xuôi `note`. Kiểm ở `ops/test/gate-flow.test.ts`. Verdict gộp `everFlowed`/`reachedThresholdCount` cho câu trả lời một dòng. Chạy thật 2026-09-22 trên 15 PR đang mở: **14 delayed · 0 đang ở/quá ngưỡng · 1/14 (`#42`) từng có cửa sổ ≥ 12 giờ · tổng 154 lần đặt lại đồng hồ** — số tích luỹ xác nhận chữ ký. Đếm phạm vi `origin/main..refs/pull/<n>/head` (chỉ commit riêng của PR). Lưu ý phép đo: `longestStableHours` là **cận trên** (đo phần đầu-nhánh-không-đổi từ `git log`, không trừ thời gian CI), và "từng có cửa sổ ≥ ngưỡng" là điều kiện **cần chứ không đủ** để merge (`#42` đạt cửa sổ rồi vẫn trượt vì cron).
 - **Máy chặn từ nay:** **chưa đủ — phép đo có rồi, bản sửa cơ chế thì chưa.** Bản sửa (phương án A hoặc B của `P-027`) chờ `🤖 [QĐ] #116` vì chạm vùng bảo vệ. Tới khi có bản sửa và một bài kiểm dựng lại đúng hình dạng (PR `automerge-delayed` CI xanh + một commit gộp bước 0 → `merge-gate.ts` phải trả `merge`, kèm **ca âm** là commit có nội dung thật thì đồng hồ **phải** tính lại), KF này vẫn mở.
+
+---
+
+## KF-012 · Nguồn công bố tự mâu thuẫn với chính nó, và cách đọc theo mặt chữ ra số khác cách đọc theo ví dụ
+
+- **Lần gặp:** 2 — cả hai trong một lượt của `topic/T-006`, trên hai cơ quan khác nhau.
+- **Chữ ký:** một văn bản công bố chứa **cả** một câu quy tắc **lẫn** một ví dụ tính sẵn, và áp quy tắc theo đúng mặt chữ vào chính dữ liệu của ví dụ thì ra một con số **khác** con số ví dụ in ra.
+- **Hai lần đã gặp:**
+  - **TreasuryDirect**, trang *I bonds interest rates*: câu mở đầu ghi lãi suất tổng hợp đợt tháng 11-2025 là **4,03%**, còn khối "An example" ngay dưới lấy 0,90% và 1,67% rồi tự tính từng bước ra **4,26%**.
+  - **IRS Pub 590-A**, Worksheet 1-2: câu hướng dẫn dòng 4 nói làm tròn lên tới bội số $10, còn ví dụ điền sẵn của cùng tài liệu in **$6.825** — không phải bội số của $10. Theo mặt chữ thì ô đó phải là $6.830, và khấu trừ cuối đổi theo.
+- **Nguyên nhân gốc:** giả định ngầm rằng "một nguồn uy tín là **một** sự thật". Không phải: một trang hay một tài liệu là **nhiều** khẳng định được cập nhật ở **nhiều** thời điểm khác nhau. Câu tóm tắt ở đầu trang và khối ví dụ ở giữa trang có vòng đời riêng, và không ai kiểm chéo chúng với nhau. Bất biến I6 ("mọi con số hiển thị có nguồn hoặc có mô hình") nói con số phải **có** nguồn, nhưng không nói gì về việc nguồn đó có tự nhất quán không.
+- **Vì sao nó đặc biệt nguy hiểm ở dự án này:** đây là **nhóm Z** — hỏng mà mọi chỉ báo đều xanh. Ca kiểm vẫn khớp, `pnpm check` vẫn xanh, `claimId` vẫn trỏ đúng một URL có thật. Chỉ con số lên video là sai, và nó sai theo cách một người xem đọc kỹ sẽ bắt được còn CI thì không bao giờ. Bằng chứng công sức của kênh nằm đúng ở chỗ này.
+- **Đã sửa ở đâu — không vá sản phẩm:** luật đọc nguồn, ghi thành ba câu và áp từ `T-006` trở đi:
+  1. **Ưu tiên ví dụ tính sẵn hơn câu quy tắc.** Ví dụ tính sẵn là thứ kiểm được từng bước; câu quy tắc là thứ diễn giải được nhiều cách. Khi hai thứ lệch nhau, ca kiểm cấp 1 bám ví dụ.
+  2. **Mâu thuẫn được ghi vào `assumptions` của chính file mô hình**, bằng lời, kèm cả hai con số và biên độ chênh lệch — không ghi vào chỗ khác, vì Fact & Risk Pass đọc `assumptions`.
+  3. **Một con số nằm trong vùng mâu thuẫn thì không được lên video** cho tới khi có nguồn thứ hai xác nhận. Mô hình vẫn dùng được cho mọi vùng khác.
+- **Máy chặn từ nay:** chưa có máy chặn, và **không thể có** bằng kiểm tra tĩnh — muốn tự phát hiện thì phải đọc hiểu văn bản nguồn, tức là chính cấp kiểm 4 (`llm-assumption-check`) vốn đang chờ `platform/P-003`. Tới lúc đó, lớp chặn là con người: Fact & Risk Pass đọc `assumptions` trước khi phát hành, và mục `editorial/E-002` là chỗ luật này phải trở thành một bước có tên.
+
+---
+
+## KF-013 · Hai PR xanh riêng lẻ, gộp vào `main` thì đỏ vì một bất biến mới gặp một vi phạm cũ
+
+- **Lần gặp:** 1 — `main` đỏ lúc 2026-09-22T10:12Z, ngay sau khi PR `#85` (`P-023`) merge.
+- **Chữ ký:** một PR thêm một **bất biến quét cả kho** (`P-023` thêm `ops/test/step0-log-path.test.ts`: không file code nào được neo vào một đường dẫn log bước 0 cố định), một PR **khác** thêm một file vi phạm bất biến đó (`P-027` thêm `ops/scripts/gate-flow.ts`, chú thích nhắc đích danh `ops/logs/platform/P-016.jsonl`). Mỗi nhánh chỉ mang **một** trong hai file, nên CI của từng PR **xanh**. Chỉ khi cả hai cùng vào `main` thì bất biến mới gặp file vi phạm → `pnpm check` đỏ ở `main`.
+- **Nguyên nhân gốc:** CI đo mỗi PR **so với `main` tại lúc PR đó chạy**, không so với `main` **sau** khi các PR đang mở khác đã merge. Một bất biến "quét cả kho" và một file mới nằm ở hai nhánh khác nhau là hai nửa của một mâu thuẫn ngữ nghĩa mà không phép đo per-PR nào thấy được — cùng hình dạng KF-009, nhưng ở tầng **nội dung** thay vì tầng `mergeable`. Nhóm **Z**: hỏng mà mọi chỉ báo per-PR đều xanh.
+- **Đã sửa ở đâu:** `ops/scripts/gate-flow.ts` — chú thích đổi từ tên file đích danh sang lời chung ("các dòng log bước 0"). Không đụng cơ chế của `gate-flow.ts` (nó vốn đã KHÔNG đọc file đó — chỉ chú thích nhắc tên); không revert `P-023` hay `P-027` (cả hai đều đúng, revert làm mất cơ chế thật). Forward-fix một dòng để `main` xanh ngay, đúng tinh thần "main đỏ thì sửa ngay" (CLAUDE.md 13).
+- **Máy chặn từ nay:** `ops/test/step0-log-path.test.ts` — bất biến quét-cả-kho của `P-023` (đã có) cộng một ca âm **đích danh** `gate-flow.ts` mới thêm ở bản sửa này, để lần sau ai đưa lại tên file vào đó thì đỏ với thông điệp trỏ thẳng KF-013. Chạy trong `pnpm test` (job `check` của CI). Lỗ hổng còn lại — không phép đo per-PR nào thấy mâu thuẫn "bất biến ở nhánh A, vi phạm ở nhánh B" **trước** merge — vẫn mở; chặn thật cần chạy `pnpm check` trên kết quả gộp thử của từng cặp PR đang mở, là việc lớn hơn một mục fix.
 
 ---
 
