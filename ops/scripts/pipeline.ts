@@ -33,7 +33,14 @@ import { definition as release } from '@crux/workshop-release';
  * đó" — ranh giới thật do contract giữ, và `runWorkshop` validate đầu ra
  * theo đúng contract của xưởng trước khi trả về.
  */
-const DEFINITIONS: Record<WorkshopName, WorkshopDefinition<object>> = {
+/**
+ * Định nghĩa của cả sáu xưởng. `pipeline.ts` là nơi DUY NHẤT được import
+ * nhiều xưởng (bất biến I3, `lint-deps.ts`), nên đây cũng là nguồn duy nhất
+ * cho `definition.consumes` của từng xưởng — bên khác cần danh sách tiêu thụ
+ * (ví dụ `check-fixtures.ts`) lấy từ đây, không tự chép lại (mục
+ * `integration/I-011`).
+ */
+export const DEFINITIONS: Record<WorkshopName, WorkshopDefinition<object>> = {
   topic,
   editorial,
   visual,

@@ -378,7 +378,7 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
 
 - deps: `I-009`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
 - tiêu chí xong:
   - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
@@ -387,6 +387,21 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
   - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
     nó đang kiểm thì không kiểm gì.
   - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
+- **Đã làm:**
+  - Chọn phương án **bỏ bản chép**, đúng khuyến nghị "nếu làm được". `UpstreamFrom` bỏ trường `workshops`;
+    fixture chỉ khai `{ "golden": "<tập>" }`. `readInputFile(root, path, consumes)` nhận danh sách xưởng
+    cần nạp từ bên gọi: CLI truyền `definition.consumes` (`kernel/src/cli.ts`), năm fixture `upstreamFrom`
+    bỏ mảng `workshops`, năm stub test truyền `definition.consumes`. Một nguồn duy nhất
+    (`definition.consumes` ở `workshops/<tên>/src/index.ts`), không còn bản chép thứ hai để trôi.
+  - `check-fixtures.ts` lấy `consumes` từ `DEFINITIONS` của `pipeline.ts` (nơi DUY NHẤT được import nhiều
+    xưởng, bất biến I3) — không tự chép lại danh sách. `pipeline.ts` export `DEFINITIONS` cho việc này.
+  - Danh sách viết cứng trong `kernel/test/input.test.ts` (bài "sáu fixture … khớp ĐÚNG snapshot") đã hết:
+    chuyển sang `ops/test/check-fixtures.test.ts`, lấy `consumes` từ `DEFINITIONS`, không khai tay.
+  - Kiểm đỏ thật, đo bằng chạy thật: (a) đổi `consumes` của một xưởng thì `inputs`/`inputsHash` của output
+    đổi theo, tập vàng replay đỏ ngay (`pnpm check`) — đo với `release` bỏ `topic`: snapshot `release` lệch
+    ở `inputsHash`. (b) `upstreamFrom.workshops` sót lại trong fixture nay **đỏ** ở `pnpm contracts`
+    (`upstreamFromWorkshopsProblems`), không còn bị bỏ qua im lặng như trước.
+  - `ops/known-failures.md` hàng **Z16**: ghi phần `upstreamFrom.workshops` đã bỏ ở `I-011`.
 
 ### I-012 · Bài kiểm G14 quét cả nhánh đã merge, nên nó kêu oan và sẽ kêu mãi mãi
 
@@ -469,11 +484,44 @@ còn tệ hơn là không viết").
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
-  - `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/`.
-  - Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
-    test tái hiện, không chỉ có lời.
-  - Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
-    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`).
+  - ✅ `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/` —
+    việc số 6, `ops/scripts/check-workshop-contracts.ts`. Quét **đệ quy**, nên thư mục con không thoát.
+  - ✅ Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
+    test tái hiện, không chỉ có lời. `ops/test/check-workshop-contracts.test.ts` bài cuối chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát, kèm bài đối chứng với schema sạch.
+    Đã kiểm rằng bài đó **đỏ** khi gỡ dòng nối ở `check-contracts.ts` — quét đúng mà không ai gọi vẫn là
+    "không gì đỏ".
+  - ✅ Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
+    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`). Mỗi file giữ một ghi chú
+    nói phép kiểm đó nay nằm ở đâu.
+- PR: `#95`
+
+### I-014 · Phạm vi quét contract vẫn buộc bằng quy ước thư mục, không bằng phép kiểm
+
+Tìm ra trong vòng soát của `I-013` (reviewer ngữ cảnh sạch, PR `#95`).
+
+`I-013` đưa `workshops/<tên>/contracts/**/*.schema.json` vào `pnpm contracts`. Phạm vi đó dừng ở **quy ước
+thư mục**: một `*.schema.json` đặt ở `workshops/<tên>/src/`, ở `packs/**`, hay bất cứ đâu khác vẫn ngoài
+tầm quét, và **không gì buộc** "file mà `src/*.ts` nạp" phải nằm trong tập được quét. Hôm nay hai bên trùng
+nhau vì quy ước, không vì một phép kiểm — đúng hình dạng nhóm **Z** một tầng nữa: đổi chỗ một file là phép
+kiểm biến mất mà mọi chỉ báo vẫn xanh.
+
+- deps: `I-013`
+- risk: low
+- status: review
+- nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
+- PR: `#99`
+- tiêu chí xong:
+  - ✅ Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
+    việc số 7, `ops/scripts/check-schema-scope.ts`. Không dựa vào vị trí: chọn cách "kiểm mọi nơi" chứ
+    không "đòi nằm trong `contracts/`", vì `packs/` là chỗ hợp lệ cho schema của pack mà không có phép quét
+    `contracts/` riêng. Schema đã nằm trong `workshops/<tên>/contracts/` do việc số 6 lo, việc số 7 bỏ qua
+    để không kiểm hai lần.
+  - ✅ Có test tái hiện: thả một schema dùng `oneOf` (ngoài `SUPPORTED_KEYWORDS`) ở `workshops/topic/src/`
+    thì `pnpm contracts` đỏ. `ops/test/check-schema-scope.test.ts` bài *nối thật* chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát; đã kiểm đột biến: gỡ dòng nối ở
+    `check-contracts.ts` thì bài đó **đỏ** (`not ok`). Cùng bài đối chứng với schema sạch. Thêm bài cho
+    `packs/`, symlink trá hình, quét đệ quy, và ca "đã trong contracts/ thì không kiểm hai lần".

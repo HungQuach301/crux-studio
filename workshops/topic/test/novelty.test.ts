@@ -1,12 +1,18 @@
+/**
+ * Phép kiểm từ khoá schema KHÔNG còn ở đây: `pnpm contracts` việc số 6 quét
+ * mọi `workshops/<tên>/contracts/*.schema.json` (mục `integration/I-013`,
+ * `ops/scripts/check-workshop-contracts.ts`). Một bản chép tay ở đây chỉ
+ * phủ đúng contract mà tác giả nhớ viết test — cùng luật Z16 với `I-008`,
+ * `I-009`, `I-011`: bỏ bản chép, giữ một nguồn.
+ */
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { unsupportedKeywords } from '@crux/kernel';
 import { MIN_CORPUS_VIDEOS, type Corpus, type CorpusVideo } from '../src/corpus.ts';
 import {
   checkNovelty,
-  noveltyCheckSchema,
   validateNoveltyCheck,
   assertNoUniversalClaim,
   DEFAULT_THRESHOLDS,
@@ -45,10 +51,6 @@ function similarVideo(n: number): CorpusVideo {
     channelId: `ch-sim-${n}`,
   };
 }
-
-test('contract kiểm mới lạ chỉ dùng từ khoá mà validator của kernel hiểu', () => {
-  assert.deepEqual(unsupportedKeywords(noveltyCheckSchema), []);
-});
 
 test('WP-014 kiểm 2: kiểm mới lạ cho một thesis trả kết quả hợp contract, có limitation', () => {
   const check = checkNovelty(THESIS, loadCorpus(), CHECKED_AT);

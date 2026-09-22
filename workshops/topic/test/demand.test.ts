@@ -1,8 +1,15 @@
+/**
+ * Phép kiểm từ khoá schema KHÔNG còn ở đây: `pnpm contracts` việc số 6 quét
+ * mọi `workshops/<tên>/contracts/*.schema.json` (mục `integration/I-013`,
+ * `ops/scripts/check-workshop-contracts.ts`). Một bản chép tay ở đây chỉ
+ * phủ đúng contract mà tác giả nhớ viết test — cùng luật Z16 với `I-008`,
+ * `I-009`, `I-011`: bỏ bản chép, giữ một nguồn.
+ */
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { unsupportedKeywords } from '@crux/kernel';
 import { corpusProblems, type Corpus } from '../src/corpus.ts';
 import {
   autocompleteSuggestions,
@@ -32,10 +39,6 @@ const PROXIES: DemandProxy[] = [
   'same-topic-count-12m',
   'autocomplete-suggestions',
 ];
-
-test('contract đại lượng nhu cầu chỉ dùng từ khoá mà validator của kernel hiểu', () => {
-  assert.deepEqual(unsupportedKeywords(demandSignalSchema), []);
-});
 
 test('đúng ba đại lượng của WP-014, không nhiều hơn, không ít hơn', () => {
   const allowed = (demandSignalSchema['properties'] as Record<string, { enum?: string[] }>)['proxy']!
