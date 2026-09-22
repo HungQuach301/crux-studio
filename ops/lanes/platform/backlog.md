@@ -4,6 +4,32 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-029 · `automerge` 403 vì thiếu `checks: read` — hàng đợi merge đứng ~5,9 giờ — **ưu tiên CAO NHẤT**
+Mục `P-009` thêm lời gọi Checks API vào `ops/workflows/automerge.yml` mà không mở scope `checks`. Từ lúc `sync-workflows` chép bản mới sang `.github/` (`14:45:09Z` ngày 2026-09-22), **mọi** lượt `automerge` chết ở PR đầu hàng đợi với `403 Resource not accessible by integration`, và vì bước chạy dưới `set -euo pipefail` trong một vòng lặp duyệt cả hàng đợi nên **không PR nào phía sau được xét**.
+
+Đo bằng chạy thật, không suy: lượt xanh cuối là run `#463` (`14:44:30Z`); từ `#464` là **35 lượt đỏ liên tiếp**; PR cuối do máy merge là `#147` (`14:45:13Z`); tới `20:38Z` có **27 PR mở** và **0 PR máy merge**. `#71` merge lúc `16:46Z` là **chủ dự án tự bấm** (`merged_by`, cửa `owner-merge`), không phải đối chứng ngược.
+
+Vì sao nó thuộc nhóm **Z**: `pnpm lint:workflows` xanh, `pnpm check` xanh, CI của từng PR xanh, nhãn đúng, cửa đúng. Chỉ log của `automerge` đỏ — mà "lượt này không merge gì" cũng là kết quả bình thường, nên không ai mở ra xem. `missingPermissions` đã có luật quyền từ `KF-003`, nhưng luật ấy chỉ biết các lệnh `gh <lệnh con>`; `gh api` gọi thẳng endpoint là cửa hậu đi vòng qua tất cả.
+
+- deps: —
+- risk: high
+- status: review
+- nguồn: log job `merge` run `35777803363`; `ops/known-failures.md` **KF-017** và nhóm **Z18**; mục `P-009` (PR #70)
+- **cửa merge: `owner-merge`** — mục này sửa `ops/workflows/automerge.yml`, tức chính workflow tự merge (CHARTER mục 3, bất biến I4). Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
+- tiêu chí xong:
+  - ✅ `ops/workflows/automerge.yml` khai `checks: read`, kèm chú thích tại chỗ nói vì sao ba quyền cũ không bao được scope này.
+  - ✅ **Không vá bằng `|| true`:** nuốt lỗi biến `fixHasTestConclusion` thành `null` vĩnh viễn, mà `invariants.merge-gate.ts` đọc `null` là "chưa kiểm" — hàng đợi vẫn đứng, chỉ là đứng im lặng hơn (CLAUDE.md mục 13: sửa cơ chế, không vá sản phẩm).
+  - ✅ **Test tái hiện lỗi** (bất biến I2, nhãn `fix`): luật mới trong `missingPermissions` — `gh api` chạm `/check-runs` hoặc `/check-suites` phải khai `checks: read`. Sáu bài ở `ops/test/check-workflows.test.ts`, gồm một bài neo thẳng vào `ops/workflows/automerge.yml` trên cây.
+  - ✅ **Luật không được câm khi lệnh trải nhiều dòng** — vòng soát đo 14 ca và tìm ra: `gh api \` rồi URL ở dòng sau lọt hết, mà `automerge.yml` đang dùng đúng dấu `\` đó. `joinContinuations` nối thành một dòng logic trước khi khớp. Không sửa chỗ này thì một lần rewrap lệnh cho dễ đọc là lỗi quay lại mà không gì đỏ — đúng nhóm Z mà mục này sinh ra để chặn. Phá thử: xoá dòng `checks: read` khỏi file thật → **2 bài đỏ**; khôi phục → xanh.
+  - ✅ `ops/known-failures.md`: `KF-017` đủ năm phần, cộng một dòng `Z18` trong bảng rà soát nhóm Z.
+  - **Còn treo, ngoài phạm vi mục này** (không tự mở rộng PR):
+    - Một 403 ở PR đầu tiên không được phép giết cả hàng đợi. Vòng lặp nên cô lập lỗi theo từng PR và đi tiếp, rồi đỏ ở cuối với danh sách PR hỏng. Đáng một mục `platform` riêng — nó sửa **cùng một file `owner-merge`**, nên gộp vào đây sẽ làm PR khẩn này to ra và chậm lại đúng lúc hàng đợi đang đứng.
+    - Luật quyền hiện vẫn chỉ phủ `check-runs`/`check-suites`. Các scope khác gọi qua `gh api` (`statuses`, `deployments`, `packages`, …) chưa có luật nào. Chỉ khai những gì đo được, không thêm luật đoán trước — nhưng ghi lại để lần sau không phải phát hiện lại bằng một lần nhà máy dừng.
+    - **Hình dạng gọi** chưa phủ, không chỉ scope: `gh api graphql` và `curl` tới `api.github.com` đi vòng qua mọi luật hiện có. Vòng soát đo được và khai ra ở đây thay vì để im.
+    - `declaredPermissions` chỉ đọc khối `permissions:` ở mức **gốc**, bỏ qua khối cấp job — có sẵn từ trước mục này, và nếp dự án là tránh khối cấp job (`ops/workflows/ci.yml`). Ghi lại để không ai tưởng đã phủ.
+    - Luật bắt cả khi `gh api … /check-runs` chỉ nằm trong **chú thích** hoặc trong chuỗi `echo`. Hướng bắt nhầm này **an toàn** (cùng lắm ép khai thừa một quyền `read`), nên không chữa vội.
+    - Hàng đợi merge đứng nhiều giờ mà không gì báo: đó là việc của `P-020` (watchdog, ngưỡng "không PR nào merge quá 6 giờ"). Mục này **không** làm thay.
+
 ### P-018 · `D-C04` — log tách tới mức mục, sửa bất biến I8 — **ưu tiên CAO NHẤT** (chủ dự án chỉ định)
 Chủ dự án đã trả lời issue #14: chọn **B**, và trên issue bản tin #17 ghi "Ưu tiên cao nhất: thực hiện D-C04". Quyết định `irreversible` này **đã có câu trả lời**, nên nhánh việc của nó hết chờ.
 
