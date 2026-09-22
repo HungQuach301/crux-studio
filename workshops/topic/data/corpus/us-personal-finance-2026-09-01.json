@@ -49,6 +49,7 @@
   "quota": {
     "limits": {
       "searchCallsPerDay": 100,
+      "unitsPerCall": 1,
       "reserveFraction": 0.2,
       "source": "vendor-docs",
       "checkedAt": "2026-09-21T00:00:00.000Z"
