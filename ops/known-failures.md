@@ -526,6 +526,19 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-016 · `integrator-resolve.ts` trả `outcome: "resolved"` cho một cây **không parse được** — `merge=union` nối hai phía thành mã hỏng cú pháp
+
+> Số **KF-016**: `KF-014` do PR `#142` giữ, `KF-015` đã dùng. Nhận mã trước khi viết, để hai worker không lấy trùng số.
+
+- **Lần gặp:** 1 — PR `#71` (`claude/platform/P-010`), phát hiện ở lượt `crux-worker-1` ~16:45Z ngày 2026-09-22. Hai lượt bước 0 trước đó (`15:40Z` worker-1, `16:20Z` worker-2) gộp **cùng** cây này mà không thấy, vì `pnpm check` đỏ sớm hơn ở `lint:workflows` nên chưa chạy tới `typecheck`.
+- **Chữ ký:** `node ops/scripts/integrator-resolve.ts origin/main` in `{"outcome":"resolved","files":["<file>.ts"]}` và thoát `0`, nhưng `tsc --noEmit` trên cây vừa gộp báo lỗi cú pháp (`error TS1005: '}' expected`) ở **cuối** file đó. Ở `#71`: `ops/test/check-workflows.test.ts(747,1)`.
+- **Nguyên nhân gốc:** `merge=union` làm việc theo **dòng**, không theo cú pháp. Hai phía cùng kết thúc một khối bằng dòng `});` giống hệt nhau, rồi `main` viết tiếp các test mới **sau** dòng đó. Union giữ dòng chung **một lần** và đặt phần thêm của `main` vào **trước** nó, nên `});` đóng test cuối của nhánh biến mất và thân test của nhánh nuốt luôn khối mới của `main`. Không bên nào mất chữ — số dòng vẫn cộng đúng — nên phép đối chiếu bằng **số dòng xoá** mà `integrator-resolve.ts` dùng để quyết `resolved` hay `aborted-ineligible` không thấy gì bất thường: **không bên nào xoá dòng nào.**
+- **Vì sao nó đắt:** đây là ca "mọi chỉ báo đều xanh" (nhóm Z) ở đúng công cụ mà cả hàng đợi merge dựa vào. Phụ lục P3 bước 0b chỉ bắt buộc chạy `pnpm check` **trước khi push**; ca này qua được nếu `check` dừng ở một lỗi khác, hoặc nếu có ai nới thứ tự các bước. Union `ops/logs/**/*.jsonl` (ca nó sinh ra để phục vụ) an toàn vì JSONL không có cú pháp lồng nhau; file `.ts`, `.json` và `.yml` thì **không**.
+- **Đã sửa ở đâu:** *chưa sửa cơ chế* — mục `integration/I-018` nhận việc. Chỗ phải sửa nằm trong `ops/scripts/integrator-resolve.ts`: điều kiện đủ để trả `resolved` hiện chỉ là "không bên nào xoá dòng", và nó thiếu một phép kiểm rằng **cây gộp còn đọc được**. Lần này chữa bằng tay trên nhánh `#71` (trả lại `});`, giữ nguyên test của cả hai phía) là vá sản phẩm, không phải sửa cơ chế — `CLAUDE.md` mục 13.
+- **Máy chặn từ nay:** chưa có. Tới khi `I-018` xong, lớp chặn là dòng này: **bước 0 chạy `pnpm check` ĐỦ tới `typecheck` trước khi push, và một cây gộp `resolved` mà `tsc` đỏ ở lỗi cú pháp thì phải coi là `aborted-ineligible`, không phải một PR đỏ.**
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
