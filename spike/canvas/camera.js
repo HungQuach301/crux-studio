@@ -89,34 +89,65 @@ export function morphMixAt(tSec) {
 }
 
 /**
- * Vùng cắt trên canvas lớn cho khung hình tại giây `tSec`, CHƯA kẹp vào
- * mép canvas — tức là đúng ý đồ khuôn hình mà đường đi máy quay mô tả.
- * @param {number} tSec
+ * Vùng cắt CHƯA kẹp cho một trạng thái máy quay — tức đúng ý đồ khuôn hình
+ * mà trạng thái đó mô tả.
+ * @param {{x: number, y: number, zoom: number}} cam
  * @returns {{sx: number, sy: number, sw: number, sh: number}}
  */
-export function rawViewportFor(tSec) {
-  const cam = cameraAt(tSec);
+export function rawViewportForCamera(cam) {
   const sw = VIEW_W / cam.zoom;
   const sh = VIEW_H / cam.zoom;
   return { sx: cam.x - sw / 2, sy: cam.y - sh / 2, sw, sh };
 }
 
 /**
- * Vùng cắt đã kẹp vào trong mép canvas. Đây là thứ `scene.html` dùng.
- *
- * Kẹp là lưới an toàn, KHÔNG phải cách dựng khuôn hình: một đường đi máy
- * quay đúng thì kẹp không bao giờ đổi gì. Nếu kẹp có tác dụng thật, khuôn
- * hình đã trượt khỏi ý đồ mà khung hình vẫn kín, tức là hỏng mà không gì
- * đỏ. Bài kiểm khoá đúng chỗ đó bằng `rawViewportFor`.
- * @param {number} tSec
+ * Vùng cắt đã kẹp vào trong mép canvas, cho một trạng thái máy quay.
+ * @param {{x: number, y: number, zoom: number}} cam
  * @returns {{sx: number, sy: number, sw: number, sh: number}}
  */
-export function viewportFor(tSec) {
-  const { sx, sy, sw, sh } = rawViewportFor(tSec);
+export function viewportForCamera(cam) {
+  const { sx, sy, sw, sh } = rawViewportForCamera(cam);
   return {
     sx: Math.max(0, Math.min(CANVAS_W - sw, sx)),
     sy: Math.max(0, Math.min(CANVAS_H - sh, sy)),
     sw,
     sh,
   };
+}
+
+/**
+ * Phép kẹp đã phải dịch khuôn hình đi bao nhiêu pixel.
+ *
+ * Kẹp là lưới an toàn, KHÔNG phải cách dựng khuôn hình: một đường đi máy
+ * quay đúng thì hàm này luôn trả 0. Khác 0 nghĩa là khuôn hình đã trượt
+ * khỏi ý đồ mà khung hình vẫn kín — hỏng mà không gì đỏ. Tệ hơn: vùng blit
+ * khi đó nhỏ hơn thật, nên số đo hiệu năng đẹp giả.
+ *
+ * Cả bài kiểm dương lẫn bài kiểm âm đều đi qua đúng hàm này, nên bài âm
+ * chứng minh được bài dương không rỗng.
+ * @param {{x: number, y: number, zoom: number}} cam
+ * @returns {number}
+ */
+export function clampDriftForCamera(cam) {
+  const raw = rawViewportForCamera(cam);
+  const clamped = viewportForCamera(cam);
+  return Math.max(Math.abs(raw.sx - clamped.sx), Math.abs(raw.sy - clamped.sy));
+}
+
+/**
+ * Vùng cắt CHƯA kẹp cho khung hình tại giây `tSec`.
+ * @param {number} tSec
+ * @returns {{sx: number, sy: number, sw: number, sh: number}}
+ */
+export function rawViewportFor(tSec) {
+  return rawViewportForCamera(cameraAt(tSec));
+}
+
+/**
+ * Vùng cắt đã kẹp cho khung hình tại giây `tSec`. Đây là thứ `scene.html` dùng.
+ * @param {number} tSec
+ * @returns {{sx: number, sy: number, sw: number, sh: number}}
+ */
+export function viewportFor(tSec) {
+  return viewportForCamera(cameraAt(tSec));
 }

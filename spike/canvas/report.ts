@@ -231,7 +231,22 @@ export function buildReport(rows: Row[]): string {
     p('và mục 5b, đây là ca phải báo cáo chứ không phải ca tối ưu tiếp, và nó mở một `🤖 [QĐ]`.');
   }
   p();
-  p('## Một lỗi nhóm Z mà spike này tự đâm phải');
+  p('## Hai lỗi nhóm Z mà spike này tự đâm phải');
+  p();
+  p('Cả hai đều **không làm gì đỏ**, và cả hai đều làm hỏng chính thứ báo cáo này đo.');
+  p();
+  p('### 1 · Máy quay trượt ra ngoài mép canvas');
+  p();
+  p('Đường đi máy quay bản đầu trượt khỏi canvas tới **487 px** ở bốn mốc. Phép kẹp mép giấu');
+  p('chỗ đó đi: clip vẫn dựng xong, vẫn đủ khung, vẫn kín hình. Nhưng khuôn hình lệch khỏi ý đồ,');
+  p('**và vùng blit nhỏ hơn thật — nên số đo hiệu năng đẹp giả**. Một spike đo sai theo hướng có');
+  p('lợi cho chính kết luận của nó là loại hỏng tệ nhất ở đây.');
+  p();
+  p('Đã sửa các mốc để phép kẹp không còn phải làm gì. `test/camera.test.ts` khoá bằng');
+  p('`clampDriftForCamera`, và bài **kiểm âm** đi qua đúng hàm đó — gỡ phép kẹp trong');
+  p('`viewportForCamera` thì bài kiểm đỏ ngay, nên bài kiểm dương không thể rỗng.');
+  p();
+  p('### 2 · Mờ chuyển động cộng sai, thành tối đi');
   p();
   p('Bản đầu cộng các mẫu mờ chuyển động bằng `globalAlpha = 1 / blurSamples` cố định. Nghe');
   p('đúng, nhưng `source-over` không cho trung bình cộng: mẫu vẽ sau đè mẫu vẽ trước, nên với');
@@ -247,6 +262,9 @@ export function buildReport(rows: Row[]): string {
   p('Đã sửa bằng trung bình chạy (`globalAlpha = 1 / (k + 1)`, trọng số đều nhau, cộng lại bằng');
   p('1), và **cột `Y trung bình` cùng phép kiểm ở trên là máy canh chỗ đó từ nay** — không dựa');
   p('vào việc lần sau lại có người nhìn kỹ hai khung hình cạnh nhau.');
+  p();
+  p('**Mọi số trong báo cáo này là số đo SAU khi sửa cả hai lỗi.** Cấu hình `blur-30` đã được');
+  p('dựng lại từ đầu sau khi sửa lỗi thứ hai; ba cấu hình còn lại không đụng tới phép cộng mẫu.');
   p();
   p('## Chạy lại');
   p();

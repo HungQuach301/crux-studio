@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   CANVAS_W, CANVAS_H, VIEW_W, VIEW_H, DURATION_S,
   KEYS, MORPH_FROM, MORPH_TO,
-  cameraAt, morphMixAt, rawViewportFor, viewportFor,
+  cameraAt, clampDriftForCamera, morphMixAt, viewportFor,
 } from '../camera.js';
 
 /** Mức chia đủ mịn để bắt cả chỗ trượt ngắn giữa hai mốc. */
@@ -23,9 +23,7 @@ test('kẹp mép canvas không bao giờ phải làm gì — khuôn hình đúng
   let worst = 0;
   let worstAt = 0;
   for (let t = 0; t <= DURATION_S; t += STEP) {
-    const raw = rawViewportFor(t);
-    const clamped = viewportFor(t);
-    const drift = Math.max(Math.abs(raw.sx - clamped.sx), Math.abs(raw.sy - clamped.sy));
+    const drift = clampDriftForCamera(cameraAt(t));
     if (drift > worst) { worst = drift; worstAt = t; }
   }
   assert.equal(
@@ -35,19 +33,25 @@ test('kẹp mép canvas không bao giờ phải làm gì — khuôn hình đúng
   );
 });
 
-test('kiểm âm: một mốc máy quay trượt mép PHẢI bị bắt', () => {
-  // Cùng phép đo như bài trên, nhưng trên một đường đi cố tình sai: zoom
-  // rộng tới mức khung nhìn to hơn cả canvas. Nếu phép đo không bắt được
-  // ca này thì bài kiểm trên là bài kiểm rỗng.
-  const badZoom = 0.20;
-  const sw = VIEW_W / badZoom;
-  const sx = CANVAS_W / 2 - sw / 2;
-  const clampedSx = Math.max(0, Math.min(CANVAS_W - sw, sx));
-  assert.ok(
-    Math.abs(sx - clampedSx) > 0,
-    'phép so raw/clamped không phát hiện được khuôn hình rộng hơn canvas',
-  );
-  assert.ok(badZoom < Math.max(VIEW_W / CANVAS_W, VIEW_H / CANVAS_H));
+test('kiểm âm: máy quay trượt mép PHẢI bị chính phép đo đó bắt', () => {
+  // Bài này đi qua ĐÚNG hàm mà bài kiểm dương dùng (`clampDriftForCamera`),
+  // không tự tính lại phép kẹp bằng hằng số nội tuyến. Nhờ vậy nó chứng
+  // minh được bài dương không rỗng: gỡ phép kẹp trong `viewportForCamera`
+  // thì bài này đỏ ngay.
+  const bad: Array<[string, { x: number; y: number; zoom: number }]> = [
+    ['lệch sang trái quá mép', { x: 100, y: 1700, zoom: 0.44 }],
+    ['lệch xuống dưới quá mép', { x: 3000, y: 3390, zoom: 0.60 }],
+    ['zoom rộng hơn cả canvas', { x: CANVAS_W / 2, y: CANVAS_H / 2, zoom: 0.20 }],
+  ];
+  for (const [label, cam] of bad) {
+    assert.ok(
+      clampDriftForCamera(cam) > 0,
+      `phép đo KHÔNG bắt được ca "${label}" — bài kiểm dương vì thế là bài kiểm rỗng`,
+    );
+  }
+
+  // Và một ca hợp lệ phải cho 0, nếu không phép đo chỉ đang luôn báo lỗi.
+  assert.equal(clampDriftForCamera({ x: CANVAS_W / 2, y: CANVAS_H / 2, zoom: 1 }), 0);
 });
 
 test('không khung nào đứng yên — quy tắc máy quay trôi liên tục của D-04', () => {
