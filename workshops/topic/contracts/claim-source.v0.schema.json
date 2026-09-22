@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "crux://contracts/topic/claim-source.v0.schema.json",
+  "title": "Ràng buộc claim ↔ ô dữ liệu — v0",
+  "description": "Cầu tra ngược cho mục backlog `topic/T-004` (spec WP-011 §5b): một con số đã phát hành phải tra được từ `seriesId` ra `claimId` và tập nào dùng nó. Mỗi bản ghi ghim MỘT claim đã phát hành vào MỘT ô dữ liệu cụ thể (`provider`+`seriesId`+`period`) và con số như lúc phát hành. Thiếu một trường ở đây là 'không tra ngược được' của §5b — dừng và nêu tên trường, đây là lỗi contract không phải lỗi code. v0 để LỎNG (CHARTER 5.2): chỉ trường bắt buộc tối thiểu, cho phép thêm trường.",
+  "type": "object",
+  "required": ["episodeId", "claimId", "provider", "seriesId", "period", "publishedValue"],
+  "properties": {
+    "episodeId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Tập đã phát hành dùng con số này, ví dụ `us-personal-finance/ep-0001`."
+    },
+    "claimId": {
+      "type": "string",
+      "pattern": "^C[0-9]+$",
+      "description": "Trỏ về `claims[].id` của payload xưởng Đề tài (bất biến I6). Issue phải dẫn về đây, không chỉ tới tên chuỗi (tiêu chí xong T-004)."
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["fred", "bls", "census"],
+      "description": "Cùng tập nhà cung cấp với snapshot.v0 (mục T-003)."
+    },
+    "seriesId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mã chuỗi của nhà cung cấp, ví dụ FRED `UNRATE`."
+    },
+    "period": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Kỳ dữ liệu ISO date (đầu kỳ) mà claim trích, khớp `observations[].period` của snapshot. Ghim đúng ô, không chỉ chuỗi — nhờ đó biết chính xác con số nào đổi."
+    },
+    "publishedValue": {
+      "type": ["number", "null"],
+      "description": "Con số như lúc phát hành. `null` khi tập trích một ô nhà cung cấp báo thiếu. So với giá trị mới của cùng `period` để ra 'con số đã phát hành và con số mới' của issue."
+    }
+  }
+}
