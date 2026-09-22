@@ -93,11 +93,21 @@ Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng gi�
 
 - deps: T-006
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-013, mục Lõi định lượng 3
 - tiêu chí xong:
-  - Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số.
-  - Không có điểm đảo chiều cũng là một kết quả hợp lệ, và phải được ghi thành `stableConclusion` có bằng chứng.
+  - ✅ Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số. — `runSensitivityPass(model, registry, options)` nhận thẳng `ModelDefinition` đã nạp (cùng hình dạng với `runModel`); bên gọi tự `loadModel(modelId)` trước. Quét từng tham số một (giữ các tham số khác ở giá trị nền), tìm điểm đảo chiều bằng cách theo dõi dấu của một "biến kết luận" (`conclusionOutput`) đổi từ dương sang âm hay ngược lại, nhị phân tinh chỉnh giá trị đảo chiều.
+  - ✅ Không có điểm đảo chiều cũng là một kết quả hợp lệ, và phải được ghi thành `stableConclusion` có bằng chứng. — bắt buộc ở tầng ứng dụng (`sensitivityProblems`, vì validator của kernel không hỗ trợ if/then, cùng lý do `approvedIssueUrl` của `model.v0.schema.json`), sinh tự động từ dấu quan sát được ở đầu mỗi khoảng quét.
+- **Đã làm, 2026-09-22** (lượt `crux-worker-3`): `workshops/topic/contracts/sensitivity.v0.schema.json` (payload v0, đóng, theo mẫu `model.v0.schema.json`) · `workshops/topic/src/sensitivity.ts` (`runSensitivityPass`, `validateSensitivity`, `sensitivityProblems`) · `workshops/topic/test/sensitivity.test.ts` (14 test, gồm ba acceptance test của WP-013 mục 6: tìm đúng điểm đảo chiều đã biết trước bằng đại số trên `M-002` thật, chạy hai lần ra cùng một JSON, tham số không tồn tại thì dừng và nêu đúng tên).
+  - Bắt buộc quét mọi tham số `geoVarying: true` (WP-013 mục 5) — chưa mô hình nào trong tám mô hình hiện có mang cờ này thật (ghi trong `verification.tiers`), nên luật được kiểm bằng một mô hình tổng hợp trong test, không phải bằng dữ liệu thật.
+  - Trần 1.000.000 điểm quét cho một tham số (WP-013 mục 5b) — đo được thật trên `M-002.loanAmountUsd` (validRange rộng, step=1 ra 49.999.001 điểm), không phải số tự nghĩ.
+  - **Một lỗ hổng nhóm Z tự phát hiện khi viết acceptance test 1:** bản đầu dùng `runModel` (đòi MỌI output khai trong contract hữu hạn) để tính giá trị quét — nhưng `M-002.breakEvenMonths = pointsCostUsd / monthlySavingsUsd` chia cho 0 đúng tại điểm đảo chiều thật (`monthlySavingsUsd = 0`), nên lần chạy đầu tiên trên dữ liệu thật ném `NonFiniteOutputError` của một output KHÔNG liên quan `conclusionOutput`. Sửa: tự giải tham số + gọi công thức trực tiếp, chỉ kiểm hữu hạn đúng `conclusionOutput` — các output khác được phép vô định tại điểm Sensitivity Pass đang tìm.
+- **Soát chéo (subagent, ngữ cảnh sạch)** theo CHARTER mục 3–6, tìm 2 phát hiện CHẶN + 3 khoảng trống test, cả năm đã sửa trước khi rời nháp:
+  - **CHẶN 1:** trailer `Co-Authored-By` mang tên model ("Claude Sonnet 5"), trái `CLAUDE.md` mục 6 — sửa lại `Co-Authored-By: Claude <noreply@anthropic.com>` (amend + force-push nhánh của chính phiên này, cùng cách PR #79/#109 đã làm).
+  - **CHẶN 2:** dòng log I8 (`ops/logs/topic/T-007.jsonl`) khai "pnpm check và pnpm replay xanh", trong khi `pnpm check` thật ra 696/697 test (1 fail — `ops/test/step0-log-path.test.ts`, mục `P-023`/`ops/scripts/gate-flow.ts`, xác nhận **đã đỏ trên `origin/main` trước khi nhánh này tách ra**, không liên quan `T-007`). `CLAUDE.md` mục 8 cấm ghi "đã chạy, xanh" khi chưa đúng — đã sửa lại dòng log ghi đúng số thật.
+  - Cổng chặn 1.000.000 điểm quét đếm THIẾU 1 so với mảng thật sự dựng khi `step` không chia hết khoảng (điểm `max` được chèn thêm không được cộng vào trước khi so ngưỡng) — `actualPointCount` nay là nguồn duy nhất cho cả cổng chặn lẫn `scanPoints`.
+  - Ba test mới cho ba ca chưa có bài kiểm: điểm đảo chiều rơi đúng một điểm lưới (khử trùng lặp, dùng step=5 chạm thẳng `baseRatePct`), điểm ĐẦU khoảng quét bằng 0 chẵn (không tính là flip, có chủ đích — không có "trước" trong miền quét để so), bước quét không dương thì ném.
+- **Cố ý bỏ qua so với WP-013 gốc, có lý do:** checkpoint 2b của WP-013 ("≥2 mô hình `verified`") không áp dụng — `T-006` đã ghi rõ (D-C02) không mô hình nào trong tám mô hình được `verified` cho tới khi `platform/P-003` (cần `OPENAI_API_KEY`, đang `owner-merge`) chạy được, và backlog hiện hành (CHARTER thắng spec khi mâu thuẫn) đặt `deps: T-006` chứ không đặt điều kiện đó. CLI `scripts/run-sensitivity.ts` của WP-013 mục 3 và việc commit một kết quả quét thật làm ví dụ tham chiếu (WP-013 mục 7) **chưa làm** — ngoài hai bullet tiêu chí xong ở trên, để giữ PR gọn theo một mục tiêu; đáng một mục backlog riêng nếu cần CLI độc lập.
 
 ### T-008 · Corpus đối thủ, kiểm mới lạ, đại lượng nhu cầu
 Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **giới hạn của từng thứ khai rõ trong chính dữ liệu**, không nằm trong ghi chú.
