@@ -1,10 +1,16 @@
+/**
+ * Phép kiểm từ khoá schema KHÔNG còn ở đây: `pnpm contracts` việc số 6 quét
+ * mọi `workshops/<tên>/contracts/*.schema.json` (mục `integration/I-013`,
+ * `ops/scripts/check-workshop-contracts.ts`). Một bản chép tay ở đây chỉ
+ * phủ đúng contract mà tác giả nhớ viết test — cùng luật Z16 với `I-008`,
+ * `I-009`, `I-011`: bỏ bản chép, giữ một nguồn.
+ */
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { unsupportedKeywords } from '@crux/kernel';
 import {
-  corpusSchema,
   corpusProblems,
   forbiddenKeyPaths,
   quotaGate,
@@ -20,12 +26,6 @@ const CORPUS_PATH = fileURLToPath(
 function loadCorpus(): Corpus {
   return JSON.parse(readFileSync(CORPUS_PATH, 'utf8')) as Corpus;
 }
-
-test('contract corpus chỉ dùng từ khoá mà validator của kernel hiểu', () => {
-  // Cùng lý do với `pnpm contracts` việc số 2: một ràng buộc được viết ra
-  // nhưng không được kiểm còn tệ hơn là không viết.
-  assert.deepEqual(unsupportedKeywords(corpusSchema), []);
-});
 
 test('WP-014 kiểm 1: corpus mẫu hợp contract và sạch mọi phép soát', () => {
   const corpus = loadCorpus();

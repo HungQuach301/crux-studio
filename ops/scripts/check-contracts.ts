@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Năm việc:
+ * Sáu việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -11,6 +11,10 @@
  * 4. Mọi fixture của xưởng và mọi snapshot tập vàng đều hợp contract.
  * 5. Fixture `input.json` nạp pack từ `packs/` và không mang bản sao cấu
  *    hình (`ops/scripts/check-fixtures.ts`, mục `integration/I-008` và `I-009`).
+ * 6. Contract của xưởng (`workshops/<tên>/contracts/`) chịu cùng phép kiểm
+ *    từ khoá như contract của kernel — mục `integration/I-013`. Trước mục
+ *    đó, việc số 2 chỉ nhìn `kernel/contracts/`, nên một contract xưởng
+ *    dùng từ khoá validator chưa hiểu không làm gì đỏ.
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -26,6 +30,7 @@ import {
   type WorkshopName,
 } from '@crux/kernel';
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
+import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -112,12 +117,17 @@ if (existsSync(goldenRoot)) {
 // 5 · Fixture input.json không mang bản sao cấu hình
 problems.push(...fixtureInputProblems(root));
 
+// 6 · Contract của xưởng — một lượt quét cho cả số đếm lẫn danh sách vấn đề
+const workshopContracts = scanWorkshopContracts(root);
+problems.push(...workshopContracts.problems);
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
 }
 
 process.stdout.write(
-  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${checked} artifact hợp lệ, ` +
+  `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${workshopContracts.files.length} contract xưởng, ` +
+    `${checked} artifact hợp lệ, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
 );
