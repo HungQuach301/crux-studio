@@ -487,6 +487,17 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-018 · `main` đỏ vì một workflow vào được `main` mà không luật nào soi nó ở `node --test`
+
+- **Lần gặp:** 1
+- **Chữ ký:** `pnpm check` dừng ngay ở `pnpm lint:workflows` **trên chính `origin/main`**, in `spike-canvas.yml:47/69/84 — khối `run: |` thiếu `set -euo pipefail` (Z10)` cộng `spike-canvas.yml:63 — `|| true` … không có chú thích (Z9)`. Mọi PR đang mở kế thừa đúng bốn dòng đó ngay khi gộp `main`, nên chúng đỏ mà không ai đụng vào chúng.
+- **Nguyên nhân gốc:** Không phải luật thiếu — Z9 và Z10 đã nằm trong `ops/scripts/check-workflows.ts` từ mục `P-011`, và `pnpm lint:workflows` bắt đúng cả bốn chỗ. Chỗ thủng là **thời điểm**: `lint:workflows` chỉ soi cây khi ai đó chạy `pnpm check`, còn `node --test` — thứ chạy trong mọi lần CI và mọi lượt worker — **không có bài nào soi cây thật bằng Z9/Z10**. Hai bài "cây hiện tại phải sạch" ở `ops/test/check-workflows.test.ts` chỉ soi quyền và action Node 20. Nên `spike-canvas.yml` (mục `visual/V-002`, PR #42) merge vào `main` lúc `23:05:06Z` với đủ bốn vi phạm, và `main` đỏ từ đó. Đây là **KF-013 lần thứ tư trong ngày** ở một hình dạng mới: bất biến có sẵn, vi phạm mới, và không lần chạy nào đặt hai thứ cạnh nhau **trước** lúc merge.
+- **Đo được, 2026-09-22 23:38Z:** `origin/main` tại `cf5c7f9`, `node ops/scripts/check-workflows.ts` trên cây sạch → **EXIT=1**, đúng bốn dòng trên. 17 PR đang mở, **CI xanh cả 17** — vì lần chạy CI gần nhất của mọi PR đều **trước** `23:05:06Z`. Bốn PR xung đột của lượt (#120, #39, #84, #89) có mốc kẹt `23:02–23:05Z`, và mốc của #89 đúng bằng `7dfdfeb` — cùng một lần merge.
+- **Đã sửa ở đâu:** `ops/workflows/spike-canvas.yml` — thêm `set -euo pipefail` vào ba khối `run: |` (dòng 47, 69, 84) và một chú thích tại chỗ cho `"$found" --version || true` nói vì sao nuốt lỗi ở đúng dòng đó là an toàn. **Không** nới luật, **không** thêm ngoại lệ cho file này: luật đúng, file sai.
+- **Máy chặn từ nay:** bài `cây hiện tại sạch với Z10 (set -euo pipefail) và Z9 (nuốt lỗi có chú thích)` ở `ops/test/check-workflows.test.ts`, chạy `blocksMissingPipefail(runBlocks(...))` và `undocumentedSwallows(...)` trên **mọi** `ops/workflows/*.yml` của cây thật. Nó chạy trong `node --test`, tức trong `pnpm test` của `pnpm check` **và** trong mọi lần CI — không còn phụ thuộc việc ai đó chạy tới bước `lint:workflows`. Phá thử: bỏ bản sửa `spike-canvas.yml` ra khỏi cây thì bài này **đỏ** với đúng bốn chuỗi (`:47`, `:69`, `:84` Z10 và `:63` Z9), khôi phục thì **57/57 xanh**.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown

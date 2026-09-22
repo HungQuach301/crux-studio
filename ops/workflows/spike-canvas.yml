@@ -45,6 +45,7 @@ jobs:
       # ffmpeg không có sẵn trên mọi ảnh runner; Chrome thì có.
       - name: Chuẩn bị ffmpeg và trình duyệt
         run: |
+          set -euo pipefail
           if ! command -v ffmpeg >/dev/null 2>&1; then
             sudo apt-get update -qq
             sudo apt-get install -y -qq ffmpeg
@@ -60,6 +61,9 @@ jobs:
           fi
           echo "CRUX_CHROME=$found" >> "$GITHUB_ENV"
           echo "dùng trình duyệt: $found"
+          # Chỉ in phiên bản để đọc log, không ai đọc mã thoát của nó:
+          # một trình duyệt không chịu cờ --version vẫn render được, nên
+          # nuốt lỗi ở đúng dòng này là an toàn (Z9).
           "$found" --version || true
 
       - name: Ghi mốc thời gian bắt đầu
@@ -67,6 +71,7 @@ jobs:
 
       - name: Render
         run: |
+          set -euo pipefail
           args="--out spike-out"
           if [ "${{ inputs.config }}" != "all" ] && [ -n "${{ inputs.config }}" ]; then
             args="$args --config ${{ inputs.config }}"
@@ -82,6 +87,7 @@ jobs:
       # và Actions làm tròn LÊN theo từng phút cho mỗi job.
       - name: Quy phút Actions
         run: |
+          set -euo pipefail
           ended=$(date +%s)
           elapsed=$(( ended - SPIKE_STARTED ))
           minutes=$(( (elapsed + 59) / 60 ))

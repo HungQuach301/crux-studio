@@ -374,6 +374,30 @@ test('cả sáu workflow trong ops/workflows/ khai đủ quyền chúng cần', 
   }
 });
 
+// KF-018 · `spike-canvas.yml` vào `main` với 3 khối `run: |` thiếu
+// `set -euo pipefail` và 1 `|| true` không chú thích, làm `pnpm check` ĐỎ
+// trên chính `main` (đo 2026-09-22 23:38Z, sau khi #42 merge lúc 23:05Z).
+//
+// Luật Z9 và Z10 đã có sẵn trong linter và `pnpm lint:workflows` bắt đúng —
+// chỗ thủng là `node --test` KHÔNG soi cây thật bằng hai luật đó. Hai bài
+// "cây hiện tại phải sạch" ngay trên chỉ soi quyền và action Node 20, nên
+// một lượt CI chạy lệch nhịp (KF-002: GitHub không dựng lần chạy cho commit
+// cuối) đủ để file lọt vào `main` mà không gì đỏ trước lúc merge.
+test('cây hiện tại sạch với Z10 (set -euo pipefail) và Z9 (nuốt lỗi có chú thích)', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  const offenders: string[] = [];
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const source = readFileSync(join(dir, file), 'utf8');
+    for (const line of blocksMissingPipefail(runBlocks(source, file))) {
+      offenders.push(`${file}:${line} — khối \`run: |\` thiếu set -euo pipefail (Z10)`);
+    }
+    for (const line of undocumentedSwallows(source)) {
+      offenders.push(`${file}:${line} — nuốt lỗi không có chú thích giải thích (Z9)`);
+    }
+  }
+  assert.deepEqual(offenders, [], offenders.join(' · '));
+});
+
 test('không workflow nào còn dùng action chạy Node 20', () => {
   const dir = join(process.cwd(), 'ops', 'workflows');
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
