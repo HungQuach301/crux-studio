@@ -217,7 +217,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G19 · Hạn mức `search.list` của YouTube Data API là bao nhiêu
 - deps: —
 - risk: medium
-- status: ready
+- status: parked
 - nguồn: `docs/assumptions.md` G19; mục `topic/T-008`; spec WP-014 mục 3b và mục 7
 - kiểm: mở Google Cloud Console của project, đọc hạn mức thật của `search.list` (số lần gọi mỗi ngày và
   đơn vị mỗi lần gọi), so với con số 100 đang dùng. **Chỉ chủ dự án làm được** — cần tài khoản và một
@@ -230,3 +230,35 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
   bảng trong `packs/channels/us-personal-finance/quota-budget.md` thay bằng số thật, và
   `quota.limits.source` của corpus chuyển từ `vendor-docs` sang `console-measured` — đó là điều kiện còn
   thiếu duy nhất để `T-008` đạt tiêu chí "hạn mức được đo, không được đoán".
+- ⬜ **`parked` — 2026-09-22, lượt `crux-worker-1`.** Bài kiểm nằm ngoài repo và chỉ chủ dự án chạy được;
+  không có đường nào bên trong repo đi vòng qua nó. Issue **#101** nêu ba phương án. Có câu trả lời thì
+  mở lại thành `ready`.
+- vì sao `parked` chứ không phải `review`: không phần nào của mục này chờ một lượt worker — nó chờ hai
+  con số đọc từ Cloud Console. Để `ready` thì mọi lượt worker sau lại nhận mục này (nó là mục `ready`
+  đầu tiên đủ điều kiện của làn `verify` theo `ops/lanes/priority.md`) rồi lại dừng ở đúng chỗ cũ —
+  đúng chỗ rò mà `VF-G7` và `VF-G10` đã vá bằng cách này.
+- ✅ **Đã kiểm được phần kiểm được: phương án dự phòng đang chạy thật, không chỉ được hứa.** Đo trên
+  `main` ở `f873967`, nên `parked` không để lại rủi ro nào đứng chờ:
+  - **Hạn mức không xuất hiện dưới dạng hằng số ở đâu trong code.** `quotaGate` nhận
+    `searchCallsPerDay` và `reserveFraction` làm **tham số** (`QuotaState`); thân hàm chỉ đọc `state.*`,
+    không đọc hằng số nào. Chuỗi `100` có mặt trên **hai** dòng trong `workshops/topic/src/`, và không
+    dòng nào là hạn mức: `corpus.ts:227` là một dòng **chú thích** của `quotaGate`, và `demand.ts:120`
+    là `Math.round(median(rates) * 100) / 100` — **hệ số làm tròn**, không liên quan quota.
+  - Giá trị thật nằm trong **dữ liệu**: `workshops/topic/data/corpus/us-personal-finance-2026-09-01.json`
+    (`quota.limits.searchCallsPerDay: 100`, `source: "vendor-docs"`), và
+    `workshops/topic/contracts/corpus.v0.schema.json` bắt buộc trường `source` với `enum`
+    `["vendor-docs", "console-measured"]`. Nghĩa là G19 sai thì sửa một số trong một file dữ liệu.
+  - Test `workshops/topic/test/corpus.test.ts:132` khẳng định `source === 'vendor-docs'` — bên tiêu thụ
+    không thể lặng lẽ tin đây là số đã đo.
+- ⚠️ **Một chỗ dễ sai lặng lẽ, đã ghi vào #101 và vào chính bảng quota:** bảng
+  `quota-budget.md` có **hai** dòng số (số lần gọi mỗi ngày, và đơn vị mỗi lần gọi), nhưng code chỉ tiêu
+  thụ **một** — `searchCallsPerDay`. Cửa dừng đếm **lần gọi**, không đếm **đơn vị**; không chỗ nào trong
+  repo **tiêu thụ** "đơn vị mỗi lần gọi" — `unitsPerCall` không tồn tại trong code (`workshops/`,
+  `kernel/`, `ops/scripts/`, `packs/*.json`); từ PR này trở đi nó chỉ có mặt trong văn xuôi tài
+  liệu. Nếu Console hiển
+  thị hạn mức theo đơn vị thì giữa số đọc được và số code dùng có một **phép chia**, và đó là chỗ một sai
+  số đi vào mà không gì đỏ. Vì vậy #101 xin **hai số nguyên bản như Console hiển thị**, không xin số đã
+  quy đổi.
+- hệ quả: không làn nào chặn ở đây. `T-008` giữ nguyên phần đã làm (contract, kiểm mới lạ, ba đại lượng
+  nhu cầu) — phần đó chạy trên corpus có sẵn và không gọi API, nên **không** đứng trên G19. Phần **xây**
+  corpus (`T-011`) thì đứng trên G19, nhưng đang chặn ở chỗ nặng hơn: repo chưa có secret nào (#36).
