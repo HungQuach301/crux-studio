@@ -259,3 +259,27 @@ test('P-023 · không file code nào neo vào một đường dẫn log bước 
       'Dùng readRunLogs trên cả ops/logs, hoặc step0LogPath của kernel.',
   );
 });
+
+/**
+ * ## `KF-013` · hai PR xanh, gộp vào nhau thì `main` đỏ (ca âm đích danh)
+ *
+ * Bất biến trên đã có từ `P-023`, nhưng nó quét **cả kho** một lần — khi đỏ,
+ * lời báo chỉ liệt kê file, không nói *vì sao* file đó có mặt. Ca này ghim
+ * đích danh chỗ đã làm `main` đỏ thật lúc 2026-09-22T10:12Z: `P-023` thêm
+ * bất biến, `P-027` thêm `ops/scripts/gate-flow.ts` với một chú thích nhắc
+ * đích danh một đường dẫn log bước 0. Hai PR **xanh riêng lẻ** (mỗi bên chỉ
+ * có một trong hai file), gộp vào `main` mới đỏ — không PR nào một mình bắt
+ * được. Nhóm **Z**. Đây là bài kiểm TÁI HIỆN của bản sửa (bất biến I2):
+ * chạy trên `gate-flow.ts` trước khi sửa thì ĐỎ, sau khi sửa thì xanh.
+ */
+test('KF-013 · gate-flow.ts không neo vào một đường dẫn log bước 0 cố định', () => {
+  const HARDCODED = /ops\/logs\/[^'"`\s]*(step0|P-016)[^'"`\s]*\.jsonl/;
+  const gateFlow = join(process.cwd(), 'ops', 'scripts', 'gate-flow.ts');
+  const body = readFileSync(gateFlow, 'utf8');
+  assert.equal(
+    HARDCODED.test(body),
+    false,
+    'ops/scripts/gate-flow.ts nhắc đích danh một đường dẫn log bước 0 (P-016/step0 .jsonl) — ' +
+      'đúng chỗ đã làm main đỏ ở KF-013. Dùng lời chung ("các dòng log bước 0") thay vì tên file.',
+  );
+});
