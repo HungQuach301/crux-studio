@@ -411,3 +411,22 @@ Mỗi lượt integrator và mỗi lượt worker ghi một dòng bước 0 vào
   - **Bằng chứng bằng chạy thật, không bằng lập luận:** dựng lại đúng hình dạng trên — hai nhánh cùng mang một dòng bước 0, một bên vào `main` trước — rồi đo `git merge-tree --write-tree` ở chế độ **tắt** `merge=union` (ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes`, cách mô phỏng GitHub mà KF-009 dùng). Trước khi sửa: `EXIT=1`. Sau khi sửa: `EXIT=0`.
   - Ghi kết quả vào `ops/known-failures.md` KF-009 — đó là chỗ đang giữ câu chuyện này.
 - **mã mục nhận trước lúc 2026-09-22 04:1x giờ VN** (`ops/logs/README.md`, KF-005): `P-022` là mã cao nhất trên `main` **và** trên cả 11 nhánh PR đang mở tại lúc nhận, nên `P-023` không đụng ai.
+
+### P-024 · Commit gộp của `integrator-resolve.ts` không mang trailer, và bước bù bằng tay đã hụt một lượt
+Bước 0 tạo commit gộp bằng `git merge` bên trong `ops/scripts/integrator-resolve.ts`, nên commit ra đời với đúng một dòng thân: `Gộp origin/main (integrator, không xung đột)` — **không** `Claude-Session`, **không** `Co-Authored-By`. Các lượt trước bù bằng tay (`git commit --amend` trước khi push) và ba dòng log bước 0 đều ghi lại việc bù đó.
+
+Đã đo, không suy: lượt worker `crux-worker-1` 2026-09-22 06:39 giờ VN bỏ bước bù, và **cả 9** commit gộp vừa push ra `Claude-Session=0 Co-Authored-By=0` — `51e3637`, `406f6f8`, `0f8f301`, `b186895`, `fef1a7f`, `7aa5cc7`, `9e4742f`, `4fe91f1`, `37cb1e0`. Không sửa lại được: tám trong chín nhánh là nhánh của PR người khác, mà `CLAUDE.md` mục 2 cấm force-push lên nhánh của người khác.
+
+Một bước đúng-đắn-bắt-buộc mà chỗ thực thi duy nhất là trí nhớ của routine thì nó sẽ hụt, và đây là lần hụt đầu tiên đo được. `trailer-warn` có `continue-on-error: true` (CHARTER mục 4, cố ý) nên không gì đỏ — đúng nhóm **Z**.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: vòng soát ngữ cảnh sạch của PR `#93`; `ops/known-failures.md` KF-010; `CLAUDE.md` mục 6; giả định `G14`
+- tiêu chí xong:
+  - `integrator-resolve.ts` tự ghi trailer vào commit gộp nó tạo, ở **một** chỗ, không để routine bù tay. Mã phiên đọc từ môi trường; không có thì commit vẫn phải mang `Co-Authored-By`, và thiếu mã phiên phải **nói ra** trong kết quả trả về chứ không im lặng.
+  - Tên hay mã model **không** lọt vào trailer (`CLAUDE.md` mục 6). Đây là ca đã sai thật trên `main`: 47 dòng `Co-Authored-By: Claude Opus 5` và 9 dòng `Claude Sonnet 5` trong 40 commit gần nhất.
+  - Có test: gọi tool trên một cây dựng sẵn, đọc `git log -1 --format=%B` của commit gộp, khẳng định có đủ hai trailer và **không** có tên model. Test phải **đỏ thật** khi gỡ phần ghi trailer.
+  - `ops/known-failures.md` KF-010 cập nhật dòng **Máy chặn từ nay** bằng tên test đó.
+- **ảnh hưởng tới `VF-G14`:** phép kiểm của `G14` là "đọc job `trailer-warn` trên các PR do routine mở, trong một tuần". Chín commit thiếu trailer này nằm trong cửa sổ đó và **không phải** tín hiệu nền tảng ghi hỏng trailer — chúng là bước bị bỏ. `VF-G14` phải loại chín mã băm trên ra khỏi mẫu, nếu không nó kết luận sai về `G14`.
+- **mã mục nhận lúc 2026-09-22 06:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-023` là mã cao nhất trên `main` **và** trên cả 16 nhánh PR đang mở tại lúc nhận, nên `P-024` không đụng ai.
