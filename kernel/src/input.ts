@@ -27,9 +27,24 @@
  * snapshot vẫn xanh, nên nó trôi lại được.
  *
  * Cách chặn giữ đúng hình dạng của `I-008`: **bỏ bản sao thì không cần so**.
- * File `--input` khai `upstreamFrom` — tên tập vàng và danh sách xưởng — và
- * artifact tới từ `ops/golden/<tập>/snapshots/` lúc chạy. Không còn bản chép
- * nào để trôi.
+ * File `--input` khai `upstreamFrom` — chỉ tên tập vàng — và artifact tới từ
+ * `ops/golden/<tập>/snapshots/` lúc chạy. Không còn bản chép nào để trôi.
+ *
+ * ## Danh sách xưởng tiêu thụ suy từ `definition.consumes` (mục `integration/I-011`)
+ *
+ * `I-009` để `upstreamFrom.workshops` khai tay trong fixture — một **bản chép
+ * thứ hai** của `definition.consumes` (nguồn thật ở `workshops/<tên>/src/index.ts`).
+ * Hai danh sách lệch nhau mà không gì đỏ: fixture nạp theo danh sách của mình,
+ * còn `inputsHashOf` băm theo `definition.consumes`, nên đổi `consumes` mà để
+ * fixture giữ danh sách cũ thì lần chạy độc lập vẫn xanh với một artifact thừa
+ * (hàng `Z16` của `ops/known-failures.md`, đo lại ở `I-011`).
+ *
+ * Cách chặn cùng hình dạng `I-009`: **bỏ bản chép thì không cần so**. Fixture
+ * không khai danh sách nữa; `readInputFile` nhận `consumes` từ bên gọi — CLI
+ * truyền `definition.consumes` xuống (`cli.ts`), test và `check-fixtures.ts`
+ * lấy từ chính `definition` của xưởng. Một nguồn duy nhất, không có bản chép
+ * thứ hai để trôi. Đổi `consumes` thì `inputs`/`inputsHash` của output đổi
+ * theo, nên tập vàng replay đỏ ngay (`pnpm check`) — không còn chỗ nào xanh.
  *
  * Điều này cũng **hoà giải với CHARTER 6.1** (PR cập nhật snapshot không kèm
  * thay đổi nào khác): fixture tự đi theo snapshot, nên một PR
@@ -70,15 +85,14 @@ export interface InputFile {
  * Trỏ tới artifact đầu vào trong một tập vàng, thay cho việc chép chúng vào
  * file (mục `integration/I-009`).
  *
- * `workshops` khai **đúng** những xưởng mà xưởng này tiêu thụ, không phải cả
- * sáu: `inputsHashOf` băm con trỏ artifact đầu vào, nên thừa một artifact là
- * đổi `inputsHash` của output.
+ * Danh sách xưởng cần nạp **không** nằm ở đây: nó suy từ `definition.consumes`
+ * của xưởng tiêu thụ, do bên gọi `readInputFile` truyền vào (mục
+ * `integration/I-011`). Fixture khai danh sách riêng là một bản chép thứ hai
+ * của `consumes`, và hai bên lệch nhau mà không gì đỏ.
  */
 export interface UpstreamFrom {
   /** Tên thư mục tập vàng trong `ops/golden/`. */
   golden: string;
-  /** Tên các xưởng cần nạp snapshot. */
-  workshops: readonly WorkshopName[];
 }
 
 /** Khoá cấp một được phép có trong một file `--input`. */
@@ -98,39 +112,43 @@ export function goldenSnapshotPath(root: string, golden: string, workshop: strin
 }
 
 /**
- * Nạp khối `upstream` từ snapshot tập vàng. Ném lỗi ở mọi chỗ khai sai —
- * KHÔNG có nhánh nào trả về rỗng rồi chạy tiếp: "nạp được 0 artifact" và
- * "xưởng này không tiêu thụ gì" trông giống hệt nhau lúc chạy, và đó đúng là
- * cách nhóm Z của `ops/known-failures.md` sống. Xưởng không tiêu thụ gì thì
- * khai `upstream: {}`, không khai `upstreamFrom` với danh sách rỗng.
+ * Nạp khối `upstream` từ snapshot tập vàng, cho đúng những xưởng trong
+ * `consumes`. `consumes` tới từ `definition.consumes` của xưởng tiêu thụ (bên
+ * gọi truyền vào), không phải từ file — nên fixture không mang bản chép thứ
+ * hai của danh sách đó (mục `integration/I-011`).
+ *
+ * Ném lỗi ở mọi chỗ khai sai — KHÔNG có nhánh nào trả về rỗng rồi chạy tiếp:
+ * "nạp được 0 artifact" và "xưởng này không tiêu thụ gì" trông giống hệt nhau
+ * lúc chạy, và đó đúng là cách nhóm Z của `ops/known-failures.md` sống. Xưởng
+ * không tiêu thụ gì (`consumes` rỗng) thì khai `upstream: {}`, không khai
+ * `upstreamFrom`.
  */
-function readUpstreamFromGolden(root: string, full: string, raw: unknown): Record<string, unknown> {
+function readUpstreamFromGolden(
+  root: string,
+  full: string,
+  raw: unknown,
+  consumes: readonly WorkshopName[],
+): Record<string, unknown> {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error(`File --input ${full} khai "upstreamFrom" không phải một object JSON.`);
   }
-  const { golden, workshops } = raw as { golden?: unknown; workshops?: unknown };
+  const { golden } = raw as { golden?: unknown };
 
   if (typeof golden !== 'string' || golden.length === 0) {
     throw new Error(`File --input ${full} khai "upstreamFrom" thiếu trường "golden" (tên tập vàng).`);
   }
-  if (!Array.isArray(workshops) || workshops.length === 0) {
+  if (consumes.length === 0) {
     throw new Error(
-      `File --input ${full} khai "upstreamFrom.workshops" không phải một mảng không rỗng. ` +
-        `Xưởng không tiêu thụ artifact nào thì khai "upstream": {} — một danh sách rỗng ở đây ` +
-        `không phân biệt được với "quên khai" (mục integration/I-009).`,
+      `File --input ${full} khai "upstreamFrom" nhưng xưởng tiêu thụ không consumes gì. ` +
+        `Xưởng không tiêu thụ artifact nào thì khai "upstream": {} — "upstreamFrom" với ` +
+        `danh sách rỗng không phân biệt được với "quên khai" (mục integration/I-009, I-011).`,
     );
   }
 
   const upstream: Record<string, unknown> = {};
-  for (const name of workshops as readonly unknown[]) {
-    if (typeof name !== 'string' || !(WORKSHOPS as readonly string[]).includes(name)) {
-      throw new Error(
-        `File --input ${full} khai "upstreamFrom.workshops" có "${String(name)}", ` +
-          `không phải tên xưởng nào. Sáu xưởng: ${WORKSHOPS.join(', ')}.`,
-      );
-    }
+  for (const name of consumes) {
     if (name in upstream) {
-      throw new Error(`File --input ${full} khai xưởng "${name}" hai lần trong "upstreamFrom.workshops".`);
+      throw new Error(`Xưởng tiêu thụ khai "${name}" hai lần trong "consumes".`);
     }
     const path = goldenSnapshotPath(root, golden, name);
     if (!existsSync(path)) {
@@ -156,10 +174,15 @@ function readUpstreamFromGolden(root: string, full: string, raw: unknown): Recor
  * `path` tương đối được giải theo `root`, không theo cwd: hai đầu vào của
  * hàm này phải cùng một gốc, nếu không fixture của gốc này chạy với pack của
  * gốc kia mà không ai biết.
+ *
+ * `consumes` là danh sách xưởng cần nạp khi file khai `upstreamFrom` — tới từ
+ * `definition.consumes` của xưởng tiêu thụ (mục `integration/I-011`), không
+ * từ file. Chế độ `upstream` khai thẳng (CHARTER 5.4) không dùng `consumes`.
  */
 export function readInputFile(
   root: string,
   path: string,
+  consumes: readonly WorkshopName[] = [],
 ): { episode: EpisodeContext; input: WorkshopInput } {
   const full = isAbsolute(path) ? path : resolve(root, path);
   if (!existsSync(full)) throw new Error(`Không có file --input ${full}.`);
@@ -214,7 +237,7 @@ export function readInputFile(
 
   let upstream: Record<string, unknown>;
   if ('upstreamFrom' in file) {
-    upstream = readUpstreamFromGolden(root, full, file.upstreamFrom);
+    upstream = readUpstreamFromGolden(root, full, file.upstreamFrom, consumes);
   } else {
     // `null` là một giá trị JSON hợp lệ, nên `?? {}` sẽ nuốt nó thành "không
     // có artifact đầu vào" — im lặng đúng kiểu nhóm Z. Khai `upstream` thì

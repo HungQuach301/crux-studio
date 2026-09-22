@@ -82,7 +82,7 @@ export async function runWorkshopCli<P extends object>(
   let locale: string;
 
   if (args.input) {
-    const fixture = readInputFile(args.root, args.input);
+    const fixture = readInputFile(args.root, args.input, definition.consumes);
     ({ episodeId, channel, genre, locale } = fixture.episode);
     input = fixture.input;
   } else if (args.episode) {
