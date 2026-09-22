@@ -531,3 +531,16 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
   - Ghi kết quả vào `ops/known-failures.md` **KF-011**.
 - ⬜ **CÒN TREO — hai tiêu chí cuối (bản sửa cơ chế A/B và bằng chứng chạy thật của nó) CHỜ `🤖 [QĐ] #116`.** Lượt `crux-worker-3` chỉ làm phần **đo** (tiêu chí "đo trước, sửa sau" ở trên) — nó là cửa `open`, đảo ngược được, không chạm `ops/invariants.*` nên không đứng sau quyết định nào. Bản sửa cơ chế chạm `ops/invariants.merge-gate.ts` (cửa `owner-merge`) và có thể là `irreversible` (đổi ý nghĩa I4), nên KHÔNG được tự chọn A hay B: chờ câu trả lời của chủ dự án ở `#116` (đọc cả issue `#116` lẫn issue bản tin, dạng `#116 A`). Có câu trả lời thì lượt sau mở lại mục này thành `ready` để làm nốt — cùng nếp `VF-G7`/`VF-G19`. Dòng bản tin (tiêu chí 2) cũng để lượt đó làm cùng, vì `gate-flow.ts` đã sẵn sàng cấp số cho nó. Mục này KHÔNG được tự chuyển `done` khi PR đo merge — ô ⬜ này giữ nó lại (`ops/scripts/backlog-status.ts`, `HOLD_MARKERS`).
 - **mã mục nhận lúc 2026-09-22 12:4x giờ VN** (`ops/logs/README.md`, KF-005): `P-026` là mã cao nhất trên `main` **và** trên cả 18 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-027` không đụng ai.
+
+### P-028 · fix · Hai khoá `env:` làm `smoke-workflows.yml` thành YAML không hợp lệ; linter workflow dựng thêm luật khoá trùng
+`smoke-workflows.yml` có hai khoá `env:` liền nhau trong step `Xác định commit và workflow vừa đổi`. Một mapping YAML không được có hai khoá cùng tên: GitHub từ chối cả workflow ở mức khởi động (`startup_failure`, 0 job), nên nó đỏ ở **mọi** lần push. Sáu PR đang mở (`#65`, `#154`, `#155`, `#156`, `#157`, `#159`) mang check đỏ vì nó, trong đó bốn PR chỉ là dòng-log không đụng workflow nào. `pnpm lint:workflows` không bắt vì nó không dựng cây YAML (nhóm Z: xanh ở chỗ rẻ, đỏ ở chỗ đắt). Chi tiết: `ops/known-failures.md` `KF-016`.
+
+- deps: —
+- risk: medium — không chặn cửa merge (`ops/invariants.merge-gate.ts` chỉ đọc `ci.yml`), nhưng vô hiệu hoá chính lưới an toàn `smoke-workflows` và làm mọi PR trông đỏ.
+- status: review
+- nguồn: lượt `crux-worker-2` 2026-09-22 ~19:18Z; `ops/known-failures.md` `KF-016`; 8 lần chạy `smoke-workflows.yml` (#1–#8) đều `startup_failure`.
+- **mã mục nhận lúc 2026-09-22 ~19:18Z:** `P-027` là mã cao nhất trên `main`; `P-028` không đụng ai.
+- tiêu chí xong:
+  - Gộp hai khoá `env:` thành một trong `ops/workflows/smoke-workflows.yml` (sửa cấu hình, không vá sản phẩm). ✅
+  - Test tái hiện lỗi (bất biến I2, CI chặn): `duplicateMappingKeys` mới trong `ops/scripts/check-workflows.ts`, chạy trong `pnpm lint:workflows`. Ca âm hai `env:` trong một step **đỏ**, ca âm hai `on:` gốc **đỏ**; ca dương (hai `- name:` liền nhau, nội dung `run: |`, cả cây `ops/workflows/` thật) **sạch**. Đo được đỏ thật trên bản `smoke-workflows.yml` trước khi sửa. ✅
+  - `ops/known-failures.md` `KF-016` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*. ✅
