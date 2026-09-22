@@ -351,6 +351,19 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 ---
 
+## KF-010 · Commit gộp của bước 0 ra đời không có trailer, và bước bù bằng tay đã hụt
+
+- **Lần gặp:** 1 (lượt worker `crux-worker-1`, 2026-09-22 06:39 giờ VN — cả 9 commit gộp cùng lượt)
+- **Chữ ký:** một commit trên nhánh `claude/` có thân đúng một dòng `Gộp origin/main (integrator, không xung đột)`; `git log -1 --format=%B <sha> | grep -c 'Claude-Session'` trả `0`. Đo nhanh cả loạt: `for b in <nhánh>; do git log -1 --format=%B origin/$b | grep -c 'Claude-Session'; done`.
+- **Nguyên nhân gốc:** `ops/scripts/integrator-resolve.ts` tạo commit gộp bằng `git merge` bên trong tool, nên commit sinh ra với thông điệp mặc định của tool — không trailer. Việc thêm trailer nằm **ngoài** tool, ở trí nhớ của routine đang chạy bước 0. Một bước bắt buộc mà chỗ thực thi duy nhất là trí nhớ thì sẽ hụt; đây là lần hụt đầu tiên đo được. Không phải lỗi nền tảng ghi hỏng trailer — chính lượt đó, commit **do worker tự tạo** (`0c78618`) vẫn có đủ hai trailer.
+- **Vì sao không gì đỏ:** job `trailer-warn` đặt `continue-on-error: true` — cố ý, theo CHARTER mục 4 (luật cứng về trailer sẽ chặn toàn bộ công việc nếu nền tảng đổi cách ghi). Nên chín commit thiếu trailer đi qua CI xanh trơn. Đúng nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+- **Thiệt hại thật, không giả định:** phép kiểm của `VF-G14` là đọc job `trailer-warn` trên các PR do routine mở trong một tuần. Chín commit này nằm trong cửa sổ mẫu và trông y như tín hiệu "nền tảng không ghi trailer", trong khi nguyên nhân khác hẳn. Không loại chúng ra thì `G14` bị kết luận sai.
+- **Không sửa lại được:** tám trong chín nhánh thuộc PR của worker khác, mà `CLAUDE.md` mục 2 cấm force-push lên nhánh của người khác. Amend lẻ nhánh còn lại chỉ làm mẫu thêm lệch. Dòng đính chính trong `ops/logs/platform/P-016.jsonl` là bản ghi duy nhất.
+- **Đã sửa ở đâu:** mục `P-024` (`ops/lanes/platform/backlog.md`) — chuyển việc ghi trailer **vào trong** `integrator-resolve.ts`, bỏ hẳn bước bù tay. Sửa chỗ sinh ra commit, không vá từng lượt chạy.
+- **Máy chặn từ nay:** *chưa có* — `P-024` còn `ready`. Tiêu chí xong của nó đòi một test gọi tool trên cây dựng sẵn rồi đọc `git log -1 --format=%B`, và test phải đỏ thật khi gỡ phần ghi trailer. Mục này **chưa xong** cho tới khi dòng này ghi được tên test đó.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
