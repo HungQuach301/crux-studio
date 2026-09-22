@@ -368,6 +368,24 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 ---
 
+## KF-011 · Cửa `automerge-delayed` không bao giờ tới hạn — đồng hồ 12 giờ bị chính bước 0 đặt lại
+
+- **Lần gặp:** 1 (đo ở lượt `crux-worker-1`, 2026-09-22 12:4x giờ VN)
+- **Chữ ký:** một PR mang nhãn `automerge-delayed`, CI xanh, `mergeable_state: clean`, mở đã nhiều hơn 12 giờ, mà `ops/invariants.merge-gate.ts` vẫn trả `{"outcome":"wait","hoursLeft":12}`. Đo nhanh cả hàng đợi: `git log --first-parent --format=%ct refs/probe/pr-<N>` rồi tìm khoảng trống lớn nhất giữa hai lần đầu nhánh đổi — dưới 12 giờ nghĩa là đồng hồ chưa từng chạy hết.
+- **Nguyên nhân gốc:** `merge-gate.ts` đo 12 giờ từ `ciCompletedAt` của lần CI trên **đầu nhánh hiện tại**. Bước 0 (phụ lục P3, và từ D-C06 chạy ở đầu **mọi** lượt worker theo phụ lục P1) gộp `main` vào PR rồi push. Commit mới → đầu nhánh mới → lần CI mới → đồng hồ về 0. Bước 0 chạy dày hơn 12 giờ nhiều lần, nên ngưỡng không bao giờ tới.
+- **Vì sao không gì đỏ:** mọi thành phần chạy **đúng luật của nó**. CI xanh, nhãn đúng, `automerge.yml` gọi `merge-gate.ts` đúng, `merge-gate.ts` trả `wait` đúng, bước 0 gộp đúng phạm vi nó được giao. Không có lỗi ở bất cứ đâu để mà đỏ — chỉ có một vòng phản hồi giữa hai cơ chế đều đúng. Đúng nhóm **Z**.
+- **Thiệt hại thật, không giả định, đo 2026-09-22 05:4xZ:** 13 PR đang mở mang nhãn `automerge-delayed`; trong 40 PR merge gần nhất **không một PR nào** mang nhãn đó — cả 40 đều `automerge` (cửa `open`). `#39` mở từ `2026-09-21T11:43Z` (18 giờ), CI xanh, 29 lần đổi đầu nhánh trong 24 giờ, khoảng trống lớn nhất **3h19m**. Chạy `ops/invariants.merge-gate.ts` trên trạng thái thật của `#39`: `{"outcome":"wait","reason":"CI xanh được 0.3 giờ, ngưỡng 12 giờ.","hoursLeft":12}`. Chỉ **1/13** PR từng có khoảng trống ≥ 12 giờ.
+- **Ca `#42` — ngưỡng gần như không với tới được ngay cả khi không ai đụng vào PR:** đầu nhánh đứng yên `2026-09-21T13:11:32Z` → `2026-09-22T01:14:17Z`, tức 12h02m45s. CI xanh khoảng `13:12Z` nên ngưỡng đạt khoảng `01:12Z`; `automerge.yml` chạy `cron: '23 * * * *'`, lượt `00:23` còn sớm và tới lượt `01:23` thì đầu nhánh đã đổi hai lần. Cửa sổ sống rộng **khoảng 2 phút**, rơi đúng giữa hai lượt. Bài học: khi đồng hồ bị đặt lại liên tục, một lịch chạy **thưa** biến "hiếm khi tới hạn" thành "không bao giờ tới hạn".
+- **Vì sao đã ghi mà vẫn sót:** hệ quả "đồng hồ đặt lại" **đã** được ghi nhiều lần — mô tả PR `#85` và `#39` nói ra, phụ lục P3 bước 0c dặn phải ghi vào ghi chú, `P-026` nhắc tới trong một tiêu chí. Nhưng mọi chỗ đó ghi nó cho **một lượt**, như một khoản phí. Không chỗ nào cộng lại theo thời gian để hỏi *ngưỡng có bao giờ tới không*. Số đo một lượt vô hại; số đo tích luỹ nói rằng cửa đã đóng. **Bài học vượt ra ngoài mục này: một hệ quả được ghi đều đặn ở mức từng lượt có thể là một lỗi chưa ai nhìn thấy ở mức tổng — luôn hỏi thêm "cộng lại trong 24 giờ thì thành cái gì".**
+- **Vòng tự khoá, đây là chỗ khó nhất:** `KF-009` làm GitHub báo `dirty` → `automerge` bỏ qua → bước 0 phải gộp để gỡ `dirty` → gộp làm đồng hồ về 0 → `automerge` trả `wait`. Hai lớp phòng thủ chống nhau: **không gộp thì `dirty` chặn, gộp thì đồng hồ chặn.** Bản sửa cắt vòng này là `P-023` (dòng bước 0 xuống file riêng từng lượt, hết nguyên nhân ở `KF-009`) — nó **đã xong và đang nằm trong PR `#85`**, mà `#85` mang nhãn `automerge-delayed`. Bản sửa bị chính thứ nó sửa giữ lại. Không đường nào ra bằng máy; gỡ kẹt cần một lần merge tay.
+- **Đã sửa ở đâu:** mục `P-027` (`ops/lanes/platform/backlog.md`) — kèm issue `🤖 [QĐ]`, vì cả hai phương án sửa đều chạm vùng bảo vệ: (A) bước 0 đo lại bằng `git merge-tree` trước khi tin `mergeable_state` và không gộp PR mà `git` nói là sạch — phải đi cùng `P-023`, một mình không đủ; (B) đồng hồ không tính lại vì commit gộp của bước 0 — chạm `ops/invariants.merge-gate.ts`, cửa `owner-merge`, và có thể đọc thành sửa ý nghĩa bất biến I4, tức `irreversible`.
+- **Máy chặn từ nay:** **chưa có.** Tiêu chí đầu của `P-027` là dựng phép đo trước khi sửa: một lệnh `ops/scripts/` trả lời "cửa `automerge-delayed` có chảy không" bằng số — khoảng trống đầu-nhánh-không-đổi dài nhất, số lần đặt lại, số giờ còn thiếu — đọc từ `git log --first-parent` cộng nhãn, không đọc văn xuôi trong `note`. Tới khi có phép đo đó và một bài kiểm dựng lại đúng hình dạng (PR `automerge-delayed` CI xanh + một commit gộp bước 0 → `merge-gate.ts` phải trả `merge`, kèm **ca âm** là commit có nội dung thật thì đồng hồ **phải** tính lại), KF này vẫn mở.
+
+---
+
+
+---
+
 ## Cách thêm một mục
 
 ```markdown
