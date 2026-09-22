@@ -27,9 +27,13 @@
  *
  * ## Mốc kẹt: nhị phân hoá theo lịch sử `main`, không đọc từ ghi chú log
  *
- * Số giờ kẹt nằm rải trong trường `note` (văn xuôi tiếng Việt) của
- * `ops/logs/platform/P-016.jsonl`. Đọc số ra khỏi văn xuôi là thứ hỏng im
- * lặng ngay lần đầu ai đó viết khác đi một chữ. Thay vào đó, mốc kẹt được
+ * Số giờ kẹt nằm rải trong trường `note` (văn xuôi tiếng Việt) của các dòng
+ * log bước 0 — trước mục `P-023` là một file dùng chung mang mã mục, từ
+ * `P-023` là một file cho mỗi lượt chạy (`step0LogPath` của kernel). File
+ * này **không đọc chỗ nào trong hai chỗ đó**, và đó là chủ đích: đọc số ra
+ * khỏi văn xuôi là thứ hỏng im lặng ngay lần đầu ai đó viết khác đi một
+ * chữ, còn neo vào một tên file là thứ hỏng im lặng ngay lần đầu tên file
+ * đổi — `P-023` vừa đổi nó. Thay vào đó, mốc kẹt được
  * **đo lại**: gộp thử nhánh lần lượt với từng commit gần đây của `main` và
  * tìm commit ĐẦU TIÊN làm nó xung đột. Đúng phép đo mà lượt integrator
  * `17:06Z` đã làm bằng tay cho PR #56 và ra `15:44:08Z`.
