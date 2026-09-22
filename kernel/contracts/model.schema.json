@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://crux.studio/contracts/topic/model.v0.schema.json",
-  "title": "Mô hình định lượng tái dùng — v0",
-  "description": "Cơ sở của mọi con số phái sinh (mục backlog topic/T-005, spec WP-012, Lõi định lượng mục 2). Đóng (additionalProperties: false), khác payload envelope v0 vốn cố ý để lỏng — đây là dữ liệu nội bộ của xưởng topic, không phải phong bì artifact. `verification` giữ cả bốn cấp kiểm riêng (WP-012 mục 3b) thay vì một cấp duy nhất, để trạng thái tổng hợp tính được từ điều kiện của từng cấp (mục 3c) chứ không phải một khẳng định rời không có bằng chứng đi kèm.",
+  "$id": "crux://contracts/model.schema.json",
+  "title": "Mô hình định lượng tái dùng",
+  "description": "Cơ sở của mọi con số phái sinh (mục backlog kernel/K-002, nguồn topic/T-005, spec WP-012 · Lõi định lượng mục 2). Chuyển từ workshops/topic/contracts/model.v0.schema.json sang kernel: cấu trúc một 'mô hình' (assumptions/parameters/formula/verification theo bốn cấp) trung tính với thể loại — chỉ khoá `modelId` mang tiền tố genre. Đóng (additionalProperties: false), khác payload envelope v0 vốn cố ý để lỏng. `verification` giữ cả bốn cấp kiểm riêng (WP-012 mục 3b) thay vì một cấp duy nhất, để trạng thái tổng hợp tính được từ điều kiện của từng cấp (mục 3c) chứ không phải một khẳng định rời không có bằng chứng đi kèm.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "modelId", "version", "title", "question", "assumptions", "parameters", "formula", "outputs", "verification"],

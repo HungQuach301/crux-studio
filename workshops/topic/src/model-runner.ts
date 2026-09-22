@@ -3,27 +3,22 @@
  * WP-012 mục 1-2). WP này xây **công cụ**; nội dung tám mô hình đầu tiên do
  * `topic/T-006` tạo — file này không đăng ký công thức thật nào.
  *
- * `formula` trong `model.v0.schema.json` là một KHOÁ tra vào registry hàm đã
+ * `formula` trong `model.schema.json` là một KHOÁ tra vào registry hàm đã
  * đăng ký ở bên gọi (`FormulaRegistry`), KHÔNG phải một biểu thức được
  * `eval`: cho agent ghi một chuỗi biểu thức tuỳ ý rồi thực thi nó là một bề
  * mặt chạy mã không kiểm soát được, và runner phải xác định tuyệt đối — một
  * `eval` phụ thuộc cách trình duyệt/engine JS diễn giải dấu phẩy động không
  * bảo đảm điều đó qua các phiên bản Node.
  *
- * Bất biến I3: file này chỉ được import `@crux/kernel`.
+ * Bất biến I3: file này chỉ được import `@crux/kernel`. Contract của mô hình
+ * (mục `kernel/K-002`) sống ở `kernel/contracts/model.schema.json`, không
+ * còn một bản riêng dưới `workshops/topic/contracts/` — một nguồn duy nhất,
+ * không hai file trôi khỏi nhau.
  */
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { validate, type JsonSchema, type ValidationResult } from '@crux/kernel';
+import { modelSchema, validate, type ValidationResult } from '@crux/kernel';
 
-const CONTRACTS_DIR = fileURLToPath(new URL('../contracts/', import.meta.url));
-
-function load(name: string): JsonSchema {
-  return JSON.parse(readFileSync(`${CONTRACTS_DIR}${name}`, 'utf8')) as JsonSchema;
-}
-
-export const modelSchema: JsonSchema = load('model.v0.schema.json');
+export { modelSchema };
 
 export const MODEL_SCHEMA_VERSION = 0;
 
