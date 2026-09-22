@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-004",
+  "version": "1.0",
+  "title": "Giảm trừ khi nhận trợ cấp an sinh trước tuổi hưu đầy đủ",
+  "question": "Nhận trợ cấp an sinh xã hội sớm bao nhiêu tháng thì mất bao nhiêu phần trăm, và số tiền hằng tháng còn lại là bao nhiêu?",
+  "assumptions": [
+    "Giảm trừ có hai bậc: 36 tháng đầu một tỷ lệ, các tháng vượt 36 một tỷ lệ khác. Bốn số tử/mẫu là tham số vì chúng khác nhau theo loại trợ cấp.",
+    "Bản thân người lao động dùng 5/9 của 1% cho bậc một; vợ hoặc chồng dùng 25/36 của 1%. Cả hai dùng 5/12 của 1% cho bậc hai.",
+    "Số tiền giảm trừ được làm tròn LÊN tới bội số 10 xu gần nhất rồi mới trừ vào PIA — đây là một bước của điều luật, không phải cách trình bày.",
+    "Không mô hình hoá trợ cấp goá phụ: 20 CFR 404.410(c) dùng công thức khác (nhân 0,285 rồi chia cho số tháng từ tuổi 60), không cùng dạng hai bậc.",
+    "Không tính điều chỉnh theo thu nhập khi còn đi làm, không tính delayed retirement credit cho việc nhận muộn."
+  ],
+  "parameters": [
+    {
+      "name": "primaryInsuranceAmountUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        20000
+      ],
+      "defaultValue": 980.5,
+      "source": "ecfr/20-cfr-404.410"
+    },
+    {
+      "name": "monthsBeforeFullRetirementAge",
+      "unit": "month",
+      "validRange": [
+        0,
+        72
+      ],
+      "defaultValue": 44,
+      "source": "ecfr/20-cfr-404.410"
+    },
+    {
+      "name": "firstTierNumerator",
+      "unit": "count",
+      "validRange": [
+        1,
+        100
+      ],
+      "defaultValue": 5,
+      "source": "ecfr/20-cfr-404.410"
+    },
+    {
+      "name": "firstTierDenominator",
+      "unit": "count",
+      "validRange": [
+        1,
+        100
+      ],
+      "defaultValue": 9,
+      "source": "ecfr/20-cfr-404.410"
+    },
+    {
+      "name": "secondTierNumerator",
+      "unit": "count",
+      "validRange": [
+        1,
+        100
+      ],
+      "defaultValue": 5,
+      "source": "ecfr/20-cfr-404.410"
+    },
+    {
+      "name": "secondTierDenominator",
+      "unit": "count",
+      "validRange": [
+        1,
+        100
+      ],
+      "defaultValue": 12,
+      "source": "ecfr/20-cfr-404.410"
+    }
+  ],
+  "formula": "social-security-early-reduction",
+  "outputs": [
+    {
+      "name": "reductionUsd",
+      "unit": "usd",
+      "interpretation": "Số tiền giảm trừ mỗi tháng, đã làm tròn lên tới 10 xu như điều luật yêu cầu."
+    },
+    {
+      "name": "monthlyBenefitUsd",
+      "unit": "usd",
+      "interpretation": "Trợ cấp thực nhận mỗi tháng sau giảm trừ."
+    },
+    {
+      "name": "reductionPct",
+      "unit": "percent",
+      "interpretation": "Phần trăm PIA bị mất — con số người xem nhớ được, khác với số tiền tuyệt đối."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Hai ví dụ trong điều luật khớp từng xu: $228,80 giảm trừ / $751,70 thực nhận, và $80,20 / $332,20.",
+        "tolerancePct": 0.05,
+        "evidenceRef": "workshops/topic/data/models/cases/M-004.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "SSA có máy tính trực tuyến, nhưng ssa.gov chặn truy cập từ môi trường phiên chạy (HTTP 403 qua Akamai). Ca cấp 1 vì vậy lấy từ chính điều luật trên eCFR.",
+        "benchmarkUrl": "https://www.ecfr.gov/current/title-20/chapter-III/part-404/section-404.410"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+[
+  {
+    "caseId": "irs915-example-1",
+    "params": {
+      "netBenefitsUsd": 5980,
+      "otherIncomeUsd": 28990,
+      "taxExemptInterestUsd": 0,
+      "exclusionsUsd": 0,
+      "adjustmentsUsd": 0,
+      "baseAmountUsd": 25000,
+      "secondThresholdAdderUsd": 9000
+    },
+    "expected": {
+      "taxableBenefitsUsd": 2990,
+      "provisionalIncomeUsd": 31980
+    },
+    "computedBy": "IRS Pub 915 (2025), Example 1 và 'Filled-in Worksheet 1': trợ cấp ròng $5,980, thu nhập khác $28,990 — dòng 8 ra 31,980 và 'On line 6b, you enter your taxable benefits of $2,990.'"
+  }
+]

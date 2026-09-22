@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-005",
+  "version": "1.0",
+  "title": "Khoản rút tối thiểu bắt buộc từ IRA truyền thống",
+  "question": "Một người đến tuổi phải rút tiền khỏi IRA truyền thống buộc phải rút ra bao nhiêu trong năm nay, tính từ số dư cuối năm trước?",
+  "assumptions": [
+    "Dùng Table III (Uniform Lifetime) của IRS Pub 590-B Phụ lục B. Bảng này KHÔNG nằm trong code: nó đổi khi IRS ban hành bảng mới, nên mẫu số là tham số có nguồn.",
+    "Không áp dụng khi người thụ hưởng duy nhất là vợ hoặc chồng kém hơn 10 tuổi — ca đó dùng Table II, mẫu số khác.",
+    "Số dư là số dư ngày 31 tháng 12 của năm liền trước, không phải số dư hiện tại.",
+    "Mô hình tính khoản BẮT BUỘC rút, không tính thuế phải nộp trên khoản đó và không tính khoản phạt khi rút thiếu."
+  ],
+  "parameters": [
+    {
+      "name": "priorYearEndBalanceUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        1000000000
+      ],
+      "defaultValue": 100000,
+      "source": "irs/p590b-example-table-iii"
+    },
+    {
+      "name": "applicableDenominator",
+      "unit": "year",
+      "validRange": [
+        1,
+        120
+      ],
+      "defaultValue": 24.6,
+      "source": "irs/p590b-appendix-b-table-iii"
+    }
+  ],
+  "formula": "rmd-uniform-lifetime",
+  "outputs": [
+    {
+      "name": "rmdUsd",
+      "unit": "usd",
+      "interpretation": "Số tiền tối thiểu phải rút trong năm."
+    },
+    {
+      "name": "rmdPctOfBalance",
+      "unit": "percent",
+      "interpretation": "Khoản rút tính theo phần trăm số dư — con số cho thấy tỷ lệ tăng dần theo tuổi."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Ba ví dụ của Pub 590-B khớp trong dung sai 0,2%; lệch lớn nhất 0,065% ở ca $38.400 vì IRS in $1.450 trong khi phép chia ra $1.449,06.",
+        "tolerancePct": 0.2,
+        "evidenceRef": "workshops/topic/data/models/cases/M-005.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "IRS không cung cấp máy tính RMD chính thức; nhiều công ty môi giới có. Chưa chạy đối chiếu: ba ví dụ trong chính Pub 590-B đã dùng làm ca cấp 1.",
+        "benchmarkUrl": "https://www.irs.gov/pub/irs-pdf/p590b.pdf"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}
