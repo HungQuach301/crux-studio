@@ -17,6 +17,16 @@ từng mở file này (WP-014 mục 3c: giới hạn nằm trong dữ liệu, kh
 | Phần dự trữ không được đụng (`reserveFraction`) | 0.2 | WP-014 mục 5 (luật của dự án, không phải hạn mức của nhà cung cấp) | — |
 | Số lần gọi dùng được mỗi ngày | 80 | dẫn xuất: `100 − ceil(100 × 0,2)` | — |
 
+> ⚠️ **Hai dòng đầu bảng, nhưng code chỉ tiêu thụ MỘT.** Cửa dừng `quotaGate` đọc `searchCallsPerDay` và
+> đếm **lần gọi**; nó không đếm **đơn vị**. Dòng "đơn vị mỗi lần gọi" hiện **không có bên tiêu thụ nào**
+> — `unitsPerCall` không tồn tại ở đâu trong workspace (đo 2026-09-22, giả định **G19**). Hệ quả cần
+> biết trước khi có người điền số thật: nếu Cloud Console hiển thị hạn mức theo **đơn vị** chứ không theo
+> **lần gọi**, thì giữa số đọc được và số code dùng có một **phép chia**, và phép chia đó là chỗ một sai
+> số đi vào mà không gì đỏ. Issue **#101** vì vậy xin hai số **nguyên bản như Console hiển thị**, không
+> xin số đã quy đổi — người quy đổi là agent, và bước quy đổi được ghi lại kèm ngày đọc.
+>
+> Mục `verify/VF-G19` đang `parked` cho tới khi có hai số đó (#101).
+
 Bucket của `search.list` **riêng** với bucket của `videos.insert`, nên việc xây corpus không tranh quota
 với việc đăng video. Điều đó nghĩa là một corpus chạy quá tay không làm hỏng lịch phát hành — nhưng nó
 vẫn tiêu hết phần tìm kiếm của ngày hôm đó.
