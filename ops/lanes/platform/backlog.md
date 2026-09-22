@@ -531,3 +531,26 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
   - Ghi kết quả vào `ops/known-failures.md` **KF-011**.
 - ⬜ **CÒN TREO — hai tiêu chí cuối (bản sửa cơ chế A/B và bằng chứng chạy thật của nó) CHỜ `🤖 [QĐ] #116`.** Lượt `crux-worker-3` chỉ làm phần **đo** (tiêu chí "đo trước, sửa sau" ở trên) — nó là cửa `open`, đảo ngược được, không chạm `ops/invariants.*` nên không đứng sau quyết định nào. Bản sửa cơ chế chạm `ops/invariants.merge-gate.ts` (cửa `owner-merge`) và có thể là `irreversible` (đổi ý nghĩa I4), nên KHÔNG được tự chọn A hay B: chờ câu trả lời của chủ dự án ở `#116` (đọc cả issue `#116` lẫn issue bản tin, dạng `#116 A`). Có câu trả lời thì lượt sau mở lại mục này thành `ready` để làm nốt — cùng nếp `VF-G7`/`VF-G19`. Dòng bản tin (tiêu chí 2) cũng để lượt đó làm cùng, vì `gate-flow.ts` đã sẵn sàng cấp số cho nó. Mục này KHÔNG được tự chuyển `done` khi PR đo merge — ô ⬜ này giữ nó lại (`ops/scripts/backlog-status.ts`, `HOLD_MARKERS`).
 - **mã mục nhận lúc 2026-09-22 12:4x giờ VN** (`ops/logs/README.md`, KF-005): `P-026` là mã cao nhất trên `main` **và** trên cả 18 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-027` không đụng ai.
+
+---
+
+### P-030 · Một lớp chặn mới sẽ làm đỏ 11/21 PR đang mở, và cách sửa duy nhất trong nhánh thì máy cấm agent làm
+PR `#142` (mục `KF-014`) thêm job **chặn** `no-model-name`, quét `origin/main..HEAD` để bắt tên model trong khối trailer. Luật nó thực thi là đúng (`CLAUDE.md` mục 6), phạm vi nó quét cũng đúng (`automerge.yml` merge bằng squash, nên thân mọi commit của nhánh **có** tới `main`). Nhưng nó được viết ra **sau** khi các commit vi phạm đã nằm sẵn trong lịch sử của các nhánh đang mở.
+
+Đo trên toàn bộ PR đang mở (~21:45Z, `origin/main = 5ded395`, chạy bản checker của nhánh `#142`): **28 commit vi phạm trải trên 11 / 21 PR** — `#39` `#42` `#49` `#56` `#65` `#79` `#81` `#84` `#89` `#112` `#157`. Nặng nhất `#42` (9/10 commit) và `#157` (1/1 — commit vi phạm là commit **duy nhất** của PR). Sạch: `#66` `#109` `#117` `#120` `#129` `#142` `#150` `#160` `#161` `#162`.
+
+`#142` mang nhãn `automerge-delayed`, tức **máy tự merge** sau 12 giờ CI xanh. Không ai phải bấm gì để 11 PR kia đứng lại, trên một hàng đợi vốn tuần tự và vốn đã đứng vì `automerge` 403 (issue `#152`).
+
+Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit rồi **force-push** — bị `.claude/settings.json` chặn ở `deny` (`Bash(git push --force:*)`, `Bash(git push -f:*)`). Theo `CLAUDE.md` mục 3, bị chặn không phải lỗi cần lách. Nên mục này **không** tự chọn đường: xem `🤖 [QĐ] #165`.
+
+- deps: —
+- risk: high
+- status: blocked
+- nguồn: `ops/known-failures.md` KF-017; comment 15:55Z và 17:45Z trên PR `#65`; điểm 6 của vòng soát trên PR `#112` (18:53Z); `.claude/settings.json` phần `deny`; `CLAUDE.md` mục 6 và mục 13
+- tiêu chí xong:
+  - Chốt một trong ba đường ở `🤖 [QĐ] #165`: (a) chủ dự án force-push 11 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash — lưu ý file đó là vùng `owner-merge`.
+  - Làm theo đường đã chốt, **trước khi** `#142` vào `main`. Vào sau là đo lại 11 PR rồi gỡ từng cái, đắt hơn nhiều.
+  - **Bằng chứng bằng chạy thật:** chạy checker của `#142` trên **mọi** nhánh PR đang mở, trước và sau. Trước: 11 PR đỏ. Sau: 0 PR đỏ — hoặc, nếu chọn (a), danh sách PR còn đỏ đúng bằng danh sách nhánh chưa được dựng lại, không PR nào ngoài danh sách đó.
+  - Luật chung ghi vào `ops/known-failures.md` KF-017: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
+  - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
+- **mã mục nhận lúc 2026-09-22 ~21:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-027` là mã cao nhất trên `main`, `P-028` (`#160`) và `P-029` (`#162`) đã thuộc hai PR đang mở, nên `P-030` không đụng ai.
