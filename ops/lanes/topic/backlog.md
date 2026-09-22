@@ -77,7 +77,7 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
 
 - deps: T-005
 - risk: high
-- status: ready
+- status: claimed
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
   - Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.**
