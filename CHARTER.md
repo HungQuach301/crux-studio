@@ -168,7 +168,7 @@ Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn qu
   - quá 6 giờ không có PR nào được merge trong khi backlog vẫn còn mục `ready` (mục `P-020`, chỉ dẫn 4 trên issue bản tin #17 — ngưỡng cũ là 48 giờ);
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn;
   - chi phí tích luỹ trong `ops/logs/**/*.jsonl` (bất biến I8) vượt **80%** cận dưới của ngân sách học;
-  - không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim (dòng `at` mới nhất trong `ops/logs/platform/P-016.jsonl`, ghi ở bước 0 của mọi lượt — phụ lục P1/P3) quá **3 giờ** — dấu hiệu một routine có lượt chạy lỗi hoặc đã ngừng chạy (mục `P-020`).
+  - không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim quá **3 giờ** — dấu hiệu một routine có lượt chạy lỗi hoặc đã ngừng chạy (mục `P-020`). Nhịp tim là dòng `at` mới nhất trong **các dòng log bước 0** (phụ lục P1/P3 ghi một dòng ở mọi lượt). Từ mục `P-023` các dòng đó nằm rải ở nhiều file, nên watchdog quét cả `ops/logs` rồi lọc theo trường `ref` — **không neo vào một tên file**.
 
 ### 2.5 Bản tin ngày — hộp quyết định duy nhất
 

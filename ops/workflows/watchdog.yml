@@ -121,26 +121,33 @@ jobs:
           #     Watchdog ở NGOÀI Claude nên không đọc được trực tiếp "routine
           #     nào vừa chạy, có lỗi hay không" — cách quan sát được duy nhất
           #     từ bên ngoài là NHỊP TIM: bước 0 của phụ lục P1/P3 ghi một
-          #     dòng vào đúng ops/logs/platform/P-016.jsonl ở MỌI lượt
-          #     crux-worker-<N> và MỌI lượt crux-integrator, kể cả lượt
-          #     không có PR nào xung đột (P3 bước 0d) — nên dòng `at` mới
-          #     nhất trong file đó là nhịp tim chung của cả hai loại routine.
+          #     dòng log ở MỌI lượt crux-worker-<N> và MỌI lượt
+          #     crux-integrator, kể cả lượt không có PR nào xung đột (P3
+          #     bước 0d) — nên dòng `at` mới nhất trong các dòng bước 0 là
+          #     nhịp tim chung của cả hai loại routine.
           #     Một lượt lỗi SAU khi ghi xong bước 0 vẫn để lại nhịp tim —
           #     cách này bắt được "im hẳn", không bắt được "lỗi giữa chừng
           #     nhưng vẫn kịp ghi log", đây là giới hạn đã biết, không phải
-          #     điều đã bỏ sót. `crux-digest` không ghi vào đây (không chạm
-          #     code), nhưng digest đã có dấu hiệu số 1 canh riêng ở trên.
-          HEARTBEAT_FILE="ops/logs/platform/P-016.jsonl"
-          if [ -f "$HEARTBEAT_FILE" ]; then
-            LAST_BEAT=$(jq -s -r 'map(.at) | max // empty' "$HEARTBEAT_FILE" 2>/dev/null || true)
-            if [ -z "$LAST_BEAT" ]; then
-              add "\`$HEARTBEAT_FILE\` không đọc được dòng \`at\` nào — không tính được nhịp tim của routine worker/integrator."
-            else
-              AGE_MIN=$(( (NOW - $(date -u -d "$LAST_BEAT" +%s)) / 60 ))
-              [ "$AGE_MIN" -gt 180 ] && add "Không routine \`crux-worker-*\`/\`crux-integrator\` nào ghi nhịp tim trong $AGE_MIN phút (ngưỡng 180 = 3 giờ, nhịp tim là dòng \`at\` mới nhất trong \`$HEARTBEAT_FILE\`). Có thể một routine đã lỗi hoặc đã dừng chạy."
-            fi
+          #     điều đã bỏ sót. `crux-digest` không ghi dòng bước 0 (không
+          #     chạm code), nhưng digest đã có dấu hiệu số 1 canh riêng.
+          #
+          #     KHÔNG neo vào một tên file (mục P-023, bài kiểm
+          #     `ops/test/step0-log-path.test.ts`): từ P-023 mỗi LƯỢT CHẠY
+          #     ghi một file riêng, tên do `step0LogPath()` của kernel sinh,
+          #     nên một đường dẫn cố định là cách dấu hiệu này hỏng im lặng
+          #     ngay lượt đầu tiên tên file đổi (nhóm Z). Thay vào đó quét
+          #     CẢ `ops/logs` — như dấu hiệu số 4 ở trên — rồi lọc theo
+          #     trường `ref`: `<làn>/step0-…` là hình dạng mới, còn
+          #     `platform/P-016` là các dòng bước 0 CŨ. Giữ cả hai vì log
+          #     append-only: dòng cũ ở lại nguyên chỗ (P-023), và bỏ chúng
+          #     ra thì nhịp tim mất một nguồn mà không gì đỏ.
+          LAST_BEAT=$(find ops/logs -name '*.jsonl' -exec cat {} + 2>/dev/null \
+            | jq -s -r 'map(select((.ref // "") | test("(^|/)step0-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
+          if [ -z "$LAST_BEAT" ]; then
+            add "Không đọc được dòng bước 0 nào trong \`ops/logs\` — không tính được nhịp tim của routine worker/integrator (dấu hiệu số 5, mục P-020). Hoặc chưa lượt nào ghi, hoặc hình dạng \`ref\` đã đổi."
           else
-            add "Không tìm thấy \`$HEARTBEAT_FILE\` — dấu hiệu số 5 (nhịp tim routine, mục P-020) phụ thuộc đúng file này."
+            AGE_MIN=$(( (NOW - $(date -u -d "$LAST_BEAT" +%s)) / 60 ))
+            [ "$AGE_MIN" -gt 180 ] && add "Không routine \`crux-worker-*\`/\`crux-integrator\` nào ghi nhịp tim trong $AGE_MIN phút (ngưỡng 180 = 3 giờ, nhịp tim là dòng \`at\` mới nhất trong các dòng bước 0 của \`ops/logs\`). Có thể một routine đã lỗi hoặc đã dừng chạy."
           fi
 
           if [ "$TEST" = "true" ]; then
