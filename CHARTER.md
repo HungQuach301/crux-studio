@@ -173,13 +173,14 @@ Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn qu
 
 Routine `crux-digest` chạy mỗi sáng và mở issue `🤖 [Bản tin] YYYY-MM-DD`, dài tối đa khoảng 25 dòng. Dòng đầu tiên luôn là "Cần anh quyết: N việc", kèm link tới từng issue.
 
-Từ D-C06, đây là **nơi duy nhất** chủ dự án phải mở. Bản tin chứa đủ bốn thứ để một lần đọc là đủ:
+Từ D-C06, đây là **nơi duy nhất** chủ dự án phải mở. Bản tin chứa đủ năm thứ để một lần đọc là đủ:
 
 | Phần | Nội dung | Cách trả lời |
 |---|---|---|
 | Cần anh quyết | Mỗi `irreversible` một dòng: tóm tắt · khuyến nghị · link | MỘT comment, dạng `#19 A, #14 B` |
 | Đã tự làm | Mỗi `reversible` đã làm theo khuyến nghị một dòng | `hoàn tác #N` trong vòng 24 giờ |
 | Đang chờ merge | PR `automerge-delayed` cùng số giờ còn lại | `dừng` ngay trên PR đó |
+| Tiến độ | Mục done 24 giờ · còn lại theo từng đợt · thông lượng và ngày dự kiến xong · nút thắt máy hay người · lượt chạy routine 24 giờ (`G3`) | — |
 | Thước đo | Các thước đo ở mục 1.3, **kết thúc bằng dòng "thời gian của anh"** | — |
 
 Mọi câu trả lời nằm trong **một** comment trên issue này. Agent đọc ở lượt chạy kế tiếp (độ trễ ở 2.3).
@@ -706,9 +707,13 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    số giờ kẹt và số lượt `aborted-ineligible` liên tiếp (mục P-022, đọc `ops/logs/platform/P-016.jsonl`
    bằng `readRunLogs`); PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
-   từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3.
+   từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3; và số liệu **Tiến độ**
+   (mục `platform/P-019`): số mục done 24 giờ, số mục còn lại theo từng đợt, thông lượng 3 ngày, ngày dự kiến
+   xong từng đợt, nút thắt máy hay người, và số lượt chạy routine 24 giờ. **Đừng tính tay** — gọi
+   `ops/scripts/digest-metrics.ts` (`collectMetrics` → `renderDigestMetrics`), nó tính tất cả từ backlog, log
+   và snapshot GitHub bằng mô hình có test (bất biến I6). Đợt của một mục suy từ làn theo bảng `LANE_BATCH`.
 
-3. Mở issue "🤖 [Bản tin] YYYY-MM-DD", nhãn digest, tiếng Việt, tối đa khoảng 25 dòng, theo đúng bốn phần:
+3. Mở issue "🤖 [Bản tin] YYYY-MM-DD", nhãn digest, tiếng Việt, tối đa khoảng 25 dòng, theo đúng năm phần:
 
    Cần anh quyết: N việc
      Mỗi irreversible MỘT dòng: tóm tắt · khuyến nghị · link. Không thuật ngữ chưa giải thích.
@@ -726,6 +731,15 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      tự giải được" ngay trên dòng đó, để nó không im lặng như đã từng xảy ra (nhóm Z). PR mang nhãn
      `owner-merge` mà cũng vướng ca này thì thêm cùng dạng dòng ngay dưới các dòng `automerge-delayed`,
      ghi rõ nhãn `owner-merge` để phân biệt — mục này không đợi cổng merge nào để đáng được thấy.
+
+   Tiến độ
+     Lấy thẳng từ `renderDigestMetrics` (mục `platform/P-019`). Một dòng cho tốc độ chung: số mục done 24
+     giờ và thông lượng trung bình 3 ngày. Một dòng cho mỗi đợt (Đợt 0 hạ tầng, Đợt 1 các làn song song):
+     số mục còn lại · số parked · ngày dự kiến xong (chiếu theo thông lượng của chính đợt đó, "chưa đủ dữ
+     liệu để chiếu" khi 3 ngày không mục nào done). Một dòng **nút thắt hiện tại là máy hay người** — người
+     khi có PR `owner-merge` hay quyết định đang chờ, máy khi có PR xung đột hay CI đỏ. Một dòng **số lượt
+     chạy routine trong 24 giờ** — số để kiểm giả định `G3` (trần lượt chạy mỗi ngày); đếm dòng log bước 0,
+     nên là số lượt worker cộng integrator, không gồm lượt digest.
 
    Thước đo
      Các thước đo ở CHARTER 1.3. DÒNG CUỐI CÙNG luôn là:
