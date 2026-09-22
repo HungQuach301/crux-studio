@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  joinContinuations,
   missingPermissions,
   brokenEventChains,
   subscribedEvents,
@@ -234,6 +235,131 @@ jobs:
       - run: gh pr list --state merged
 `;
   assert.deepEqual(missingPermissions(readOnly), []);
+});
+
+// ── KF-017 · Checks API là scope riêng ───────────────────────────────────
+
+test('KF-017 · `gh api .../check-runs` mà thiếu `checks: read` thì đỏ', () => {
+  // Đúng hình dạng đã làm hỏng `automerge.yml` từ 14:45Z ngày 2026-09-22:
+  // ba quyền khai ra trông rất đủ, và không quyền nào trong ba bao được
+  // scope `checks`. GitHub trả 403, `set -euo pipefail` giết cả bước, hàng
+  // đợi merge đứng im ~5,9 giờ mà không gì đỏ ngoài chính lượt automerge.
+  const broken = `name: automerge
+on: [workflow_dispatch]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  merge:
+    steps:
+      - run: |
+          FIX_HAS_TEST=$(gh api "repos/$REPO/commits/$HEAD/check-runs?per_page=100" \\
+            --jq '[.check_runs[] | select(.name == "fix-has-test")][0].conclusion // null')
+`;
+  const missing = missingPermissions(broken);
+  assert.equal(missing.length, 1, JSON.stringify(missing));
+  assert.match(missing[0]!, /checks: read/);
+  assert.match(missing[0]!, /403/);
+});
+
+test('KF-017 · khai `checks: read` thì hết đỏ, và `checks: write` cũng đủ', () => {
+  const body = `jobs:
+  merge:
+    steps:
+      - run: gh api "repos/$REPO/commits/$HEAD/check-runs?per_page=100"
+`;
+  const withRead = `name: x\non: [workflow_dispatch]\n\npermissions:\n  checks: read\n\n${body}`;
+  const withWrite = `name: x\non: [workflow_dispatch]\n\npermissions:\n  checks: write\n\n${body}`;
+  assert.deepEqual(missingPermissions(withRead), []);
+  assert.deepEqual(missingPermissions(withWrite), []);
+});
+
+test('KF-017 · `check-suites` cùng scope, và `gh pr checks` KHÔNG bị luật này bắt', () => {
+  const suites = `name: x
+on: [workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  j:
+    steps:
+      - run: gh api "repos/$REPO/commits/$SHA/check-suites"
+`;
+  assert.match(missingPermissions(suites).join(' · '), /checks: read/);
+
+  // `gh pr checks` đi qua scope `pull-requests` — luật cũ đã phủ, không
+  // được kéo nó sang `checks` và bắt workflow khai thừa quyền.
+  const prChecks = `name: x
+on: [workflow_dispatch]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  j:
+    steps:
+      - run: gh pr checks 12 --repo "$REPO"
+`;
+  assert.deepEqual(missingPermissions(prChecks), []);
+});
+
+test('KF-017 · lệnh trải nhiều dòng bằng `\\` vẫn bị bắt — vòng soát P-029', () => {
+  // Vòng soát đo 14 ca và tìm ra đúng lỗ này: mọi luật khớp trong phạm vi
+  // MỘT dòng, còn bash cho trải lệnh ra nhiều dòng. `automerge.yml` đang
+  // dùng đúng dấu `\` đó và chỉ tình cờ để URL ở dòng đầu — một lần rewrap
+  // cho dễ đọc là luật tắt tiếng và KF-017 quay lại mà không gì đỏ.
+  const head = `name: x
+on: [workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  j:
+    steps:
+      - run: |
+`;
+
+  const urlOnNextLine = `${head}          FIX=$(gh api \\
+            "repos/$REPO/commits/$HEAD/check-runs?per_page=100")
+`;
+  assert.match(missingPermissions(urlOnNextLine).join(' · '), /checks: read/);
+
+  // Lối viết `gh` thông dụng: cờ `-H` chen vào giữa, URL xuống tận dòng thứ ba.
+  const headerThenUrl = `${head}          gh api \\
+            -H "Accept: application/vnd.github+json" \\
+            "repos/$REPO/commits/$HEAD/check-runs"
+`;
+  assert.match(missingPermissions(headerThenUrl).join(' · '), /checks: read/);
+});
+
+test('joinContinuations nối đúng một dòng logic, và không đụng dòng thường', () => {
+  assert.equal(joinContinuations('a \\\n   b\n'), 'a b\n');
+  assert.equal(joinContinuations('a\nb\n'), 'a\nb\n');
+  // Nối rồi thì `permissions:` vẫn phải đọc được từ nguồn GỐC — đó là lý do
+  // `declaredPermissions` KHÔNG dùng bản đã nối (nó đọc theo thụt lề).
+  const src = `permissions:
+  checks: read
+
+jobs:
+  j:
+    steps:
+      - run: gh api \\
+          "repos/$R/commits/$S/check-runs"
+`;
+  assert.deepEqual(missingPermissions(src), []);
+});
+
+test('KF-017 · `automerge.yml` trên cây khai được `checks`', () => {
+  // Bài hồi quy neo thẳng vào file thật: luật trên có thể đúng mà file vẫn
+  // thiếu quyền, và đó chính là ca đã xảy ra.
+  const source = readFileSync(join(process.cwd(), 'ops', 'workflows', 'automerge.yml'), 'utf8');
+  assert.match(source, /\/check-runs/, 'automerge.yml không còn gọi Checks API — xem lại bài này');
+  assert.deepEqual(missingPermissions(source), []);
 });
 
 // ── Cây hiện tại phải sạch ───────────────────────────────────────────────
