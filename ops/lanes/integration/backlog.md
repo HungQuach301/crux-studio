@@ -586,3 +586,44 @@ muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bư
     ra ngoài vòng lặp, nên một PR hỏng làm tắt phép đo của 18 PR còn lại. Trả lỗi **theo từng PR** để bên
     gọi vẫn thấy phần còn lại. Không nuốt lỗi — ca hỏng phải đọc được ở đầu ra.
   - `ops/known-failures.md` `KF-015` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
+
+### I-018 · `integrator-resolve.ts` gọi một cây hỏng cú pháp là `resolved` (KF-016)
+
+`fix`. Điều kiện đủ để bước 0 trả `outcome: "resolved"` và push hiện chỉ là **không bên nào xoá dòng**
+(đếm dòng xoá ở mỗi bên so với tổ tiên chung). Phép đếm đó đúng với ý định của nó — "gộp thuần cộng thêm
+thì an toàn" — nhưng nó đo **dòng**, còn thứ phải còn nguyên là **cú pháp**.
+
+Ca đã xảy ra thật, PR `#71` ngày 2026-09-22: hai phía cùng kết thúc một khối bằng dòng `});` giống hệt
+nhau, `main` viết thêm test **sau** dòng đó. `merge=union` giữ dòng chung một lần và đặt phần thêm của
+`main` vào **trước** nó, nên `});` đóng test cuối của nhánh biến mất. Không bên nào xoá dòng nào — phép
+đếm không thấy gì — và tool in `{"outcome":"resolved","files":["ops/test/check-workflows.test.ts"]}`, thoát
+`0`. `tsc` mới bắt được: `ops/test/check-workflows.test.ts(747,1): error TS1005: '}' expected`.
+
+Hai lượt bước 0 trước đó gộp **cùng** cây này mà không thấy, vì `pnpm check` đỏ sớm hơn ở `lint:workflows`
+nên chưa chạy tới `typecheck`. Tức lớp chặn duy nhất đang đứng giữa cây hỏng và `main` là **thứ tự các
+bước trong `pnpm check`**, không phải một phép kiểm có chủ đích.
+
+Vì sao nó đáng sửa ở cơ chế chứ không vá từng lượt: union được bật cho `ops/logs/**/*.jsonl`, nơi nó an
+toàn vì JSONL không có cú pháp lồng nhau. Nhưng `integrator-resolve.ts` áp cùng phép đếm cho **mọi** file
+nó gộp được, kể cả `.ts`, `.json` và `.yml` — những định dạng mà "không ai xoá dòng" không kéo theo "kết
+quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: lượt `crux-worker-1` 2026-09-22 ~16:45Z; `ops/known-failures.md` `KF-016`; `ops/logs/platform/P-010.jsonl`
+- **Số hiệu I-018:** `I-015` do PR `#112` giữ, `I-016` đã merge, `I-017` do PR `#150` giữ.
+- tiêu chí xong:
+  - `integrator-resolve.ts` kiểm **cây gộp còn đọc được** trước khi trả `resolved`, cho những định dạng có
+    cú pháp: ít nhất `.ts`/`.js` (parse), `.json` và `.yml`/`.yaml` (nạp). Không đọc được thì trả
+    `aborted-ineligible` kèm `reason` nói rõ file nào và lỗi gì — **không** trả `resolved` rồi để `pnpm
+    check` ở phía sau bắt, vì `check` có thể dừng ở một lỗi khác trước khi tới đó.
+  - Chỉ kiểm những file **tool vừa gộp** (`files` trong kết quả), không quét cả cây: bước 0 chạy ở đầu mọi
+    lượt worker, thêm một lượt quét toàn kho vào đó là thêm chi phí cho mọi lượt.
+  - Test tái hiện lỗi (bất biến I2, CI chặn): dựng hai nhánh mà union sinh ra đúng hình dạng trên (cùng một
+    dòng đóng khối ở cuối, một bên viết thêm sau nó), gọi tool. Bài kiểm phải **đỏ** trên bản `main` hiện
+    tại (tool trả `resolved`) và **xanh** sau bản sửa (`aborted-ineligible`).
+  - Phụ lục **P3 bước 0b** của `CHARTER.md` nói rõ: một cây `resolved` mà đỏ ở **lỗi cú pháp** là ca
+    `aborted-ineligible`, không phải "PR đỏ" — hai ca này đi hai đường khác nhau ở lượt sau (phụ lục P1
+    bước 2). Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+  - `ops/known-failures.md` `KF-016` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
