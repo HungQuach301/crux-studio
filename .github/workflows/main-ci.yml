@@ -7,6 +7,15 @@ name: main-ci
 
 on:
   workflow_dispatch:
+    inputs:
+      # P-010 · chế độ chạy thử. `pnpm check` vẫn chạy đủ — đó là toàn bộ
+      # giá trị của file này — chỉ job `alert` là in ra issue nó ĐỊNH mở
+      # thay vì mở. Không có chế độ này thì mỗi lần chạy thử trên một `main`
+      # đang đỏ sẽ đẻ thêm một issue cảnh báo trùng.
+      dry_run:
+        description: 'Chạy thử: vẫn chạy pnpm check, nhưng in ra issue ĐỊNH mở thay vì mở'
+        type: boolean
+        default: false
   push:
     branches: [main]
   schedule:
@@ -42,6 +51,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - id: run
         run: pnpm check
+      # Z3 (ops/known-failures.md nhóm Z): `ops/workflows/` chỉ có hiệu lực
+      # SAU KHI sync-workflows.yml chép sang .github/workflows/. Nếu sync
+      # ngừng chạy hoặc hỏng vì PAT hết hạn, bản CŨ trong .github/ vẫn chạy
+      # và vẫn xanh — không có gì đỏ để báo điều đó. So hai thư mục ở đây.
+      #
+      # CHỈ chạy khi KHÔNG PHẢI sự kiện `push`: `push` vào main kích hoạt cả
+      # main-ci lẫn sync-workflows.yml cùng lúc, không có gì bảo đảm workflow
+      # nào xong trước — so ngay lúc đó sẽ đỏ giả sau một merge bình thường.
+      # Lịch mỗi giờ của job này (xem chú thích đầu file) đủ để bắt một lần
+      # sync hỏng thật trong vòng một giờ.
+      - name: Đối chiếu ops/workflows/ với .github/workflows/ (Z3)
+        if: github.event_name != 'push'
+        run: node ops/scripts/check-workflows-synced.ts
 
   alert:
     name: alert
@@ -68,6 +90,7 @@ jobs:
           SHA: ${{ github.sha }}
           MARKER: '<!-- crux-escalate-main-do -->'
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
           TITLE="[CẢNH BÁO] main đỏ tại ${SHA:0:7}"
@@ -87,6 +110,16 @@ jobs:
             "3. Ghi vào \`ops/known-failures.md\`, và thêm một mục \`fix\` vào backlog của làn gây lỗi." \
             "" \
             "Không sửa trực tiếp trên \`main\`. Việc sửa làm lại trên nhánh.")
+
+          # Chạy thử dừng ở đây: `pnpm check` của job `check` đã chạy thật
+          # và đã đỏ (job này chỉ chạy khi `failure()`), nên phép thử đã có
+          # kết quả. Chỉ thao tác ghi ra ngoài là bị chặn.
+          if [ "$DRY_RUN" = "true" ]; then
+            printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n────────\n%s\n' \
+              "$([ -n "$EXISTING" ] && echo "bình luận vào issue #$(echo "$EXISTING" | cut -f1)" || echo "mở issue \"$TITLE\"")" \
+              "$BODY"
+            exit 0
+          fi
 
           if [ -z "$EXISTING" ]; then
             gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
