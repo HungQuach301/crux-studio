@@ -1,0 +1,98 @@
+[
+  {
+    "caseId": "regdd-now-365d",
+    "params": {
+      "interestEarnedUsd": 61.68,
+      "principalUsd": 1000,
+      "termDays": 365
+    },
+    "expected": {
+      "apyPct": 6.17
+    },
+    "computedBy": "12 CFR phần 1030 Phụ lục A, phần A ví dụ (1): '$61.68 in interest for a 365-day year on $1,000... the annual percentage yield is 6.17%'."
+  },
+  {
+    "caseId": "regdd-cd-182d",
+    "params": {
+      "interestEarnedUsd": 30.37,
+      "principalUsd": 1000,
+      "termDays": 182
+    },
+    "expected": {
+      "apyPct": 6.18
+    },
+    "computedBy": "Cùng Phụ lục A, phần A ví dụ (2): '$30.37 in interest on a $1,000 six-month certificate... 6.18%'."
+  },
+  {
+    "caseId": "regdd-stepped-183d",
+    "params": {
+      "interestEarnedUsd": 26.68,
+      "principalUsd": 1000,
+      "termDays": 183
+    },
+    "expected": {
+      "apyPct": 5.39
+    },
+    "computedBy": "Cùng Phụ lục A, phần B ví dụ (1) tài khoản lãi bậc thang: 'the total interest for six months is $26.68... 5.39%'."
+  },
+  {
+    "caseId": "regdd-stepped-730d",
+    "params": {
+      "interestEarnedUsd": 133.13,
+      "principalUsd": 1000,
+      "termDays": 730
+    },
+    "expected": {
+      "apyPct": 6.45
+    },
+    "computedBy": "Cùng Phụ lục A, phần B ví dụ (2): 'the total interest for two years is $133.13... 6.45%'."
+  },
+  {
+    "caseId": "regdd-variable-intro",
+    "params": {
+      "interestEarnedUsd": 56.52,
+      "principalUsd": 1000,
+      "termDays": 365
+    },
+    "expected": {
+      "apyPct": 5.65
+    },
+    "computedBy": "Cùng Phụ lục A, phần C lãi suất thả nổi có ưu đãi đầu kỳ: 'the total interest for a 365-day year for a $1,000 deposit is $56.52... 5.65%'."
+  },
+  {
+    "caseId": "regdd-tier-1",
+    "params": {
+      "interestEarnedUsd": 53.9,
+      "principalUsd": 1000,
+      "termDays": 365
+    },
+    "expected": {
+      "apyPct": 5.39
+    },
+    "computedBy": "Cùng Phụ lục A, phần D bậc thứ nhất: 'the institution will pay $53.90 in interest on a $1,000 deposit... 5.39%'."
+  },
+  {
+    "caseId": "regdd-tier-2",
+    "params": {
+      "interestEarnedUsd": 452.29,
+      "principalUsd": 8000,
+      "termDays": 365
+    },
+    "expected": {
+      "apyPct": 5.65
+    },
+    "computedBy": "Cùng Phụ lục A, phần D bậc thứ hai: '$452.29 in interest on an $8,000 deposit... 5.65%'."
+  },
+  {
+    "caseId": "regdd-tier-3",
+    "params": {
+      "interestEarnedUsd": 1183.61,
+      "principalUsd": 20000,
+      "termDays": 365
+    },
+    "expected": {
+      "apyPct": 5.92
+    },
+    "computedBy": "Cùng Phụ lục A, phần D bậc thứ ba: '$1,183.61 in interest on a $20,000 deposit... 5.92%'."
+  }
+]

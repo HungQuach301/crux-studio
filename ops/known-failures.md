@@ -393,6 +393,23 @@ Cách đó **chạm vùng bảo vệ**: bất biến I8 trong CHARTER mục 3 vi
 
 ---
 
+## KF-012 · Nguồn công bố tự mâu thuẫn với chính nó, và cách đọc theo mặt chữ ra số khác cách đọc theo ví dụ
+
+- **Lần gặp:** 2 — cả hai trong một lượt của `topic/T-006`, trên hai cơ quan khác nhau.
+- **Chữ ký:** một văn bản công bố chứa **cả** một câu quy tắc **lẫn** một ví dụ tính sẵn, và áp quy tắc theo đúng mặt chữ vào chính dữ liệu của ví dụ thì ra một con số **khác** con số ví dụ in ra.
+- **Hai lần đã gặp:**
+  - **TreasuryDirect**, trang *I bonds interest rates*: câu mở đầu ghi lãi suất tổng hợp đợt tháng 11-2025 là **4,03%**, còn khối "An example" ngay dưới lấy 0,90% và 1,67% rồi tự tính từng bước ra **4,26%**.
+  - **IRS Pub 590-A**, Worksheet 1-2: câu hướng dẫn dòng 4 nói làm tròn lên tới bội số $10, còn ví dụ điền sẵn của cùng tài liệu in **$6.825** — không phải bội số của $10. Theo mặt chữ thì ô đó phải là $6.830, và khấu trừ cuối đổi theo.
+- **Nguyên nhân gốc:** giả định ngầm rằng "một nguồn uy tín là **một** sự thật". Không phải: một trang hay một tài liệu là **nhiều** khẳng định được cập nhật ở **nhiều** thời điểm khác nhau. Câu tóm tắt ở đầu trang và khối ví dụ ở giữa trang có vòng đời riêng, và không ai kiểm chéo chúng với nhau. Bất biến I6 ("mọi con số hiển thị có nguồn hoặc có mô hình") nói con số phải **có** nguồn, nhưng không nói gì về việc nguồn đó có tự nhất quán không.
+- **Vì sao nó đặc biệt nguy hiểm ở dự án này:** đây là **nhóm Z** — hỏng mà mọi chỉ báo đều xanh. Ca kiểm vẫn khớp, `pnpm check` vẫn xanh, `claimId` vẫn trỏ đúng một URL có thật. Chỉ con số lên video là sai, và nó sai theo cách một người xem đọc kỹ sẽ bắt được còn CI thì không bao giờ. Bằng chứng công sức của kênh nằm đúng ở chỗ này.
+- **Đã sửa ở đâu — không vá sản phẩm:** luật đọc nguồn, ghi thành ba câu và áp từ `T-006` trở đi:
+  1. **Ưu tiên ví dụ tính sẵn hơn câu quy tắc.** Ví dụ tính sẵn là thứ kiểm được từng bước; câu quy tắc là thứ diễn giải được nhiều cách. Khi hai thứ lệch nhau, ca kiểm cấp 1 bám ví dụ.
+  2. **Mâu thuẫn được ghi vào `assumptions` của chính file mô hình**, bằng lời, kèm cả hai con số và biên độ chênh lệch — không ghi vào chỗ khác, vì Fact & Risk Pass đọc `assumptions`.
+  3. **Một con số nằm trong vùng mâu thuẫn thì không được lên video** cho tới khi có nguồn thứ hai xác nhận. Mô hình vẫn dùng được cho mọi vùng khác.
+- **Máy chặn từ nay:** chưa có máy chặn, và **không thể có** bằng kiểm tra tĩnh — muốn tự phát hiện thì phải đọc hiểu văn bản nguồn, tức là chính cấp kiểm 4 (`llm-assumption-check`) vốn đang chờ `platform/P-003`. Tới lúc đó, lớp chặn là con người: Fact & Risk Pass đọc `assumptions` trước khi phát hành, và mục `editorial/E-002` là chỗ luật này phải trở thành một bước có tên.
+
+---
+
 ## Cách thêm một mục
 
 ```markdown

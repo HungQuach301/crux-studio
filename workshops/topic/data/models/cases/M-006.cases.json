@@ -1,0 +1,14 @@
+[
+  {
+    "caseId": "treasurydirect-example",
+    "params": {
+      "fixedRatePct": 0.9,
+      "semiannualInflationRatePct": 1.67
+    },
+    "expected": {
+      "compositeRatePct": 4.26,
+      "compositeRateUnroundedPct": 4.25503
+    },
+    "computedBy": "TreasuryDirect, trang 'I bonds interest rates', khối 'An example': '[0.0090 + (2 x 0.0167) + (0.0090 x 0.0167)]... Adding the parts gives 0.0425503. Rounding gives 0.0426... a composite rate of 4.26%.'"
+  }
+]
