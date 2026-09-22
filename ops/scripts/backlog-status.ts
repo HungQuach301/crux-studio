@@ -152,8 +152,11 @@ export function hasHoldMarker(body: string): boolean {
  *    `- deps: V-003 · bộ công cụ đã có ở …` — dấu `·` ở đó ngăn mã mục với
  *    lời giải thích, không ngăn hai phần phụ thuộc. Cắt ở `·` sẽ sinh ra một
  *    đoạn toàn lời văn, không tra được, và `V-004` sẽ chờ vĩnh viễn.
- * 2. **Mỗi đoạn lấy mã ĐẦU TIÊN.** Nhờ đó lời giải thích đi kèm trong cùng
- *    đoạn không ảnh hưởng gì.
+ * 2. **Mỗi đoạn lấy MỌI mã trong đoạn**, không phải mã đầu tiên. Một đoạn
+ *    viết `I-013 và I-014` phải ra hai phần phụ thuộc: chỉ lấy mã đầu là
+ *    lệch về hướng nguy hiểm — mở khoá một mục trong khi một nền móng khác
+ *    của nó chưa xong. Đoạn chỉ có một mã kèm lời giải thích vẫn ra đúng
+ *    một phần, nên lời giải thích không ảnh hưởng gì.
  *
  * Đoạn không chứa mã nào giữ `id: null` — bên gọi coi đó là **chưa xong**
  * chứ không bỏ qua, xem `readyQueue`.
@@ -362,19 +365,33 @@ export function readyQueue(
     items: parseBacklog(backlog.content),
   }));
 
-  const index = new Map<string, { lane: string; id: string; satisfied: boolean }>();
+  const index = new Map<string, { lane: string; id: string; satisfied: boolean; duplicate: boolean }>();
   const duplicateIds: string[] = [];
   for (const { lane, items } of parsed) {
     for (const item of items) {
       const seen = index.get(item.id);
       if (seen !== undefined) {
         // `deps` không phân giải theo làn, nên hai làn dùng chung một mã là
-        // ca mở khoá nhầm mà không gì đỏ. Hôm nay chưa có ca nào; in ra để
-        // ngày có thì nó không im lặng.
+        // ca mở khoá nhầm mà không gì đỏ. In ra để nó không im lặng — VÀ
+        // đánh dấu mã đó là trùng.
+        //
+        // Vì sao đánh dấu chứ không chỉ in: `deps: <mã>` lúc này không xác
+        // định trỏ mục nào, nên lấy mục gặp trước mà mở khoá là đoán, và
+        // đoán theo đúng hướng nguy hiểm — mục gặp trước `done` thì mục phụ
+        // thuộc vào `readyNow` trong khi mục cùng mã ở làn kia còn `ready`.
+        // Cùng luật thận trọng một hướng với mọi nhánh khác của hàm này:
+        // chưa chắc thì coi là CHƯA xong. Đoán sai theo hướng này tốn một
+        // nhịp; đoán sai theo hướng kia nhận một mục mà nền móng chưa có.
         duplicateIds.push(`${seen.lane}/${item.id} ↔ ${lane}/${item.id}`);
+        seen.duplicate = true;
         continue;
       }
-      index.set(item.id, { lane, id: item.id, satisfied: isSatisfied(item, lane, subjects) });
+      index.set(item.id, {
+        lane,
+        id: item.id,
+        satisfied: isSatisfied(item, lane, subjects),
+        duplicate: false,
+      });
     }
   }
 
@@ -398,6 +415,10 @@ export function readyQueue(
         const target = lookup(dep.id);
         if (target === undefined) {
           waitingOn.push(`${dep.id} (không có mục này)`);
+          continue;
+        }
+        if (target.duplicate) {
+          waitingOn.push(`${dep.id} (mã trùng giữa hai làn)`);
           continue;
         }
         // In mã mục THẬT (`verify/VF-G7`), không in mã như `deps` viết

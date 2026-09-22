@@ -484,6 +484,55 @@ test('readyQueue: hai làn dùng chung một mã thì in ra, không im lặng', 
   assert.deepEqual(queue.duplicateIds, ['alpha/D-040 ↔ beta/D-040']);
 });
 
+test('readyQueue: mã trùng giữa hai làn KHÔNG mở khoá mục phụ thuộc', () => {
+  // Ca tái hiện lỗi do vòng soát ngữ cảnh sạch của PR #112 tìm ra.
+  //
+  // `deps` không phân giải theo làn. Trước bản sửa, mục gặp TRƯỚC thắng chỗ
+  // trong index và mục cùng mã ở làn sau bị `continue` bỏ qua — nên
+  // `beta/D-052` (deps: D-051) được mở khoá nhờ `alpha/D-051` đã vào `main`,
+  // trong khi `beta/D-051` — nền móng thật của nó — còn `ready`.
+  //
+  // Đó là đúng hướng lệch nguy hiểm mà chính file này dựng lên để tránh:
+  // nhận một mục mà nền móng của nó chưa có. Chưa chắc thì coi là CHƯA xong.
+  const queue = readyQueue(
+    [
+      { lane: 'alpha', content: '### D-051 · Mục của alpha\n- deps: —\n- status: review\n' },
+      {
+        lane: 'beta',
+        content: [
+          '### D-051 · Mục trùng mã ở beta, CHƯA xong',
+          '- deps: —',
+          '- status: ready',
+          '',
+          '### D-052 · Mục phụ thuộc D-051',
+          '- deps: D-051',
+          '- status: ready',
+          '',
+        ].join('\n'),
+      },
+    ],
+    ['[alpha] D-051 — xong (#1)'],
+  );
+
+  assert.deepEqual(queue.duplicateIds, ['alpha/D-051 ↔ beta/D-051']);
+  assert.deepEqual(
+    queue.readyNow.map((e) => `${e.lane}/${e.id}`),
+    ['beta/D-051'],
+    '`beta/D-052` KHÔNG được vào readyNow khi mã `D-051` còn trùng giữa hai làn',
+  );
+  const blocked = queue.blocked.find((e) => e.id === 'D-052');
+  assert.deepEqual(blocked?.waitingOn, ['D-051 (mã trùng giữa hai làn)']);
+});
+
+test('parseDeps: một đoạn có NHIỀU mã ra đủ từng phần, không chỉ mã đầu', () => {
+  // Chốt điều mà chú thích của `parseDeps` khai: lấy MỌI mã trong đoạn.
+  // Chỉ lấy mã đầu sẽ bỏ quên `I-014` và mở khoá sớm một nhịp.
+  assert.deepEqual(
+    parseDeps('I-013 và I-014').map((d) => d.id),
+    ['I-013', 'I-014'],
+  );
+});
+
 test('readMainSubjects: kho NÔNG thì ném, không trả danh sách cụt', () => {
   // Ca thật đã đo ngày 2026-09-22: phiên cloud clone nông, `git log` đọc
   // được 50 trên 86 tiêu đề, và 6 mục đã `done` không thấy commit của mình.
