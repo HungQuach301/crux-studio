@@ -319,14 +319,60 @@ export function prHeadRef(number: number): string {
 }
 
 /**
+ * Kho phiên là **shallow** thì làm nó đầy TRƯỚC khi đo — mục `I-017`,
+ * `ops/known-failures.md` `KF-015`.
+ *
+ * Trên kho nông, `git merge-tree --write-tree` không tìm được tổ tiên chung
+ * (nó nằm ngoài phần lịch sử đã tải) nên một nhánh gộp **sạch** ra
+ * `fatal: refusing to merge unrelated histories` (thoát 128) — đúng mã thoát
+ * mà `branchConflicts` coi là hỏng thật rồi ném. Phép đo "không tin API, đo
+ * lại bằng chạy thật" ở đầu file chỉ đúng khi lịch sử đầy đủ; độ sâu lịch sử
+ * là cùng một loại phụ thuộc với `main` mà `fetchProbeRefs` đã nhận trách
+ * nhiệm, chỉ chưa được nhận (I-017).
+ *
+ * Ném — chứ không đo tiếp trên lịch sử thiếu — nếu không unshallow được: một
+ * phép đo sai ở đây đi thẳng vào bản tin và vào comment gửi chủ dự án
+ * (`KF-015` lần đầu đã sinh một comment báo động sai đòi force-push).
+ */
+function ensureComplete(cwd: string, remote: string): void {
+  const shallow = git(cwd, ['rev-parse', '--is-shallow-repository']);
+  if (shallow.error !== undefined || shallow.status !== 0) {
+    throw new Error(
+      `Không kiểm được kho có shallow không (${cwd}): ${shallow.error?.message ?? shallow.stderr.trim()}`,
+    );
+  }
+  if (shallow.stdout.trim() !== 'true') return;
+
+  const unshallow = git(cwd, ['fetch', '--unshallow', '--no-tags', '--quiet', remote]);
+  if (unshallow.error !== undefined || unshallow.status !== 0) {
+    throw new Error(
+      `Kho đang shallow và không unshallow được từ \`${remote}\` — không đo xung đột trên lịch sử thiếu (KF-015): ${unshallow.error?.message ?? unshallow.stderr.trim()}`,
+    );
+  }
+  // Xác nhận đã hết shallow bằng chạy thật, không tin một mình mã thoát của
+  // `--unshallow`: còn shallow thì tổ tiên chung vẫn có thể thiếu.
+  const after = git(cwd, ['rev-parse', '--is-shallow-repository']);
+  if (after.error !== undefined || after.status !== 0 || after.stdout.trim() === 'true') {
+    throw new Error(
+      `Kho vẫn shallow sau \`git fetch --unshallow ${remote}\` — không đo xung đột trên lịch sử thiếu (KF-015).`,
+    );
+  }
+}
+
+/**
  * Nạp `main` **và** đầu của các PR về kho cục bộ, trong **một** lần
  * `git fetch`.
  *
  * `main` đi cùng chuyến chứ không để bên gọi tự lo: dò mốc kẹt trên một
  * `origin/main` cũ cho ra một con số trông hợp lý và sai — PR đã được gỡ
  * xung đột vẫn hiện trên bản tin, PR vừa kẹt thì chưa. Đúng nhóm Z.
+ *
+ * Kho nông cũng là một `origin/main` "sai" theo cùng nghĩa đó, chỉ sai ở độ
+ * sâu chứ không ở mốc — nên `ensureComplete` chạy TRƯỚC lần fetch này
+ * (`I-017`, `KF-015`).
  */
 export function fetchProbeRefs(cwd: string, numbers: readonly number[], remote = 'origin'): void {
+  ensureComplete(cwd, remote);
   const specs = [
     '+refs/heads/main:refs/remotes/origin/main',
     ...numbers.map((n) => `+refs/pull/${n}/head:${prHeadRef(n)}`),
@@ -338,8 +384,27 @@ export function fetchProbeRefs(cwd: string, numbers: readonly number[], remote =
 }
 
 /**
+ * Một PR mà phép dò **hỏng** — mã thoát của `merge-tree` ngoài `0`/`1`, ref
+ * chưa nạp về, v.v. Khác hẳn `null` (dò xong, PR gộp sạch): một PR hỏng là
+ * một PR **chưa biết**, không phải một PR sạch.
+ */
+export interface ConflictProbeError {
+  /** Lý do không dò được, nguyên văn — không nuốt, phải đọc được ở đầu ra. */
+  error: string;
+}
+
+/** Kết quả dò một PR: mốc kẹt, `null` (gộp sạch), hoặc lỗi dò riêng PR đó. */
+export type ConflictProbe = ConflictOrigin | null | ConflictProbeError;
+
+/** Phân biệt "dò hỏng" với "dò xong" (mốc kẹt hoặc `null` gộp sạch). */
+export function isProbeError(probe: ConflictProbe): probe is ConflictProbeError {
+  return probe !== null && typeof probe === 'object' && 'error' in probe;
+}
+
+/**
  * Mốc kẹt của **mọi** PR trong danh sách — khoá là số PR, giá trị `null`
- * nghĩa là PR đó không xung đột với đầu `main`.
+ * nghĩa là PR đó không xung đột với đầu `main`, một `ConflictProbeError`
+ * nghĩa là **không dò được riêng PR đó**.
  *
  * Dò tất cả chứ không chỉ những PR mà API gọi là `CONFLICTING`: xem ghi chú
  * "Không tin `mergeable` của API" ở đầu file.
@@ -347,17 +412,31 @@ export function fetchProbeRefs(cwd: string, numbers: readonly number[], remote =
  * Nạp `main` và đầu các PR về trước khi dò. Bỏ bước đó thì `git merge-tree` báo
  * "not a valid object name" cho mọi PR mở sau lần clone gần nhất, tức là
  * đúng những PR mới nhất — và mục này im lặng ở chỗ nó phải lên tiếng.
+ *
+ * **Một PR hỏng không làm tắt cả mẻ** (`I-017`): `probeConflictOrigin` ném khi
+ * `merge-tree` thoát ngoài `0`/`1` (ca `KF-015` là một ví dụ). Trước đây lỗi
+ * đó ném ra ngoài vòng lặp, nên một PR hỏng nuốt luôn phép đo của mọi PR còn
+ * lại. Nay lỗi được bắt **theo từng PR**: ghi ra `stderr` để đọc được ở đầu
+ * ra, ghi vào map dưới dạng `ConflictProbeError`, rồi đo tiếp PR sau. Lỗi ở
+ * tầng cả mẻ (`fetchProbeRefs`, `recentMainCommits`) vẫn ném — đó là hỏng
+ * chung, không phải hỏng của một PR.
  */
 export function measureConflicts(
   cwd: string,
   numbers: readonly number[],
   mainRef = 'origin/main',
-): Map<number, ConflictOrigin | null> {
+): Map<number, ConflictProbe> {
   fetchProbeRefs(cwd, numbers);
   const commits = recentMainCommits(cwd, mainRef);
-  const origins = new Map<number, ConflictOrigin | null>();
+  const origins = new Map<number, ConflictProbe>();
   for (const number of numbers) {
-    origins.set(number, probeConflictOrigin(cwd, prHeadRef(number), commits));
+    try {
+      origins.set(number, probeConflictOrigin(cwd, prHeadRef(number), commits));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`PR #${number}: không dò được mốc kẹt, đo tiếp PR sau — ${message}\n`);
+      origins.set(number, { error: message });
+    }
   }
   return origins;
 }

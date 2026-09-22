@@ -28,6 +28,8 @@ import {
   conflictOrigin,
   conflictRows,
   hoursBetween,
+  isProbeError,
+  measureConflicts,
   prHeadRef,
   probeConflictOrigin,
   recentMainCommits,
@@ -339,5 +341,105 @@ test('recentMainCommits NÉM khi git thoát 0 nhưng không cho commit nào', ()
     assert.throws(() => recentMainCommits(root, 'main', 0), /không cho commit nào/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── measureConflicts qua remote thật (mục I-017, KF-015) ─────────────────────
+//
+// Hai bài dưới đây chạm cả `git fetch` lẫn `git clone`, nên chúng dựng một
+// kho **upstream** thật trong thư mục tạm rồi clone ra — không giả lập
+// remote. Điều I-017 khẳng định là "kho nông làm phép đo ra ngược", và một
+// bản giả lập chỉ khẳng định lại chính giả định đang cần kiểm (cùng lý do
+// makeRepo ở trên không giả lập `spawnSync`).
+
+/**
+ * Upstream có `main` (c1→c3) và hai `refs/pull/<n>/head`:
+ *  - PR 1 (`feat`): rẽ ra ở c1, chỉ **thêm** file — gộp sạch với đầu `main`
+ *    khi lịch sử ĐẦY ĐỦ; nhưng trên kho nông, tổ tiên chung c1 nằm ngoài
+ *    phần đã tải nên `merge-tree` ra `refusing to merge unrelated histories`.
+ *  - PR 2 (`orphan`): lịch sử gốc **riêng**, không có tổ tiên chung với
+ *    `main` kể cả khi đầy đủ — `merge-tree` thoát 128 thật, dùng để kiểm một
+ *    PR hỏng không làm tắt cả mẻ.
+ */
+function makeUpstream(): string {
+  const up = mkdtempSync(join(tmpdir(), 'crux-upstream-'));
+  git(up, 'init', '--quiet', '--initial-branch=main');
+  git(up, 'config', 'user.email', 'test@example.com');
+  git(up, 'config', 'user.name', 'Test');
+
+  writeFileSync(join(up, 'shared.txt'), 'dòng một\ndòng hai\n');
+  git(up, 'add', '.');
+  git(up, 'commit', '--quiet', '-m', 'c1');
+
+  git(up, 'checkout', '--quiet', '-b', 'feat');
+  writeFileSync(join(up, 'them.txt'), 'thuần cộng thêm\n');
+  git(up, 'add', '.');
+  git(up, 'commit', '--quiet', '-m', 'feat: chỉ thêm file, gộp sạch');
+  git(up, 'update-ref', 'refs/pull/1/head', 'refs/heads/feat');
+
+  git(up, 'checkout', '--quiet', '--orphan', 'orphan');
+  git(up, 'rm', '--quiet', '-rf', '.');
+  writeFileSync(join(up, 'goc-rieng.txt'), 'lịch sử gốc riêng\n');
+  git(up, 'add', '.');
+  git(up, 'commit', '--quiet', '-m', 'orphan: gốc riêng, không tổ tiên chung');
+  git(up, 'update-ref', 'refs/pull/2/head', 'refs/heads/orphan');
+
+  git(up, 'checkout', '--quiet', 'main');
+  writeFileSync(join(up, 'khac.txt'), 'không liên quan\n');
+  git(up, 'add', '.');
+  git(up, 'commit', '--quiet', '-m', 'c2');
+  writeFileSync(join(up, 'shared.txt'), 'dòng một\ndòng hai\ndòng ba\n');
+  git(up, 'commit', '--quiet', '-am', 'c3 — thêm dòng, không đụng phần feat/orphan');
+
+  return up;
+}
+
+test('KF-015: kho nông báo "xung đột" cho nhánh gộp sạch — unshallow trước khi đo mới đúng', () => {
+  // ĐỎ trên bản `main` cũ: `measureConflicts` ném `refusing to merge
+  // unrelated histories` (128) trên kho nông. XANH sau bản sửa:
+  // `fetchProbeRefs` unshallow trước, PR gộp sạch ra `null`.
+  const up = makeUpstream();
+  const clone = mkdtempSync(join(tmpdir(), 'crux-shallow-'));
+  rmSync(clone, { recursive: true, force: true });
+  try {
+    execFileSync('git', ['clone', '--quiet', '--depth=1', `file://${up}`, clone]);
+    assert.equal(
+      execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: clone, encoding: 'utf8' }).trim(),
+      'true',
+      'điều kiện bài kiểm: clone phải nông',
+    );
+
+    const origins = measureConflicts(clone, [1], 'origin/main');
+    assert.equal(origins.get(1), null, 'PR chỉ thêm file phải là gộp sạch, không phải "xung đột" của kho nông');
+    assert.equal(
+      execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: clone, encoding: 'utf8' }).trim(),
+      'false',
+      'đo xong thì kho không còn nông',
+    );
+  } finally {
+    rmSync(up, { recursive: true, force: true });
+    rmSync(clone, { recursive: true, force: true });
+  }
+});
+
+test('một PR hỏng (thoát 128) không làm tắt phép đo của PR còn lại', () => {
+  // ĐỎ trên bản `main` cũ: lỗi 128 của PR orphan ném ra ngoài vòng lặp, cả
+  // `measureConflicts` chết theo, PR 1 mất kết quả. XANH sau bản sửa: lỗi
+  // bắt theo từng PR — PR 1 vẫn ra `null`, PR 2 ra `ConflictProbeError`.
+  const up = makeUpstream();
+  const clone = mkdtempSync(join(tmpdir(), 'crux-batch-'));
+  rmSync(clone, { recursive: true, force: true });
+  try {
+    execFileSync('git', ['clone', '--quiet', `file://${up}`, clone]);
+
+    const origins = measureConflicts(clone, [2, 1], 'origin/main');
+
+    assert.equal(origins.get(1), null, 'PR gộp sạch vẫn được đo dù PR trước nó trong mẻ hỏng');
+    const bad = origins.get(2);
+    assert.ok(bad !== undefined && isProbeError(bad), 'PR orphan phải ra lỗi dò riêng, không phải null (gộp sạch)');
+    assert.match((bad as { error: string }).error, /unrelated histories|thoát/);
+  } finally {
+    rmSync(up, { recursive: true, force: true });
+    rmSync(clone, { recursive: true, force: true });
   }
 });
