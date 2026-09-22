@@ -257,26 +257,36 @@ export function renderGateFlowVerdict(verdict: GateFlowVerdict, delayHours: numb
 // ── Phần chạm git ────────────────────────────────────────────────────────
 
 /**
- * Mốc mỗi lần đổi đầu nhánh của một PR, MỚI TRƯỚC CŨ SAU, đọc bằng
- * `git log --first-parent --format=%cI` trên `refs/pull/<n>/head`.
+ * Mốc mỗi lần đổi đầu nhánh **của riêng PR**, MỚI TRƯỚC CŨ SAU, đọc bằng
+ * `git log --first-parent --format=%cI <mainRef>..<refs/pull/<n>/head>`.
  *
- * `--first-parent` để một commit gộp `main` của bước 0 tính đúng **một**
- * lần đổi đầu nhánh, không kéo theo cả lịch sử `main` vừa gộp vào. Ném khi
- * git hỏng: một mảng rỗng ở đây cho ra "PR không đổi đầu nhánh lần nào",
- * tức đánh giá sai là PR đã đứng yên — đúng nhóm Z.
+ * Hai luật thiết kế, cả hai đều là chỗ dễ làm sai:
+ *
+ * 1. **`--first-parent`** để một commit gộp `main` của bước 0 tính đúng
+ *    **một** lần đổi đầu nhánh, không kéo theo cả lịch sử `main` vừa gộp.
+ * 2. **`<mainRef>..`** để chỉ đếm commit **thuộc riêng PR**, cắt bỏ tổ tiên
+ *    chung với `main`. Bỏ khoảng này thì `--first-parent` đi tiếp qua điểm
+ *    rẽ nhánh vào lịch sử của `main` (tới đáy `depth`), nên `clockResets`
+ *    đếm cả commit nền/`main` vốn chưa bao giờ là một lần push lên PR, và
+ *    một khoảng trống dài trong lịch sử `main` có thể làm `everReachedThreshold`
+ *    đúng sai — che tín hiệu KF-011 ở đúng nhịp thưa 1–2 lần/ngày (D-C06).
+ *
+ * Ném khi git hỏng hoặc PR không có commit nào ngoài `main`: một mảng rỗng
+ * ở đây cho ra "PR không đổi đầu nhánh lần nào", tức đánh giá sai là PR đã
+ * đứng yên — đúng nhóm Z.
  */
-export function prHeadChanges(cwd: string, number: number, depth = HEAD_LOG_DEPTH): string[] {
+export function prHeadChanges(cwd: string, number: number, mainRef = 'origin/main', depth = HEAD_LOG_DEPTH): string[] {
   const ref = prHeadRef(number);
-  const result = git(cwd, ['log', '--first-parent', `--max-count=${depth}`, '--format=%cI', ref]);
+  const result = git(cwd, ['log', '--first-parent', `--max-count=${depth}`, '--format=%cI', `${mainRef}..${ref}`]);
   if (result.error !== undefined || result.status !== 0) {
-    throw new Error(`Không đọc được lịch sử đầu nhánh của PR #${number} (${ref}): ${result.error?.message ?? result.stderr}`);
+    throw new Error(`Không đọc được lịch sử đầu nhánh của PR #${number} (${mainRef}..${ref}): ${result.error?.message ?? result.stderr}`);
   }
   const commits = result.stdout
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   if (commits.length === 0) {
-    throw new Error(`\`git log ${ref}\` không cho commit nào — không đo được đầu nhánh của PR #${number}.`);
+    throw new Error(`\`git log ${mainRef}..${ref}\` không cho commit nào — PR #${number} không có commit nào ngoài \`${mainRef}\`, không đo được đầu nhánh.`);
   }
   return commits;
 }
@@ -298,13 +308,14 @@ export function measureGateFlow(
   prs: readonly PrLabelInput[],
   now: string,
   delayHours: number,
+  mainRef = 'origin/main',
 ): { rows: GateFlowRow[]; verdict: GateFlowVerdict } {
   fetchProbeRefs(cwd, prs.map((pr) => pr.number));
   const inputs: GateFlowInput[] = prs.map((pr) => ({
     number: pr.number,
     title: pr.title,
     labels: pr.labels,
-    headChangesNewestFirst: prHeadChanges(cwd, pr.number),
+    headChangesNewestFirst: prHeadChanges(cwd, pr.number, mainRef),
   }));
   const rows = gateFlowRows(inputs, now, delayHours);
   return { rows, verdict: gateFlowVerdict(rows) };

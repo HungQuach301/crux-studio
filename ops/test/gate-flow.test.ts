@@ -293,15 +293,15 @@ function makeRepo(): string {
   return root;
 }
 
-test('prHeadChanges: đọc --first-parent, mới trước cũ sau, và commit gộp main chỉ là MỘT lần đổi đầu nhánh', () => {
+test('prHeadChanges: chỉ đếm commit RIÊNG của PR (main..head), commit gộp main là MỘT lần đổi đầu nhánh', () => {
   const root = makeRepo();
   try {
-    const commits = prHeadChanges(root, 7);
-    // Dòng first-parent của feat: commit gộp, B, A, c1 (base) → 4. Commit
-    // `c2 main` KHÔNG được đếm (nó là cha THỨ HAI của commit gộp). Không có
-    // `--first-parent` thì là 5 — nên con số 4 chính là bằng chứng lịch sử
-    // main vừa gộp không bị kéo vào đếm.
-    assert.equal(commits.length, 4, 'commit gộp main không kéo theo lịch sử main (c2 bị loại)');
+    const commits = prHeadChanges(root, 7, 'main');
+    // `main..feat` theo first-parent: commit gộp, B, A → 3. Commit nền
+    // `c1 main` (tổ tiên chung, có trong main) và `c2 main` (cha thứ hai của
+    // commit gộp) đều KHÔNG được đếm. Không có `main..` thì c1 lọt vào (4);
+    // nên con số 3 là bằng chứng lịch sử main không bị đếm là "đổi đầu nhánh".
+    assert.equal(commits.length, 3, 'chỉ commit riêng của PR: gộp, B, A — nền main bị cắt');
     // Mới trước cũ sau: commit đầu tiên (gộp) mới hơn commit cuối (A).
     assert.ok(Date.parse(commits[0]!) >= Date.parse(commits[commits.length - 1]!));
   } finally {
@@ -309,10 +309,10 @@ test('prHeadChanges: đọc --first-parent, mới trước cũ sau, và commit g
   }
 });
 
-test('prHeadChanges: ref không có commit nào thì NÉM, không trả mảng rỗng (nhóm Z)', () => {
+test('prHeadChanges: ref không có commit riêng nào thì NÉM, không trả mảng rỗng (nhóm Z)', () => {
   const root = makeRepo();
   try {
-    assert.throws(() => prHeadChanges(root, 999), /Không đọc được lịch sử|không cho commit nào/);
+    assert.throws(() => prHeadChanges(root, 999, 'main'), /Không đọc được lịch sử|không cho commit nào/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
