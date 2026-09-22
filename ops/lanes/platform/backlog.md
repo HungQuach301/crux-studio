@@ -426,7 +426,7 @@ Mỗi lượt integrator và mỗi lượt worker ghi một dòng bước 0 vào
   5. **Thiếu mã giả định `G17` tại chỗ** (CLAUDE.md mục 7). Đã ghi `G17` vào khối doc của `kernel/src/log.ts` và thêm hai file vào cột *Phần phụ thuộc* của `G17` trong `docs/assumptions.md`, kèm một câu nói rõ quan hệ là **được thúc đẩy bởi** chứ không phải **phụ thuộc vào**: G17 có hết `sai` thì hình dạng này vẫn đúng, chỉ bớt cấp bách.
 - **Vòng soát chéo nêu thêm một rủi ro vận hành, đáng một mục riêng:** `ops/logs/integration/` sẽ **phình theo tốc độ sinh** — mỗi lượt worker và mỗi lượt integrator đẻ một file, và `readRunLogs` đọc **mọi** file mỗi lần bản tin hay metrics chạy. Với 2 worker mỗi giờ cộng integrator, đó là hàng chục file mỗi ngày. Mục này cố ý không giải: gom (rollup) và giữ (retention) là một thiết kế riêng, và đánh đổi sai ở đó sẽ làm mất dữ liệu chi phí. Bullet dưới đây nói về **hình dạng cũ**; cái này nói về **tốc độ sinh** — hai việc khác nhau.
 - **Còn treo, không làm ở đây để khỏi trộn phạm vi:** các file hình dạng cũ (`integration/P3-run-*`, `integration/P3-daily-*`, `platform/P1-step0-*`) ở lại nguyên — append-only. Chúng không sinh thêm, nhưng cũng chưa có gì **chặn** một routine ghi lại theo hình dạng cũ: `misfiledLogLines` chỉ hỏi `lane` và `ref` có khớp tên file không, không hỏi tên file có đúng hình dạng lượt chạy không. Đáng một mục `platform` riêng khi các dòng cũ đã rơi khỏi mọi cửa sổ thời gian đang dùng.
-- **mã mục nhận trước lúc 2026-09-22 04:1x giờ VN** (`ops/logs/README.md`, KF-005): `P-022` là mã cao nhất trên `main` **và** trên cả 11 nhánh PR đang mở tại lúc nhận, nên `P-023` không đụng ai.
+- **mã mục nhận trước lúc 2026-09-22 04:1x giờ VN** (`ops/logs/README.md`, KF-005): `P-022` là mã cao nhất trên `main` **và** trên cả 13 nhánh PR đang mở tại lúc nhận, nên `P-023` không đụng ai.
 
 ### P-024 · Commit gộp của `integrator-resolve.ts` không mang trailer, và bước bù bằng tay đã hụt một lượt
 Bước 0 tạo commit gộp bằng `git merge` bên trong `ops/scripts/integrator-resolve.ts`, nên commit ra đời với đúng một dòng thân: `Gộp origin/main (integrator, không xung đột)` — **không** `Claude-Session`, **không** `Co-Authored-By`. Các lượt trước bù bằng tay (`git commit --amend` trước khi push) và ba dòng log bước 0 đều ghi lại việc bù đó.
@@ -534,12 +534,12 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
 
 ---
 
-### P-030 · Một lớp chặn mới sẽ làm đỏ 11/21 PR đang mở, và cách sửa duy nhất trong nhánh thì máy cấm agent làm
+### P-030 · Một lớp chặn mới sẽ làm đỏ 13/29 PR đang mở, và cách sửa duy nhất trong nhánh thì máy cấm agent làm
 PR `#142` (mục `KF-014`) thêm job **chặn** `no-model-name`, quét `origin/main..HEAD` để bắt tên model trong khối trailer. Luật nó thực thi là đúng (`CLAUDE.md` mục 6), phạm vi nó quét cũng đúng (`automerge.yml` merge bằng squash, nên thân mọi commit của nhánh **có** tới `main`). Nhưng nó được viết ra **sau** khi các commit vi phạm đã nằm sẵn trong lịch sử của các nhánh đang mở.
 
-Đo trên toàn bộ PR đang mở (~21:45Z, `origin/main = 5ded395`, chạy bản checker của nhánh `#142`): **28 commit vi phạm trải trên 11 / 21 PR** — `#39` `#42` `#49` `#56` `#65` `#79` `#81` `#84` `#89` `#112` `#157`. Nặng nhất `#42` (9/10 commit) và `#157` (1/1 — commit vi phạm là commit **duy nhất** của PR). Sạch: `#66` `#109` `#117` `#120` `#129` `#142` `#150` `#160` `#161` `#162`.
+Đo trên toàn bộ PR đang mở (~21:45Z, `origin/main = 5ded395`, chạy bản checker của nhánh `#142`): **30 commit vi phạm trải trên 13 / 29 PR** — `#39` `#42` `#49` `#56` `#65` `#79` `#81` `#84` `#89` `#112` `#153` `#157` `#164`. Nặng nhất `#42` (9/10 commit). Ba PR log của làn `integration` — `#153` `#157` `#164` — dính **1/1**, tức commit vi phạm là commit **duy nhất** của PR, nên không có gì để giữ lại khi dựng lại nhánh. Sạch: `#66` `#109` `#117` `#120` `#129` `#142` `#149` `#150` `#151` `#154` `#155` `#156` `#159` `#160` `#161` `#162`.
 
-`#142` mang nhãn `automerge-delayed`, tức **máy tự merge** sau 12 giờ CI xanh. Không ai phải bấm gì để 11 PR kia đứng lại, trên một hàng đợi vốn tuần tự và vốn đã đứng vì `automerge` 403 (issue `#152`).
+`#142` mang nhãn `automerge-delayed`, tức **máy tự merge** sau 12 giờ CI xanh. Không ai phải bấm gì để 13 PR kia đứng lại, trên một hàng đợi vốn tuần tự và vốn đã đứng vì `automerge` 403 (issue `#152`).
 
 Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit rồi **force-push** — bị `.claude/settings.json` chặn ở `deny` (`Bash(git push --force:*)`, `Bash(git push -f:*)`). Theo `CLAUDE.md` mục 3, bị chặn không phải lỗi cần lách. Nên mục này **không** tự chọn đường: xem `🤖 [QĐ] #165`.
 
@@ -548,9 +548,9 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
 - status: blocked
 - nguồn: `ops/known-failures.md` KF-017; comment 15:55Z và 17:45Z trên PR `#65`; điểm 6 của vòng soát trên PR `#112` (18:53Z); `.claude/settings.json` phần `deny`; `CLAUDE.md` mục 6 và mục 13
 - tiêu chí xong:
-  - Chốt một trong ba đường ở `🤖 [QĐ] #165`: (a) chủ dự án force-push 11 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash — lưu ý file đó là vùng `owner-merge`.
-  - Làm theo đường đã chốt, **trước khi** `#142` vào `main`. Vào sau là đo lại 11 PR rồi gỡ từng cái, đắt hơn nhiều.
-  - **Bằng chứng bằng chạy thật:** chạy checker của `#142` trên **mọi** nhánh PR đang mở, trước và sau. Trước: 11 PR đỏ. Sau: 0 PR đỏ — hoặc, nếu chọn (a), danh sách PR còn đỏ đúng bằng danh sách nhánh chưa được dựng lại, không PR nào ngoài danh sách đó.
+  - Chốt một trong ba đường ở `🤖 [QĐ] #165`: (a) chủ dự án force-push 13 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash — lưu ý file đó là vùng `owner-merge`.
+  - Làm theo đường đã chốt, **trước khi** `#142` vào `main`. Vào sau là đo lại 13 PR rồi gỡ từng cái, đắt hơn nhiều.
+  - **Bằng chứng bằng chạy thật:** chạy checker của `#142` trên **mọi** nhánh PR đang mở, trước và sau. Trước: 13 PR đỏ. Sau: 0 PR đỏ — hoặc, nếu chọn (a), danh sách PR còn đỏ đúng bằng danh sách nhánh chưa được dựng lại, không PR nào ngoài danh sách đó.
   - Luật chung ghi vào `ops/known-failures.md` KF-017: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~21:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-027` là mã cao nhất trên `main`, `P-028` (`#160`) và `P-029` (`#162`) đã thuộc hai PR đang mở, nên `P-030` không đụng ai.
