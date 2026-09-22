@@ -1,0 +1,338 @@
+# 🤖 Chạy thử workflow vừa đổi, sau khi nó đã có hiệu lực trên `main` (mục P-010).
+#
+# Vì sao cần — KF-003, rủi ro B7: workflow chạy trên một PR là bản nằm trong
+# `.github/workflows/` của NHÁNH PR, mà nhánh PR thừa hưởng bản đó từ `main`.
+# Agent không ghi được `.github/` (CHARTER 3.2, giả định G10), nên bản mới
+# trong `ops/workflows/` KHÔNG BAO GIỜ được chạy trước khi merge.
+# `pnpm lint:workflows` bắt được cú pháp và khối `permissions`, nhưng không
+# bắt được quyền thật, secret thiếu, hay một lệnh `gh` gọi sai.
+#
+# Đã xảy ra thật hai lần: `labels` run #1 hỏng vì thiếu `contents: read`, và
+# hai workflow nữa mang lỗi cùng loại nằm im vì chưa từng chạy. Cả hai lần
+# đều chỉ lộ ra khi có người bấm tay — tức là muộn, và tốn thời gian của
+# chủ dự án (CHARTER 1.3).
+#
+# ⚠️ File này KHÔNG BAO GIỜ gọi `automerge.yml` ở chế độ thật. Hàng rào nằm
+# trong `ops/scripts/smoke-workflows.ts` — hai lớp độc lập, `NEVER_REAL_DISPATCH`
+# theo tên file và `MERGE_PATTERNS` theo nội dung — và có test riêng cho
+# đúng điều này (`ops/test/smoke-workflows.test.ts`).
+name: smoke-workflows
+
+on:
+  # Hai đường vào, vì có HAI cách `ops/workflows/**` tới được `main`:
+  #
+  #   người merge  → sự kiện `push` thật → nhánh này
+  #   máy merge    → `automerge.yml` merge bằng GITHUB_TOKEN, KHÔNG sinh sự
+  #                  kiện `push` nào (KF-004, giả định G2) → nó gọi tường
+  #                  minh qua `workflow_dispatch`, theo danh sách của
+  #                  `ops/invariants.post-merge-dispatch.ts`
+  #
+  # CỐ Ý KHÔNG dùng `workflow_run` trên `sync-workflows`: chưa ai trong repo
+  # này kiểm bằng chạy thật rằng một lần chạy `sync-workflows` do
+  # GITHUB_TOKEN gọi có sinh ra `workflow_run` hay không, và cả nhóm lỗi
+  # KF-004 sinh ra từ đúng loại giả định đó. Thứ tự "sau khi sync chép xong"
+  # được bảo đảm bằng thứ KIỂM ĐƯỢC: bước "Chờ sync" dưới đây đối chiếu
+  # NỘI DUNG `.github/workflows/` với `ops/workflows/` và không làm gì cho
+  # tới khi hai bên khớp.
+  push:
+    branches: [main]
+    paths: ['ops/workflows/**']
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit trên main để lấy danh sách workflow vừa đổi. Bỏ trống thì lấy HEAD của main.'
+        type: string
+        default: ''
+      dry_run:
+        description: 'Chạy thử chính file này: dựng kế hoạch rồi in ra, không gọi workflow nào'
+        type: boolean
+        default: false
+
+permissions:
+  # actions/checkout phải đọc được repo. Repo private thiếu quyền này cho ra
+  # "Repository not found" (404), không phải lỗi quyền. Xem KF-003.
+  contents: read
+  # `gh workflow run` và `gh run list/view` — kích hoạt và đọc lần chạy.
+  actions: write
+  # Mở issue `alert` khi có workflow đỏ.
+  issues: write
+
+# KF-004 issues: @nhắc nằm NGAY TRONG thân issue, không chờ notify.yml.
+# Issue này do GITHUB_TOKEN mở, mà GitHub cố ý không kích hoạt workflow từ
+# sự kiện do GITHUB_TOKEN tạo ra — nên notify.yml sẽ không bao giờ chạy cho
+# nó. `alertIssueBody` của ops/scripts/smoke-workflows.ts đặt @nhắc ngay
+# dòng đầu thân issue, cùng cách main-ci.yml và watchdog.yml làm.
+#
+# KF-004 push: file này không đẩy commit nào, nên nó không sinh sự kiện
+# `push`. Nó CHỜ sự kiện đó (hoặc một lời gọi tường minh từ `automerge.yml`
+# theo `ops/invariants.post-merge-dispatch.ts`), chứ không tạo ra nó.
+
+concurrency:
+  group: smoke-workflows
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    # Bước gọi phải chờ từng lần chạy xong, mà một lần chạy có thể nằm chờ
+    # trong `concurrency` của workflow kia. Trần này để một lần chờ hỏng
+    # không giữ runner cả tiếng.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Xác định commit và workflow vừa đổi
+        id: changed
+        env:
+          # `github.sha` là commit của lần push; khi gọi tay nó là HEAD của
+          # `--ref`, nên vẫn đúng cho đường `automerge` gọi tường minh.
+          EVENT_SHA: ${{ github.sha }}
+          INPUT_SHA: ${{ inputs.sha }}
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          SHA="${INPUT_SHA:-${EVENT_SHA:-}}"
+          if [ -z "$SHA" ]; then
+            SHA=$(git rev-parse origin/main)
+            echo "Không có sha nào được truyền vào; lấy HEAD của main: $SHA"
+          fi
+          git cat-file -e "$SHA^{commit}"
+
+          # `sync-workflows` ĐẨY MỘT COMMIT lên `main`, và commit đó chỉ chạm
+          # `.github/workflows/`. Nếu nó vào trước khi lần chạy này được tạo
+          # thì `github.sha` trỏ vào chính nó, `git diff` cho danh sách RỖNG,
+          # và cơ chế này báo "không có gì để thử" rồi xanh — đúng loại "xanh
+          # sai" mà mục này đi gỡ. Lùi về commit gần nhất thật sự chạm
+          # `ops/workflows/`.
+          # `--no-walk` là bắt buộc: không có nó, `git log -1 <sha> -- <path>`
+          # duyệt CẢ LỊCH SỬ tới `<sha>` và gần như luôn tìm thấy một commit
+          # cũ nào đó, nên điều kiện không bao giờ đúng. Đã đo bằng chạy
+          # thật trên một repo dựng riêng: không `--no-walk` trả commit của
+          # PR trước đó, có `--no-walk` trả rỗng đúng như cần.
+          if [ -z "$(git log -1 --no-walk --format=%H "$SHA" -- 'ops/workflows/')" ]; then
+            SKIPPED="$SHA"
+            SHA=$(git rev-list -1 "$SKIPPED" -- 'ops/workflows/')
+            echo "::notice::$SKIPPED không chạm ops/workflows/ (nhiều khả năng là commit sync). Lùi về $SHA."
+          fi
+
+          # Khoảng diff: trên sự kiện `push`, `github.event.before` phủ CẢ
+          # LƯỢT — một lượt `automerge` merge nhiều PR thì dùng `$SHA^` sẽ
+          # bỏ sót mọi PR trừ cái cuối.
+          EMPTY=$(git hash-object -t tree /dev/null)
+          BASE=""
+          if [ -n "${EVENT_BEFORE:-}" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            # Z9: nuốt lỗi ở đây là CỐ Ý. `$EVENT_BEFORE` có thể không còn
+            # trong clone này (force-push, hoặc clone nông không kéo tới
+            # commit đó); `--verify --quiet` trả rỗng kèm exit khác 0, và
+            # `|| true` giữ cho `bash -e` không giết job. `BASE` rỗng được
+            # dòng ngay dưới bắt và lùi về `$SHA^` rồi về cây rỗng, nên
+            # không có ca nào đi tiếp với `BASE` sai.
+            BASE=$(git rev-parse --verify --quiet "$EVENT_BEFORE^{commit}" || true)
+          fi
+          [ -z "$BASE" ] && BASE=$(git rev-parse --verify --quiet "$SHA^" || echo "$EMPTY")
+          git diff --name-only "$BASE" "$SHA" -- 'ops/workflows/' > changed.txt
+
+          # HỢP với phép so nội dung: file nào trong `ops/workflows/` còn
+          # khác bản trong `.github/workflows/` thì chắc chắn CHƯA được chạy
+          # thử lần nào, bất kể nó đổi ở commit nào. Đây là lớp không phụ
+          # thuộc vào việc chọn đúng commit — hợp hai nguồn thì thừa một lần
+          # chạy thử là cùng, còn thiếu thì im lặng.
+          for PATH_ in ops/workflows/*.yml; do
+            FILE=$(basename "$PATH_")
+            cmp -s "$PATH_" ".github/workflows/$FILE" || echo "ops/workflows/$FILE" >> changed.txt
+          done
+
+          sort -u changed.txt -o changed.txt
+          echo "Xét từ $BASE tới $SHA, hợp với phần lệch so với .github/workflows/:"
+          cat changed.txt
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Chờ sync chép xong, rồi dựng kế hoạch
+        run: |
+          set -euo pipefail
+          node ops/scripts/smoke-workflows.ts plan ops/workflows changed.txt > plan.json
+          PLAN=$(cat plan.json)
+          COUNT=$(echo "$PLAN" | jq '.dispatch | length')
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "Không workflow nào vừa đổi cần gọi."
+          else
+            # Lớp thứ hai của "chạy SAU sync, không song song": đối chiếu
+            # NỘI DUNG thật của từng file trong hai thư mục. `workflow_run`
+            # khai được thứ tự, nhưng nó không chứng minh được rằng bản
+            # trong `.github/` đã là bản mới — sync có thể đẩy commit rồi
+            # GitHub còn một nhịp mới thấy. Không có phép so này thì mọi
+            # lần chạy thử đều có thể đang thử BẢN CŨ mà vẫn xanh, và đó
+            # đúng là loại "xanh sai" tệ nhất (nhóm Z).
+            for TRY in 1 2 3 4 5 6; do
+              LAG=""
+              for FILE in $(echo "$PLAN" | jq -r '.dispatch[].file'); do
+                if ! cmp -s "ops/workflows/$FILE" ".github/workflows/$FILE"; then
+                  LAG="$LAG $FILE"
+                fi
+              done
+              [ -z "$LAG" ] && break
+              echo "Chưa sync xong (lần $TRY):$LAG — chờ 20 giây rồi git pull."
+              sleep 20
+              git pull --quiet --ff-only origin main
+            done
+            if [ -n "${LAG// /}" ]; then
+              echo "::error::sync-workflows chưa chép xong sau 6 lần chờ:$LAG. Không chạy thử BẢN CŨ."
+              exit 1
+            fi
+          fi
+
+          echo "$PLAN" | jq .
+
+      - name: Gọi từng workflow rồi chờ kết quả
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          PLAN=$(cat plan.json)
+          RESULTS="[]"
+
+          while IFS=$'\t' read -r FILE DRY; do
+            [ -z "$FILE" ] && continue
+            MODE=$([ "$DRY" = "true" ] && echo "chạy thử" || echo "thật")
+            echo "──────────── $FILE ($MODE)"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  CHẠY THỬ chính smoke-workflows — ĐỊNH gọi: gh workflow run $FILE --ref main $([ "$DRY" = "true" ] && echo '-f dry_run=true')"
+              continue
+            fi
+
+            BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            if [ "$DRY" = "true" ]; then
+              gh workflow run "$FILE" --repo "$REPO" --ref main -f dry_run=true
+            else
+              gh workflow run "$FILE" --repo "$REPO" --ref main
+            fi
+
+            # `gh workflow run` không trả về id của lần chạy nó vừa tạo.
+            # Hỏi lại cho tới khi thấy một lần chạy `workflow_dispatch` mới
+            # hơn mốc `BEFORE`. Giới hạn số lần hỏi: một vòng chờ không có
+            # trần là một cách khác để treo hàng đợi.
+            ID=""
+            for TRY in $(seq 1 12); do
+              sleep 10
+              ID=$(gh run list --repo "$REPO" --workflow "$FILE" --event workflow_dispatch \
+                --limit 5 --json databaseId,createdAt \
+                --jq "[.[] | select(.createdAt >= \"$BEFORE\")] | sort_by(.createdAt) | last | .databaseId // empty")
+              [ -n "$ID" ] && break
+              echo "  chưa thấy lần chạy mới (lần $TRY)."
+            done
+
+            if [ -z "$ID" ]; then
+              echo "  ::warning::gọi xong mà không thấy lần chạy nào mới cho $FILE."
+              RESULTS=$(echo "$RESULTS" | jq --arg f "$FILE" --argjson d "$DRY" \
+                '. + [{file: $f, dryRun: $d, conclusion: "không-thấy-lần-chạy", runUrl: "", firstError: "gh workflow run trả về xanh nhưng không có lần chạy nào được tạo"}]')
+              continue
+            fi
+
+            # Chờ lần chạy xong. `gh run watch --exit-status` trả mã khác 0
+            # khi lần chạy đỏ, mà ở đây ĐỎ LÀ DỮ LIỆU chứ không phải lỗi của
+            # bước này — nuốt mã trả về rồi đọc `conclusion` ở dòng sau.
+            gh run watch "$ID" --repo "$REPO" --exit-status > /dev/null 2>&1 || true
+            INFO=$(gh run view "$ID" --repo "$REPO" --json conclusion,url)
+            CONCL=$(echo "$INFO" | jq -r '.conclusion // "chưa-xong"')
+            URL=$(echo "$INFO" | jq -r .url)
+            echo "  $CONCL · $URL"
+
+            ERR=""
+            if [ "$CONCL" != "success" ]; then
+              # Dòng lỗi ĐẦU TIÊN, không phải cả log: issue phải đọc được
+              # trong khoảng 60 giây trên màn hình điện thoại (rủi ro B11).
+              ERR=$(gh run view "$ID" --repo "$REPO" --log-failed 2>/dev/null \
+                | grep -m1 -E '(::error|[Ee]rror|ERROR|not found|denied|failed)' \
+                | cut -c1-300 || true)
+            fi
+
+            RESULTS=$(echo "$RESULTS" | jq --arg f "$FILE" --argjson d "$DRY" \
+              --arg c "$CONCL" --arg u "$URL" --arg e "$ERR" \
+              '. + [{file: $f, dryRun: $d, conclusion: $c, runUrl: $u, firstError: $e}]')
+          done < <(echo "$PLAN" | jq -r '.dispatch[] | "\(.file)\t\(.dryRun)"')
+
+          echo "$RESULTS" > results.json
+          echo "$RESULTS" | jq .
+
+      - name: Tóm tắt, và mở MỘT issue nếu có workflow đỏ
+        # Luôn chạy: một bước gọi đỏ giữa chừng là đúng lúc cần đọc tóm tắt
+        # nhất. `if: always()` chứ không phải mặc định.
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: HungQuach301
+          SHA: ${{ steps.changed.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+        run: |
+          set -euo pipefail
+          [ -f plan.json ] || echo '{"dispatch":[],"notDispatchable":[],"refused":[]}' > plan.json
+          [ -f results.json ] || echo '[]' > results.json
+          PLAN=$(cat plan.json)
+          RESULTS=$(cat results.json)
+
+          # CHÍNH CƠ CHẾ NÀY hỏng thì cũng phải kêu. Nếu bước gọi chết giữa
+          # chừng, `results.json` thiếu hoặc thiếu dòng, và đếm "đỏ" trên nó
+          # sẽ ra 0 — job đỏ trên `main` mà không issue, không thông báo, và
+          # `watchdog.yml` không canh lần chạy đỏ nói chung. Đúng nhóm Z.
+          # Vì vậy: mỗi workflow có trong kế hoạch mà KHÔNG có kết quả được
+          # tính là một dòng đỏ.
+          PLANNED=$(echo "$PLAN" | jq -r '.dispatch[].file')
+          if [ "$DRY_RUN" != "true" ]; then
+            for FILE in $PLANNED; do
+              echo "$RESULTS" | jq -e --arg f "$FILE" 'any(.[]; .file == $f)' > /dev/null && continue
+              echo "::error::$FILE nằm trong kế hoạch nhưng không có kết quả — bước gọi đã chết giữa chừng."
+              RESULTS=$(echo "$RESULTS" | jq --arg f "$FILE" --arg o "$RUN_OUTCOME" \
+                '. + [{file: $f, dryRun: true, conclusion: "không-có-kết-quả", runUrl: "",
+                       firstError: ("bước gọi của smoke-workflows kết thúc " + $o + " trước khi tới workflow này")}]')
+            done
+            echo "$RESULTS" > results.json
+          fi
+          # Cấm im lặng (rà soát Z2): tóm tắt lần chạy LUÔN được ghi, kể cả
+          # khi mọi thứ xanh và kể cả khi không có gì để gọi.
+          {
+            echo "## Chạy thử workflow vừa đổi — \`${SHA:0:7}\`"
+            echo
+            echo "$PLAN" | jq -r '
+              (if (.dispatch | length) > 0 then "Đã gọi:\n" + (.dispatch | map("- `\(.file)` — " + (if .dryRun then "chế độ chạy thử" else "chế độ thật" end)) | join("\n")) else "Không workflow nào cần gọi." end),
+              (if (.refused | length) > 0 then "\nKhông gọi, vì không có chế độ an toàn:\n" + (.refused | map("- `\(.file)` — \(.why)") | join("\n")) else "" end),
+              (if (.notDispatchable | length) > 0 then "\nKhông tự thử được:\n" + (.notDispatchable | map("- `\(.file)` — \(.why)") | join("\n")) else "" end)'
+            echo
+            echo "$RESULTS" | jq -r 'if length == 0 then "_Không có kết quả nào._" else (map("- `\(.file)` → **\(.conclusion)**" + (if .runUrl == "" then "" else " · \(.runUrl)" end)) | join("\n")) end'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          RED=$(echo "$RESULTS" | jq '[.[] | select(.conclusion != "success" and .conclusion != "skipped")] | length')
+          echo "Workflow đỏ: $RED"
+          if [ "$RED" -eq 0 ]; then
+            echo "Không có gì đỏ. Không mở issue."
+            exit 0
+          fi
+
+          BODY=$(node ops/scripts/smoke-workflows.ts alert \
+            plan.json results.json "$SHA" "$RUN_URL" "$OWNER")
+
+          if [ "$DRY_RUN" = "true" ]; then
+            printf 'CHẠY THỬ — KHÔNG mở issue.\nĐỊNH mở:\n────────\n%s\n' "$BODY"
+            exit 0
+          fi
+
+          # MỘT issue cho cả lần push, không phải một issue mỗi workflow.
+          gh issue create --repo "$REPO" \
+            --title "[CẢNH BÁO] Workflow vừa merge chạy thử không xanh (${SHA:0:7})" \
+            --label alert \
+            --body "$BODY"
