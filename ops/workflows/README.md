@@ -26,6 +26,7 @@ PAT có hạn dùng. Khi nó hết hạn, sync **im lặng** dừng: không có 
 | `notify.yml` | issue `opened`/`labeled` | Nhắc `@HungQuach301` trên issue `decision`/`digest`/`alert` | — |
 | `watchdog.yml` | cron 6 giờ một lần · dispatch | Canh ba dấu hiệu im lặng, kể cả `sync-workflows` hỏng | — |
 | `labels.yml` | push `ops/labels.json` · dispatch | Đồng bộ nhãn từ `ops/labels.json` | I2, I4 (nhãn là đầu vào của chúng) |
+| `smoke-workflows.yml` | push `ops/workflows/**` · `automerge` gọi | Chạy thử đúng những workflow vừa đổi, **sau** khi sync chép xong | — (lấp khoảng trống của G10) |
 
 ## Tên status check mà ruleset `protect-main` đòi
 
@@ -70,6 +71,28 @@ Từ quyết định **D-C06**, quyết định nằm ở `ops/invariants.merge-
 
 ## Sau khi gộp, gọi tay các workflow nghe `push`
 
-Gộp bằng `GITHUB_TOKEN` **không** sinh sự kiện `push` cho workflow nào (giả định G2, KF-004). Danh sách phải gọi do `ops/invariants.post-merge-dispatch.ts` trả về — `main-ci.yml` luôn luôn, `labels.yml` khi `ops/labels.json` đổi, `sync-workflows.yml` khi `ops/workflows/**` đổi.
+Gộp bằng `GITHUB_TOKEN` **không** sinh sự kiện `push` cho workflow nào (giả định G2, KF-004). Danh sách phải gọi do `ops/invariants.post-merge-dispatch.ts` trả về — `main-ci.yml` luôn luôn, `labels.yml` khi `ops/labels.json` đổi, rồi `sync-workflows.yml` và **sau đó** `smoke-workflows.yml` khi `ops/workflows/**` đổi.
 
 Danh sách đó **không** được viết cứng trong bash: viết cứng nghĩa là thêm một workflow nghe `push` mà quên sửa bash thì không có gì báo, và đó đúng là cách KF-004 xảy ra lần đầu.
+
+## Chạy thử sau khi merge (mục `P-010`)
+
+Workflow ở đây **chưa bao giờ chạy** trước khi merge — đó là hệ quả trực tiếp của giả định **G10**. `pnpm lint:workflows` bắt được cú pháp và khối `permissions`; nó **không** bắt được quyền thật, secret thiếu, hay một lệnh `gh` gọi sai. Hai lỗi loại đó đã xảy ra thật (KF-003).
+
+`smoke-workflows.yml` lấp đúng khoảng đó: sau mỗi lần `ops/workflows/**` đổi trên `main`, nó gọi **đúng những workflow vừa đổi**, không chạy lại cả bộ.
+
+| Workflow được gọi | Chế độ |
+|---|---|
+| có `inputs.dry_run` | gọi kèm `-f dry_run=true` |
+| không có `dry_run`, không có lệnh merge | gọi thường |
+| có lệnh merge, hoặc tên nằm trong `NEVER_REAL_DISPATCH` | **không gọi** — liệt kê trong issue |
+| không có `workflow_dispatch` | **không gọi được** — liệt kê trong issue |
+| chính `smoke-workflows.yml` | tự loại mình, nếu không nó kẹt ở `concurrency` của chính nó |
+
+`automerge.yml` **không bao giờ** được gọi ở chế độ thật. Hàng rào có hai lớp độc lập trong `ops/scripts/smoke-workflows.ts` — `NEVER_REAL_DISPATCH` bắt theo tên file, `MERGE_PATTERNS` bắt theo nội dung — và có test riêng cho đúng điều đó.
+
+**Chế độ chạy thử phải CÓ GIÁ TRỊ.** Mỗi `dry_run` chạy hết phần đọc và in ra việc nó **định** làm; chỉ đúng thao tác ghi ra ngoài bị chặn. Một chế độ thử chỉ in "ok" thì không kiểm được gì ngoài việc runner khởi động.
+
+**Thứ tự so với sync là nội dung, không phải hình thức.** Chạy thử trước khi `.github/workflows/` có bản mới là chạy thử **bản cũ**, và nó sẽ xanh. `smoke-workflows.yml` vì thế đối chiếu **nội dung** hai thư mục và không gọi gì cho tới khi chúng khớp — không dựa vào thứ tự sự kiện, thứ chưa ai kiểm bằng chạy thật ở repo này.
+
+Workflow đỏ thì **một** issue `alert` cho cả lần push, không phải một issue mỗi workflow: mỗi issue là một lần gọi chủ dự án (CHARTER 2.4).
