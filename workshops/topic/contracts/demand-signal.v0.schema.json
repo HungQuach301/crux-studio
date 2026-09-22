@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://crux.studio/contracts/topic/demand-signal.v0.schema.json",
+  "title": "Đại lượng nhu cầu thay thế — v0",
+  "description": "WP-014 mục 3c.3: ba đại lượng này là PROXY, không phải nhu cầu. Mỗi lần dùng bắt buộc lưu ngày, vùng, ngôn ngữ và thiên lệch đã biết — bốn trường bắt buộc dưới đây, không phải bốn dòng ghi chú.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "proxy", "value", "unit", "basis", "asOf", "region", "language", "knownBias"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 0 },
+    "proxy": {
+      "enum": ["views-per-day-of-age", "same-topic-count-12m", "autocomplete-suggestions"],
+      "description": "Đúng ba đại lượng của WP-014. Thêm đại lượng thứ tư là đổi contract, không phải thêm một chuỗi."
+    },
+    "value": { "type": "number", "minimum": 0 },
+    "unit": { "enum": ["views-per-day", "videos", "suggestions"] },
+    "basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "sampleSize"],
+      "properties": {
+        "kind": { "enum": ["corpus", "autocomplete"] },
+        "ref": { "type": "string", "minLength": 1 },
+        "sampleSize": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "asOf": { "type": "string", "format": "date-time" },
+    "region": { "type": "string", "pattern": "^[A-Z]{2}$" },
+    "language": { "type": "string", "minLength": 2 },
+    "knownBias": {
+      "type": "string",
+      "minLength": 40,
+      "description": "Thiên lệch đã biết của chính đại lượng này. minLength chặn ca điền 'không có' cho xong."
+    }
+  }
+}

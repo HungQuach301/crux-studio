@@ -11,8 +11,15 @@
 # ⚠️ Giả định **G17** về file này đã được kiểm và **SAI**: luật ở đây KHÔNG
 # áp cho chính lần gộp mang nó tới. Git đọc `.gitattributes` của nhánh ở
 # trạng thái TRƯỚC lần gộp, nên mọi nhánh mở ra trước khi file này tồn tại
-# vẫn phải giải tay đúng một lần. Nó cũng chưa được chứng minh là có ảnh
-# hưởng tới trạng thái `mergeable` GitHub tự tính (`VF-G17`).
+# vẫn phải giải tay đúng một lần.
+#
+# ⚠️ Và đã đo được (2026-09-22, mục `VF-G17`, `KF-009`): luật ở đây KHÔNG
+# có tác dụng gì tới trạng thái `mergeable` mà GitHub tự tính. Một PR chỉ
+# đụng `main` ở đúng một file `.jsonl` khai union vẫn ra `mergeable_state:
+# "dirty"` trên GitHub trong khi `git merge-tree` ở máy trả `EXIT=0`. Vì
+# `automerge.yml` nghe phía GitHub, file này một mình KHÔNG bao giờ đủ để
+# một PR merge được.
+#
 # Cơ chế chính không phải file này, mà là mục `P-016`: integrator tự gộp
 # `main` vào PR xung đột. Xem G17 trong docs/assumptions.md.
 #

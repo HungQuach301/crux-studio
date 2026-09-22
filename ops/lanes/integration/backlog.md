@@ -387,3 +387,119 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
   - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
     nó đang kiểm thì không kiểm gì.
   - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
+
+### I-012 · Bài kiểm G14 quét cả nhánh đã merge, nên nó kêu oan và sẽ kêu mãi mãi
+
+Tìm ra ở lượt `crux-integrator` 2026-09-22 02:05 giờ VN — lần đầu phụ lục P3 bước 4 có cơ chế thật để
+chạy (`pnpm recheck:assumptions`, mục `I-003`). Đã đo bằng chạy thật.
+
+`collectCommits` quét `refs/remotes/origin/claude/*` trừ `^refs/remotes/origin/main`. Phép loại đó đúng
+với ý định — chú thích của `judgeTrailerEvidence` nói rõ loại `main` ra vì **squash làm mất trailer, không
+phải agent làm mất** — nhưng nó rò: GitHub merge kiểu **squash**, nên nhánh đã merge vẫn còn trên remote
+với **toàn bộ** lịch sử không nằm trong `main`. Bài kiểm vì thế đếm lại đúng những commit mà nó định loại.
+
+Đo được, lượt 2026-09-22: **14/131 commit "thiếu trailer"**, và phân loại từng commit thì
+
+- **10** nằm trên đúng một nhánh stale, `origin/claude/platform/P-009` (PR `#9` đã merge, nhánh chưa xoá).
+  Trong đó có `99d6bcf Initial commit`, `e01a667 Add files via upload`, `087246e Delete .github/...` —
+  commit của **chính chủ dự án** qua giao diện web, không bao giờ có trailer và không nên có;
+- **2** là `chore: sync workflows from ops/workflows [skip ci]`, do GitHub Action `sync-workflows` sinh;
+- **2** là merge tay dạng `Gộp main vào <nhánh>` mà `isToolCommit` không khớp (nó chỉ nhận
+  `Gộp … (integrator,` và `Merge branch …`);
+- **1** là tín hiệu thật: `7fc292a` (`integration: bước 0 của P3 lượt 23:05`, trên
+  `origin/claude/keen-mayer-nzkvdy`) — commit do agent soạn, thiếu trailer `Claude-Session`. Đây là đúng
+  phần mà giả định **G14** còn để ngỏ, và là thứ duy nhất trong 14 dòng đáng gọi là quan sát.
+
+Vì sao đáng một mục chứ không phải một dòng ghi chú: bài kiểm này **không bao giờ xanh được nữa**. Commit
+của chủ dự án trên nhánh stale sẽ nằm đó mãi, nên mỗi thứ Hai nó lại in sẵn một thân issue `🤖 [QĐ]` cho
+một giả định chẳng đổi trạng thái — đúng lý do mà chính script đã bỏ kết luận `nâng` ("một cảnh báo kêu
+mọi lượt là một cảnh báo không ai đọc"), và đúng hình dạng `I-005`/`I-007` đã sửa một lần cho ca "kêu
+oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue; lượt sau sẽ không may như vậy.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: lượt `crux-integrator` 2026-09-22 02:05 giờ VN, `ops/logs/integration/P3-daily-2026-09-22.jsonl`;
+  `docs/assumptions.md` G14; mục `I-003`, `I-005`, `I-007`
+- tiêu chí xong:
+  - Phạm vi quét chỉ còn commit **của agent, trên nhánh còn sống**. Loại nhánh đã merge bằng câu hỏi trả
+    lời được — ví dụ đối chiếu với danh sách PR đang mở, hoặc loại mọi commit có trước điểm rẽ của nhánh
+    khỏi `main` — chứ không phải nới `isToolCommit` cho tới khi hết đỏ. Nới danh sách chữ ký là vá sản
+    phẩm (CLAUDE.md mục 13).
+  - `isToolCommit` nhận thêm hai dạng đã đo được: `chore: sync workflows…` (máy sinh) và merge tay dạng
+    `Gộp <ref> vào <nhánh>`. Mỗi dạng một test âm.
+  - Một test dựng kho bare thật có **đúng hình dạng đã gặp** — một nhánh đã squash-merge còn sót trên
+    remote, mang commit không trailer — và bài kiểm G14 phải ra `khớp`, không `sai`. Cùng quy ước "không
+    mô phỏng" với các test G14/G17 đang có trong `ops/test/recheck-assumptions.test.ts`.
+  - `7fc292a` không được biến mất cùng với nhiễu: sau khi siết phạm vi, một commit agent thật sự thiếu
+    trailer vẫn phải ra `sai`. Có test cho đúng điều đó.
+- **Đã làm:**
+  - `collectCommits` (`ops/scripts/recheck-assumptions.ts`) nay lọc `refs/remotes/origin/claude/*` còn
+    đúng nhánh có **PR mở**, trước khi `git log` — trả lời "trả lời được" mà tiêu chí xong đòi, không đoán
+    theo ngày hay theo lịch sử git (squash không giữ SHA cũ nên "điểm rẽ khỏi `main`" của một nhánh stale
+    không nói lên gì). `fetchOpenPrBranches()` gọi `gh pr list --state open` — cùng quy ước gọi lệnh với
+    `fetchMergedPrs()` của `ops/scripts/update-metrics.ts`, không phải cách mới. Nhánh hết PR mở (đã
+    merge/đã đóng) loại thẳng khỏi phạm vi quét: `liveRefs.length === 0` trả `[]` như một quan sát hợp lệ
+    (cùng nhánh `observedNothing` với ca "kho không còn nhánh nào" của `I-007`), không phải lỗi.
+  - `isToolCommit` nhận thêm đúng hai dạng đã đo được, neo chặt để không rơi lại thành danh sách đen:
+    `chore: sync workflows from ops/workflows` (tiền tố do Action `sync-workflows` sinh) và
+    `Gộp (origin/)?main(...) vào ` (mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ
+    "Gộp … vào" nói chung — giữ nguyên vẹn ca âm `"Gộp hai mô hình định lượng vào một bảng"` đã có).
+  - Test mới trong `ops/test/recheck-assumptions.test.ts`: hai test cho `isToolCommit`, ba test cho
+    `collectCommits` (nhánh stale bị loại dù thiếu trailer thật; nhánh sống vẫn ra `sai` khi thật sự thiếu
+    trailer — phép lọc mới không được nuốt tín hiệu thật; mọi nhánh hết PR mở thì trả rỗng, không ném).
+    Ba test `collectCommits` cũ (mục `I-005`, `I-007`) cập nhật để tự khai nhánh nào có PR mở, không gọi
+    `gh` thật trong test.
+  - `ops/known-failures.md` hàng **Z15**: thêm đoạn "Sửa tiếp ở mục `I-012`".
+
+### I-013 · Contract của xưởng nằm ngoài tầm quét của `pnpm contracts`
+
+Tìm ra trong vòng soát của `topic/T-008` (reviewer ngữ cảnh sạch, PR `#91`).
+
+`ops/scripts/check-contracts.ts` chạy `unsupportedKeywords` trên phong bì cộng sáu payload v0 của
+`kernel/contracts/`, và chỉ thế. Mục `T-008` thêm ba contract ở `workshops/topic/contracts/` — đúng luật
+phân định của CLAUDE.md mục 12, vì corpus và kiểm mới lạ không trung tính với thể loại lẫn kênh, nên chúng
+không thuộc `kernel/`. Nhưng thư mục đó **không ai quét**.
+
+`T-008` tự bù bằng ba test gọi `unsupportedKeywords` cho ba schema của nó. Cơ chế bù đó là **opt-in**:
+contract thứ tư thả vào `workshops/*/contracts/` mà tác giả quên viết test tương ứng thì nó dùng từ khoá
+validator chưa hiểu, ràng buộc im lặng không được kiểm, và **không gì đỏ**. Đúng hình dạng nhóm **Z** —
+và đúng cái mà chính `pnpm contracts` tồn tại để chặn ("một ràng buộc được viết ra nhưng không được kiểm
+còn tệ hơn là không viết").
+
+- deps: —
+- risk: low
+- status: review
+- nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - ✅ `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/` —
+    việc số 6, `ops/scripts/check-workshop-contracts.ts`. Quét **đệ quy**, nên thư mục con không thoát.
+  - ✅ Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
+    test tái hiện, không chỉ có lời. `ops/test/check-workshop-contracts.test.ts` bài cuối chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát, kèm bài đối chứng với schema sạch.
+    Đã kiểm rằng bài đó **đỏ** khi gỡ dòng nối ở `check-contracts.ts` — quét đúng mà không ai gọi vẫn là
+    "không gì đỏ".
+  - ✅ Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
+    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`). Mỗi file giữ một ghi chú
+    nói phép kiểm đó nay nằm ở đâu.
+- PR: `#95`
+
+### I-014 · Phạm vi quét contract vẫn buộc bằng quy ước thư mục, không bằng phép kiểm
+
+Tìm ra trong vòng soát của `I-013` (reviewer ngữ cảnh sạch, PR `#95`).
+
+`I-013` đưa `workshops/<tên>/contracts/**/*.schema.json` vào `pnpm contracts`. Phạm vi đó dừng ở **quy ước
+thư mục**: một `*.schema.json` đặt ở `workshops/<tên>/src/`, ở `packs/**`, hay bất cứ đâu khác vẫn ngoài
+tầm quét, và **không gì buộc** "file mà `src/*.ts` nạp" phải nằm trong tập được quét. Hôm nay hai bên trùng
+nhau vì quy ước, không vì một phép kiểm — đúng hình dạng nhóm **Z** một tầng nữa: đổi chỗ một file là phép
+kiểm biến mất mà mọi chỉ báo vẫn xanh.
+
+- deps: `I-013`
+- risk: low
+- status: ready
+- nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
+    hoặc bị đòi phải nằm trong `contracts/`, và có dòng vấn đề nếu không.
+  - Có test tái hiện: thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` **ngoài** `contracts/` thì
+    `pnpm contracts` đỏ.

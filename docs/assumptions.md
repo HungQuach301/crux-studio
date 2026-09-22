@@ -47,7 +47,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
-| G9 | Thuê được người soát bản địa và giao việc qua link | `suy luận` | giao làn `verify` | `VF-G9` |
+| G9 | Thuê được người soát bản địa và giao việc qua link | **`đã kiểm một phần`** — nửa "giao việc qua link" chạy thật; nửa "thuê được người" chưa | hai kênh tuyển có thật, **trang của chính họ ghi là miễn phí cho bên thuê** (EFA, ACES) · link tới repo private **không** dùng được · xuất bản ra ngoài là `irreversible` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
 | G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** phần routine; thread chưa | lớp thứ hai vẫn giữ | `VF-G11` |
 | G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | `tài liệu nói vậy` | dự phòng đã viết sẵn | `VF-G12` |
@@ -57,6 +57,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
+| G19 | `search.list` của YouTube Data API cho 100 lần gọi mỗi ngày, bucket riêng với `videos.insert` | `tài liệu nói vậy` | dự phòng đã viết sẵn · chặn phần XÂY corpus, không chặn phần đã làm của `T-008` | `VF-G19` |
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G7`, `G14`) đã kiểm được một phần — cũng ở dưới; `G2` và `G14` ngay trong Đợt 0. `G7` là ca đáng chú ý nhất: phần chưa kiểm không phải vì chưa ai làm, mà vì **phiên cloud không ra được các trang điều khoản** (mục `VF-G7`). `G11` đã kiểm **xong** phần routine ngày 2026-09-21, mục `VF-G11`.
 
@@ -200,11 +201,68 @@ Tức phương thức dùng được cho Việt Nam là **chuyển khoản quố
 ## G9 · Thuê được người soát bản địa và giao việc qua link
 
 - **Nội dung:** thuê được người bản địa Mỹ soát nội dung, và giao việc cho họ qua link mà không cần họ có tài khoản GitHub hay Claude.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · quyết định D-17 · rủi ro A4
+- **Độ tin cậy:** **`đã kiểm một phần`** — nửa "giao việc qua link" **chạy thật** (đo được cả chiều dương lẫn chiều âm); nửa "thuê được người" mới ở mức đọc trang của hai tổ chức, **chưa đăng tin, chưa ai nhận việc**.
+- **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · `ops/network-domains.md` · quyết định D-17 · rủi ro A4
 - **Cách kiểm:** tìm ít nhất hai kênh tuyển thực tế, và một cách giao việc không cần tài khoản. Miễn phí ở bước tìm.
-- **Dự phòng:** chưa có. Nếu sai thì mở `🤖 [QĐ]` — giả định thứ hai chưa có dự phòng.
-- **Trạng thái:** giao làn `verify`, mục `VF-G9`. Rủi ro A4: vai "người ngoài" nhận việc qua link, **có thời hạn phản hồi** — nếu không có thời hạn, họ thành nút cổ chai nằm ngoài mô hình tự trị.
+- **Dự phòng:** chưa có. Nếu sai thì mở `🤖 [QĐ]` — giả định thứ hai chưa có dự phòng. Lượt kiểm 2026-09-21 **không** làm giả định này sai, nên chưa phải mở.
+- **Trạng thái:** kiểm lần đầu 2026-09-21 (mục `VF-G9`, lượt `crux-worker-2`). Rủi ro A4: vai "người ngoài" nhận việc qua link, **có thời hạn phản hồi** — nếu không có thời hạn, họ thành nút cổ chai nằm ngoài mô hình tự trị. **Không kênh nào dưới đây áp hạn hộ** — hạn phải nằm trong chính bản brief.
+
+**✅ Hai kênh tuyển thực tế — hội nghề nghiệp biên tập ở Mỹ, miễn phí cho bên thuê**
+
+Chọn hội nghề nghiệp thay vì sàn freelance chung vì mục này cần đúng một thứ: người **bản địa Mỹ** soát nội dung tiếng Anh Mỹ.
+
+| | **EFA** — Editorial Freelancers Association | **ACES** — The Society for Editing |
+|---|---|---|
+| Trang | `www.the-efa.org/hiring/` (đọc 2026-09-21) | `aceseditors.org/resources/job-board` (đọc 2026-09-21) |
+| Chi phí cho bên thuê | *"There is no charge to use the Member Directory or Job List."* | *"ACES offers this job board as a free service to the editing community."* |
+| Cần là hội viên không | **Không đòi** — trang không đặt điều kiện hội viên lên bên thuê. Nhưng trang cũng **không** có câu nào nói thẳng về non-member; kết luận này đọc từ *"There is no charge to use…"* cộng với việc không có rào đăng nhập nào | Trang form đăng tin không đòi đăng nhập |
+| Cách đăng tin | `www.the-efa.org/hiring/job-submission-form/` — *"submitted jobs are typically posted within 48 hours"* | `members.aceseditors.org/add-a-job-posting` |
+| Ô của form | (form dựng bằng JS, không đọc được thô) — trang ghi *"Publication may be delayed if we need to reach out to you for clarification about the rate you are offering"* | Job Title\* · Company\* · Job Location\* · **Link to Apply** · **Email to Apply** · Brief Job Description\* · First/Last Name\* · Email\* |
+| Tin sống bao lâu | không ghi trên trang | **hai trang của chính họ lệch nhau:** trang job-board ghi *"Jobs will be expire after 60 days"*, trang form ghi *"Postings expire after 30 days"* |
+| Người soát liên hệ lại kiểu gì | *"Qualified freelancers will then contact you directly."* | qua ô `Link to Apply` / `Email to Apply` do bên thuê tự điền |
+
+- **EFA từ chối tin trả thấp:** *"We do not post low-paying or nonpaying jobs, jobs that pay by royalty or on spec, internships of any kind, or jobs we suspect may be fraudulent. The EFA reserves the right to reject or remove any job posting for any reason."* (`www.the-efa.org/hiring/`, đọc 2026-09-21). **Họ không nói ngưỡng "low-paying" là bao nhiêu**, và không buộc nó vào bảng giá — bảng giá dưới đây là chỗ duy nhất có số, nên dùng nó làm mốc tham chiếu, chứ EFA không khai đó là ngưỡng.
+- **Xem danh sách tin của EFA là quyền lợi hội viên** (*"The EFA Job List is a paid benefit exclusive to EFA members"* — `www.the-efa.org/job-list/`, đọc 2026-09-21; câu này ở trang khác với trang `/hiring/` dẫn đầu bảng). Luồng vì thế là: bên thuê đăng miễn phí → hội viên đọc → hội viên chủ động liên hệ. Bên thuê không cần tài khoản ở bất kỳ bước nào.
+- **ACES đang chuyển website** và trang job-board ghi tin đang để tạm trên một thư mục Google Drive — ghi lại để lượt sau không tưởng là mình đọc nhầm.
+
+**Bảng giá EFA 2026 — số đọc từ nguồn, kèm một phép gộp được khai rõ (bất biến I6)**
+
+Nguồn: `www.the-efa.org/rates/`, đọc 2026-09-21. Trang tự khai: *"The median rate ranges in the 2026 Rate Chart below are based on data from a survey administered to EFA members from November 2025 through mid-January 2026"*, hơn 1.100 hội viên trả lời về mức giá năm 2025. Trang cũng tự mô tả mình là công cụ *"helps you estimate the cost for your project"* — tức bảng **ước lượng chi phí**, không phải biểu giá bắt buộc.
+
+**Mô hình, không phải một ô trong bảng gốc:** bảng `EDITING` của EFA chia Copyediting và Proofreading thành **19 dòng con mỗi nhóm** (Academic humanities/STEM, Fiction, Legal, Medical, Medicolegal, Technical…). Hai dòng đầu dưới đây là **min của cột thấp nhất và max của cột cao nhất qua cả 19 dòng con**, tính bằng máy từ HTML của chính trang, bỏ các ô `n/a` và các ô `$0.00–0.00` (cách trang ghi "không áp dụng"). Dòng Fact-checking thì **đọc thẳng** từ một dòng của bảng `PUBLISHING`, không gộp gì.
+
+| Việc | Theo giờ | Theo từ | Theo trang (250 từ) |
+|---|---|---|---|
+| Copyediting (gộp 19 dòng con) | 33,00–75,00 USD | 2,0–5,5 ¢ | 5,00–13,75 USD |
+| Proofreading (gộp 19 dòng con) | 29,00–75,00 USD | 1,0–4,5 ¢ | 2,50–11,25 USD |
+| Fact-checking (một dòng, không gộp) | 50,00–60,00 USD | — | 60,00–72,50 USD |
+
+Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là **số trang mỗi giờ, không phải tiền**. Căn cột đã kiểm bằng số học trên một dòng khác của cùng bảng: `Indexing → Book` ghi 2,0–2,5 ¢/từ và 5,00–6,25 USD/trang, đúng bằng 250 từ × giá mỗi từ.
+
+**Hệ quả thẳng vào CHARTER mục 8:** ngân sách học tới cổng Mốc 3 (600–900 USD) là **chi phí API**, chưa có dòng nào cho người soát bản địa. Một lượt soát một kịch bản ~1.500 từ ở mức proofreading rẻ nhất (1,0 ¢/từ) là ~15 USD; ở mức fact-checking thì một giờ là 50,00–60,00 USD. Việc có đưa vào ngân sách hay không là quyết định, không phải phát hiện của mục này.
+
+**✅ Cách giao việc không cần tài khoản — nửa đọc đã chạy thật**
+
+Đo bằng `curl` trong chính lượt chạy, 2026-09-21, **không** gửi header xác thực nào:
+
+| Phép đo | Kết quả thật | Nghĩa |
+|---|---|---|
+| `raw.githubusercontent.com/github/gitignore/main/Node.gitignore` | **HTTP 200**, 2.189 byte nội dung thật | người ngoài đọc được nội dung **công khai** qua một link, **không cần tài khoản nào** |
+| `github.com/HungQuach301/crux-studio` | **HTTP 404** | |
+| `raw.githubusercontent.com/HungQuach301/crux-studio/main/README.md` | **HTTP 404** | |
+| như trên, ép rỗng header `Authorization` | **HTTP 404** | |
+
+- **Kết luận ngược chiều, và là phần đáng giá nhất của lượt đo:** repo `crux-studio` là repo **private**, nên **"gửi link repo" KHÔNG phải một cách giao việc**. GitHub trả `404` (không phải `401`/`403`) cho người chưa xác thực, tức người ngoài không phân biệt được "không có quyền" với "không tồn tại". Muốn người ngoài soát được thì phải **xuất bản riêng** phần cần soát.
+- **Nhưng xuất bản ra ngoài là `irreversible`** — CHARTER 2.3 nhóm 2 ("mọi thứ công khai ra ngoài"). Agent **không tự làm**. Cả gist công khai lẫn gist "secret" (ai có link đều đọc được) đều thuộc nhóm đó. Đây là chỗ mục này dừng lại và chờ một quyết định, không phải chỗ để tự mở.
+- **Đường trả lời không cần tài khoản:** (a) **email trực tiếp** — không đòi tài khoản ở cả hai đầu, và đúng là cơ chế EFA mô tả (*"contact you directly"*) cùng ô `Email to Apply` của ACES; (b) một biểu mẫu ở chế độ "ai có link cũng trả lời được" — Google Forms tự khai *"Under 'General access,' you can give access to anyone with a link"* và chỉ bắt đăng nhập khi bật `Limit to 1 response` (`support.google.com/docs/answer/2839588`, đọc 2026-09-21). Đường (b) mới ở mức **`tài liệu nói vậy`**: lượt này không dựng form nào để chạy thật.
+
+**⬜ Còn treo — khai trước, không để tự phát hiện**
+
+- **Chưa đăng tin, chưa ai nhận việc.** Đây là chỗ giả định thật sự chịu tải và nó chưa được chạm: đăng tin là cam kết trả tiền cho người thật (CHARTER 2.3 nhóm 1, `irreversible`), nên agent không tự làm. Vì vậy độ tin cậy dừng ở `đã kiểm một phần`.
+- **Chưa dựng và chưa chạy thử một biểu mẫu trả lời nào.** Đường (b) ở trên còn là giấy.
+- **Phát hiện ngược hướng mô hình tự trị, đáng một mục backlog `platform`:** mọi đường trả lời không cần tài khoản đang có đều đổ vào **hộp thư hoặc biểu mẫu của chủ dự án**. Không có đường nào để agent đọc phản hồi của người soát mà không qua người. Đó đúng là nút cổ chai **A4**, và nó đánh thẳng vào thước đo "thời gian của anh" (CHARTER 1.3, mặc định **M8**). Mục này chỉ **ghi nhận**; dựng đường phản hồi máy đọc được là việc của làn `platform`.
+- **Năm kênh không đo được từ phiên cloud này:** `www.upwork.com`, `www.fiverr.com`, `www.proz.com`, `www.atanet.org`, `contentwriters.com` đều trả **403** với egress của sandbox. `403` là **máy chủ có trả lời** — tức nối được, và đây là chặn bot phía họ. Nó **không** nói gì về việc chủ dự án mở bằng trình duyệt của mình. Không được đọc thành "không dùng được".
+- Không chỗ treo nào ở trên chặn Đợt 0 hay Đợt 1. Chúng chặn ở lúc có kịch bản thật cần soát.
 
 ## G10 · Phiên cloud không ghi được `.github/workflows`
 
@@ -216,7 +274,10 @@ Tức phương thức dùng được cho Việt Nam là **chuyển khoản quố
   > Lưu ý về cách kiểm: hook `guard.mjs` chặn chính agent ghi vào `.github/`, nên bài kiểm này **không thực hiện được từ một phiên agent bình thường** — và agent không được tự nới hook để kiểm. Bài kiểm cần chủ dự án chạy, hoặc cần một PR `owner-merge` mở một ngoại lệ hẹp cho đúng một file thử rồi đóng lại ngay.
 - **Dự phòng nếu giả định đúng:** giữ nguyên cơ chế sync và PAT — đang dùng.
 - **Nếu hoá ra ghi được ổn định:** có thể gỡ bỏ cơ chế sync và PAT, **thông qua một quyết định riêng**. Agent không tự gỡ: việc đó đổi cách toàn bộ workflow tới được GitHub.
-- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10`.
+- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10` — mục đó nay `parked` (2026-09-21, lượt `crux-worker-2`).
+- ⬜ **Vì sao `parked`:** cách kiểm ở trên là đúng thứ phụ lục P1 của CHARTER và `CLAUDE.md` mục 4 cấm tuyệt đối, và lớp chặn máy vẫn sống — đo lại trong lượt worker 2026-09-21 ~22:25Z, `guard.mjs` chặn cả một lệnh **đọc** `.github/workflows/ci.yml`. Đi vòng qua hook bằng công cụ khác là lách lớp chặn, không làm. Bài kiểm cần chủ dự án chạy, hoặc cần một ngoại lệ hẹp có thời hạn trong `guard.mjs` qua PR `owner-merge` — nới lớp chặn là CHARTER 2.3 nhóm 5. Issue **#88** nêu ba phương án; lời hứa "đề xuất riêng" về G10 có từ issue #5 (2026-09-20) và tới nay mới thực hiện.
+- ⬜ **Dữ liệu gián tiếp, đo kỹ rồi vẫn KHÔNG kết luận được:** `git log origin/main -- .github/` (tới `c7179c6`) trả **3** commit — `9b97cea` và `9928c75` của `crux-sync` (PAT `WORKFLOW_SYNC_TOKEN`) là ghi thật; `939ebb0` là commit **gốc** của lịch sử đang thấy (committer `GitHub <noreply@github.com>`, bản squash của PR #15), không có cha nên cả cây hiện ra dạng `A`, gồm 7 file `.github/workflows/*.yml` đã tồn tại từ trước — đầu nhánh thật của PR #15 (`c5a164a`) **không** chạm `.github/`. Cạm bẫy đo: `git diff-tree -r --name-status <sha>` trả rỗng cho commit gốc, phải có `--root`. Dữ liệu này không nói được gì về quyền của phiên agent — chưa phiên nào thử, vì hook chặn — nên độ tin cậy giữ nguyên `tài liệu nói vậy`.
+- **Không chặn làn nào:** dự phòng "giữ nguyên cơ chế sync và PAT" đang chạy thật; câu trả lời chỉ mở đường **gỡ** cơ chế đó, mà việc gỡ vốn đã cần một quyết định riêng.
 
 ## G11 · Hook và luật deny có hiệu lực trong routine và thread
 
@@ -338,13 +399,22 @@ Tức phương thức dùng được cho Việt Nam là **chuyển khoản quố
 
   Kết luận: **git đọc `.gitattributes` của nhánh đích ở trạng thái TRƯỚC lần gộp.** Một luật merge do `main` mang tới **không tự áp cho chính lần gộp mang nó tới**. Hai lần thử của `P-015` đều đặt luật sẵn ở commit gốc, nên cả hai đều bỏ sót đúng điều kiện đã làm hỏng việc thật.
 
-  **Chỗ vẫn chưa kiểm, và phải nói rõ:** bằng chứng trên **không** chứng minh được GitHub bỏ qua `.gitattributes` khi nó tự tính trạng thái `mergeable`. Trong tình huống của PR #11, git ở phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Câu hỏi "GitHub có dùng `.gitattributes` không" chỉ trả lời được bằng hai PR mà **cả hai đều đã mang sẵn** `.gitattributes` — chưa có cặp nào như thế. Giữ nó ở mục `VF-G17`.
+  **Câu hỏi còn mở nay đã trả lời — 2026-09-22, và câu trả lời là KHÔNG.** Bằng chứng ở PR #11 phía trên **không** nói được gì về GitHub: lúc đó git ở phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Ca kiểm mà mục `VF-G17` mô tả — hai PR **đều đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only — từ đó đã xảy ra thật, và được đo **hai lần độc lập**:
+
+  | Lần quan sát | PR | `mergeable_state` GitHub tự tính | `git merge-tree --write-tree` ở phía worker |
+  |---|---|---|---|
+  | lượt `crux-integrator`, 2026-09-22 02:05 giờ VN | `#56`, `#65` | `dirty` | `EXIT=0`, gộp sạch |
+  | lượt `crux-worker-1`, 2026-09-21 19:38Z | `#75` | `dirty` | `EXIT=0`, gộp sạch |
+
+  Lần quan sát thứ hai tách biến sạch hơn lần đầu, và đó là lý do nó đáng ghi riêng: `base.sha` của `#75` **đúng bằng** `main` tại lúc đo (`296869b`), nên `dirty` không thể là trạng thái cũ GitHub chưa tính lại; và file **duy nhất** mà nhánh với `main` cùng chạm là `ops/logs/platform/P-016.jsonl`, vốn đã khai `merge=union`. Bật/tắt đúng một biến trên cùng một phép đo: union bật → `EXIT=0`; ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes` (thắng `.gitattributes` trong cây) → `EXIT=1`, `CONFLICT (content) in ops/logs/platform/P-016.jsonl`; xoá dòng đó đi → `EXIT=0` trở lại. Và một **đối chứng chặt hơn**, vì `-merge` là *unset* nên git rơi về trình merge nhị phân và luôn báo xung đột (kèm `warning: Cannot merge binary files`, dù file là văn bản thuần): chạy lại với `merge=text` — trình văn bản thường — vẫn `EXIT=1`, `CONFLICT (content)`, **không** cảnh báo nhị phân. Chênh lệch giữa hai phía đúng là do luật union, không phải do cách tắt luật.
+
+  **Hệ quả:** `.gitattributes` một mình không bao giờ đủ, vì lớp tự merge chỉ nghe **một** phía — phía GitHub, phía không áp luật. Ghi đầy đủ ở `ops/known-failures.md` **KF-009**. Kết luận này **không** làm đổi trạng thái giả định nào: G17 đã `sai` và đã chuyển dự phòng từ trước. Nó siết thêm lý do dự phòng (`P-016`, bước 0 của phụ lục P3) phải chạy ở đầu **mọi** lượt worker chứ không phải một lần mỗi ngày.
 - **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes` · `ops/scripts/recheck-assumptions.ts`
-- **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04`, log tách tới mức mục nên hai PR khác mục không còn dùng chung file — ca kiểm phải là hai lần chạy của **cùng một mục** (`ops/logs/<lane>/<id>.jsonl`), hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai.
-- **Kiểm tự động:** `union-merge-order` — dựng hai repo git thật trong thư mục tạm, khác nhau **đúng một điều kiện**: nhánh đã mang `.gitattributes` trước lần gộp hay chưa. Bài kiểm không đi tìm lại kết luận `sai` đã có, mà canh **hai điều kiện dự phòng đang đứng lên trên**: (1) luật do `main` mang tới vẫn KHÔNG áp cho chính lần gộp mang nó tới — nếu git đổi hành vi này thì G17 hết `sai`; (2) union VẪN cứu được lần gộp khi nhánh đã mang sẵn luật — nếu hỏng thì `.gitattributes` thành đồ trang trí và KF-005 phải viết lại. Phần *GitHub tự tính `mergeable`* thì **không** tự kiểm được ở đây: nó cần hai PR thật trên GitHub, vẫn nằm ở `VF-G17`.
+- **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04`, log tách tới mức mục nên hai PR khác mục không còn dùng chung file — ca kiểm phải là hai lần chạy của **cùng một mục** (`ops/logs/<lane>/<id>.jsonl`), hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai. **Đã thực hiện, hai lần độc lập** (2026-09-22 và 2026-09-21 19:38Z) — hai câu trả lời **đúng là khác nhau**, cả hai đã ghi ở phần độ tin cậy trên.
+- **Kiểm tự động:** `union-merge-order` — dựng hai repo git thật trong thư mục tạm, khác nhau **đúng một điều kiện**: nhánh đã mang `.gitattributes` trước lần gộp hay chưa. Bài kiểm không đi tìm lại kết luận `sai` đã có, mà canh **hai điều kiện dự phòng đang đứng lên trên**: (1) luật do `main` mang tới vẫn KHÔNG áp cho chính lần gộp mang nó tới — nếu git đổi hành vi này thì G17 hết `sai`; (2) union VẪN cứu được lần gộp khi nhánh đã mang sẵn luật — nếu hỏng thì `.gitattributes` thành đồ trang trí và KF-005 phải viết lại. Phần *GitHub tự tính `mergeable`* thì **không** tự kiểm được ở đây: nó cần hai PR thật trên GitHub. Phần đó nay **đã trả lời bằng quan sát** (xem độ tin cậy ở trên và `KF-009`) chứ không bằng bài kiểm tự động — và nó vẫn sẽ không tự kiểm được, nên thứ canh nó là bước 0 của phụ lục P3 cộng dòng log bắt buộc, không phải `pnpm recheck:assumptions`.
 - **Dự phòng — đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được mọi lần gộp **sau khi** nhánh đã mang luật — không mất gì. Nhưng nó không còn được coi là cơ chế chính. Cơ chế chính chuyển sang mục `P-016`: routine integrator **tự gộp `main`** vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Việc giải xung đột trở thành việc của máy, không phải việc của người.
 - **Bài học chung, vượt ra ngoài mục này:** hai lần thử của `P-015` là chạy thật, và vẫn cho kết luận sai — vì cả hai đều dựng ở **trạng thái sau cùng**, không dựng ở trạng thái mà lỗi thật sẽ xảy ra. "Kiểm bằng chạy thật" (CHARTER 11.1 luật 3) chưa đủ. Bài thử phải tái hiện **đúng điều kiện đầu vào của lần chạy thật**, và điều kiện dễ bỏ sót nhất là *thứ tự thời gian*: ai có gì, vào lúc nào.
-- **Trạng thái:** `sai`, đã chuyển dự phòng ngay trong cùng PR ghi nhận nó (quyết định `reversible` theo CLAUDE.md mục 7). Phần còn mở giao làn `verify` mục `VF-G17`.
+- **Trạng thái:** `sai`, đã chuyển dự phòng ngay trong cùng PR ghi nhận nó (quyết định `reversible` theo CLAUDE.md mục 7). **Phần còn mở đã đóng ngày 2026-09-22** (mục `VF-G17`, làn `verify`): GitHub **không** dùng `.gitattributes` khi tự tính `mergeable`. Không còn câu hỏi nào treo ở giả định này; trạng thái `sai` giữ nguyên, dự phòng giữ nguyên.
 
 ---
 
@@ -374,3 +444,14 @@ Tức phương thức dùng được cho Việt Nam là **chuyển khoản quố
 - **Cách kiểm lại:** lặp đúng hai dòng trong bảng trên. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi registry npm, mà các lệnh kiểm của repo phải chạy được khi không có mạng — một bài kiểm im lặng bỏ qua vì không ra được internet còn tệ hơn là không có bài kiểm nào. Mục `VF-G18` giữ phần kiểm định kỳ.
 - **Dự phòng — chưa cần viết sẵn:** nếu giả định này hoá ra sai, cơ chế `I-004` không mất an toàn, nó chỉ mất tính "ít xáo trộn nhất": lockfile vẫn khớp manifest và CI vẫn gác. Khi đó `integrator-lockfile.ts` chuyển sang `aborted-ineligible` cho mọi xung đột lockfile và giao lại cho người — một dòng sửa, hành vi quay về đúng như trước mục `I-004`.
 - **Trạng thái:** đã kiểm, đang được dùng. Kiểm lại khi nâng `pnpm` qua một phiên bản chính.
+
+## G19 · Hạn mức `search.list` của YouTube Data API
+
+- **Nội dung:** method `search.list` có bucket **riêng** 100 lần gọi mỗi ngày, mỗi lần 1 đơn vị, và mỗi trang kết quả tiếp theo tốn thêm một lần gọi. Bucket này không dùng chung với `videos.insert`, nên xây corpus không tranh quota với việc đăng video.
+- **Vì sao nó chịu tải:** toàn bộ ngân sách quota của corpus đối thủ (`packs/channels/us-personal-finance/quota-budget.md`) và cửa dừng `quotaGate` đứng trên con số 100. Sai theo hướng **thấp hơn** thì một lần xây corpus tiêu hết quota của ngày mà cửa dừng không kịp đóng — và vì `search.list` không dùng chung bucket với việc đăng, hỏng đó **không** lan sang lịch phát hành, nhưng nó vẫn làm mọi việc tìm kiếm khác trong ngày chết lặng.
+- **Nguồn:** tài liệu nhà cung cấp. **Chưa đọc Cloud Console** — WP-014 mục 7 đòi đúng việc đó, và phiên cloud không có project nào để mở.
+- **Độ tin cậy:** `tài liệu nói vậy`
+- **Phần phụ thuộc:** `workshops/topic/src/corpus.ts` · `packs/channels/us-personal-finance/quota-budget.md` · `ops/lanes/topic/backlog.md` (T-008, T-011)
+- **Cách kiểm:** mở Google Cloud Console của project, đọc hạn mức thật của `search.list`, so với 100. **Chỉ chủ dự án làm được** — cần tài khoản và một project có bật API. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi ra ngoài, mà các lệnh kiểm của repo phải chạy được khi không có mạng.
+- **Dự phòng — đã viết sẵn:** con số **không nằm trong code**. `quotaGate` nhận `searchCallsPerDay` và `reserveFraction` làm tham số, và cả hai đọc từ trường `quota.limits` của chính ảnh chụp corpus. Giả định sai thì sửa đúng một số trong dữ liệu, không sửa dòng code nào. Lớp thứ hai: mỗi corpus ghi `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 là lần ta đọc được hạn mức thật từ chính số đã tiêu.
+- **Trạng thái:** `tài liệu nói vậy`, giao làn `verify`, mục `VF-G19`. Phần đã làm của `T-008` (contract, kiểm mới lạ, ba đại lượng nhu cầu) **không** đứng trên giả định này — nó chạy trên corpus có sẵn và không gọi API. Phần **xây** corpus (`T-011`) thì có, và đang chặn ở chỗ khác nặng hơn: chưa có secret nào.
