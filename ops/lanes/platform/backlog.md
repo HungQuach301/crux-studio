@@ -438,25 +438,30 @@ Cùng hình dạng với **G17** ở một chỗ khác: *một luật nằm tron
 ### P-027 · Cửa `automerge-delayed` chưa bao giờ merge được một PR nào — đồng hồ 12 giờ bị chính bước 0 đặt lại
 Bất biến **I4** hứa: PR `automerge-delayed` vào `main` sau **12 giờ** CI xanh. Đo trên dữ liệu thật thì lời hứa đó **chưa một lần** được giữ. Cửa `open` (nhãn `automerge`) chảy bình thường; cửa `automerge-delayed` là một chỗ giữ **vĩnh viễn**.
 
-Không có gì đỏ ở bất cứ đâu: CI xanh trên cả 13 PR, `mergeable_state: clean`, nhãn đúng, `automerge.yml` chạy đúng luật và trả `wait` đúng luật. Đúng nhóm **Z** — hỏng mà mọi chỉ báo đều xanh.
+Không có gì đỏ ở bất cứ đâu: CI xanh trên cả 13 PR, `mergeable_state: clean`, nhãn đúng, `automerge.yml` chạy đúng luật và trả `wait` đúng luật. Đúng nhóm **Z** — hỏng mà mọi chỉ báo đều xanh. Và không thành phần nào hỏng: docblock của chính `merge-gate.ts` nói việc đặt lại đồng hồ là **cố ý**. Lỗi nằm ở **vòng phản hồi** giữa nó và bước 0, nên đọc từng file riêng sẽ không bao giờ thấy.
 
-**Cơ chế, ba câu:** `ops/invariants.merge-gate.ts` đo 12 giờ từ `ciCompletedAt` của lần CI trên **đầu nhánh hiện tại**. Bước 0 (phụ lục P3, chạy ở đầu **mọi** lượt worker theo phụ lục P1) gộp `main` vào PR và push một commit mới. Commit mới là đầu nhánh mới là lần CI mới là đồng hồ **về 0** — và bước 0 chạy dày hơn 12 giờ rất nhiều.
+**Cơ chế, ba câu:** `ops/invariants.merge-gate.ts` đo 12 giờ từ `ciCompletedAt`, cộng một cổng `if (input.ciSha !== input.headSha) return {outcome:'skip'}` buộc lần CI đó phải thuộc **đầu nhánh hiện tại**. Bước 0 (phụ lục P3, chạy ở đầu **mọi** lượt worker theo phụ lục P1) gộp `main` vào PR và push một commit mới. Commit mới là đầu nhánh mới là lần CI mới là đồng hồ **về 0** — và bước 0 chạy dày hơn 12 giờ rất nhiều.
 
 **Đo, không suy (2026-09-22 05:4xZ, lượt `crux-worker-1`):**
 
 | Phép đo | Kết quả |
 |---|---|
-| PR đang mở mang nhãn `automerge-delayed` | **13** (`#39 #42 #49 #56 #65 #79 #81 #83 #84 #85 #89 #109 #112`) |
-| Trong 40 PR merge gần nhất, số PR mang nhãn `automerge-delayed` | **0** — cả 40 đều `automerge` |
+| PR đang mở mang nhãn `automerge-delayed`, **đo lúc `2026-09-22T05:47Z`** | **13** (`#39 #42 #49 #56 #65 #79 #81 #83 #84 #85 #89 #109 #112`) — con số này trôi theo thời gian, luôn đọc kèm mốc đo |
+| PR mang nhãn `automerge-delayed` do **máy** merge, tính trên **toàn bộ** 79 PR đã đóng | **0** |
+| PR mang nhãn `automerge-delayed` từng vào `main` bằng bất cứ đường nào | **1** — `#43`, và đó là chủ dự án merge **tay** |
 | PR có khoảng trống đầu-nhánh-không-đổi ≥ 12 giờ trong 24 giờ qua | **1 / 13** (chỉ `#42`) |
 | `#39` — mở từ `2026-09-21T11:43Z`, tức **18 giờ** | 29 lần đổi đầu nhánh / 24 giờ · trống lớn nhất **3h19m** |
 | `ops/invariants.merge-gate.ts` chạy thật trên trạng thái thật của `#39` | `{"outcome":"wait","reason":"CI xanh được 0.3 giờ, ngưỡng 12 giờ.","hoursLeft":12}` |
 
 Số lần đổi đầu nhánh trong 24 giờ và khoảng trống lớn nhất, cả 13 PR: `#109` 50 lần/1h26m · `#112` 52/1h26m · `#89` 47/1h39m · `#79` 46/1h39m · `#65` 42/1h39m · `#84` 42/2h28m · `#81` 41/2h48m · `#56` 38/2h11m · `#83` 36/8h09m · `#85` 35/7h38m · `#39` 29/3h19m · `#49` 29/5h59m · `#42` 16/**12h02m**.
 
+**Ca `#43` — đối chứng bắt buộc, và nó KHÔNG phủ định kết luận trên.** `#43` mang nhãn `automerge-delayed` và **đã vào `main`**, nên câu "cửa này chưa bao giờ cho PR nào qua" viết trần sẽ **sai**. Đọc kỹ thì nó củng cố kết luận: `#43` mở `2026-09-21T12:41:51Z`, merge `13:16:39Z` — **35 phút**, tức **trước** ngưỡng 12 giờ rất xa, nên `automerge.yml` ở mốc đó chắc chắn trả `wait` và không thể là thủ phạm. Trường `merged_by` chốt lại: `#43` ghi `HungQuach301` (người), trong khi PR do máy merge ghi `github-actions[bot]` — đối chứng `#113`, `merged_by: github-actions[bot]`. Vậy `#43` là **chủ dự án merge tay**, đúng loại thao tác mà thước đo "thời gian của anh" (CHARTER 1.3) đếm. PR delayed duy nhất còn lại đã đóng là `#44`, và nó đóng **không** merge.
+
+**Phát biểu đúng, sau khi đã loại `#43`:** *máy* chưa bao giờ merge một PR `automerge-delayed` nào. Cửa delayed chưa một lần tự chảy; lần duy nhất một PR delayed vào được `main` là nhờ có người bấm.
+
 **`#42` là ca đáng đọc kỹ nhất, vì nó cho thấy ngưỡng gần như không với tới được ngay cả khi không ai đụng vào PR.** Đầu nhánh đứng yên từ `2026-09-21T13:11:32Z` tới `2026-09-22T01:14:17Z` — 12h02m45s. CI xanh xong khoảng `13:12Z`, nên ngưỡng 12 giờ đạt khoảng `01:12Z`. `automerge.yml` chạy theo lịch **`cron: '23 * * * *'`**: lượt `00:23` còn sớm, lượt `01:23` thì đầu nhánh đã đổi hai lần. Cửa sổ sống của PR này rộng **khoảng 2 phút** và rơi đúng vào giữa hai lượt. Trượt.
 
-**Phản biện đã loại trừ — "repo còn non nên chưa PR nào kịp tới hạn":** không đúng. Cửa `automerge-delayed` ra đời cùng `D-C06`, vào `main` lúc `2026-09-21T08:30:56Z` (`git log -1 -- docs/decisions/D-C06.md`), tức đã **21 giờ** tại lúc đo. PR delayed cũ nhất (`#39`) đã mở **18 giờ**. Cả hai đều vượt xa ngưỡng 12 giờ, và **5/13** PR (`#39` 18,2h · `#42` 17,6h · `#49` 16,3h · `#56` 14,6h · `#65` 12,6h) đã mở hơn 12 giờ. Nếu cửa chảy thì ít nhất vài PR phải đã vào `main`.
+**Phản biện đã loại trừ — "repo còn non nên chưa PR nào kịp tới hạn":** không đúng. Cửa `automerge-delayed` ra đời cùng `D-C06`, vào `main` lúc `2026-09-21T08:30:56Z` (`git log -1 -- docs/decisions/D-C06.md`), tức đã **21 giờ** tại lúc đo. PR delayed cũ nhất (`#39`) đã mở **18 giờ**. Cả hai đều vượt xa ngưỡng 12 giờ, và **5/13** PR (`#39` 18,2h · `#42` 17,6h · `#49` 16,3h · `#56` 14,6h · `#65` 12,6h) đã mở hơn 12 giờ. Nếu cửa chảy thì ít nhất vài PR phải đã vào `main` **bằng máy**.
 
 **Vì sao chưa ai bắt được:** hệ quả "đồng hồ đặt lại" **đã** được ghi — mô tả `#85` và `#39` đều nói ra, phụ lục P3 bước 0c dặn phải ghi vào ghi chú, P-026 nhắc tới nó trong một tiêu chí. Nhưng mọi chỗ đó ghi nó cho **một lượt**, như một khoản phí phải trả. Không chỗ nào cộng lại theo thời gian để hỏi câu duy nhất quan trọng: *ngưỡng có bao giờ tới không.* Số đo một lượt thì vô hại; số đo tích luỹ nói rằng cửa này đóng.
 
