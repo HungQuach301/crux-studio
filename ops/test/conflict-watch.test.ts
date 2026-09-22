@@ -422,6 +422,24 @@ test('KF-015: kho nông báo "xung đột" cho nhánh gộp sạch — unshallow
   }
 });
 
+test('I-017 · PR dò HỎNG in "CHƯA kết luận xung đột", KHÔNG khẳng định "xung đột" (chống báo động sai KF-015)', () => {
+  const rows = conflictRows(
+    [{ number: 7, title: 't', labels: [], origin: null, probeError: 'refusing to merge unrelated histories' }],
+    NOW,
+  );
+  assert.equal(rows[0]!.probeError, 'refusing to merge unrelated histories');
+  assert.equal(rows[0]!.hoursStuck, null);
+  const line = renderConflictRow(rows[0]!);
+  assert.match(line, /dò HỎNG, CHƯA kết luận xung đột/);
+  assert.doesNotMatch(line, /(^|[^A-Za-zÀ-ỹ])xung đột,/, 'không được khẳng định "xung đột," cho một PR chỉ là dò hỏng');
+});
+
+test('origin null mà KHÔNG có probeError vẫn là "xung đột, KHÔNG dò được mốc" (ca cửa sổ dò rỗng)', () => {
+  const rows = conflictRows([{ number: 8, title: 'y', labels: [], origin: null }], NOW);
+  assert.equal(rows[0]!.probeError, null);
+  assert.match(renderConflictRow(rows[0]!), /xung đột, KHÔNG dò được mốc kẹt/);
+});
+
 test('một PR hỏng (thoát 128) không làm tắt phép đo của PR còn lại', () => {
   // ĐỎ trên bản `main` cũ: lỗi 128 của PR orphan ném ra ngoài vòng lặp, cả
   // `measureConflicts` chết theo, PR 1 mất kết quả. XANH sau bản sửa: lỗi

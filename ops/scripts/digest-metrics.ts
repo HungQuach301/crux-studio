@@ -409,6 +409,7 @@ export function collectMetrics(
                 title: pr.title,
                 labels: labelNames(pr.labels),
                 origin: isProbeError(probe) ? null : probe,
+                probeError: isProbeError(probe) ? probe.error : null,
               };
             }),
           now.toISOString(),

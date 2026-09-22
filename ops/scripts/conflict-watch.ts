@@ -132,6 +132,13 @@ export interface ConflictInput {
   title: string;
   labels: readonly string[];
   origin: ConflictOrigin | null;
+  /**
+   * Đặt khi PR này **không đo được** (một `ConflictProbeError`) — khác hẳn
+   * `origin: null` của một PR đang xung đột mà cửa sổ dò không đủ để chốt
+   * mốc. Cái giá thật của `KF-015` là một comment khẳng định "xung đột" SAI,
+   * nên "dò hỏng" phải được nói đúng là "chưa kết luận", không phải "xung đột".
+   */
+  probeError?: string | null;
 }
 
 export interface ConflictRow {
@@ -159,6 +166,12 @@ export interface ConflictRow {
    * mọi chỉ báo xanh, PR đứng im vô hạn.
    */
   clockFrozen: boolean;
+  /**
+   * Lý do **không đo được** PR này, hoặc `null` nếu đo được. Khi khác `null`,
+   * dòng bản tin nói "dò hỏng, CHƯA kết luận xung đột" chứ không khẳng định
+   * "xung đột" — xem `ConflictInput.probeError`.
+   */
+  probeError: string | null;
 }
 
 /**
@@ -181,6 +194,7 @@ export function conflictRows(inputs: readonly ConflictInput[], now: string): Con
       hoursStuck: raw === null ? null : Math.max(raw, 0),
       exact: input.origin?.exact ?? false,
       clockSkew: raw !== null && raw < 0,
+      probeError: input.probeError ?? null,
       // So không phân biệt hoa thường, cùng cách `decideMerge` chuẩn hoá
       // `input.labels`. Nhãn GitHub giữ nguyên chữ hoa nhưng chỉ duy nhất
       // theo kiểu không phân biệt hoa thường, nên một nhãn gõ `AutoMerge`
@@ -203,7 +217,11 @@ export function conflictRows(inputs: readonly ConflictInput[], now: string): Con
 /** Một dòng bản tin, tiếng Việt. Dạng khớp phụ lục P2 mục "Đang chờ merge". */
 export function renderConflictRow(row: ConflictRow): string {
   const parts = [`#${row.number}`];
-  if (row.hoursStuck === null) {
+  if (row.probeError !== null) {
+    // Dò hỏng (`KF-015` và họ hàng): KHÔNG khẳng định "xung đột" — cái giá
+    // của KF-015 chính là một khẳng định xung đột sai gửi chủ dự án.
+    parts.push(`dò HỎNG, CHƯA kết luận xung đột (${row.probeError})`);
+  } else if (row.hoursStuck === null) {
     parts.push('xung đột, KHÔNG dò được mốc kẹt');
   } else {
     parts.push(`xung đột, kẹt ${row.exact ? '' : 'ít nhất '}${row.hoursStuck.toFixed(2)} giờ`);
@@ -341,7 +359,16 @@ function ensureComplete(cwd: string, remote: string): void {
       `Không kiểm được kho có shallow không (${cwd}): ${shallow.error?.message ?? shallow.stderr.trim()}`,
     );
   }
-  if (shallow.stdout.trim() !== 'true') return;
+  // Fail-closed: chỉ `'false'` mới là "đã đầy đủ, đo được". Một giá trị lạ
+  // (git quá cũ, output đổi) coi-là-đầy-đủ trong im lặng thì kho nông lọt
+  // qua và dựng lại đúng KF-015 — nên ném thay vì đoán.
+  const isShallow = shallow.stdout.trim();
+  if (isShallow === 'false') return;
+  if (isShallow !== 'true') {
+    throw new Error(
+      `\`git rev-parse --is-shallow-repository\` trả giá trị lạ ${JSON.stringify(isShallow)} (${cwd}) — không đoán kho đã đầy đủ (KF-015).`,
+    );
+  }
 
   const unshallow = git(cwd, ['fetch', '--unshallow', '--no-tags', '--quiet', remote]);
   if (unshallow.error !== undefined || unshallow.status !== 0) {
