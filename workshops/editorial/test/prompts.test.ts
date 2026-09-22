@@ -59,9 +59,12 @@ test('mỗi prompt thật kết thúc bằng mục Tự kiểm, và không chứ
 // ── `generation.promptVersion` trong artifact (vế còn lại của tiêu chí xong E-001) ──
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
+// Danh sách xưởng cần nạp suy từ `definition.consumes`, không khai tay trong
+// fixture — khai tay là bản chép thứ hai của `consumes` (mục integration/I-011).
 const { episode, input: fixture } = readInputFile(
   root,
   fileURLToPath(new URL('../fixtures/input.json', import.meta.url)),
+  definition.consumes,
 );
 
 function ctx(cassette: Cassette, impl: 'stub' | 'v1' = 'stub') {
