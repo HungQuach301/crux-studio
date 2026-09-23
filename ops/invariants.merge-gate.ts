@@ -9,7 +9,13 @@
  * |---|---|---|
  * | `owner-merge` | — | máy KHÔNG BAO GIỜ merge |
  * | `automerge-delayed` | `automerge-delayed` | 12 giờ kể từ lúc CI xanh |
+ * | `automerge-delayed` + lối nhanh | `automerge-delayed` + `hotfix` | không chờ, nếu `ops/invariants.hotfix-lane.ts` cho phép (`D-C07`) |
  * | `open` | `automerge` | không chờ |
+ *
+ * **Lối nhanh `hotfix` bỏ đúng MỘT thứ: khoảng chờ.** Nó không bỏ phép kiểm
+ * nào — CI xanh trên đúng đầu nhánh, không nháp, không xung đột,
+ * `fix-has-test` xanh và không có lời `dừng` đều vẫn phải đạt, và sáu điều
+ * kiện riêng của nó nằm ở `ops/invariants.hotfix-lane.ts`.
  *
  * **Vì sao lấy CỬA chứ không lấy NHÃN làm gốc (rà soát Z8):** nhãn do
  * `ci.yml` gắn, mà `ci.yml` chạy theo định nghĩa trong NHÁNH PR. Một PR sửa
@@ -33,6 +39,7 @@
 
 import { readFileSync } from 'node:fs';
 import type { Gate } from './invariants.protected-area.ts';
+import type { HotfixDecision } from './invariants.hotfix-lane.ts';
 
 export interface Comment {
   author: string;
@@ -66,6 +73,17 @@ export interface MergeInput {
   owner: string;
   now: string;
   delayHours: number;
+  /**
+   * Kết luận của lối đi nhanh `hotfix` (`D-C07`, `ops/invariants.hotfix-lane.ts`),
+   * do `automerge.yml` tính bằng bản trên `main` — cùng đường như `gate`.
+   *
+   * `null` nghĩa là **chưa xét**, và chưa xét thì đi cửa thường: thiếu dữ
+   * liệu không bao giờ được rút ngắn khoảng chờ. Chỉ `lane === 'hotfix'` bỏ
+   * được cửa 12 giờ, và nó chỉ được xét SAU khi mọi phép kiểm chung đã đạt
+   * (CI xanh trên đúng đầu nhánh, không nháp, không xung đột, `fix-has-test`
+   * xanh, không có lời `dừng`) — đó là điều kiện 4 của `D-C07`.
+   */
+  hotfix: HotfixDecision | null;
 }
 
 export type Outcome = 'merge' | 'skip' | 'wait' | 'recheck';
@@ -163,6 +181,14 @@ export function decideMerge(input: MergeInput): Decision {
     return { outcome: 'merge', reason: 'PR không chạm vùng bảo vệ, CI xanh trên đầu nhánh.' };
   }
 
+  // Lối đi nhanh `hotfix` (`D-C07`). Đặt ở ĐÚNG đây, không sớm hơn: mọi phép
+  // kiểm chung phía trên đã chạy, nên lối nhanh chỉ bỏ MỘT thứ — khoảng chờ
+  // 12 giờ — chứ không bỏ lớp chặn nào. Lời `dừng` của chủ dự án vẫn thắng
+  // nó, vì phép kiểm đó nằm trên.
+  if (input.hotfix !== null && input.hotfix.lane === 'hotfix') {
+    return { outcome: 'merge', reason: `Lối nhanh \`hotfix\` (D-C07): ${input.hotfix.reason}` };
+  }
+
   if (input.ciCompletedAt === null) {
     return { outcome: 'skip', reason: 'Không biết CI xanh lúc nào, nên không tính được khoảng chờ.' };
   }
@@ -217,6 +243,7 @@ if (isMain) {
     owner: raw.owner ?? '',
     now: raw.now ?? new Date().toISOString(),
     delayHours: raw.delayHours ?? DEFAULT_DELAY_HOURS,
+    hotfix: raw.hotfix ?? null,
   });
   process.stdout.write(`${JSON.stringify(decision)}\n`);
 }
