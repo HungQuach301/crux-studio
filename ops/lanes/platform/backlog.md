@@ -680,6 +680,67 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
 
+ claude/hopeful-dirac-hk8edy
+---
+
+### P-032 · Đường về xanh của `main` bị khoá sau cửa 12 giờ — hai câu trong CHARTER nói ngược nhau
+`CLAUDE.md` mục 13 và CHARTER phụ lục P3 bước 1 đòi sửa một `main` đỏ **ngay**. Luật vùng bảo vệ (CHARTER mục 3, `D-C06`) phủ `ops/workflows/**` ở mức `automerge-delayed`, tức **12 giờ CI xanh**. Khi `main` đỏ **vì một workflow**, mọi bản sửa — sửa tại chỗ hay revert — chạm đúng thư mục ấy, nên cửa 12 giờ áp cho chính thứ đáng lẽ đi nhanh nhất.
+
+Đo `2026-09-23 ~00:40Z`, `origin/main = ecd0085`, đỏ từ `23:05:06Z` (`7dfdfeb`, PR `#42`): ba cổng đỏ trên cây sạch (`lint:workflows` EXIT=1 bốn dòng `spike-canvas.yml`; `check:tests` EXIT=1; `pnpm test` 790 pass / **3 fail**). Bản sửa `#167` **CI xanh 5/5 từ `00:03Z`**, nhưng `node ops/invariants.protected-area.ts` trên diff của nó ra `{"gate":"automerge-delayed"}` vì `ops/workflows/spike-canvas.yml` — nên `main` còn đỏ cho tới khi `#167` tự merge — **dự kiến** ~`12:03Z` (đồng hồ 12 giờ chạy từ lúc CI xanh trên đầu nhánh, `00:03Z`, không phải từ lúc `main` đỏ — CHARTER 3.3). Đây là chiếu, không phải số đo: nó đổi nếu `#167` bị push mới, bị comment `dừng`, hoặc CI đổi màu.
+
+Giá phải trả, đo ở bước 0 cùng lượt: **6 / 16 PR đang mở** xung đột, `integrator-resolve.ts` trả `aborted-ineligible` cho **cả 6**, 0 giải, 0 push. Và vì CI dựng `refs/pull/N/merge` (**đo được** trên chính PR của mục này — xem `KF-020`), **mọi** PR đang mở đỏ ở lượt CI kế tiếp. Chính xác hơn về thời điểm: `ci.yml` chỉ chạy trên `pull_request` với `[opened, synchronize, reopened, labeled, unlabeled]`, nên "lượt kế tiếp" tới khi PR có sự kiện mới, không phải ngay lập tức. Không gì đỏ ngoài `main` — nhóm Z: mỗi luật đều đúng, chỗ thủng ở chỗ hai luật gặp nhau.
+
+- deps: —
+- risk: **high** — mỗi lần `main` đỏ vì workflow là ~12 giờ toàn bộ hàng đợi merge đứng, không ai phải bấm sai gì cả.
+- status: review
+- nguồn: `🤖 [QĐ] #169` (**đã trả lời: A**, `01:19:54Z` ngày 2026-09-23, kèm sáu điều kiện) → `docs/decisions/D-C07.md`; `🤖 [QĐ] #175` (PR `#168` ra cửa `owner-merge`, cần chủ dự án merge); `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
+- tiêu chí xong:
+  - ✅ **`🤖 [QĐ] #169` đã có câu trả lời: A**, kèm sáu điều kiện, chốt lâu dài ở `docs/decisions/D-C07.md`. Sáu điều kiện là phép kiểm máy ở `ops/invariants.hotfix-lane.ts`, không phải lời dặn — đó là chỗ câu trả lời đòi khắt khe nhất.
+  - ✅ **Chứng minh bằng chạy thật** (`origin/main = 00f2f84`, 2026-09-23 ~04:0xZ, đầu ra THẬT của `pnpm check` EXIT=1):
+    - `node ops/scripts/main-red-scope.ts` trên đầu ra đó → `{"sha":"00f2f84","files":["ops/workflows/spike-canvas.yml"]}` — đúng một file, đúng chỗ hỏng thật.
+    - `node ops/invariants.protected-area.ts` trên diff "chỉ sửa `spike-canvas.yml`" → `{"gate":"automerge-delayed"}`. Cửa **không** đổi, và đó là chủ đích: lối nhanh không nới vùng bảo vệ, nó chỉ bỏ khoảng chờ.
+    - `node ops/invariants.hotfix-lane.ts` trên cùng diff đó, với thân cảnh báo thật của `#131` cộng khối phạm vi ở trên → `{"lane":"hotfix"}`.
+    - Bốn ca âm, chạy thật cùng lượt: chạm `watchdog.yml` (ngoài phạm vi) → `normal`; chạm thêm `ops/scripts/check-test-coverage.ts` (tầng luật, đúng hình dạng `#167`) → `needs-decision`; chạm `automerge.yml` → `needs-decision`; không có nhãn `hotfix` → `normal`.
+  - ✅ **Bài tái hiện (bất biến I2)** trong `node --test`: `ops/test/invariants-hotfix-lane.test.ts` 14 bài (gồm ca "phân biệt hai ca" mà câu trả lời đòi), `ops/test/main-red-scope.test.ts` 8 bài, và 9 test âm mới ở `ops/test/invariants-merge-gate.test.ts` — lối nhanh không bỏ CI đỏ, không bỏ `fix-has-test`, không thắng lời `dừng`, không mở được cửa `owner-merge`. Nới đúng một ca, không nới cả thư mục: có test riêng cho "cùng thư mục vẫn là ngoài phạm vi".
+  - ✅ **Chỗ lệch hai câu đã sửa**, đúng chỗ chủ dự án chỉ ra: CHARTER phụ lục P3 bước 1 và thân issue cảnh báo do `main-ci.yml` sinh ra thôi ghi cứng nhãn `automerge` — nhãn nay là trường `gate` do tool tính, cộng `hotfix` khi đủ điều kiện. Cùng câu đó sửa ở `CLAUDE.md` mục 13 và mục 2, CHARTER 3.3 và nhật ký thay đổi **C8**.
+  - ⚠️ **Chỗ chưa che, khai ra:** bản sửa vừa sửa chỗ hỏng vừa siết thêm luật ra `needs-decision`, tức vẫn chờ 12 giờ (`#167` là ví dụ thật). Cách đi: tách hai PR. Ghi ở `D-C07` và `KF-020`.
+  - ⚠️ **Hai vế còn lại của câu trả lời KHÔNG nằm trong mục này**, để mỗi PR một phạm vi: `P-034` (@nhắc mỗi 4 giờ cho cảnh báo khẩn) và `P-035` (bản tin có mục riêng cho lần merge lối nhanh).
+- **mã mục nhận lúc 2026-09-23 ~00:4x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — cảnh báo ở đầu `KF-018`): cao nhất là `P-031` (`#167`), nên `P-032` không đụng ai.
+
+---
+
+### P-034 · Cảnh báo khẩn phải @nhắc ngay ở comment đầu tiên, và nhắc lại mỗi 4 giờ
+Chủ dự án dặn kèm câu trả lời `#169`: **mọi** cảnh báo khẩn của CHARTER 2.4 phải `@nhắc` ngay trong comment **đầu tiên**, và nhắc lại **mỗi 4 giờ** khi chưa có phản hồi. Số đo của anh: cảnh báo `#131` mở lúc `2026-09-22T10:14Z` và **13 giờ** sau mới @nhắc.
+
+Luật hiện hành đi ngược lại có chủ đích: `main-ci.yml` cố ý **không** @nhắc ở lần đỏ đầu (`D-C06`, "gọi người ở phút đầu là gọi người cho một việc mà máy sắp tự làm xong"), và chỉ @nhắc **đúng một lần** sau 2 giờ, canh bằng mốc `<!-- crux-escalate-main-do -->`. Nên mục này là **sửa luật**, không phải sửa lỗi: nó đổi cả hai vế (độ trễ và số lần), và nó đổi ở hai chỗ — `main-ci.yml` và `watchdog.yml`.
+
+- deps: —
+- risk: medium — @nhắc quá dày làm loãng chính cảnh báo; quá thưa thì lặp lại đúng chỗ `#131` đã trượt. Chủ dự án đã chốt con số, nên rủi ro còn lại chỉ là chỗ thực thi.
+- status: ready
+- nguồn: comment của chủ dự án trên `🤖 [QĐ] #169` (`2026-09-23T01:19:54Z`); CHARTER 2.4; `D-C06`; `docs/decisions/D-C07.md` mục "Việc còn lại"
+- tiêu chí xong:
+  - ⬜ `main-ci.yml`: @nhắc nằm trong thân issue **ngay lần đỏ đầu**, và một comment nhắc lại khi lần @nhắc gần nhất đã quá **4 giờ**. Mốc `<!-- crux-escalate-main-do -->` không còn là "đã nhắc thì thôi" mà là "đã nhắc lúc nào" — đọc `createdAt` của comment mang mốc đó, đừng đếm số comment.
+  - ⬜ `watchdog.yml`: cùng luật 4 giờ cho ba loại cảnh báo còn lại của CHARTER 2.4.
+  - ⬜ Test: một issue đã @nhắc 3,9 giờ trước thì **không** nhắc lại; 4,1 giờ trước thì nhắc lại. Hàm quyết định tách khỏi bash (`ops/scripts/`), để test được mà không cần Actions.
+  - ⬜ CHARTER 2.4 sửa theo, kèm một dòng nhật ký thay đổi: câu "không @nhắc ở lần đầu" của `D-C06` bị thay, và phải nói rõ là bị thay.
+- **mã mục nhận lúc 2026-09-23 ~04:0x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên mọi nhánh PR đang mở** (`refs/pull/N/head` của cả 21 PR, không chỉ vài nhánh nhớ được): cao nhất là `P-033` (`#173`), nên `P-034` không đụng ai.
+
+---
+
+### P-035 · Bản tin có một mục riêng cho mỗi PR merge qua lối đi nhanh `hotfix`
+Điều kiện 6 của `D-C07` có hai vế, và chỉ vế thứ nhất đã xong: `automerge.yml` @nhắc chủ dự án ngay lúc merge một PR `hotfix`. Vế còn lại — *"một mục riêng trong bản tin kế tiếp để tôi soát lại"* — chưa có chỗ nào thực hiện.
+
+Vì sao tách khỏi `P-032`: nó chạm `ops/scripts/digest-metrics.ts`, mà PR `#120` (`platform/P-027`) đang mở trên **đúng** file đó và đang xung đột với `main` bốn lượt liên tiếp. Thêm một PR nữa vào cùng file là thêm một xung đột biết trước (CHARTER mục 4: hai làn cùng sửa một file).
+
+- deps: `P-027` (PR `#120`) vào `main` trước
+- risk: low — thiếu nó thì lần merge lối nhanh vẫn có @nhắc tức thời, chỉ mất chỗ soát lại vào sáng hôm sau.
+- status: blocked
+- nguồn: comment của chủ dự án trên `🤖 [QĐ] #169`, điều kiện 6; `docs/decisions/D-C07.md`
+- tiêu chí xong:
+  - ⬜ Bản tin (phụ lục P2) có mục **"Đã merge qua lối nhanh `hotfix`"**, mỗi dòng: số PR · sự cố nào · file nào đã chạm · giờ merge. Rỗng thì in một dòng "không có", không bỏ mục (cấm im lặng, rà soát Z2).
+  - ⬜ Nguồn của mục đó là dữ liệu máy đọc, không phải văn xuôi: nhãn `hotfix` trên PR đã merge trong 24 giờ qua, cộng khối `crux-hotfix-scope` của cảnh báo tương ứng.
+  - ⬜ Test cho hàm dựng mục đó, gồm ca rỗng.
+- **mã mục nhận lúc 2026-09-23 ~04:0x giờ UTC** (`ops/logs/README.md`, `KF-005`): cùng phép dò như `P-034` — cao nhất lúc nhận là `P-034` của chính lượt này.
 ### P-033 · Chuỗi kẹt của bước 0 đếm bằng mắt từ văn xuôi, nên ngưỡng cảnh báo im lặng
 Phụ lục P3 bước 0b đòi ba số cho mỗi PR bị bỏ lại — giờ kẹt · làn sở hữu · **số lượt liên tiếp cùng chữ ký** — và nói thẳng lý do: *"thiếu chúng thì `pickPrToHandle` ở phụ lục P1 bước 2 không có nguồn để đếm"*. Nhưng nó không nói **ghi vào đâu**, nên mọi lượt ghi cả ba vào `note`, tức văn xuôi. Nguồn để đếm vì thế chưa bao giờ tồn tại ở dạng máy đọc được.
 
@@ -701,6 +762,7 @@ Hàng đợi merge đứng (`main` đỏ, `KF-020`) chỉ **làm lộ** lỗi n�
   - ✅ Dòng log bước 0 của chính lượt này là dữ liệu thật đầu tiên ở dạng mới.
   - ⬜ **Còn lại, không làm ở PR này để khỏi trộn phạm vi:** (a) một lớp máy bắt dòng bước 0 báo có PR bỏ lại mà **quên** trường `step0`; (b) bản tin (phụ lục P2) và `stuckStreak` gọi thẳng `step0Streaks` thay vì nhận số truyền tay; (c) sửa lời phụ lục P3 bước 0b để nó nói rõ ghi ba số **vào trường `step0`** — đó là sửa CHARTER ngoài mục 1 và mục 3, tức cửa `automerge-delayed`, nên đi ở PR riêng.
 - **mã mục nhận lúc 2026-09-23 ~02:5x Z** (`KF-005`): dò `### P-` trên `main` **và mọi** nhánh PR đang mở, cao nhất là `P-032` (`#168`), nên `P-033` không đụng ai.
+ main
 ### P-031 · `main` đỏ: `spike-canvas.yml` vào `main` với 4 vi phạm Z9/Z10 mà `node --test` không soi
 
 `origin/main` tại `cf5c7f9` **đỏ** ở `pnpm lint:workflows` — đo `2026-09-22 23:38Z` trên cây sạch, `EXIT=1`, bốn dòng: `spike-canvas.yml:47/69/84` thiếu `set -euo pipefail` (Z10) và `:63` nuốt lỗi không chú thích (Z9). File vào `main` lúc `23:05:06Z` cùng `7dfdfeb` (mục `visual/V-002`, PR #42).
