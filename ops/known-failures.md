@@ -33,6 +33,21 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
   Vùng bảo vệ mức `automerge-delayed` (CHARTER mục 3, `D-C06`) phủ **`ops/workflows/**`**. Mà một `main` đỏ vì một workflow thì **mọi** bản sửa của nó — sửa tại chỗ như `#167`, hay revert `#42` — đều chạm đúng thư mục ấy. Vậy cửa 12 giờ áp cho chính thứ đáng lẽ phải đi nhanh nhất.
 
 - **Vì sao nó đắt hơn vẻ ngoài:** `CLAUDE.md` mục 13 viết *"`main` đỏ thì revert ngay"*, và CHARTER phụ lục P3 bước 1 cũng nói **ngay**. Luật vùng bảo vệ nói **12 giờ**. Hai câu trong cùng một hiến chương, và cho tới `#167` merge (~`12:00Z`, tức ~12 giờ sau khi `main` đỏ lúc `23:05Z`) thì: không PR xung đột nào gỡ được, và **mọi** PR đang mở đỏ ở lượt CI kế tiếp vì CI dựng `refs/pull/N/merge`. 16 PR đứng vì một cửa thiết kế cho chuyện khác. Không gì đỏ **lúc này** ngoài `main` — đúng nhóm **Z**: mỗi luật riêng lẻ đều đúng, chỗ thủng nằm ở chỗ hai luật gặp nhau.
+
+  **Đo trên chính PR ghi mục này (`#168`), nên phần "mọi PR đang mở sẽ đỏ" không còn là suy luận.** `#168` chỉ thêm tài liệu và hai file log — không chạm một dòng code nào. CI của nó vẫn **đỏ**:
+
+  ```
+  HEAD is now at 10ff9d0 Merge 5152ceb… into ecd0085…
+  > pnpm contracts   → Contract ok
+  > pnpm lint:deps   → I3 ok
+  > pnpm lint:workflows
+  Workflow có vấn đề:
+    - spike-canvas.yml:47/:69/:84 … (Z10)
+    - spike-canvas.yml:63 … (Z9)
+  ##[error]Process completed with exit code 1
+  ```
+
+  Hai điều dòng log này chốt lại: (1) `actions/checkout@v7` trong `ops/workflows/ci.yml` **dựng `refs/pull/<N>/merge`**, tức mọi PR chạy `pnpm check` trên cây *đã gộp `main`*, nên `main` đỏ là **mọi** PR đỏ — trước đây chỉ suy từ tài liệu, nay có dòng `Merge … into ecd0085` làm bằng; (2) bốn dòng làm `#168` đỏ **không có dòng nào** thuộc diff của `#168`. Bốn check còn lại (`protected-area`, `fix-has-test`, `secret-scan`, `trailer-warn`) đều **success**.
 - **Vì sao lượt này không tự sửa:** nới cửa merge cho một loại PR là **đổi CHARTER mục 3** — `irreversible` nhóm 4 của CHARTER 2.3. Agent không tự làm, kể cả khi khuyến nghị rõ ràng. Đã mở `🤖 [QĐ] #169`; mục `platform/P-032` nhận việc và đứng `blocked` tới khi có câu trả lời.
 - **Đã sửa ở đâu:** *chưa sửa cơ chế.* `#167` gỡ **lần này** (đúng và cần), nhưng không đụng tới cái làm lần sau lặp lại.
 - **Máy chặn từ nay:** chưa có, và cố ý chưa có — thêm lớp chặn trước khi chốt luật chỉ khoá thêm một cửa nữa. Tới khi `P-032` xong, lớp chặn là dòng này: **một PR mà tiêu chí xong của nó là "đưa `main` từ đỏ về xanh" phải được kiểm cửa merge ngay lúc nhận việc, không phải lúc gắn nhãn.** Ra `automerge-delayed` hay `owner-merge` thì nói ngay trong mô tả PR là `main` sẽ còn đỏ bao lâu, để bản tin sáng đếm được — đừng để nó lộ ra qua sáu lượt worker `aborted-ineligible` liên tiếp.
