@@ -34,6 +34,9 @@ function pr(patch: Partial<MergeInput> = {}): MergeInput {
     owner: 'HungQuach301',
     now: '2026-09-21T13:00:00.000Z',
     delayHours: DEFAULT_DELAY_HOURS,
+    // Mặc định là "chưa xét lối nhanh" — cùng hướng an toàn như
+    // `automerge.yml` khi nó không dựng được dữ liệu của `D-C07`.
+    hotfix: null,
     ...patch,
   };
 }
@@ -202,4 +205,79 @@ test('không biết CI xanh lúc nào thì không merge ở cửa có chờ', ()
 
 test('mốc thời gian không đọc được thì không merge', () => {
   assert.equal(decideMerge(pr({ ciCompletedAt: 'hôm qua' })).outcome, 'skip');
+});
+
+// ── Lối đi nhanh `hotfix` (D-C07) ────────────────────────────────────────
+
+const NOW_1H = '2026-09-21T01:00:00.000Z';
+
+test('lối nhanh bỏ được cửa 12 giờ: CI xanh 1 giờ mà vẫn merge', () => {
+  const decision = decideMerge(
+    pr({ now: NOW_1H, labels: ['automerge-delayed', 'hotfix'], hotfix: { lane: 'hotfix', reason: 'cảnh báo nêu đúng file này' } }),
+  );
+  assert.equal(decision.outcome, 'merge');
+  assert.match(decision.reason, /D-C07/);
+});
+
+test('chưa xét lối nhanh (`null`) thì vẫn chờ đủ 12 giờ — thiếu dữ liệu không rút ngắn gì', () => {
+  assert.equal(decideMerge(pr({ now: NOW_1H, hotfix: null })).outcome, 'wait');
+});
+
+test('`needs-decision` và `normal` KHÔNG rút ngắn khoảng chờ', () => {
+  for (const lane of ['needs-decision', 'normal'] as const) {
+    const decision = decideMerge(pr({ now: NOW_1H, hotfix: { lane, reason: 'chạm tầng luật' } }));
+    assert.equal(decision.outcome, 'wait', lane);
+  }
+});
+
+test('điều kiện 4 · lối nhanh KHÔNG bỏ qua CI: CI đỏ thì vẫn skip', () => {
+  const decision = decideMerge(
+    pr({ now: NOW_1H, ciConclusion: 'failure', hotfix: { lane: 'hotfix', reason: 'đủ điều kiện' } }),
+  );
+  assert.equal(decision.outcome, 'skip');
+});
+
+test('điều kiện 4 · lối nhanh KHÔNG bỏ qua CI xanh trên đúng đầu nhánh', () => {
+  const decision = decideMerge(
+    pr({ now: NOW_1H, ciSha: 'cũ0000', hotfix: { lane: 'hotfix', reason: 'đủ điều kiện' } }),
+  );
+  assert.equal(decision.outcome, 'skip');
+});
+
+test('lối nhanh KHÔNG thắng lời `dừng` của chủ dự án', () => {
+  const decision = decideMerge(
+    pr({
+      now: NOW_1H,
+      hotfix: { lane: 'hotfix', reason: 'đủ điều kiện' },
+      comments: [{ author: 'HungQuach301', body: 'dừng cái này lại đã', createdAt: GREEN }],
+    }),
+  );
+  assert.equal(decision.outcome, 'skip');
+  assert.match(decision.reason, /dừng/);
+});
+
+test('lối nhanh KHÔNG mở được cửa `owner-merge`', () => {
+  const decision = decideMerge(
+    pr({ gate: 'owner-merge', hotfix: { lane: 'hotfix', reason: 'đủ điều kiện' } }),
+  );
+  assert.equal(decision.outcome, 'skip');
+});
+
+test('lối nhanh KHÔNG bỏ qua bất biến I2 vế hai (`fix-has-test`)', () => {
+  const decision = decideMerge(
+    pr({
+      now: NOW_1H,
+      labels: ['automerge-delayed', 'hotfix', 'fix'],
+      fixHasTestConclusion: 'skipped',
+      hotfix: { lane: 'hotfix', reason: 'đủ điều kiện' },
+    }),
+  );
+  assert.equal(decision.outcome, 'skip');
+});
+
+test('lối nhanh KHÔNG merge một PR đang xung đột với `main`', () => {
+  const decision = decideMerge(
+    pr({ now: NOW_1H, mergeable: false, hotfix: { lane: 'hotfix', reason: 'đủ điều kiện' } }),
+  );
+  assert.equal(decision.outcome, 'skip');
 });

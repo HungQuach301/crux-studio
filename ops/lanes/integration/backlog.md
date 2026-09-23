@@ -610,7 +610,7 @@ quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~16:45Z; `ops/known-failures.md` `KF-016`; `ops/logs/platform/P-010.jsonl`
 - **Số hiệu I-018:** `I-015` do PR `#112` giữ, `I-016` đã merge, `I-017` do PR `#150` giữ.
 - tiêu chí xong:

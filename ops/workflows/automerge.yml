@@ -14,6 +14,12 @@
 #                        trừ khi chủ dự án comment `dừng`
 #   open               · nhãn `automerge`, merge ngay
 #
+# Từ `D-C07` có thêm LỐI ĐI NHANH cho cửa `automerge-delayed`: nhãn `hotfix`
+# bỏ được khoảng chờ 12 giờ khi `main` đang đỏ và PR chỉ sửa đúng file mà
+# cảnh báo khẩn nêu tên. Sáu điều kiện nằm ở `ops/invariants.hotfix-lane.ts`;
+# lối nhanh KHÔNG bỏ phép kiểm nào khác, và không bao giờ áp cho chính file
+# này (điều kiện 5).
+#
 # CỬA được tính lại ở đây bằng `ops/invariants.protected-area.ts` BẢN TRÊN
 # MAIN, không lấy từ nhãn. Nhãn do `ci.yml` gắn, mà `ci.yml` chạy theo định
 # nghĩa trong nhánh PR — một PR sửa `ci.yml` sẽ không bị nhãn nào chặn. Đó
@@ -49,6 +55,11 @@ permissions:
   # PR ĐẦU hàng đợi, `set -euo pipefail` giết cả bước, và không PR nào merge
   # được. Đo được: 35 lượt đỏ liên tiếp, 14:45Z → 20:38Z ngày 2026-09-22.
   checks: read
+  # `D-C07`: bước xét lối nhanh `hotfix` đọc issue cảnh báo đang mở (`gh issue
+  # list` + `gh issue view`) để lấy khối phạm vi. `issues` là scope RIÊNG, các
+  # quyền trên không bao nó — thiếu dòng này thì `set -euo pipefail` giết cả
+  # bước ở PR đầu hàng đợi, đúng chữ ký `KF-017`.
+  issues: read
 
 # KF-004 push: merge ở đây sinh sự kiện `push` vào main, mà `main-ci.yml`,
 # `labels.yml`, `smoke-workflows.yml` và `.github/workflows/sync-workflows.yml`
@@ -118,8 +129,67 @@ jobs:
           if [ -z "${NUMS// /}" ]; then
             echo "Không có PR nào mang nhãn tự merge. Kết thúc."
             echo "merged=" >> "$GITHUB_OUTPUT"
+            echo "merged_hotfix=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # ── D-C07 · dữ liệu của lối đi nhanh `hotfix` ─────────────────────
+          #
+          # Dựng MỘT LẦN cho cả hàng đợi, không dựng lại trong vòng lặp: cả
+          # ba thứ dưới đây là trạng thái của SỰ CỐ, không phải của từng PR.
+          #
+          # Điều kiện 1 · `main-ci` gần nhất trên `main` có đỏ không. Không có
+          # lần chạy nào thì coi như KHÔNG đỏ — hướng an toàn là cửa thường.
+          MAIN_CI_RUN=$(gh api "repos/$REPO/actions/workflows/main-ci.yml/runs?branch=main&status=completed&per_page=1" \
+            --jq '.workflow_runs[0] // {} | {conclusion: (.conclusion // ""), sha: (.head_sha // "")}')
+          MAIN_CI=$(echo "$MAIN_CI_RUN" | jq -r .conclusion)
+          INCIDENT_SHA=$(echo "$MAIN_CI_RUN" | jq -r .sha)
+          if [ "$MAIN_CI" = "success" ] || [ -z "$MAIN_CI" ]; then
+            MAIN_CI_RED=false
+            INCIDENT_SHA=""
+          else
+            MAIN_CI_RED=true
+          fi
+          echo "D-C07 · main-ci gần nhất: ${MAIN_CI:-(chưa có lần chạy nào)} tại ${INCIDENT_SHA:-—} → mainCiRed=$MAIN_CI_RED"
+
+          # Điều kiện 1 (vế cảnh báo) · thân issue `alert` đang mở, NỐI với
+          # những comment do `github-actions[bot]` viết — và CHỈ những comment
+          # đó.
+          #
+          # ⚠️ Lọc tác giả KHÔNG tuỳ chọn (bất biến I7, `CLAUDE.md` mục 5).
+          # `parseScope` lấy khối phạm vi MỚI NHẤT và không biết ai viết nó.
+          # Agent comment được lên issue cảnh báo bằng danh tính chủ dự án —
+          # bước 0 vẫn ghi ghi chú ở đó — nên nối cả comment của agent vào là
+          # cho một comment ĐỊNH NGHĨA LẠI điều kiện 2, tức tự cấp quyền cho
+          # chính mình. Vòng soát ngữ cảnh sạch tái hiện được đúng ca đó: một
+          # khối tự viết với `files: ["CHARTER.md", ...]` ra `lane: "hotfix"`.
+          # `github-actions[bot]` là tác giả duy nhất mà agent không giả được:
+          # chỉ workflow chạy theo định nghĩa trên `main` viết dưới tên đó.
+          ALERT_NUM=$(gh issue list --repo "$REPO" --label alert --state open \
+            --search "main đỏ in:title" --json number,createdAt,author \
+            --jq '[.[] | select(.author.login == "github-actions[bot]")]
+                  | sort_by(.createdAt) | last | .number // ""')
+          ALERT_BODY=""
+          if [ -n "$ALERT_NUM" ]; then
+            ALERT_BODY=$(gh issue view "$ALERT_NUM" --repo "$REPO" --json body,comments \
+              --jq '[.body] + [.comments[] | select(.author.login == "github-actions[bot]") | .body]
+                    | join("\n\n")')
+          fi
+          echo "D-C07 · cảnh báo đang mở: ${ALERT_NUM:-(không có)}"
+
+          # Điều kiện 6 · mọi PR đang mở mang nhãn `hotfix`. Cửa chọn PR số
+          # nhỏ nhất, nên danh sách này phải đủ, không chỉ PR đang xét.
+          # `--paginate` cộng với một `--jq` trả MẢNG in ra một mảng CHO MỖI
+          # TRANG (`[171] []`), và chuỗi đó không phải JSON hợp lệ — `--argjson`
+          # dưới đây sẽ chết kéo cả bước theo `set -e`. Nên lấy DÒNG (như
+          # bước dựng `NUMS` phía trên đã làm) rồi ghép mảng bằng `jq` một lần.
+          HOTFIX_LIST=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+            --jq '.[] | select(.labels | map(.name) | index("hotfix") != null) | .number' \
+            | tr '\n' ' ')
+          HOTFIX_PRS=$(jq -cn --arg list "$HOTFIX_LIST" \
+            '$list | split(" ") | map(select(. != "")) | map(tonumber)')
+          echo "D-C07 · PR mang nhãn hotfix: $HOTFIX_PRS"
+          MERGED_HOTFIX=""
 
           for NUM in $NUMS; do
             echo "──────────── PR #$NUM"
@@ -163,8 +233,40 @@ jobs:
             FIX_HAS_TEST=$(gh api "repos/$REPO/commits/$HEAD/check-runs?per_page=100" \
               --jq '[.check_runs[] | select(.name == "fix-has-test" and .status == "completed")][0].conclusion // null')
 
+            # Lối đi nhanh `hotfix` (D-C07, `ops/invariants.hotfix-lane.ts`).
+            # Tính bằng bản trên `main` như mọi thứ khác trong file này, và in
+            # ra kết luận cho MỌI PR — kể cả `normal` (cấm im lặng, rà soát Z2).
+            # Danh sách file bị XOÁ, tách khỏi `changed`: một PR xoá đúng file
+            # test đang làm cổng đỏ thì thoả điều kiện 2 một cách hoàn hảo mà
+            # vẫn là "tắt test để CI xanh" (`CLAUDE.md` mục 13). `--name-only`
+            # không phân biệt được, `--name-status` thì có.
+            git diff --name-status "$BASE" "refs/remotes/pr/$NUM" \
+              | awk '$1 ~ /^D/ { print $2 }' > "$PR_DIR/deleted.txt"
+
+            jq -n \
+              --argjson pr "$DATA" \
+              --argjson hotfixPrs "$HOTFIX_PRS" \
+              --arg alertBody "$ALERT_BODY" \
+              --arg incidentSha "$INCIDENT_SHA" \
+              --argjson mainCiRed "$MAIN_CI_RED" \
+              --argjson number "$NUM" \
+              '{labels: [$pr.labels[].name], changed: [], deleted: [], alertBody: $alertBody,
+                incidentSha: $incidentSha, mainCiRed: $mainCiRed, otherHotfixPrs: $hotfixPrs,
+                number: $number}' \
+              > "$PR_DIR/hotfix-input.json"
+            # `changed` đọc từ chính file mà bước tính cửa đã dựng — một nguồn
+            # duy nhất cho "PR này đổi những gì", nên cửa và lối nhanh không
+            # thể xét hai danh sách khác nhau.
+            jq --rawfile changed "$PR_DIR/changed.txt" --rawfile deleted "$PR_DIR/deleted.txt" \
+              '.changed = ($changed | split("\n") | map(select(. != "")))
+               | .deleted = ($deleted | split("\n") | map(select(. != "")))' \
+              "$PR_DIR/hotfix-input.json" > "$PR_DIR/hotfix-input.full.json"
+            HOTFIX=$(node ops/invariants.hotfix-lane.ts "$PR_DIR/hotfix-input.full.json")
+            echo "  lối nhanh=$(echo "$HOTFIX" | jq -r .lane) — $(echo "$HOTFIX" | jq -r .reason)"
+
             jq -n \
               --arg gate "$GATE" \
+              --argjson hotfix "$HOTFIX" \
               --arg head "$HEAD" \
               --arg owner "$OWNER" \
               --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -176,7 +278,8 @@ jobs:
                 mergeableState: $pr.mergeable_state, headSha: $head, ciSha: ($ci.head_sha // null),
                 ciConclusion: ($ci.conclusion // null), ciCompletedAt: ($ci.updated_at // null),
                 fixHasTestConclusion: (if $fixHasTest == "null" then null else $fixHasTest end),
-                comments: $comments, owner: $owner, now: $now, delayHours: 12}' > "$PR_DIR/state.json"
+                comments: $comments, owner: $owner, now: $now, delayHours: 12,
+                hotfix: $hotfix}' > "$PR_DIR/state.json"
 
             DECISION=$(node ops/invariants.merge-gate.ts "$PR_DIR/state.json")
             OUTCOME=$(echo "$DECISION" | jq -r .outcome)
@@ -201,15 +304,41 @@ jobs:
               -f sha="$HEAD"
             echo "  đã merge #$NUM"
             MERGED="$MERGED $NUM"
+            if [ "$(echo "$HOTFIX" | jq -r .lane)" = "hotfix" ]; then
+              MERGED_HOTFIX="$MERGED_HOTFIX $NUM"
+            fi
           done
 
           echo "merged=${MERGED# }" >> "$GITHUB_OUTPUT"
+          echo "merged_hotfix=${MERGED_HOTFIX# }" >> "$GITHUB_OUTPUT"
 
       # Chế độ chạy thử không bao giờ tới được bước này: nó `continue`
       # trước khi ghi vào `MERGED`, nên `steps.merge.outputs.merged` rỗng và
       # điều kiện dưới đây sai. Đó là chủ đích — không merge thì cũng không
       # có sự kiện `push` nào để thay thế, nên gọi các workflow này ở chế độ
       # thử sẽ là gọi nhầm.
+      # D-C07 điều kiện 6 · một PR đi lối nhanh thì chủ dự án được @nhắc NGAY
+      # lúc merge, không chờ bản tin sáng. Lối nhanh là chỗ duy nhất máy đưa
+      # một thay đổi vùng bảo vệ vào `main` mà không có khoảng chờ 12 giờ, nên
+      # nó là chỗ duy nhất cần một dòng "việc này vừa xảy ra" tức thời.
+      - name: '@nhắc chủ dự án về PR đã merge qua lối nhanh hotfix (D-C07)'
+        if: steps.merge.outputs.merged_hotfix != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: HungQuach301
+          MERGED_HOTFIX: ${{ steps.merge.outputs.merged_hotfix }}
+        run: |
+          set -euo pipefail
+          for NUM in $MERGED_HOTFIX; do
+            gh pr comment "$NUM" --repo "$REPO" --body "$(printf '%s\n' \
+              "🤖 @$OWNER PR này vừa được merge qua **lối đi nhanh \`hotfix\`** (\`D-C07\`, câu trả lời của anh ở \`#169\`), tức KHÔNG chờ 12 giờ." \
+              "" \
+              "Sáu điều kiện đã được máy kiểm trước khi merge (\`ops/invariants.hotfix-lane.ts\`): \`main-ci\` đang đỏ, cảnh báo khẩn đang mở nêu đúng các file này, không chạm tầng luật đang bắt lỗi, không chạm hạ tầng merge, đủ 5 check xanh trên đúng đầu nhánh, và đây là PR \`hotfix\` duy nhất của sự cố." \
+              "" \
+              "Bản tin kế tiếp có một mục riêng cho lần merge này để anh soát lại.")"
+          done
+
       - name: Gọi tay các workflow lẽ ra chạy theo sự kiện push
         if: steps.merge.outputs.merged != ''
         env:

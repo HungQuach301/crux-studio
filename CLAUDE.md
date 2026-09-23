@@ -47,6 +47,15 @@ pnpm --filter @crux/workshop-topic run start -- --episode ep-0001-stub   # chạ
 # PR này thuộc cửa merge nào (D-C06)? Chạy, đừng đoán:
 git diff --name-only origin/main...HEAD > /tmp/changed.txt
 node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .
+
+# PR sửa `main` đỏ này có đi được lối nhanh `hotfix` không (D-C07)? Cũng chạy, đừng đoán.
+# File JSON: {labels, changed, deleted, alertBody, incidentSha, mainCiRed, otherHotfixPrs, number}
+# `alertBody` = thân issue cảnh báo NỐI với comment của `github-actions[bot]` — KHÔNG nối comment của agent.
+node ops/invariants.hotfix-lane.ts /tmp/hotfix.json
+# → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
+
+# Phạm vi sự cố của một `main` đỏ, dạng máy đọc (nguồn duy nhất cho điều kiện 2):
+pnpm check > /tmp/check.txt 2>&1; node ops/scripts/main-red-scope.ts /tmp/check.txt "$(git rev-parse HEAD)"
 ```
 
 **Không** có lệnh nào trong repo gọi API trả tiền ở Đợt 0. Mọi xưởng đang ở `impl: stub`.
@@ -68,6 +77,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
   |---|---|---|
   | `open` | `automerge` | Máy merge ngay khi CI xanh |
   | `automerge-delayed` | `automerge-delayed` | Máy merge sau **12 giờ** CI xanh, trừ khi chủ dự án comment `dừng` |
+  | `automerge-delayed` + PR sửa `main` đỏ | `automerge-delayed` + `hotfix` | Máy merge **ngay** khi CI xanh, nếu đủ sáu điều kiện của `D-C07` (xem mục 13) |
   | `owner-merge` | `owner-merge` + issue `🤖 [QĐ]` tóm tắt cần duyệt gì | Chỉ chủ dự án merge |
 
   CI gắn lại nhãn theo đúng luật đó, và `automerge.yml` tính lại cửa bằng bản trên `main` trước khi merge — nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
@@ -151,7 +161,7 @@ Tám luật này do máy thực thi. Không lách, không tắt, không thêm ng
 | I1 | Không secret trong repo | gitleaks trong CI |
 | I2 | Vào `main` chỉ qua PR có CI xanh; PR `fix` phải có test tái hiện lỗi | `automerge.yml`, CI |
 | I3 | Xưởng không import xưởng khác, chỉ import `kernel/` | `pnpm lint:deps` |
-| I4 | Vùng bảo vệ có hai mức: `owner-merge` (chủ dự án merge) và `automerge-delayed` (máy merge sau 12 giờ CI xanh, trừ khi có lời `dừng`) | `ops/invariants.*`, hook `.claude/settings.json` |
+| I4 | Vùng bảo vệ có hai mức: `owner-merge` (chủ dự án merge) và `automerge-delayed` (máy merge sau 12 giờ CI xanh, trừ khi có lời `dừng`). Lối đi nhanh `hotfix` của `D-C07` bỏ **khoảng chờ**, không bỏ mức bảo vệ nào | `ops/invariants.*` (gồm `invariants.hotfix-lane.ts`), hook `.claude/settings.json` |
 | I5 | Máy không công khai video | Contract release v0 khoá `visibility: "private"` |
 | I6 | Mọi con số hiển thị có nguồn hoặc có mô hình | `claimIds` trong contract, Fact & Risk Pass |
 | I7 | Nội dung không đáng tin được cô lập | Mục 5 ở trên |
@@ -198,7 +208,7 @@ docs/spec/  docs/decisions/  docs/assumptions.md
 - Lỗi cùng loại xuất hiện lần thứ hai → sửa spec, contract hoặc prompt, **không vá sản phẩm**. Ghi vào `ops/known-failures.md`.
 - Cùng một chữ ký lỗi ba lần trên một mục → gắn `parked`, mở `🤖 [QĐ]`, chuyển sang mục khác. Làn không được dừng.
 - Mỗi PR được một subagent reviewer có ngữ cảnh sạch soát theo CHARTER mục 3–6 trước khi gắn `automerge` hoặc `automerge-delayed`. PR `automerge-delayed` cần soát **kỹ hơn**, không phải lỏng hơn: 12 giờ là khoảng chờ để chủ dự án kịp nói `dừng`, không phải một lớp soát thay cho reviewer.
-- `main` đỏ thì revert ngay; việc sửa làm lại trên nhánh.
+- `main` đỏ thì revert ngay; việc sửa làm lại trên nhánh. **"Ngay" nay có đường đi bằng máy (`D-C07`):** gắn thêm nhãn `hotfix` cho PR sửa, và `automerge.yml` bỏ khoảng chờ 12 giờ. Điều kiện hẹp, và máy kiểm chứ không phải anh tự nhận: PR chỉ được chạm **đúng** các file trong khối `crux-hotfix-scope` của issue cảnh báo, không chạm tầng luật đang bắt lỗi (`ops/invariants.*`, `ops/scripts/check-*.ts`, `ops/scripts/lint-*.ts`, hook), không chạm hạ tầng merge, và mỗi sự cố chỉ một PR. Bản sửa vừa sửa chỗ hỏng vừa siết thêm luật thì **tách hai PR** — phần sửa tối thiểu đi lối nhanh, phần siết luật đi cửa thường. Nhãn cửa merge vẫn chạy tool mà lấy, đừng đoán.
 - Không tắt, không skip, không quarantine test để làm CI xanh.
 
 ## 14. Quyết định — khi nào dừng hỏi

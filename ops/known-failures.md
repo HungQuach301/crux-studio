@@ -6,6 +6,64 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-020 · Bản sửa một `main` đỏ **tự nó** nằm trong vùng bảo vệ, nên `main` không thể xanh lại dưới 12 giờ
+
+> Số **KF-020**: dò `## KF-` trên `main` **và trên mọi nhánh PR đang mở** trước khi viết, đúng cách `KF-018` chỉ (`KF-005`). Trên `main` cao nhất là `KF-018` (`#166`, đã merge ở `fc24f75`; `KF-017` của `#162` cũng đã vào `main` ở `d36d424`). Còn mở chỉ có `KF-019`, thuộc PR `#167`.
+>
+> ⚠️ Bản đầu của dòng này viết *"`KF-018` thuộc `#166`, `KF-017` thuộc `#162` — cả ba đang mở"*, chép nguyên khung câu của `KF-018` mà **không đo lại**: hai PR ấy đã merge từ trước lúc viết. Đúng chữ ký mà `KF-005` cảnh báo, và lần này nó trúng ngay mục đang cảnh báo về nó. Việc cấp mã `KF-020` không sai, chỉ phần diễn giải sai.
+
+- **Lần gặp:** 2 — lượt `crux-worker-1` ~23:38Z (PR `#120`) rồi lượt `crux-worker-1` ~00:40Z ngày 2026-09-23, khi **cùng một chữ ký** chặn **cả 6** PR xung đột của bước 0.
+
+  > ⚠️ **Lần gặp thứ nhất là suy lại từ hoàn cảnh, không phải từ một bản ghi.** `KF-019` (trên nhánh của `#167`) ghi một **chữ ký khác** — workflow vào `main` mà `node --test` không soi — và **không một chữ nào** về cửa merge hay vùng bảo vệ. Nói ra để lượt sau không tưởng có hai bản ghi cùng chữ ký này; mục này là bản ghi **đầu tiên** của nó. Điều đó không làm sai hành động: chữ ký đã chặn việc hai lượt liên tiếp, nên CHARTER 6.6 (sửa cơ chế ở lần thứ hai) vẫn áp đúng. Lần thứ hai là lúc luật `CHARTER 6.6` đòi sửa **cơ chế**, không vá sản phẩm — nên mục này ghi cái mà `KF-019` không ghi: không phải `spike-canvas.yml` sai, mà **đường về xanh bị khoá sau một cửa 12 giờ**.
+- **Chữ ký:** một worker gỡ xong xung đột của một PR, `tsc --noEmit` sạch và test của chính PR đó xanh, nhưng `pnpm check` vẫn `EXIT=1` ở những cổng mà **cây sạch của `origin/main` cũng đỏ y hệt**. Theo phụ lục P3 bước 0b, worker phải `git merge --abort` và **không push** — đúng luật, và không tiến được bước nào. Lặp lại ở mọi PR, mọi lượt, cho tới khi `main` xanh.
+- **Đo, không suy (2026-09-23 ~00:40Z, `origin/main = ecd0085`):**
+
+  | Cổng | Kết quả trên cây sạch `origin/main` |
+  |---|---|
+  | `pnpm lint:workflows` | **EXIT=1** — `spike-canvas.yml:47/:69/:84` thiếu `set -euo pipefail` (Z10), `:63` nuốt lỗi không chú thích (Z9) |
+  | `pnpm check:tests` | **EXIT=1** — `spike/canvas/test/camera.test.ts` ngoài glob (Z11); 53 file trên đĩa / 52 trong glob |
+  | `pnpm test` | **790 pass / 3 fail** — bài 135, 183, 196 |
+
+  Cả ba do `7dfdfeb` (PR `#42`, mục `visual/V-002`) vào `main` lúc `23:05:06Z`. Hệ quả đo được ở bước 0 cùng lượt: **6 / 16 PR đang mở** xung đột (`#120` `#39` `#84` `#89` `#160` `#112`), `integrator-resolve.ts` trả `aborted-ineligible` cho **cả 6**, **0 giải, 0 push**.
+
+- **Nguyên nhân gốc — và đây mới là phần tái dùng được:** bản sửa duy nhất, PR `#167`, **CI xanh 5/5 từ `00:03Z`**, nhưng cửa merge của nó không phải `open`. Chạy chứ đừng đọc bảng bằng mắt:
+
+  ```
+  $ node ops/invariants.protected-area.ts --changed /tmp/changed167.txt --head .
+  {"gate":"automerge-delayed","owner":[],
+   "delayed":["`ops/workflows/spike-canvas.yml` — workflow không dùng secret, không phát hành"]}
+  ```
+
+  Vùng bảo vệ mức `automerge-delayed` (CHARTER mục 3, `D-C06`) phủ **`ops/workflows/**`**. Mà một `main` đỏ vì một workflow thì **mọi** bản sửa của nó — sửa tại chỗ như `#167`, hay revert `#42` — đều chạm đúng thư mục ấy. Vậy cửa 12 giờ áp cho chính thứ đáng lẽ phải đi nhanh nhất.
+
+- **Vì sao nó đắt hơn vẻ ngoài — và chỗ mâu thuẫn cụ thể nhất không phải chữ "ngay":** `CLAUDE.md` mục 13 viết *"`main` đỏ thì revert ngay"*, và CHARTER **6.5** (`CHARTER.md:369`) viết *"Main đỏ được revert ngay"*. Nhưng bằng chứng sắc hơn nằm ở phụ lục **P3 bước 1** (`CHARTER.md:825–827`), chỗ CHARTER **ghi cứng cái nhãn**:
+
+  > *mở PR revert (**nhãn automerge**, nhánh `claude/integration/revert-<sha>`)*
+
+  Tức CHARTER bảo dán `automerge` lên đúng loại PR mà `ops/invariants.protected-area.ts` tính ra `automerge-delayed` — đã đo: chạy tool trên danh sách file của `7dfdfeb` (một bản revert `#42`) cũng ra `automerge-delayed`. Không phải hai cách diễn đạt lệch nhau, mà là **hai luật cho ra hai nhãn khác nhau trên cùng một PR**. Và cho tới khi `#167` merge thì: không PR xung đột nào gỡ được, và **mọi** PR đang mở đỏ ở lượt CI kế tiếp vì CI dựng `refs/pull/N/merge`. 16 PR đứng vì một cửa thiết kế cho chuyện khác. (**Dự kiến, không phải số đo:** đồng hồ 12 giờ chạy từ lúc **CI xanh trên đầu nhánh**, không phải từ lúc `main` đỏ — CHARTER 3.3, `CHARTER.md:263`. `#167` xanh lúc `00:03Z` nên mốc tự merge là ~`12:03Z`, với điều kiện nó giữ CI xanh, không ai comment `dừng`, và không có push mới đặt lại đồng hồ.) Không gì đỏ **lúc này** ngoài `main` — đúng nhóm **Z**: mỗi luật riêng lẻ đều đúng, chỗ thủng nằm ở chỗ hai luật gặp nhau.
+
+  **Đo trên chính PR ghi mục này (`#168`), nên phần "mọi PR đang mở sẽ đỏ" không còn là suy luận.** `#168` chỉ thêm tài liệu và hai file log — không chạm một dòng code nào. CI của nó vẫn **đỏ**:
+
+  ```
+  HEAD is now at 10ff9d0 Merge 5152ceb… into ecd0085…
+  > pnpm contracts   → Contract ok
+  > pnpm lint:deps   → I3 ok
+  > pnpm lint:workflows
+  Workflow có vấn đề:
+    - spike-canvas.yml:47/:69/:84 … (Z10)
+    - spike-canvas.yml:63 … (Z9)
+  ##[error]Process completed with exit code 1
+  ```
+
+  Hai điều dòng log này chốt lại: (1) `actions/checkout@v7` trong `ops/workflows/ci.yml` **dựng `refs/pull/<N>/merge`**, tức mọi PR chạy `pnpm check` trên cây *đã gộp `main`*, nên `main` đỏ là **mọi** PR đỏ — trước đây chỉ suy từ tài liệu, nay có dòng `Merge … into ecd0085` làm bằng; (2) bốn dòng làm `#168` đỏ **không có dòng nào** thuộc diff của `#168`. Bốn check còn lại (`protected-area`, `fix-has-test`, `secret-scan`, `trailer-warn`) đều **success**.
+- **Vì sao lượt này không tự sửa:** nới cửa merge cho một loại PR là **đổi CHARTER mục 3** — `irreversible` nhóm 4 của CHARTER 2.3. Agent không tự làm, kể cả khi khuyến nghị rõ ràng. Đã mở `🤖 [QĐ] #169`; mục `platform/P-032` nhận việc và đứng `blocked` tới khi có câu trả lời.
+- **Đã sửa ở đâu:** *chưa sửa cơ chế.* `#167` gỡ **lần này** (đúng và cần), nhưng không đụng tới cái làm lần sau lặp lại.
+- **Đã sửa cơ chế ngày 2026-09-23** (`D-C07`, câu trả lời `#169 A` lúc `01:19:54Z`): cửa `automerge-delayed` có **lối đi nhanh `hotfix`**, bỏ khoảng chờ 12 giờ cho đúng ca này. Sáu điều kiện là phép kiểm máy ở `ops/invariants.hotfix-lane.ts`, không phải lời dặn; phạm vi sự cố do `ops/scripts/main-red-scope.ts` dựng ở dạng máy đọc trong thân issue cảnh báo.
+- **Máy chặn từ nay:** `ops/test/invariants-hotfix-lane.test.ts` (14 bài) và 9 test âm ở `ops/test/invariants-merge-gate.test.ts` — lối nhanh KHÔNG bỏ CI đỏ, không bỏ `fix-has-test`, không thắng lời `dừng`, không mở được cửa `owner-merge`, và không áp cho `automerge.yml`/`ops/invariants.*`/`.github/**`. Cộng thêm dòng luật cũ vẫn giữ nguyên giá trị: **một PR mà tiêu chí xong của nó là "đưa `main` từ đỏ về xanh" phải được kiểm cửa merge ngay lúc nhận việc, không phải lúc gắn nhãn** — nay câu trả lời của phép kiểm đó nói thêm được một chuyện: PR này đi lối nhanh được hay không.
+- **⚠️ Chỗ chưa che:** bản sửa vừa sửa chỗ hỏng vừa SIẾT thêm luật (đúng hình dạng `#167`) ra `needs-decision`, tức vẫn chờ 12 giờ. Cách đi đúng: tách hai PR. Xem `docs/decisions/D-C07.md`.
+
+---
+
 ## KF-001 · Heredoc đóng ở cột 0 làm vỡ khối YAML của workflow
 
 - **Lần gặp:** 2 (`main-ci.yml`, rồi `notify.yml` và `watchdog.yml`)
@@ -543,8 +601,17 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 - **Chữ ký:** `node ops/scripts/integrator-resolve.ts origin/main` in `{"outcome":"resolved","files":["<file>.ts"]}` và thoát `0`, nhưng `tsc --noEmit` trên cây vừa gộp báo lỗi cú pháp (`error TS1005: '}' expected`) ở **cuối** file đó. Ở `#71`: `ops/test/check-workflows.test.ts(747,1)`.
 - **Nguyên nhân gốc:** `merge=union` làm việc theo **dòng**, không theo cú pháp. Hai phía cùng kết thúc một khối bằng dòng `});` giống hệt nhau, rồi `main` viết tiếp các test mới **sau** dòng đó. Union giữ dòng chung **một lần** và đặt phần thêm của `main` vào **trước** nó, nên `});` đóng test cuối của nhánh biến mất và thân test của nhánh nuốt luôn khối mới của `main`. Không bên nào mất chữ — số dòng vẫn cộng đúng — nên phép đối chiếu bằng **số dòng xoá** mà `integrator-resolve.ts` dùng để quyết `resolved` hay `aborted-ineligible` không thấy gì bất thường: **không bên nào xoá dòng nào.**
 - **Vì sao nó đắt:** đây là ca "mọi chỉ báo đều xanh" (nhóm Z) ở đúng công cụ mà cả hàng đợi merge dựa vào. Phụ lục P3 bước 0b chỉ bắt buộc chạy `pnpm check` **trước khi push**; ca này qua được nếu `check` dừng ở một lỗi khác, hoặc nếu có ai nới thứ tự các bước. Union `ops/logs/**/*.jsonl` (ca nó sinh ra để phục vụ) an toàn vì JSONL không có cú pháp lồng nhau; file `.ts`, `.json` và `.yml` thì **không**.
-- **Đã sửa ở đâu:** *chưa sửa cơ chế* — mục `integration/I-018` nhận việc. Chỗ phải sửa nằm trong `ops/scripts/integrator-resolve.ts`: điều kiện đủ để trả `resolved` hiện chỉ là "không bên nào xoá dòng", và nó thiếu một phép kiểm rằng **cây gộp còn đọc được**. Lần này chữa bằng tay trên nhánh `#71` (trả lại `});`, giữ nguyên test của cả hai phía) là vá sản phẩm, không phải sửa cơ chế — `CLAUDE.md` mục 13.
-- **Máy chặn từ nay:** chưa có. Tới khi `I-018` xong, lớp chặn là dòng này: **bước 0 chạy `pnpm check` ĐỦ tới `typecheck` trước khi push, và một cây gộp `resolved` mà `tsc` đỏ ở lỗi cú pháp thì phải coi là `aborted-ineligible`, không phải một PR đỏ.**
+- **Đã sửa ở đâu:** mục `integration/I-018`. `ops/scripts/merge-syntax.ts` (mới) kiểm **cây sau khi union còn đọc được**, và `ops/scripts/integrator-resolve.ts` gọi nó ngay sau vòng `merge-file --union`, **trước** khi tạo lại lockfile và trước commit: không đọc được thì trả `aborted-ineligible` kèm `reason` nói rõ file nào và lỗi gì. Phạm vi: `.ts`/`.tsx`/`.mts`/`.cts`/`.js`/`.jsx`/`.mjs`/`.cjs` parse bằng `typescript` (`transpileModule` với `reportDiagnostics` — `node --check` KHÔNG dùng được vì nó không bỏ chú thích kiểu, đã đo), `.json` bằng `JSON.parse`, `.yml`/`.yaml` bằng một phép kiểm cấu trúc khối hẹp có chủ đích (repo không có thư viện YAML). Chỉ những file tool vừa union, không quét cả cây — bước 0 chạy ở đầu **mọi** lượt worker. Lần chữa bằng tay trên nhánh `#71` (trả lại `});`, giữ nguyên test của cả hai phía) vẫn là vá sản phẩm, không phải sửa cơ chế — `CLAUDE.md` mục 13; dòng này là phần sửa cơ chế.
+- **Máy chặn từ nay:** `ops/test/merge-syntax.test.ts` — bài tái hiện lỗi (bất biến I2, job `check` của CI) dựng hai nhánh git **thật** đúng hình dạng `#71` (cả hai bên thêm sau một dòng `});` chung) và đòi `resolveAdditiveMerge` trả `aborted-ineligible`. Đo bằng chạy thật cả hai chiều: **đỏ** trên bản trước khi sửa (`{"outcome":"resolved","files":["suite.test.ts"]}`), **xanh** sau bản sửa. Cùng hình dạng ở `.json` (hai khối lồng kết thúc bằng dòng `  },` giống hệt nhau) có bài riêng. Ba bài còn lại canh chiều ngược: cây lành phải đi qua, `.jsonl` và `.md` không bị kiểm, và những cấu trúc YAML ngoài mô hình (`|`, `---`, anchor, flow collection nhiều dòng) phải **cho qua** chứ không phán.
+- **Vòng soát ngữ cảnh sạch bắt ba lỗi BÁO SAI trên bản nháp đầu** (phụ lục P1 bước 6), cả ba đều là "chặn một cây lành" — đúng loại hỏng đắt nhất của cổng này, và không ca nào nổ trên kho hiện tại nên không có gì đỏ để cảnh báo:
+  1. `.json` parse bằng `JSON.parse` một mình gọi **chính `tsconfig.json` của repo** là hỏng, vì file đó mang hai dòng chú thích `//`. Chữa: hai phép parse, chỉ báo lỗi khi **cả hai** đỏ — phép thứ hai là `parseConfigFileTextToJson` của `typescript`, chịu được JSONC mà vẫn bắt hình dạng `KF-016`.
+  2. Phép kiểm YAML không biết **mức thụt lề ẩn** mà `- ` tạo ra: khoá đầu của một item nằm ở `indent + 2`, nên `- with:` rồi `uses:` ở dòng sau ra "dedent lạc mức". Ba ca đã đo (`- with:`/`uses:`, `- env:` trong matrix, `- env:`/`run:`) đều là hình dạng thường gặp của GitHub Actions; tám workflow hiện có chỉ đi qua vì **tình cờ** viết `- name:`/`- uses:` trước `with:`. Chữa: đẩy mọi mức ẩn của chuỗi `- ` vào ngăn xếp, kể cả mức trung gian của `- - 1`.
+  3. Vô hướng viết tiếp xuống dòng với thụt lề **giảm dần** (`a: foo` / `bar` / `baz` ở ba mức khác nhau) là YAML hợp lệ, nhưng "sâu hơn thì luôn hợp lệ" biến dòng tiếp đầu tiên thành một mức thật. Chữa: một dòng không phải khoá và không phải gạch đầu dòng là vô hướng viết tiếp → cho qua cả file.
+  Cùng vòng soát còn bắt hai chỗ **bỏ sót**, đã sửa: mốc của khối vô hướng `|` lấy thụt lề dấu gạch thay vì của khoá (nuốt luôn mọi khoá anh em của item), và một dấu đóng lẻ trong vô hướng (`b: echo }`) tắt cổng cho cả file. Cả ba ca báo sai cộng năm ca nữa nay là test đích danh `A`–`H` trong `ops/test/merge-syntax.test.ts`.
+- **Thiên lệch, khai trước:** một lần báo sai (`aborted-ineligible` cho cây lành) làm đứng hàng đợi merge và đòi người giải tay; một lần bỏ sót chỉ trả về đúng hành vi trước mục này. Nên cổng chỉ báo khi cú pháp **chắc chắn** hỏng. Lỗ hổng còn lại, ghi ra để không im lặng: đường gộp **`clean`** (git tự ghép, không union) KHÔNG qua cổng này — ở đó thứ đã có cổng riêng là lockfile (`I-006`, `KF-007`); và phép kiểm YAML hẹp hơn một trình nạp thật, nên nó bắt tab và thụt lề lệch mức, không bắt mọi cách YAML hỏng. Với hai chỗ đó, lớp chặn vẫn là dòng cũ: **bước 0 chạy `pnpm check` ĐỦ tới `typecheck` trước khi push, và một cây gộp `resolved` mà `tsc` đỏ ở lỗi cú pháp thì phải coi là `aborted-ineligible`, không phải một PR đỏ.**
+
+---
+
 ## KF-019 · `main` đỏ vì một workflow vào được `main` mà không luật nào soi nó ở `node --test`
 
 - **Lần gặp:** 1
