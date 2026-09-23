@@ -140,25 +140,40 @@ jobs:
           #
           # Điều kiện 1 · `main-ci` gần nhất trên `main` có đỏ không. Không có
           # lần chạy nào thì coi như KHÔNG đỏ — hướng an toàn là cửa thường.
-          MAIN_CI=$(gh api "repos/$REPO/actions/workflows/main-ci.yml/runs?branch=main&status=completed&per_page=1" \
-            --jq '.workflow_runs[0].conclusion // ""')
+          MAIN_CI_RUN=$(gh api "repos/$REPO/actions/workflows/main-ci.yml/runs?branch=main&status=completed&per_page=1" \
+            --jq '.workflow_runs[0] // {} | {conclusion: (.conclusion // ""), sha: (.head_sha // "")}')
+          MAIN_CI=$(echo "$MAIN_CI_RUN" | jq -r .conclusion)
+          INCIDENT_SHA=$(echo "$MAIN_CI_RUN" | jq -r .sha)
           if [ "$MAIN_CI" = "success" ] || [ -z "$MAIN_CI" ]; then
             MAIN_CI_RED=false
+            INCIDENT_SHA=""
           else
             MAIN_CI_RED=true
           fi
-          echo "D-C07 · main-ci gần nhất: ${MAIN_CI:-(chưa có lần chạy nào)} → mainCiRed=$MAIN_CI_RED"
+          echo "D-C07 · main-ci gần nhất: ${MAIN_CI:-(chưa có lần chạy nào)} tại ${INCIDENT_SHA:-—} → mainCiRed=$MAIN_CI_RED"
 
-          # Điều kiện 1 (vế cảnh báo) · thân issue `alert` đang mở NỐI với mọi
-          # comment của nó. Bash KHÔNG đọc khối phạm vi — `parseScope` của
-          # `ops/invariants.hotfix-lane.ts` làm việc đó, và nó lấy khối MỚI
-          # NHẤT, nên thứ tự nối ở đây (thân rồi comment) là phần của hợp đồng.
+          # Điều kiện 1 (vế cảnh báo) · thân issue `alert` đang mở, NỐI với
+          # những comment do `github-actions[bot]` viết — và CHỈ những comment
+          # đó.
+          #
+          # ⚠️ Lọc tác giả KHÔNG tuỳ chọn (bất biến I7, `CLAUDE.md` mục 5).
+          # `parseScope` lấy khối phạm vi MỚI NHẤT và không biết ai viết nó.
+          # Agent comment được lên issue cảnh báo bằng danh tính chủ dự án —
+          # bước 0 vẫn ghi ghi chú ở đó — nên nối cả comment của agent vào là
+          # cho một comment ĐỊNH NGHĨA LẠI điều kiện 2, tức tự cấp quyền cho
+          # chính mình. Vòng soát ngữ cảnh sạch tái hiện được đúng ca đó: một
+          # khối tự viết với `files: ["CHARTER.md", ...]` ra `lane: "hotfix"`.
+          # `github-actions[bot]` là tác giả duy nhất mà agent không giả được:
+          # chỉ workflow chạy theo định nghĩa trên `main` viết dưới tên đó.
           ALERT_NUM=$(gh issue list --repo "$REPO" --label alert --state open \
-            --search "main đỏ in:title" --json number --jq '.[0].number // ""')
+            --search "main đỏ in:title" --json number,createdAt,author \
+            --jq '[.[] | select(.author.login == "github-actions[bot]")]
+                  | sort_by(.createdAt) | last | .number // ""')
           ALERT_BODY=""
           if [ -n "$ALERT_NUM" ]; then
             ALERT_BODY=$(gh issue view "$ALERT_NUM" --repo "$REPO" --json body,comments \
-              --jq '[.body] + [.comments[].body] | join("\n\n")')
+              --jq '[.body] + [.comments[] | select(.author.login == "github-actions[bot]") | .body]
+                    | join("\n\n")')
           fi
           echo "D-C07 · cảnh báo đang mở: ${ALERT_NUM:-(không có)}"
 
@@ -221,20 +236,30 @@ jobs:
             # Lối đi nhanh `hotfix` (D-C07, `ops/invariants.hotfix-lane.ts`).
             # Tính bằng bản trên `main` như mọi thứ khác trong file này, và in
             # ra kết luận cho MỌI PR — kể cả `normal` (cấm im lặng, rà soát Z2).
+            # Danh sách file bị XOÁ, tách khỏi `changed`: một PR xoá đúng file
+            # test đang làm cổng đỏ thì thoả điều kiện 2 một cách hoàn hảo mà
+            # vẫn là "tắt test để CI xanh" (`CLAUDE.md` mục 13). `--name-only`
+            # không phân biệt được, `--name-status` thì có.
+            git diff --name-status "$BASE" "refs/remotes/pr/$NUM" \
+              | awk '$1 ~ /^D/ { print $2 }' > "$PR_DIR/deleted.txt"
+
             jq -n \
               --argjson pr "$DATA" \
               --argjson hotfixPrs "$HOTFIX_PRS" \
               --arg alertBody "$ALERT_BODY" \
+              --arg incidentSha "$INCIDENT_SHA" \
               --argjson mainCiRed "$MAIN_CI_RED" \
               --argjson number "$NUM" \
-              '{labels: [$pr.labels[].name], changed: [], alertBody: $alertBody,
-                mainCiRed: $mainCiRed, otherHotfixPrs: $hotfixPrs, number: $number}' \
+              '{labels: [$pr.labels[].name], changed: [], deleted: [], alertBody: $alertBody,
+                incidentSha: $incidentSha, mainCiRed: $mainCiRed, otherHotfixPrs: $hotfixPrs,
+                number: $number}' \
               > "$PR_DIR/hotfix-input.json"
             # `changed` đọc từ chính file mà bước tính cửa đã dựng — một nguồn
             # duy nhất cho "PR này đổi những gì", nên cửa và lối nhanh không
             # thể xét hai danh sách khác nhau.
-            jq --rawfile changed "$PR_DIR/changed.txt" \
-              '.changed = ($changed | split("\n") | map(select(. != "")))' \
+            jq --rawfile changed "$PR_DIR/changed.txt" --rawfile deleted "$PR_DIR/deleted.txt" \
+              '.changed = ($changed | split("\n") | map(select(. != "")))
+               | .deleted = ($deleted | split("\n") | map(select(. != "")))' \
               "$PR_DIR/hotfix-input.json" > "$PR_DIR/hotfix-input.full.json"
             HOTFIX=$(node ops/invariants.hotfix-lane.ts "$PR_DIR/hotfix-input.full.json")
             echo "  lối nhanh=$(echo "$HOTFIX" | jq -r .lane) — $(echo "$HOTFIX" | jq -r .reason)"

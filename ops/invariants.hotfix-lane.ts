@@ -75,10 +75,25 @@ export const RULE_PATHS: readonly RegExp[] = [
   /^\.claude\/settings\.json$/,
 ];
 
-/** Hạ tầng merge — lối nhanh không bao giờ áp dụng (điều kiện 5). */
+/**
+ * Hạ tầng merge — lối nhanh không bao giờ áp dụng (điều kiện 5).
+ *
+ * Ba đường cuối là **tự tham chiếu**, và vòng soát ngữ cảnh sạch tìm ra
+ * chúng: `ci.yml` định nghĩa chính "5 check" mà điều kiện 4 dựa vào (và
+ * `automerge.yml` đọc kết luận CI từ `ci.yml` bản trên **nhánh PR** — rà
+ * soát Z8, mà khoảng chờ 12 giờ là lớp bù duy nhất cho nó), còn `main-ci.yml`
+ * và `main-red-scope.ts` là chính bên **sinh ra** phạm vi. Cho lối nhanh sửa
+ * cái máy tính phạm vi cho lối nhanh là tự nới chính nó.
+ *
+ * KHÔNG loại cả `ops/workflows/**`: làm thế là giết đúng ca mà `D-C07` sinh
+ * ra để chữa.
+ */
 export const MERGE_INFRA_PATHS: readonly RegExp[] = [
   /^ops\/workflows\/automerge\.yml$/,
   /^\.github\//,
+  /^ops\/workflows\/ci\.yml$/,
+  /^ops\/workflows\/main-ci\.yml$/,
+  /^ops\/scripts\/main-red-scope\.ts$/,
 ];
 
 /** Phạm vi sự cố, đọc từ khối máy đọc trong thân issue cảnh báo. */
@@ -94,6 +109,26 @@ export interface HotfixInput {
   labels: readonly string[];
   /** Đường dẫn PR đổi, so với tổ tiên chung với `main`. */
   changed: readonly string[];
+  /**
+   * Trong số đó, những đường dẫn bị **XOÁ** (`git diff --name-status`, hàng `D`).
+   *
+   * Vì sao cần tách riêng: khi cổng đỏ là `pnpm check:tests` thì phạm vi sự
+   * cố đúng bằng tên file test đang sai chỗ, nên một PR **xoá** file test đó
+   * vừa thoả điều kiện 2 vừa làm cổng xanh lại — tức "tắt test để CI xanh",
+   * đúng thứ `CLAUDE.md` mục 13 cấm. `changed` chỉ là danh sách đường dẫn nên
+   * không phân biệt được sửa với xoá; phải đưa trạng thái vào.
+   */
+  deleted: readonly string[];
+  /**
+   * Commit `main` của lần chạy `main-ci` **đỏ** hiện tại. Phạm vi phải nói
+   * đúng commit này, nếu không nó thuộc **sự cố khác**.
+   *
+   * Không có nó thì một cảnh báo cũ chưa đóng cấp quyền được cho lối nhanh
+   * của một `main` đỏ mới — `HotfixScope.sha` trước đây chỉ để truy nguồn.
+   * Chuỗi rỗng nghĩa là bên gọi không đọc được commit đó: khi ấy phép so bị
+   * bỏ, và mọi điều kiện còn lại vẫn phải đạt.
+   */
+  incidentSha: string;
   /** Phạm vi từ cảnh báo đang mở. `null` = không có cảnh báo, hoặc cảnh báo không có khối máy đọc. */
   scope: HotfixScope | null;
   /** Lần chạy `main-ci` gần nhất trên `main` có đỏ không (điều kiện 1). */
@@ -120,6 +155,17 @@ export interface HotfixDecision {
  * Hướng an toàn là `null`: thiếu mốc, JSON hỏng, `files` không phải mảng
  * chuỗi, hay `files` rỗng đều trả `null` — và `null` nghĩa là không có lối
  * nhanh. Một cảnh báo viết sai làm mất một nhịp, không làm thủng lớp chặn.
+ *
+ * ⚠️ **Bên gọi phải lọc tác giả TRƯỚC khi truyền vào đây** (bất biến I7,
+ * `CLAUDE.md` mục 5). Hàm này không biết ai viết đoạn văn bản nó nhận. Một
+ * comment trên issue cảnh báo là **dữ liệu**, và agent comment được lên đó
+ * bằng danh tính chủ dự án — nếu bên gọi nối cả comment của agent vào thì
+ * một comment chứa khối này sẽ **định nghĩa lại** điều kiện 2, tức tự cấp
+ * quyền cho chính mình. Vòng soát ngữ cảnh sạch tái hiện được đúng ca đó.
+ * `ops/workflows/automerge.yml` vì vậy chỉ nối thân issue và những comment
+ * do `github-actions[bot]` viết — tức chỉ `main-ci.yml`, chạy theo định
+ * nghĩa trên `main`. Phép so `incidentSha` ở `classifyHotfix` là lớp khoá
+ * thứ hai của cùng chỗ này.
  */
 export function parseScope(issueBody: string): HotfixScope | null {
   // Mốc CUỐI CÙNG thắng. `main-ci.yml` mở issue ở lần đỏ đầu, rồi BÌNH LUẬN
@@ -205,6 +251,25 @@ export function classifyHotfix(input: HotfixInput): HotfixDecision {
     return { lane: 'normal', reason: 'PR không đổi file nào — không có gì để đi lối nhanh.' };
   }
 
+  // Phạm vi phải thuộc ĐÚNG sự cố đang mở. Một cảnh báo cũ chưa đóng nói về
+  // một commit khác thì không cấp quyền cho lối nhanh của `main` đỏ lần này.
+  if (input.incidentSha !== '' && input.scope.sha !== '' && input.scope.sha !== input.incidentSha) {
+    return {
+      lane: 'normal',
+      reason: `Phạm vi cảnh báo nói commit \`${input.scope.sha}\`, còn \`main-ci\` đỏ ở \`${input.incidentSha}\` — cảnh báo của sự cố KHÁC, không cấp quyền cho lượt này.`,
+    };
+  }
+
+  // "Tắt test để CI xanh" là thứ `CLAUDE.md` mục 13 cấm, và nó lọt qua điều
+  // kiện 2 một cách hoàn hảo khi cổng đỏ chính là một file test.
+  const deleted = input.deleted.map((path) => path.trim()).filter((path) => path !== '');
+  if (deleted.length > 0) {
+    return {
+      lane: 'needs-decision',
+      reason: `PR XOÁ file (${deleted.join(', ')}). Lối nhanh chỉ dành cho bản sửa tối thiểu, không dành cho việc bỏ đi thứ đang bắt lỗi (\`CLAUDE.md\` mục 13) — mở \`🤖 [QĐ]\` nếu xoá thật là đường đúng.`,
+    };
+  }
+
   // Điều kiện 2. So đường dẫn ĐẦY ĐỦ, không so tiền tố: "không nới cả thư mục".
   const allowed = new Set(input.scope.files);
   const outside = changed.filter((path) => !allowed.has(path));
@@ -244,7 +309,9 @@ export function classifyHotfix(input: HotfixInput): HotfixDecision {
 interface CliInput {
   labels?: readonly string[];
   changed?: readonly string[];
+  deleted?: readonly string[];
   alertBody?: string | null;
+  incidentSha?: string;
   mainCiRed?: boolean;
   otherHotfixPrs?: readonly number[];
   number?: number;
@@ -264,7 +331,9 @@ if (isMain) {
   const decision = classifyHotfix({
     labels: raw.labels ?? [],
     changed: raw.changed ?? [],
+    deleted: raw.deleted ?? [],
     scope: body === '' ? null : parseScope(body),
+    incidentSha: raw.incidentSha ?? '',
     mainCiRed: raw.mainCiRed ?? false,
     otherHotfixPrs: raw.otherHotfixPrs ?? [],
     number: raw.number ?? 0,

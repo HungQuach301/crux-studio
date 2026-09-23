@@ -81,3 +81,28 @@ test('dòng pnpm nhắc lại lệnh KHÔNG vào phạm vi (chữ ký đã đo �
   assert.equal(candidates.includes('ops/scripts/check-workflows.ts'), false);
   assert.deepEqual(resolveScope(candidates, indexRepo(process.cwd())), ['ops/workflows/spike-canvas.yml']);
 });
+
+test('P2 · đầu ra THẬT của `pnpm test` không làm phạm vi phình ra cả repo', () => {
+  // Đo được trên bản trước: 15 file, trong đó có CLAUDE.md,
+  // ops/workflows/ci.yml, ops/workflows/automerge.yml và chính file này —
+  // vì 790 bài XANH mỗi bài in một dòng `ok <n> - <tên bài>`, và tên bài
+  // trong repo này thường chứa nguyên đường dẫn.
+  const output = [
+    '> crux-studio@0.0.0 test /home/user/crux-studio',
+    '> node --test "ops/test/**/*.test.ts"',
+    '# Subtest: `ops/labels.json` đổi thì gọi labels, không đổi thì thôi',
+    'ok 41 - `ops/labels.json` đổi thì gọi labels, không đổi thì thôi',
+    'ok 42 - CLAUDE.md mục 13 và ops/workflows/ci.yml nói cùng một luật',
+    'not ok 183 - Z10 · cả sáu workflow thật trong ops/workflows/ đều mở khối run: | bằng set -euo pipefail',
+    '  ---',
+    "  location: '/home/user/crux-studio/ops/test/check-workflows.test.ts:196:1'",
+    '  error: |-',
+    '    spike-canvas.yml:47 — khối `run: |` thiếu `set -euo pipefail`',
+    '  ...',
+  ].join('\n');
+  const files = resolveScope(extractCandidates(output), indexRepo(process.cwd()));
+  assert.deepEqual(files, ['ops/workflows/spike-canvas.yml']);
+  assert.equal(files.includes('CLAUDE.md'), false);
+  assert.equal(files.includes('ops/workflows/ci.yml'), false);
+  assert.equal(files.includes('ops/labels.json'), false);
+});

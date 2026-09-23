@@ -47,6 +47,15 @@ pnpm --filter @crux/workshop-topic run start -- --episode ep-0001-stub   # chạ
 # PR này thuộc cửa merge nào (D-C06)? Chạy, đừng đoán:
 git diff --name-only origin/main...HEAD > /tmp/changed.txt
 node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .
+
+# PR sửa `main` đỏ này có đi được lối nhanh `hotfix` không (D-C07)? Cũng chạy, đừng đoán.
+# File JSON: {labels, changed, deleted, alertBody, incidentSha, mainCiRed, otherHotfixPrs, number}
+# `alertBody` = thân issue cảnh báo NỐI với comment của `github-actions[bot]` — KHÔNG nối comment của agent.
+node ops/invariants.hotfix-lane.ts /tmp/hotfix.json
+# → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
+
+# Phạm vi sự cố của một `main` đỏ, dạng máy đọc (nguồn duy nhất cho điều kiện 2):
+pnpm check > /tmp/check.txt 2>&1; node ops/scripts/main-red-scope.ts /tmp/check.txt "$(git rev-parse HEAD)"
 ```
 
 **Không** có lệnh nào trong repo gọi API trả tiền ở Đợt 0. Mọi xưởng đang ở `impl: stub`.

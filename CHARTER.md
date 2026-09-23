@@ -150,7 +150,7 @@ Sau khi xử lý xong một quyết định, agent ghi quyết định có tính
 
 GitHub không gửi thông báo cho chính người thực hiện hành động. Vì agent hành động bằng danh tính của chủ dự án, cần hai workflow chạy bằng `github-actions[bot]`.
 
-**Phạm vi @nhắc (D-C06).** Chỉ **hai** thứ được phép gọi chủ dự án:
+**Phạm vi @nhắc (D-C06, mở rộng bởi `D-C07`).** Chỉ **ba** thứ được phép gọi chủ dự án:
 
 1. **Bản tin ngày** (nhãn `digest`) — hộp quyết định duy nhất, mục 2.5.
 2. **Cảnh báo khẩn** (nhãn `alert`), đúng **bốn** loại:
@@ -158,6 +158,7 @@ GitHub không gửi thông báo cho chính người thực hiện hành động.
    - watchdog báo nhà máy im lặng;
    - chi phí vượt **80%** ngân sách học (mục 8);
    - sự cố bảo mật.
+3. **Một lần merge qua lối đi nhanh `hotfix`** (`D-C07`, điều kiện 6 của chủ dự án): `automerge.yml` comment `@nhắc` ngay trên PR vừa merge. Đây là loại PR duy nhất máy đưa vào `main` **không có khoảng chờ** nào để ai kịp nói `dừng`, nên nó được gọi ngay chứ không chờ bản tin sáng. Kèm theo: bản tin kế tiếp có một mục riêng để soát lại (mục `platform/P-035`).
 
 Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn quyết định không còn là một ngày bị gọi bốn lần; cả bốn nằm trong bản tin sáng.
 
@@ -598,6 +599,8 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 - **Mục 3.3 · lối nhanh bỏ đúng MỘT thứ: khoảng chờ.** Sáu điều kiện kèm câu trả lời của chủ dự án nằm ở `ops/invariants.hotfix-lane.ts` dưới dạng phép kiểm máy, không phải lời dặn. Mọi phép kiểm khác — CI xanh trên đúng đầu nhánh, `fix-has-test`, không xung đột, không nháp, lời `dừng` — vẫn chặn y như cũ.
 - **Phụ lục P3 bước 1 · CHARTER thôi ghi cứng nhãn.** Câu cũ dặn dán `automerge` lên PR revert, còn `ops/invariants.protected-area.ts` tính ra `automerge-delayed` cho đúng loại PR đó: hai luật, hai nhãn, cùng một PR. Từ nay nhãn là trường `gate` do tool tính ra. Chính chủ dự án chỉ ra chỗ lệch này trong câu trả lời `#169`.
 - **Hướng an toàn.** Không dò được phạm vi sự cố, không có cảnh báo đang mở, hay `automerge.yml` không dựng được đầu vào: tất cả về cửa thường, tức vẫn chờ 12 giờ. Lối nhanh không bao giờ áp cho `automerge.yml`, `ops/invariants.*` hay `.github/**` (điều kiện 5), và không bao giờ áp cho một PR chạm chính luật đang bắt lỗi (điều kiện 3).
+- **Mục 2.4 · kênh @nhắc thứ ba.** Điều kiện 6 cho `automerge.yml` @nhắc ngay trên PR vừa merge qua lối nhanh, mà danh sách đóng ở 2.4 chỉ có hai kênh. Vòng soát ngữ cảnh sạch bắt đúng chỗ này — cùng chữ ký `KF-020`: hai luật đúng riêng lẻ, thủng ở chỗ gặp nhau. Nay 2.4 có ba kênh.
+- **Bốn lớp khoá thêm, do vòng soát ngữ cảnh sạch tìm ra và đều đã tái hiện được:** phạm vi chỉ đọc từ thân issue và comment của `github-actions[bot]` (một comment của agent từng **định nghĩa lại** được điều kiện 2 — bất biến I7); phạm vi phải nói đúng commit `main` đang đỏ; `ci.yml`, `main-ci.yml` và `main-red-scope.ts` vào danh sách loại trừ hẳn vì chúng là chính bên định nghĩa "5 check" và bên sinh ra phạm vi; và một PR **XOÁ** file thì không bao giờ đi lối nhanh, vì xoá file test đang đỏ vừa thoả điều kiện 2 vừa là "tắt test để CI xanh".
 - **Hai vế còn lại của câu trả lời** — @nhắc mỗi 4 giờ cho cảnh báo khẩn, và một mục riêng trong bản tin cho mỗi lần merge lối nhanh — nằm ở `platform/P-034` và `platform/P-035`, không nằm trong PR chốt quyết định này.
 
 **C7 · 2026-09-22 · quyết định `reversible` ở issue #107, phương án A.** Bảng lý do "worker phải nhận PR nào" có **bốn** hàng thay vì ba. Mục `platform/P-025`.

@@ -69,13 +69,35 @@ const CANDIDATE = new RegExp(`(?:[A-Za-z0-9_.@-]+/)*[A-Za-z0-9_.@-]+\\.(?:${EXTE
 const PNPM_ECHO = /^\s*>/;
 
 /**
+ * Dòng của `node --test` **không** phải thông báo lỗi, và đây là chỗ phình
+ * phạm vi lớn nhất đã đo được.
+ *
+ * TAP in một dòng `ok <n> - <tên bài>` cho MỌI bài đã qua, cộng
+ * `# Subtest: <tên bài>` cho từng bài, cộng một khối YAML (`location:`,
+ * `stack:`, `expected:`, …). Tên bài trong repo này thường chứa nguyên
+ * đường dẫn ("`ops/labels.json` đổi thì gọi labels"), nên 790 bài **xanh**
+ * kéo theo tên của gần hết repo.
+ *
+ * **Đo được, và đây là lý do luật này tồn tại:** trên đầu ra thật của
+ * `pnpm test` (5094 dòng, 3 bài đỏ) phạm vi ra **15** file — trong đó có
+ * `CLAUDE.md`, `ops/workflows/ci.yml`, `ops/workflows/automerge.yml` và
+ * chính `ops/scripts/main-red-scope.ts`. Bỏ hai loại dòng này: còn **2**
+ * file, đúng hai chỗ hỏng thật (`spike-canvas.yml`, `camera.test.ts`).
+ *
+ * Giữ lại `not ok` và phần chữ của thông báo lỗi — đó là chỗ cổng đỏ nói
+ * tên file thật.
+ */
+const TAP_NOISE =
+  /^\s*(?:ok\s+\d|#|(?:location|stack|file|at|code|name|expected|actual|operator|duration_ms|type|failureType)\s*:|---\s*$|\.\.\.\s*$)/;
+
+/**
  * Mọi chuỗi trông như một đường dẫn file trong đầu ra. Giữ nguyên thứ tự gặp,
  * bỏ trùng — thứ tự gặp là thứ tự cổng đỏ, đọc được hơn thứ tự chữ cái.
  */
 export function extractCandidates(output: string): string[] {
   const seen = new Set<string>();
   for (const line of output.split('\n')) {
-    if (PNPM_ECHO.test(line)) continue;
+    if (PNPM_ECHO.test(line) || TAP_NOISE.test(line)) continue;
     for (const match of line.matchAll(CANDIDATE)) {
       const raw = match[0].replace(/^[./]+/, '');
       if (raw !== '') seen.add(raw);
