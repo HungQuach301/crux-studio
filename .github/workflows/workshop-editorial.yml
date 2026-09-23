@@ -1,0 +1,86 @@
+# 🤖 Xưởng `editorial` gọi được độc lập bằng `workflow_dispatch` (mục `platform/P-004`).
+#
+# CHARTER 5.4 và quyết định D-12: sáu xưởng nối với nhau bằng **dispatch**,
+# KHÔNG nối bằng sự kiện `push`. Mỗi xưởng là một workflow riêng, chạy được
+# một mình, nhận đúng hai tham số: `episode` và `impl`.
+#
+# Đầu vào xưởng này cần: topic.
+#
+# Bất biến I8: mỗi lần chạy ghi MỘT dòng có `costUsd` vào
+# `ops/logs/editorial/<episode>.jsonl`. Dòng đó do `ops/scripts/run-workshop.ts`
+# ghi — kể cả khi lần chạy hỏng, vì I8 nói "mọi lần chạy", không nói "mọi lần
+# chạy thành công".
+#
+# Dòng log KHÔNG được commit ngược vào repo: agent và máy không push vào
+# `main` (CLAUDE.md mục 2). Lượt chạy in nó ra nhật ký và ra tóm tắt lần
+# chạy, nên người đọc lấy được ngay. Cách giữ nó lâu dài — Actions artifact
+# hoặc Releases — là việc của mục `kernel/K-004`, không phải của mục này.
+name: workshop-editorial
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode:
+        description: 'Mã tập, ví dụ ep-0001-stub'
+        required: true
+        type: string
+      impl:
+        description: 'stub hay v1. Sáu xưởng hiện đều ở stub, nên v1 chỉ đổi nhãn producer.impl.'
+        required: false
+        default: stub
+        type: choice
+        options: [stub, v1]
+
+permissions:
+  contents: read
+
+# Hai lượt chạy cùng một xưởng cho cùng một tập sẽ ghi vào cùng một file log.
+# Xếp hàng thay vì huỷ: một lượt bị huỷ giữa chừng là một lượt tốn tiền mà
+# không để lại dòng nào (bất biến I8).
+concurrency:
+  group: workshop-editorial-${{ inputs.episode }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: editorial
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Chạy xưởng editorial
+        env:
+          EPISODE: ${{ inputs.episode }}
+          IMPL: ${{ inputs.impl }}
+        run: |
+          set -euo pipefail
+          pnpm run:workshop -- --workshop editorial --episode "$EPISODE" --impl "$IMPL"
+
+      # Dòng log là thứ duy nhất mang `costUsd` ra khỏi lần chạy này. Chạy cả
+      # khi bước trên đỏ: đúng lúc hỏng mới là lúc cần đọc nó nhất.
+      - name: Dán dòng log vào tóm tắt lần chạy
+        if: always()
+        env:
+          EPISODE: ${{ inputs.episode }}
+        run: |
+          set -euo pipefail
+          LOG="ops/logs/editorial/$EPISODE.jsonl"
+          {
+            echo "### Xưởng \`editorial\` · tập \`$EPISODE\`"
+            echo
+            if [ -f "$LOG" ]; then
+              echo "Dòng log (bất biến I8) trong \`$LOG\`:"
+              echo
+              echo '```json'
+              tail -n 1 "$LOG"
+              echo '```'
+            else
+              echo "⚠️ Không có \`$LOG\`. Lần chạy kết thúc TRƯỚC khi ghi được dòng log — vi phạm bất biến I8, phải tìm nguyên nhân."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
