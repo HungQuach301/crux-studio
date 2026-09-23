@@ -295,3 +295,46 @@ jobs:
             fi
           done < <(git rev-list "$RANGE")
           echo "Thiếu trailer: $MISSING commit. Đây là cảnh báo, không chặn."
+
+  golden-solo:
+    name: golden-solo
+    runs-on: ubuntu-latest
+    # Chỉ có nghĩa trên một PR: luật nói về TẬP FILE ĐÃ ĐỔI của PR so với
+    # base. Một lần `workflow_dispatch` không có tập đó.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      # CHARTER 6.1: `pnpm replay -- --update` phải đi trong PR RIÊNG. Rà
+      # soát Z13 (`ops/known-failures.md`): gộp chung thì snapshot mới khớp
+      # output mới, `pnpm replay` xanh, và phép so tập vàng mất hết giá trị
+      # mà không gì đỏ.
+      #
+      # LUẬT nằm ở `ops/scripts/check-golden-pr.ts` (có test âm), KHÔNG nằm
+      # trong file này — `ci.yml` chạy theo định nghĩa trong nhánh PR, nên
+      # một luật viết thẳng ở đây tự nó không chặn được gì; chỗ đặt luật
+      # phải là chỗ test đọc được.
+      #
+      # BƯỚC này KHÔNG bao giờ dùng `if:` để bỏ qua (rà soát Z2): nó luôn
+      # chạy và tự in ra kết luận của mình, kể cả khi PR không chạm tập vàng.
+      #
+      # Phân biệt với `if:` mức JOB ở trên — job vẫn ra `skipped` trên một
+      # `workflow_dispatch`, và đó chính là ca `if:` mức job mà bảng nhóm Z
+      # còn để ngỏ (phần còn lại của Z2). Ba job khác của file này
+      # (`fix-has-test`, `protected-area`, `trailer-warn`) cùng khuôn đó.
+      #
+      # `-c core.quotePath=false`: mặc định `git` in tên file có ký tự ngoài
+      # ASCII dưới dạng `"ops/golden/t\341\272\255p.json"` — có ngoặc kép
+      # bao ngoài, và một luật so tiền tố sẽ fail-OPEN với nó. Script còn tự
+      # gỡ ngoặc làm lớp thứ hai; hai lớp vì chiều hỏng này im lặng.
+      - name: PR cập nhật tập vàng phải đi một mình
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
+          git -c core.quotePath=false diff --name-only \
+            "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
+            | node ops/scripts/check-golden-pr.ts

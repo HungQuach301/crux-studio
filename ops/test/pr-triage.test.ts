@@ -10,6 +10,7 @@ import {
   laneFromBranch,
   pickPrToHandle,
   shouldAlertStreak,
+  stuckStreak,
   type TriageCandidate,
 } from '../scripts/pr-triage.ts';
 
@@ -18,6 +19,7 @@ function candidate(overrides: Partial<TriageCandidate> & { number: number; branc
     ciRed: false,
     hasUnhandledComment: false,
     abortedIneligibleStreak: 0,
+    redAfterMergeStreak: 0,
     hoursSinceLastCommit: ANTI_COLLISION_HOURS,
     ...overrides,
   };
@@ -138,6 +140,87 @@ test('pickPrToHandle: nhánh không suy được làn vẫn được chọn, `la
   const result = pickPrToHandle([c]);
   assert.equal(result?.lane, null);
   assert.equal(result?.reason, 'aborted-ineligible');
+});
+
+// pickPrToHandle · ca `red-after-merge` (mục P-025, issue #107)
+
+test('pickPrToHandle: PR gộp sạch rồi đỏ được chọn, đúng lý do và đúng làn suy từ nhánh', () => {
+  const c = candidate({ number: 81, branch: 'claude/editorial/E-001', redAfterMergeStreak: 3 });
+  const result = pickPrToHandle([c]);
+  assert.deepEqual(result, { candidate: c, reason: 'red-after-merge', lane: 'editorial' });
+});
+
+test('pickPrToHandle: ca PR #81 đo thật — CI nhánh xanh, comment toàn của máy, chuỗi aborted bằng 0 — TRƯỚC P-025 không ai nhận, nay có', () => {
+  // Đúng hình dạng đã đo trên PR #81 ba lượt liên tiếp ngày 2026-09-22.
+  const c = candidate({
+    number: 81,
+    branch: 'claude/editorial/E-001',
+    ciRed: false,
+    hasUnhandledComment: false,
+    abortedIneligibleStreak: 0,
+    redAfterMergeStreak: 3,
+  });
+  const result = pickPrToHandle([c]);
+  assert.equal(result?.candidate.number, 81);
+  assert.equal(result?.reason, 'red-after-merge');
+});
+
+test('pickPrToHandle: chống giẫm chân áp dụng cho ca red-after-merge y như ba ca kia', () => {
+  const c = candidate({
+    number: 81,
+    branch: 'claude/editorial/E-001',
+    redAfterMergeStreak: 4,
+    hoursSinceLastCommit: ANTI_COLLISION_HOURS - 0.1,
+  });
+  assert.equal(pickPrToHandle([c]), null);
+});
+
+test('pickPrToHandle: red-after-merge xếp SAU ci-red và SAU comment chưa xử lý', () => {
+  const redPr = candidate({ number: 1, branch: 'claude/topic/T-001', ciRed: true });
+  const commentPr = candidate({ number: 2, branch: 'claude/editorial/E-001', hasUnhandledComment: true });
+  const redAfterMergePr = candidate({ number: 81, branch: 'claude/verify/VF-G1', redAfterMergeStreak: 3 });
+
+  assert.equal(pickPrToHandle([redAfterMergePr, commentPr, redPr])?.candidate.number, 1);
+  assert.equal(pickPrToHandle([redAfterMergePr, commentPr])?.candidate.number, 2);
+});
+
+test('pickPrToHandle: red-after-merge xếp TRƯỚC aborted-ineligible', () => {
+  const abortedPr = candidate({ number: 39, branch: 'claude/visual/V-001', abortedIneligibleStreak: 5 });
+  const redAfterMergePr = candidate({ number: 81, branch: 'claude/editorial/E-001', redAfterMergeStreak: 1 });
+  const result = pickPrToHandle([abortedPr, redAfterMergePr]);
+  assert.equal(result?.candidate.number, 81);
+  assert.equal(result?.reason, 'red-after-merge');
+});
+
+test('pickPrToHandle: một PR vướng cả hai cách kẹt ra lý do red-after-merge, không phải aborted-ineligible', () => {
+  const c = candidate({
+    number: 81,
+    branch: 'claude/editorial/E-001',
+    abortedIneligibleStreak: 2,
+    redAfterMergeStreak: 2,
+  });
+  assert.equal(pickPrToHandle([c])?.reason, 'red-after-merge');
+});
+
+// stuckStreak
+
+test('stuckStreak: PR không kẹt cách nào ra 0', () => {
+  assert.equal(stuckStreak({ abortedIneligibleStreak: 0, redAfterMergeStreak: 0 }), 0);
+});
+
+test('stuckStreak: lấy chuỗi của chữ ký nào dài hơn, không cộng hai chữ ký lại', () => {
+  assert.equal(stuckStreak({ abortedIneligibleStreak: 5, redAfterMergeStreak: 0 }), 5);
+  assert.equal(stuckStreak({ abortedIneligibleStreak: 0, redAfterMergeStreak: 3 }), 3);
+  // Cộng lại sẽ ra 4 và báo động sai cho một chữ ký mới chỉ gặp 2 lượt.
+  assert.equal(stuckStreak({ abortedIneligibleStreak: 2, redAfterMergeStreak: 2 }), 2);
+});
+
+test('stuckStreak nối vào shouldAlertStreak: chuỗi red-after-merge tới ngưỡng thì bản tin phải nói ra', () => {
+  const stuck = { abortedIneligibleStreak: 0, redAfterMergeStreak: ABORTED_INELIGIBLE_ALERT_THRESHOLD };
+  assert.equal(shouldAlertStreak(stuckStreak(stuck)), true);
+
+  const notYet = { abortedIneligibleStreak: 0, redAfterMergeStreak: ABORTED_INELIGIBLE_ALERT_THRESHOLD - 1 };
+  assert.equal(shouldAlertStreak(stuckStreak(notYet)), false);
 });
 
 // shouldAlertStreak

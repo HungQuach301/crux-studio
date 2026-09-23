@@ -5,7 +5,7 @@
  * `T-005` xây **công cụ**: `model-runner.ts` chạy một mô hình từ contract,
  * `model-verify.ts` chấm bốn cấp kiểm. File này là **nội dung**: nó đăng ký
  * tám công thức thật vào registry, và tám file `data/models/M-00N.json` mô
- * tả chúng theo `contracts/model.v0.schema.json`.
+ * tả chúng theo `kernel/contracts/model.schema.json` (mục `kernel/K-002`).
  *
  * **Luật chịu tải nhất của mục này** (`D-C02` điểm a): ca kiểm cấp 1 lấy từ
  * **nguồn độc lập bên ngoài** — ví dụ mẫu tính đã công bố của một cơ quan
