@@ -49,6 +49,7 @@ jobs:
       # ffmpeg không có sẵn trên mọi ảnh runner.
       - name: Chuẩn bị ffmpeg
         run: |
+          set -euo pipefail
           if ! command -v ffmpeg >/dev/null 2>&1; then
             sudo apt-get update -qq
             sudo apt-get install -y -qq ffmpeg
@@ -71,6 +72,7 @@ jobs:
           TRIAL_CONFIG: ${{ inputs.config }}
           TRIAL_DURATION_MS: ${{ inputs.duration-ms }}
         run: |
+          set -euo pipefail
           args="--out render-trial-out"
           if [ "$TRIAL_CONFIG" != "all" ] && [ -n "$TRIAL_CONFIG" ]; then
             args="$args --config $TRIAL_CONFIG"
@@ -83,6 +85,7 @@ jobs:
 
       - name: Sinh báo cáo
         run: |
+          set -euo pipefail
           node ops/scripts/render-trial.ts \
             --report \
             --from render-trial-out/measurements.json \
@@ -94,6 +97,7 @@ jobs:
       # và Actions làm tròn LÊN theo từng phút cho mỗi job.
       - name: Quy phút Actions
         run: |
+          set -euo pipefail
           ended=$(date +%s)
           elapsed=$(( ended - TRIAL_STARTED ))
           minutes=$(( (elapsed + 59) / 60 ))
@@ -120,6 +124,7 @@ jobs:
       - name: Dọn bản master khi không cần tải lên
         if: ${{ inputs.upload-master != 'true' }}
         run: |
+          set -euo pipefail
           rm -f render-trial-out/master-*.mp4 render-trial-out/source.mp4
           echo "bỏ bản master và clip nguồn khỏi artifact (upload-master != true)"
 
