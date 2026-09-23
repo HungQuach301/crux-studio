@@ -835,7 +835,13 @@ Làn integration của Crux Studio.
         không phải khi PR "hết xung đột": PR kẹt kiểu này vốn đã gộp sạch, và bước 0a chỉ liệt kê PR đang xung đột
         nên nó không bao giờ được đo lại ở đây. Thiếu luật về 0 thì PR đã chữa xong vẫn bị chọn lại mỗi lượt mà
         không gì đỏ.
-      - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
+      - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên, **hoặc** cây sau khi union không còn
+        đọc được (mục `I-018`, `KF-016`: union làm việc theo dòng, không theo cú pháp — nó giữ một dòng đóng khối
+        chung đúng một lần, nên hai bên cùng thêm sau dòng đó cho ra mã hỏng mà không bên nào xoá dòng nào). Ca cú
+        pháp này là `aborted-ineligible`, **không** phải "PR đỏ": hai ca đi hai đường khác nhau ở lượt sau (phụ lục
+        P1 bước 2), và tool trả nó ra ngay chứ không để `pnpm check` phía sau bắt — `check` dừng ở lỗi ĐẦU TIÊN nên
+        nó có thể đỏ ở một cổng khác trước khi tới `typecheck`, đúng cách cây hỏng của PR `#71` đi qua hai lượt bước 0.
+        Không tự giải được. KHÔNG thử `--ours`,
         `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt**, tên file gây
         vướng (có sẵn trong `reason` của kết quả), **làn sở hữu** (suy từ tên nhánh bằng `laneFromBranch`,
         `ops/scripts/pr-triage.ts`), và **số lượt `aborted-ineligible` liên tiếp cùng chữ ký** tính cả lượt này
