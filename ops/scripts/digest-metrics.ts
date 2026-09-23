@@ -51,12 +51,22 @@ import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
 import {
   conflictRows,
+  fetchProbeRefs,
   isProbeError,
   measureConflicts,
   renderConflictRow,
   type ConflictProbe,
   type ConflictRow,
 } from './conflict-watch.ts';
+import {
+  DELAYED_LABEL,
+  gateFlowRows,
+  gateFlowVerdict,
+  prHeadChanges,
+  renderGateFlowRow,
+  type GateFlowRow,
+} from './gate-flow.ts';
+import { DEFAULT_DELAY_HOURS } from '../invariants.merge-gate.ts';
 
 // --- Dạng dữ liệu GitHub (đúng dạng `gh … --json` trả về) ---
 
@@ -458,6 +468,16 @@ export interface DigestMetrics {
    * đầu file: `0` và `chưa dò` là hai chuyện khác nhau.
    */
   conflicts: ConflictRow[] | null;
+  /**
+   * Mục **"Đang chờ merge"** của bản tin (phụ lục P2) — tiêu chí thứ hai của
+   * `P-027`, dựng trên phép đo đã có ở `ops/scripts/gate-flow.ts` (tiêu chí
+   * thứ nhất, lượt `crux-worker-3`). Chỉ PR mang nhãn `automerge-delayed`.
+   *
+   * `null` — **không phải mảng rỗng** — khi lượt chạy không đo được đầu
+   * nhánh, cùng lý do với `conflicts`: một bản tin nói "0 PR đang chờ"
+   * trong khi 14 PR nằm kẹt là đúng nhóm lỗi Z.
+   */
+  delayed: GateFlowRow[] | null;
   parked: ParkedItem[];
   decisions: DecisionRow[];
   cost: CostSummary;
@@ -513,6 +533,37 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
     for (const row of metrics.conflicts) out.push(`- ${renderConflictRow(row)}`);
   }
 
+  // Mục `P-027`, phần "Đang chờ merge" của phụ lục P2. Số giờ ở đây tính
+  // theo **đồng hồ đã bị đặt lại** — giờ kể từ lúc gắn nhãn là con số làm
+  // một PR kẹt vĩnh viễn trông giống một PR sắp tới hạn (KF-011).
+  if (metrics.delayed === null) {
+    out.push('', 'Đang chờ merge: CHƯA ĐO — lượt chạy không đọc được đầu nhánh');
+  } else {
+    const conflicting = new Set((metrics.conflicts ?? []).map((row) => row.number));
+    out.push('', `Đang chờ merge: ${metrics.delayed.length}`);
+    for (const row of metrics.delayed) {
+      // Phụ lục P2: PR đang xung đột thì **thay** "còn mấy giờ" bằng lời nói
+      // về xung đột — đồng hồ 12 giờ không chạy khi đang xung đột (CHARTER
+      // 3.3), và mục "PR đang xung đột" ngay trên đã có số giờ kẹt. In cả
+      // hai là để bản tin tự mâu thuẫn trong một mục.
+      out.push(
+        conflicting.has(row.number)
+          ? `- #${row.number} · xung đột — đồng hồ ${DEFAULT_DELAY_HOURS} giờ KHÔNG chạy, xem mục "PR đang xung đột" · ${row.title}`
+          : `- ${renderGateFlowRow(row, DEFAULT_DELAY_HOURS)}`,
+      );
+    }
+    // Dòng dặn phải nói ĐÚNG trạng thái thật. "Không làm gì thì nó tự vào
+    // `main`" in vô điều kiện, ngay dưới các dòng ghi `CHƯA BAO GIỜ đạt
+    // ngưỡng`, là chỗ bản tin tự mâu thuẫn — và chủ dự án đọc bản tin đúng
+    // để quyết định *không làm gì* (KF-011).
+    const verdict = gateFlowVerdict(metrics.delayed);
+    out.push(
+      verdict.delayedCount > 0 && verdict.reachedThresholdCount === 0
+        ? '  ⚠️ Cửa delayed hiện CHƯA CHẢY (KF-011, chờ `[QĐ]` #116): không PR nào ở trên tự vào `main` được. Gỡ kẹt cần một lần merge tay.'
+        : '  Không làm gì thì PR đủ giờ tự vào `main`; muốn giữ lại thì comment `dừng` ngay trên PR đó.',
+    );
+  }
+
   out.push('', `Mục parked: ${metrics.parked.length}`);
   for (const item of metrics.parked) out.push(`- ${item.lane}/${item.id} · ${item.title}`);
 
@@ -552,11 +603,20 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
  */
 export type ConflictOrigins = ReadonlyMap<number, ConflictProbe>;
 
+/**
+ * Mốc mỗi lần đổi đầu nhánh của từng PR `automerge-delayed`, **mới trước cũ
+ * sau**, khoá là số PR (mục `P-027`, dạng mà `gate-flow.ts` nhận). Bên gọi
+ * truyền `null` cho cả tham số nghĩa là lượt chạy chưa đo gì cả — bản tin
+ * khi đó in `CHƯA ĐO`, không in `0`.
+ */
+export type DelayedHeadChanges = ReadonlyMap<number, string[]>;
+
 export function collectMetrics(
   root: string,
   snapshot: GithubSnapshot,
   now: Date,
   origins: ConflictOrigins | null = null,
+  headChanges: DelayedHeadChanges | null = null,
 ): DigestMetrics {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -631,11 +691,31 @@ export function collectMetrics(
   const machineWaiting = (conflicts?.length ?? 0) + openPrs.filter((row) => row.ci === 'đỏ').length;
   const progress = computeProgress(itemsByLane, snapshot.mergedPrs, logLines, humanWaiting, machineWaiting, now);
 
+  // Mục `P-027`. Cùng luật với `conflicts` ngay trên: không đo được thì
+  // `null`, không phải mảng rỗng.
+  const delayed =
+    headChanges === null
+      ? null
+      : gateFlowRows(
+          // KHÔNG lọc theo `headChanges.has(...)`: một PR mang nhãn mà thiếu
+          // trong map phải hiện ra ở hàng "không đọc được lần đổi đầu nhánh
+          // nào", không được âm thầm rơi khỏi con số "Đang chờ merge: N".
+          snapshot.openPrs.map((pr) => ({
+            number: pr.number,
+            title: pr.title,
+            labels: labelNames(pr.labels),
+            headChangesNewestFirst: headChanges.get(pr.number) ?? [],
+          })),
+          now.toISOString(),
+          DEFAULT_DELAY_HOURS,
+        ).filter((row) => row.isDelayed);
+
   return {
     since,
     merged: mergedByLane(snapshot.mergedPrs, since),
     openPrs,
     conflicts,
+    delayed,
     parked,
     decisions,
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
@@ -715,6 +795,49 @@ export function probeOrigins(root: string, snapshot: GithubSnapshot, argv: reado
   }
 }
 
+/**
+ * Đầu nhánh của từng PR `automerge-delayed`, đo bằng `git` (mục `P-027`).
+ *
+ * Cùng luật "hỏng thì rơi về `null`, không kéo cả bản tin xuống" với
+ * `probeOrigins` ngay trên: `fetchProbeRefs` ném khi mất mạng hoặc khi một
+ * `refs/pull/<n>/head` không nạp được, và một mục mới hạ được một bản tin
+ * đang chạy là cái giá không đáng.
+ */
+export function probeDelayedHeadChanges(
+  root: string,
+  snapshot: GithubSnapshot,
+  argv: readonly string[],
+): DelayedHeadChanges | null {
+  if (argv.includes('--no-delayed')) return null;
+  const numbers = snapshot.openPrs
+    .filter((pr) => labelNames(pr.labels).some((label) => label.toLowerCase() === DELAYED_LABEL))
+    .map((pr) => pr.number);
+  // Không PR nào mang nhãn là một câu trả lời thật ("hàng đợi delayed
+  // rỗng"), khác hẳn "không đo được" — nên trả map rỗng, không trả `null`.
+  if (numbers.length === 0) return new Map();
+  try {
+    fetchProbeRefs(root, numbers);
+    const pairs: [number, string[]][] = [];
+    for (const number of numbers) {
+      // `prHeadChanges` ném cho PR không có commit nào ngoài `main`. Đó là
+      // một PR, không phải cả lượt chạy: bỏ nó ra khỏi map thì nó vẫn hiện
+      // ở hàng "không đọc được lần đổi đầu nhánh nào" (`collectMetrics`
+      // không lọc theo map), còn ném ra ngoài thì mất cả mục.
+      try {
+        pairs.push([number, prHeadChanges(root, number)]);
+      } catch (error) {
+        process.stderr.write(`PR #${number}: ${(error as Error).message}\n`);
+      }
+    }
+    return new Map(pairs);
+  } catch (error) {
+    process.stderr.write(
+      `Không đo được đầu nhánh PR delayed, bản tin sẽ in CHƯA ĐO: ${(error as Error).message}\n`,
+    );
+    return null;
+  }
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   const githubIndex = argv.indexOf('--github');
@@ -737,7 +860,13 @@ function main(): void {
   // `note` của log. `--no-conflicts` cho lượt chạy không có kho git đầy đủ
   // — và khi đó bản tin in `CHƯA DÒ`, không in `0`.
   const root = process.cwd();
-  const metrics = collectMetrics(root, snapshot, new Date(), probeOrigins(root, snapshot, argv));
+  const metrics = collectMetrics(
+    root,
+    snapshot,
+    new Date(),
+    probeOrigins(root, snapshot, argv),
+    probeDelayedHeadChanges(root, snapshot, argv),
+  );
 
   process.stdout.write(argv.includes('--json') ? `${JSON.stringify(metrics, null, 2)}\n` : renderDigestMetrics(metrics));
 }

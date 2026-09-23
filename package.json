@@ -18,6 +18,7 @@
     "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
     "backlog:status": "node ops/scripts/backlog-status.ts",
     "digest:metrics": "node ops/scripts/digest-metrics.ts",
+    "gate:flow": "node ops/scripts/gate-flow.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\" \"spike/**/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",
