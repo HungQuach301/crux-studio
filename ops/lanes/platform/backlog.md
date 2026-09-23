@@ -593,9 +593,9 @@ Giá phải trả, đo ở bước 0 cùng lượt: **6 / 16 PR đang mở** xun
 - deps: —
 - risk: **high** — mỗi lần `main` đỏ vì workflow là ~12 giờ toàn bộ hàng đợi merge đứng, không ai phải bấm sai gì cả.
 - status: blocked
-- nguồn: `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
+- nguồn: `🤖 [QĐ] #169`; `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
 - tiêu chí xong:
-  - ⬜ **CHỜ `🤖 [QĐ]`** — nới cửa merge cho một loại PR là đổi **CHARTER mục 3**, tức `irreversible` nhóm 4 (CHARTER 2.3). Mục này **không** được tự chọn phương án. Đọc câu trả lời ở **cả hai** chỗ: issue `[QĐ]` và issue bản tin (dạng `#N A`).
+  - ⬜ **CHỜ `🤖 [QĐ] #169`** — nới cửa merge cho một loại PR là đổi **CHARTER mục 3**, tức `irreversible` nhóm 4 (CHARTER 2.3). Mục này **không** được tự chọn phương án. Đọc câu trả lời ở **cả hai** chỗ: issue `#169` và issue bản tin (dạng `#169 A`).
   - ⬜ Làm theo đường đã chốt, rồi **chứng minh bằng chạy thật**: dựng một PR chỉ sửa một vi phạm `ops/workflows/**` đang làm `main` đỏ, chạy `node ops/invariants.protected-area.ts` trên diff của nó, và cửa phải ra đúng cái đã chốt — không đọc bảng bằng mắt.
   - ⬜ Bài tái hiện (bất biến I2) trong `node --test`: một diff "chỉ sửa `main` đỏ" phải ra cửa đã chốt, và một diff chạm `ops/workflows/**` **không** thuộc loại đó vẫn phải ra `automerge-delayed`. Nới đúng một ca, không nới cả thư mục.
   - ⬜ Sửa chỗ lệch giữa hai câu: `CLAUDE.md` mục 13 hoặc CHARTER mục 3 phải nói rõ ca này, để lượt sau không phải đo lại mới biết câu nào thắng.
