@@ -548,6 +548,47 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
+## KF-021 · Ba số bắt buộc của bước 0 chỉ nằm trong văn xuôi, nên chuỗi kẹt đếm bằng mắt — ba lượt ghi ba con số khác nhau cho cùng một PR
+
+> Số **KF-021**: `KF-019` thuộc PR `#167`, `KF-020` thuộc PR `#168` — cả hai đang mở. Nhận mã trước khi viết bằng cách dò trên `main` **và mọi** nhánh PR đang mở (KF-005, và cảnh báo ở đầu `KF-018`):
+>
+> ```bash
+> for b in $(git branch -r | grep -v HEAD | sed 's/^ *//'); do
+>   git show "$b:ops/known-failures.md" 2>/dev/null | grep -o "^## KF-[0-9]*"
+> done | sort -u -V | tail -1
+> ```
+
+- **Lần gặp:** 1 — bản ghi đầu tiên của chữ ký này. Phát hiện ở lượt `crux-worker-1` ~02:51Z ngày 2026-09-23, khi đếm lại chuỗi của `#120` bằng cách đọc **mọi** dòng bước 0 chứ không chỉ những dòng đã vào `main`.
+- **Chữ ký:** hai dòng log bước 0 kề nhau ghi **chuỗi giảm đi** cho cùng một PR với cùng một chữ ký xung đột — ví dụ `streak=2` ở `00:46Z` rồi `streak=1` ở `01:20Z`. Không có gì đỏ: cả hai dòng đều đúng định dạng, `pnpm check` xanh, CI xanh.
+- **Đo được, 2026-09-23 (PR `#120`, chữ ký `ops/scripts/digest-metrics.ts` + `ops/test/digest-metrics.test.ts` không đổi suốt bảy lượt):**
+
+  | lượt bước 0 | routine | chuỗi mà lượt đó **ghi ra** | chuỗi **thật** |
+  |---|---|---|---|
+  | `23:33Z` | `crux-worker-2` | 1 | 1 |
+  | `23:38Z` | `crux-worker-1` | 1 | 2 |
+  | `00:46Z` | `crux-worker-1` | **2** | 3 |
+  | `01:20Z` | `crux-worker-2` | **1** | 4 |
+  | `01:39Z` | `crux-worker-1` | — | 5 |
+  | `02:24Z` | `crux-worker-2` | **2** | 6 |
+  | `02:51Z` | `crux-worker-1` | 7 | 7 |
+
+  `ABORTED_INELIGIBLE_ALERT_THRESHOLD` là **3**, nên `shouldAlertStreak` phải bật từ lượt `01:20Z`. Không lượt nào bật nó. Sáu PR (`#39` `#84` `#89` `#112` `#120` `#160`) đều mang nhãn `automerge-delayed`, tức đúng ca mà phụ lục P3 bước 0b bắt bản tin phải nói ra — và bản tin im lặng bốn lượt liên tiếp, **đúng hình dạng nhóm Z đã xảy ra một lần với `#81`**.
+
+- **Nguyên nhân gốc — hai lớp, lớp thứ hai mới là gốc:**
+  1. *Lớp nhìn thấy trước:* hàng đợi merge đứng (`main` đỏ, `KF-020`), nên mọi dòng bước 0 từ `21:38Z` trở đi nằm trong PR **chưa merge**. Một lượt chỉ nhìn `ops/logs/` của cây làm việc thì không thấy chúng, và đếm lại từ đầu.
+  2. *Lớp gốc:* phụ lục P3 bước 0b đòi ba số (giờ kẹt · làn sở hữu · chuỗi liên tiếp) với đúng lý do *"thiếu chúng thì `pickPrToHandle` ở phụ lục P1 bước 2 không có nguồn để đếm"* — nhưng nó **không nói ghi vào đâu**, nên mọi lượt ghi vào `note`, tức **văn xuôi tiếng Việt**. Nguồn để đếm vì thế chưa bao giờ tồn tại ở dạng máy đọc được: mỗi lượt phải đọc lại note của lượt trước bằng mắt. Lớp 1 chỉ làm lỗi này lộ ra; kể cả khi hàng đợi chạy bình thường, hai worker song song vẫn đếm lệch nhau.
+- **Vì sao nó đắt hơn vẻ ngoài:** ba số đó không phải ghi chép cho người đọc. `abortedIneligibleStreak` và `redAfterMergeStreak` là **đầu vào của `pickPrToHandle`** (phụ lục P1 bước 2), và `shouldAlertStreak` là cổng duy nhất bắt bản tin lên tiếng về một PR kẹt lâu. Đếm thiếu thì PR kẹt lâu nhất không bao giờ chạm ngưỡng, không bao giờ vào bản tin, và chủ dự án không bao giờ thấy nó — trong khi mọi chỉ báo đều xanh.
+- **Đã sửa ở đâu:** `kernel/src/log.ts`. `RunLogLine` có thêm trường tuỳ chọn `step0?: readonly Step0Stuck[]` — mỗi PR bỏ lại là **một bản ghi có cấu trúc** (`pr`, `outcome`, `signature`, `hoursStuck`, `lane`), và `formatLogLine` ghi nó ra. `step0Streaks(lines)` đếm chuỗi đang chạy từ những bản ghi đó. Sửa ở chỗ **hình dạng dữ liệu**, không vá bằng cách dặn worker đọc kỹ hơn — dặn người đọc kỹ hơn là vá sản phẩm (`CLAUDE.md` mục 13).
+- **Ba chỗ cố ý bảo thủ trong cách đếm**, vì một con số quá cao còn tệ hơn một con số thiếu ở đây:
+  1. Chỉ PR có mặt ở **lượt mới nhất** mới có chuỗi đang chạy.
+  2. Chữ ký phải **khớp qua từng lượt**; đổi file vướng là một chỗ kẹt khác, đếm lại từ 1 — cùng luật mà CHARTER mục 13 dùng cho "một chữ ký lỗi ba lần".
+  3. Gặp một dòng bước 0 **không có** trường `step0` thì phép đếm **dừng** chứ không đọc nó thành "PR này không kẹt". `readableRunsFromNewest` và `proseOnlyRuns` nói thẳng phép đếm đi được bao xa, nên bên gọi biết khi nào con số của mình là **cận dưới**. Đây là chỗ dễ tái phát nhất: mọi dòng bước 0 hiện có đều là văn xuôi, nên ở lượt kế tiếp `readableRunsFromNewest` bằng **1**.
+- **Máy chặn từ nay:** `kernel/test/step0-streak.test.ts`, chạy trong `pnpm test`. 11 bài, trong đó bài tái hiện dựng lại đúng bảy lượt thật của `#120` và đòi ra **7**, cộng một bài đối chứng cho thấy phép đếm cũ (chỉ nhìn lượt mới nhất) ra **1** — tức đúng con số đã bị ghi sai. Phá thử hai lần: bắt vòng lặp chỉ đọc lượt mới nhất → **7 bài đỏ**; bỏ `signature` khỏi khoá đếm → **1 bài đỏ**; khôi phục → 11/11 xanh.
+
+  **Còn thiếu, khai chứ không giấu:** chưa có lớp máy nào bắt một lượt bước 0 **quên** ghi trường `step0` — dòng đó vẫn hợp lệ và `misfiledLogLines` không đỏ. Tới khi có, lớp chặn là dòng này: **một dòng bước 0 báo có PR bị bỏ lại mà không mang trường `step0` là một dòng chưa viết xong.**
+
+---
+
 ## Cách thêm một mục
 
 ```markdown

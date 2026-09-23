@@ -603,3 +603,23 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
   - Luật chung ghi vào `ops/known-failures.md` KF-018: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
+
+### P-033 · Chuỗi kẹt của bước 0 đếm bằng mắt từ văn xuôi, nên ngưỡng cảnh báo im lặng
+Phụ lục P3 bước 0b đòi ba số cho mỗi PR bị bỏ lại — giờ kẹt · làn sở hữu · **số lượt liên tiếp cùng chữ ký** — và nói thẳng lý do: *"thiếu chúng thì `pickPrToHandle` ở phụ lục P1 bước 2 không có nguồn để đếm"*. Nhưng nó không nói **ghi vào đâu**, nên mọi lượt ghi cả ba vào `note`, tức văn xuôi. Nguồn để đếm vì thế chưa bao giờ tồn tại ở dạng máy đọc được.
+
+Đo trên PR `#120` (2026-09-23, chữ ký `ops/scripts/digest-metrics.ts` + `ops/test/digest-metrics.test.ts` không đổi suốt bảy lượt): lượt `00:46Z` ghi chuỗi **2**, lượt `01:20Z` ghi **1**, lượt `02:24Z` ghi **2** — chuỗi thật ở ba mốc đó là **3**, **4**, **6**. `ABORTED_INELIGIBLE_ALERT_THRESHOLD` là 3, nên `shouldAlertStreak` phải bật từ `01:20Z`; không lượt nào bật. Sáu PR (`#39` `#84` `#89` `#112` `#120` `#160`) đều mang nhãn `automerge-delayed`, tức đúng ca mà phụ lục P3 bắt bản tin phải nói ra ngay trong dòng "Đang chờ merge". Bản tin im lặng bốn lượt liên tiếp — cùng hình dạng nhóm **Z** đã xảy ra với `#81`.
+
+Hàng đợi merge đứng (`main` đỏ, `KF-020`) chỉ **làm lộ** lỗi này: các dòng bước 0 gần nhất nằm trong PR chưa merge nên không thấy được từ `main`. Kể cả khi hàng đợi chạy bình thường, hai worker song song vẫn đếm lệch nhau, vì cả hai đọc văn xuôi.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: `ops/known-failures.md` KF-021; CHARTER phụ lục P3 bước 0b; `ops/scripts/pr-triage.ts` (`pickPrToHandle`, `stuckStreak`, `shouldAlertStreak`); dòng log bước 0 của bảy lượt `23:33Z` → `02:51Z` ngày 2026-09-23
+- tiêu chí xong:
+  - ✅ `RunLogLine` có trường tuỳ chọn `step0` — mỗi PR bị bỏ lại là **một bản ghi có cấu trúc** (`pr`, `outcome`, `signature`, `hoursStuck`, `lane`), không còn chỉ là một câu trong `note`. `formatLogLine` ghi nó ra.
+  - ✅ `step0Streaks(lines)` ở `kernel/src/log.ts` đếm chuỗi đang chạy từ những bản ghi đó, tự lọc dòng bước 0 và tự sắp theo `at` (thứ tự dòng trong file không mang nghĩa — `merge=union`).
+  - ✅ Phép đếm **dừng** ở dòng đầu tiên không có `step0` thay vì đọc nó thành "không kẹt"; `readableRunsFromNewest` và `proseOnlyRuns` khai ra khi con số là **cận dưới**.
+  - ✅ Bài kiểm tái hiện: `kernel/test/step0-streak.test.ts`, 11 bài, dựng lại đúng bảy lượt thật của `#120` và đòi ra **7**; một bài đối chứng cho thấy phép đếm cũ ra **1**. Phá thử: chỉ đọc lượt mới nhất → 7 bài đỏ; bỏ `signature` khỏi khoá đếm → 1 bài đỏ.
+  - ✅ Dòng log bước 0 của chính lượt này là dữ liệu thật đầu tiên ở dạng mới.
+  - ⬜ **Còn lại, không làm ở PR này để khỏi trộn phạm vi:** (a) một lớp máy bắt dòng bước 0 báo có PR bỏ lại mà **quên** trường `step0`; (b) bản tin (phụ lục P2) và `stuckStreak` gọi thẳng `step0Streaks` thay vì nhận số truyền tay; (c) sửa lời phụ lục P3 bước 0b để nó nói rõ ghi ba số **vào trường `step0`** — đó là sửa CHARTER ngoài mục 1 và mục 3, tức cửa `automerge-delayed`, nên đi ở PR riêng.
+- **mã mục nhận lúc 2026-09-23 ~02:5x Z** (`KF-005`): dò `### P-` trên `main` **và mọi** nhánh PR đang mở, cao nhất là `P-032` (`#168`), nên `P-033` không đụng ai.
