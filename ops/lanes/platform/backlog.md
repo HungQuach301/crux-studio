@@ -474,6 +474,29 @@ Một bước đúng-đắn-bắt-buộc mà chỗ thực thi duy nhất là tr�
 - **ảnh hưởng tới `VF-G14`:** phép kiểm của `G14` là "đọc job `trailer-warn` trên các PR do routine mở, trong một tuần". Chín commit thiếu trailer này nằm trong cửa sổ đó và **không phải** tín hiệu nền tảng ghi hỏng trailer — chúng là bước bị bỏ. `VF-G14` phải loại chín mã băm trên ra khỏi mẫu, nếu không nó kết luận sai về `G14`.
 - **mã mục nhận lúc 2026-09-22 06:5x giờ VN** (`ops/logs/README.md`, KF-005): `P-023` là mã cao nhất trên `main` **và** trên cả 16 nhánh PR đang mở tại lúc nhận, nên `P-024` không đụng ai.
 
+### P-025 · `pickPrToHandle` không đếm ca "gộp sạch rồi đỏ", nên PR kẹt kiểu đó không có chủ
+Quyết định `reversible` ở issue `#107`, phương án **A**. Một PR xung đột với `main` có **hai** cách kẹt, máy chỉ nhìn thấy **một**: công cụ tự gộp bó tay (`aborted-ineligible`, có đếm, có ngưỡng, nổi lên bản tin) và công cụ gộp **sạch** nhưng chạy thử sau khi gộp thì **đỏ** (không đếm, không ngưỡng, không nổi lên đâu cả). PR `#81` kẹt theo cách thứ hai **ba lượt liên tiếp** (09:04, 09:3x, 10:0x giờ VN ngày 2026-09-22) và không lượt worker nào nhận nó — đo được: cả ba lý do của `pickPrToHandle` đều sai với nó (CI trên nhánh xanh 5/5 vì nó chỉ đỏ *sau khi gộp*, hai comment đều do máy viết, chuỗi `aborted-ineligible` bằng 0 vì tool chưa lần nào bó tay). Đúng nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+
+- deps: —
+- risk: low
+- status: review
+- nguồn: issue `#107` phương án A; dòng log bước 0 ở `#106`; mục `P-022`; `ops/known-failures.md` nhóm Z
+- **cửa merge: `automerge-delayed`** — sửa Phụ lục P1/P2 của `CHARTER.md` (mục khác mục 1 và mục 3). Issue `#107` đoán là "không chạm vùng bảo vệ"; đoán đó **sai**, và ghi ra đây thay vì im: bảng lý do nằm trong Phụ lục P1 nên thêm một hàng vào code mà không sửa Phụ lục là để CHARTER nói "ba lý do" trong khi máy có bốn. Chạy `node ops/invariants.protected-area.ts` để xác nhận cửa.
+- tiêu chí xong:
+  - `TriageReason` có lý do thứ tư `red-after-merge`, và `TriageCandidate` có `redAfterMergeStreak` — cùng hình dạng với `abortedIneligibleStreak`, đọc từ cùng một dòng log bước 0, không phải đo thêm.
+  - Thứ tự trong `pickPrToHandle`: `ci-red` → `unhandled-comment` → `red-after-merge` → `aborted-ineligible`. Giữ nguyên thứ tự ba lý do cũ (CHARTER Phụ lục P1 bước 2 chốt thứ tự đó), và đặt lý do mới trước `aborted-ineligible` như `#107` đòi.
+  - Điều kiện chống giẫm chân (`ANTI_COLLISION_HOURS`) áp cho lý do mới **y như** ba lý do cũ, không có luật riêng.
+  - `shouldAlertStreak` đếm được cả chuỗi mới: một hàm `stuckStreak` trả chuỗi kẹt của PR để bản tin (Phụ lục P2) gọi một chỗ duy nhất, không phải nhớ hai trường.
+  - Phụ lục P1 bước 2 và Phụ lục P2 của `CHARTER.md`, cộng `ops/lanes/priority.md`, nói đúng **bốn** lý do.
+  - Có test cho từng điều trên ở `ops/test/pr-triage.test.ts`. Đo được đỏ thật: reviewer ngữ cảnh sạch phá code ở bản copy 7 kiểu (đổi khe thứ tự, đổi `max` thành tổng, gỡ hẳn hàng mới, `>= 0` thay `> 0`, chống giẫm chân `>` thay `>=`) — **cả 7 đều bị bắt**.
+  - `redAfterMergeStreak` có **luật trở về 0** ghi ra rõ: `0` khi PR có commit mới sau dòng log ghi chuỗi đó. Không có luật này thì PR đã chữa xong vẫn bị `pickPrToHandle` chọn lại mỗi lượt, làn đứng đói việc, và không gì đỏ (nhóm **Z**). Luật của `abortedIneligibleStreak` ("0 khi PR không còn xung đột") KHÔNG áp được ở đây, vì PR kẹt kiểu này vốn đã gộp sạch và bước 0a chỉ liệt kê PR đang xung đột.
+  - Phụ lục P2 lọc theo "PR đang **kẹt ở hàng đợi merge**", không theo chữ "đang xung đột" — PR `red-after-merge` gộp SẠCH, nên lọc theo chữ cũ thì nó vẫn không có dòng nào trong bản tin, đúng chỗ PR #81 đã rơi.
+  - `ops/known-failures.md` có mục cho lỗi lặp mà chính PR này mắc: trailer `Co-Authored-By` mang tên model (21/51 commit trên `main`), squash merge đưa vào lịch sử không revert lại được.
+- **vòng soát ngữ cảnh sạch** (2026-09-22 ~10:5x giờ VN) chặn merge đúng một lý do — trailer mang tên model — và nêu bốn điểm tài liệu lệch code. Đã sửa cả năm trong PR này; hai commit của nhánh được amend về `Co-Authored-By: Claude <noreply@anthropic.com>` rồi force-push (nhánh của chính mình, không phải nhánh người khác).
+- **vòng soát ngữ cảnh sạch thứ hai** (lượt `crux-worker-1`, 2026-09-22 ~11:0xZ, sau khi lượt này nhận PR ở bước 2 của phụ lục P1 và gộp `main`) chặn merge vì **cùng một lý do tái diễn**: ba commit mới của lượt đó lại mang tên model ở phần tên của `Co-Authored-By`, thay vì chữ `Claude` trần. Đã dựng lại ba commit với trailer trung tính model rồi force-push. Vòng soát này cũng bắt một lỗi thật khác: mục mới thêm vào `ops/known-failures.md` mang mã **trùng** `KF-011` với một mục đã có trên `main`, và thiếu dấu `---` phân cách — nay đổi thành **`KF-014`** (mã cao nhất trên `main` là `KF-013`) và đặt lại đúng thứ tự. Không kiểm tra nào trong `pnpm check` bắt được mã KF trùng, nên nó đi qua CI xanh trơn — đúng nhóm **Z** mà chính mục này đang chữa.
+- **một lệch có sẵn trên `main`, KHÔNG sửa ở PR này vì khác mục:** lệnh mẫu ở `CLAUDE.md` mục 1 và ở Phụ lục P1 bước 7 thiếu `--base-charter`, nên `node ops/invariants.protected-area.ts --changed … --head .` trả `owner-merge` cho **mọi** PR chạm `CHARTER.md` ("không đọc được diff, nên coi như chạm mục 1 hoặc 3" — fail-closed, đúng thiết kế). Đo thật ở PR này: thiếu tham số → `owner-merge`; thêm `--base-charter <CHARTER.md của origin/main>` → `automerge-delayed`. Hệ quả: lượt sau dễ gắn `owner-merge` oan và đẩy việc sang chủ dự án. Cần một mục backlog riêng.
+- **mã mục nhận lúc 2026-09-22 10:4x giờ VN** (`ops/logs/README.md`, KF-005): `P-024` là mã cao nhất trên `main` **và** trên cả 15 nhánh PR đang mở tại lúc nhận (đo bằng `git show refs/remotes/pr/<n>:ops/lanes/platform/backlog.md`), nên `P-025` không đụng ai.
+
 ### P-026 · Bước 0 chạy `integrator-resolve.ts` của **nhánh PR**, nên bản vá `P-024` không tới được nhánh nào
 `P-024` chuyển việc ghi trailer **vào trong** `ops/scripts/integrator-resolve.ts` để bỏ hẳn bước bù bằng tay. Nhưng bước 0 `checkout` nhánh PR **rồi mới** gọi `node ops/scripts/integrator-resolve.ts`, nên **bản thật sự chạy là bản nằm trên nhánh đó**, không phải bản trên `main`. Nhánh nào mở ra trước khi `P-024` vào `main` thì vẫn chạy bản cũ, và bản cũ không ghi trailer.
 
@@ -580,3 +603,21 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
   - Luật chung ghi vào `ops/known-failures.md` KF-018: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
+### P-031 · `main` đỏ: `spike-canvas.yml` vào `main` với 4 vi phạm Z9/Z10 mà `node --test` không soi
+
+`origin/main` tại `cf5c7f9` **đỏ** ở `pnpm lint:workflows` — đo `2026-09-22 23:38Z` trên cây sạch, `EXIT=1`, bốn dòng: `spike-canvas.yml:47/69/84` thiếu `set -euo pipefail` (Z10) và `:63` nuốt lỗi không chú thích (Z9). File vào `main` lúc `23:05:06Z` cùng `7dfdfeb` (mục `visual/V-002`, PR #42).
+
+Hệ quả đo được, không phải suy đoán: **17 PR đang mở, CI xanh cả 17**, vì lần chạy CI gần nhất của mọi PR đều **trước** `23:05:06Z`. PR nào gộp `main` từ giờ cũng kế thừa đúng bốn dòng đó và đỏ mà không ai đụng vào nó — đã gặp ngay trong lượt này ở #120 (bước 2 gỡ xung đột xong, `pnpm check` đỏ đúng bốn dòng ấy, nên **không push**, đúng luật "đỏ sau khi gộp là tín hiệu thật" của phụ lục P3 bước 0b).
+
+**Nguyên nhân gốc không phải luật thiếu.** Z9 và Z10 có trong `ops/scripts/check-workflows.ts` từ mục `P-011`, và `pnpm lint:workflows` bắt đúng cả bốn chỗ. Chỗ thủng là **thời điểm**: `node --test` — thứ chạy trong mọi lần CI — không có bài nào soi cây thật bằng Z9/Z10; hai bài "cây hiện tại phải sạch" chỉ soi quyền và action Node 20. Đây là `KF-013` ở hình dạng mới: bất biến có sẵn, vi phạm mới, không lần chạy nào đặt hai thứ cạnh nhau **trước** lúc merge.
+
+- deps: —
+- risk: **high** — `main` đỏ chặn mọi làn; mọi PR đang mở đỏ ngay khi gộp `main`.
+- status: review
+- nguồn: đo ở lượt `crux-worker-1` 2026-09-22 23:3x–23:5xZ; `ops/known-failures.md` **KF-019** (và KF-013, KF-002); CLAUDE.md mục 13 (`main` đỏ thì sửa ngay), CHARTER phụ lục P3 bước 1
+- tiêu chí xong:
+  - ✅ `ops/workflows/spike-canvas.yml` hết bốn vi phạm: `set -euo pipefail` vào ba khối `run: |`, một chú thích tại chỗ cho `"$found" --version || true`. **Không** nới luật, **không** thêm ngoại lệ — luật đúng, file sai.
+  - ✅ Bài tái hiện lỗi (bất biến I2) ở `ops/test/check-workflows.test.ts`: `blocksMissingPipefail(runBlocks(...))` và `undocumentedSwallows(...)` chạy trên **mọi** `ops/workflows/*.yml` của cây thật, trong `node --test`. Phá thử: bỏ bản sửa ra khỏi cây thì đỏ với đúng bốn chuỗi, khôi phục thì 57/57 xanh.
+  - ✅ Ghi `ops/known-failures.md` **KF-019**.
+  - ⬜ **Câu hỏi còn mở, không thuộc phạm vi PR này:** vì sao CI của #42 xanh trong khi `lint:workflows` bắt được bốn chỗ này? Giả thuyết là `KF-002` (GitHub không dựng lần chạy cho commit cuối của PR, nên nhãn xanh là của một commit cũ hơn). Chưa đo, nên chưa viết vào KF-019 như một khẳng định. Nếu đúng thì lỗ hổng lớn hơn một file: **mọi** PR đều có thể merge với một commit chưa bao giờ chạy CI. Đáng một mục riêng của làn `verify`.
+- **mã mục nhận lúc 2026-09-22 23:4x giờ UTC**: `P-030` là mã cao nhất trên `main` **và** trên cả 17 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-031` không đụng ai.
