@@ -1,0 +1,147 @@
+# 🤖 Thử nghiệm engine dựng — đo trên runner Actions thật (mục `assembly/A-001`,
+# giả định G5).
+#
+# File này viết vào ops/workflows/. sync-workflows.yml chép nó sang
+# .github/workflows/ SAU khi PR merge vào main (CHARTER 3.2, giả định G10).
+# Hệ quả: số phút Actions thật chỉ lấy được sau khi PR của A-001 đã merge.
+#
+# Chỉ chạy bằng tay (`workflow_dispatch`). Nó đốt đúng thứ tài nguyên mà G5
+# đang lo, nên KHÔNG treo vào `push` hay `pull_request`.
+name: render-trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'Mã cấu hình (master-30, master-60, proof-30, proof-60, decode-30, decode-60) hoặc all'
+        required: false
+        default: all
+      duration-ms:
+        description: 'Ghi đè thời lượng mỗi lượt dựng, tính bằng ms — để đo thử rẻ trước khi chạy đủ một tập'
+        required: false
+        default: ''
+      upload-master:
+        description: 'Tải cả hai bản master lên artifact (~700 MB). Mặc định KHÔNG — xem ghi chú trong file.'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    name: trial
+    runs-on: ubuntu-latest
+    # Một tập đầy đủ ở cả sáu cấu hình mất khoảng 45 phút trên bốn nhân. Hộp
+    # thời gian rộng nhưng hữu hạn: hết giờ là một kết quả, không phải một
+    # lỗi cần thử lại.
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # ffmpeg không có sẵn trên mọi ảnh runner.
+      - name: Chuẩn bị ffmpeg
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          # `sed -n 1p` chứ không phải `head -1`: dưới `pipefail` vừa thêm,
+          # `head` thoát sớm và bắn SIGPIPE ngược lên vế trái, nên cả ống
+          # trả 141 và bước thành ĐỎ khi output vượt bộ đệm ống 64 KB. Đo
+          # thật: `set -euo pipefail; seq 1 200000 | head -1` → rc=141,
+          # cùng lệnh với `sed -n 1p` → rc=0. `sed` đọc hết đầu vào.
+          ffmpeg -version | sed -n '1p'
+          # Bộ lọc sinh cảnh nạp font DejaVu theo đường dẫn tuyệt đối. Thiếu
+          # nó thì drawtext ném lỗi giữa lượt đo, sau khi đã đốt hàng chục
+          # phút runner — kiểm ở đây rẻ hơn nhiều.
+          test -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+
+      - name: Ghi mốc thời gian bắt đầu
+        run: echo "TRIAL_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      # Input đi qua `env:` chứ không nội suy thẳng vào thân `run:`. Chỉ chủ
+      # dự án dispatch được và workflow này không thấy secret nào, nên rủi ro
+      # thấp — nhưng `${{ }}` ghép thẳng vào bash là đúng hình dạng
+      # script-injection, và `pnpm lint:workflows` không bắt được nó.
+      - name: Dựng
+        env:
+          TRIAL_CONFIG: ${{ inputs.config }}
+          TRIAL_DURATION_MS: ${{ inputs.duration-ms }}
+        run: |
+          set -euo pipefail
+          args="--out render-trial-out"
+          if [ "$TRIAL_CONFIG" != "all" ] && [ -n "$TRIAL_CONFIG" ]; then
+            args="$args --config $TRIAL_CONFIG"
+          fi
+          if [ -n "$TRIAL_DURATION_MS" ]; then
+            args="$args --duration-ms $TRIAL_DURATION_MS"
+          fi
+          echo "node ops/scripts/render-trial.ts $args"
+          node ops/scripts/render-trial.ts $args
+
+      - name: Sinh báo cáo
+        run: |
+          set -euo pipefail
+          node ops/scripts/render-trial.ts \
+            --report \
+            --from render-trial-out/measurements.json \
+            --to render-trial-out/render-trial.md
+          cat render-trial-out/render-trial.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Phút Actions là chính con số mà G5 cần. Đọc từ đồng hồ của job, không
+      # ngoại suy: ubuntu-latest tính hệ số 1 phút hoá đơn cho 1 phút chạy,
+      # và Actions làm tròn LÊN theo từng phút cho mỗi job.
+      - name: Quy phút Actions
+        run: |
+          set -euo pipefail
+          ended=$(date +%s)
+          elapsed=$(( ended - TRIAL_STARTED ))
+          minutes=$(( (elapsed + 59) / 60 ))
+          {
+            echo ""
+            echo "## Phút runner của chính lượt này"
+            echo ""
+            echo "| Hạng mục | Giá trị |"
+            echo "|---|---|"
+            echo "| Runner | ubuntu-latest (hệ số 1x) |"
+            echo "| Giây tường, cả phần dựng | $elapsed |"
+            echo "| Phút Actions tính tiền, làm tròn lên | $minutes |"
+            echo ""
+            echo "Con số này gồm cả bước cài phụ thuộc và sinh clip nguồn, nên nó là"
+            echo "CẬN TRÊN của phần dựng. Số tách theo từng cấu hình nằm trong artifact"
+            echo "\`render-trial\`, file \`measurements.json\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "elapsed=${elapsed}s minutes=${minutes}"
+
+      # Hai bản master cộng lại ~700 MB, và mp4 gần như không nén thêm được.
+      # Tải chúng lên mặc định sẽ làm chính bài đo G5 ăn mất phần "dung lượng
+      # artifact" mà G5 đang đo — nên mặc định chỉ lấy số đo cộng hai bản proof
+      # (~54 MB), còn master phải xin tường minh.
+      - name: Dọn bản master khi không cần tải lên
+        if: ${{ inputs.upload-master != 'true' }}
+        run: |
+          set -euo pipefail
+          rm -f render-trial-out/master-*.mp4 render-trial-out/source.mp4
+          echo "bỏ bản master và clip nguồn khỏi artifact (upload-master != true)"
+
+      # Nhị phân không commit (CHARTER 5.3) — clip đi ra qua artifact.
+      - name: Gói kết quả
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-trial
+          path: |
+            render-trial-out/*.mp4
+            render-trial-out/measurements.json
+            render-trial-out/render-trial.md
+          if-no-files-found: error
+          retention-days: 7
