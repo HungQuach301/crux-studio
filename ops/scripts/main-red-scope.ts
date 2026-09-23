@@ -52,14 +52,34 @@ const EXTENSIONS = ['ts', 'tsx', 'js', 'mjs', 'cjs', 'yml', 'yaml', 'json', 'md'
 const CANDIDATE = new RegExp(`(?:[A-Za-z0-9_.@-]+/)*[A-Za-z0-9_.@-]+\\.(?:${EXTENSIONS.join('|')})`, 'g');
 
 /**
+ * Dòng do pnpm in ra để NHẮC LẠI lệnh nó sắp chạy, không phải dòng lỗi:
+ *
+ *     > crux-studio@0.0.0 contracts /home/user/crux-studio
+ *     > node ops/scripts/check-contracts.ts
+ *
+ * **Đo được lúc viết file này, và đây là lý do luật này tồn tại:** không bỏ
+ * hai dòng đó thì phạm vi của sự cố thật ngày 2026-09-23 ra **bốn** file —
+ * `spike-canvas.yml` (thật) cộng `check-contracts.ts`, `check-workflows.ts`,
+ * `lint-deps.ts` (chỉ vì tên chúng nằm trong dòng nhắc lệnh). Phạm vi là thứ
+ * điều kiện 2 của `D-C07` cho phép chạm, nên nới nó bằng một dòng nhắc lệnh
+ * là nới lối nhanh ra đúng tầng luật. Điều kiện 3 vẫn chặn hẳn ba file kia,
+ * nên chỗ này không phải một lỗ — nhưng một phạm vi nói sai vẫn là một phạm
+ * vi nói sai, và nó nói sai theo hướng rộng ra.
+ */
+const PNPM_ECHO = /^\s*>/;
+
+/**
  * Mọi chuỗi trông như một đường dẫn file trong đầu ra. Giữ nguyên thứ tự gặp,
  * bỏ trùng — thứ tự gặp là thứ tự cổng đỏ, đọc được hơn thứ tự chữ cái.
  */
 export function extractCandidates(output: string): string[] {
   const seen = new Set<string>();
-  for (const match of output.matchAll(CANDIDATE)) {
-    const raw = match[0].replace(/^[./]+/, '');
-    if (raw !== '') seen.add(raw);
+  for (const line of output.split('\n')) {
+    if (PNPM_ECHO.test(line)) continue;
+    for (const match of line.matchAll(CANDIDATE)) {
+      const raw = match[0].replace(/^[./]+/, '');
+      if (raw !== '') seen.add(raw);
+    }
   }
   return [...seen];
 }

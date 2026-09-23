@@ -65,3 +65,19 @@ test('hai lần dò cùng một sự cố cho cùng một khối JSON', () => {
   const twice = resolveScope(extractCandidates(`${REAL_OUTPUT}\n${REAL_OUTPUT}`), index);
   assert.deepEqual(once, twice);
 });
+
+test('dòng pnpm nhắc lại lệnh KHÔNG vào phạm vi (chữ ký đã đo được)', () => {
+  // Đầu ra thật của `pnpm check`: hai dòng đầu mỗi cổng là pnpm nhắc lệnh, và
+  // tên script nằm ngay trong đó. Không bỏ chúng thì phạm vi ra thêm ba file
+  // thuộc tầng luật — nới đúng chỗ `D-C07` điều kiện 3 muốn chặn.
+  const output = [
+    '> crux-studio@0.0.0 lint:workflows /home/user/crux-studio',
+    '> node ops/scripts/check-workflows.ts',
+    '',
+    'Workflow có vấn đề:',
+    '  - spike-canvas.yml:47 — khối `run: |` thiếu `set -euo pipefail` (Z10).',
+  ].join('\n');
+  const candidates = extractCandidates(output);
+  assert.equal(candidates.includes('ops/scripts/check-workflows.ts'), false);
+  assert.deepEqual(resolveScope(candidates, indexRepo(process.cwd())), ['ops/workflows/spike-canvas.yml']);
+});
