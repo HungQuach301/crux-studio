@@ -716,13 +716,18 @@ Luật hiện hành đi ngược lại có chủ đích: `main-ci.yml` cố ý *
 
 - deps: —
 - risk: medium — @nhắc quá dày làm loãng chính cảnh báo; quá thưa thì lặp lại đúng chỗ `#131` đã trượt. Chủ dự án đã chốt con số, nên rủi ro còn lại chỉ là chỗ thực thi.
-- status: ready
+- status: review
 - nguồn: comment của chủ dự án trên `🤖 [QĐ] #169` (`2026-09-23T01:19:54Z`); CHARTER 2.4; `D-C06`; `docs/decisions/D-C07.md` mục "Việc còn lại"
 - tiêu chí xong:
-  - ⬜ `main-ci.yml`: @nhắc nằm trong thân issue **ngay lần đỏ đầu**, và một comment nhắc lại khi lần @nhắc gần nhất đã quá **4 giờ**. Mốc `<!-- crux-escalate-main-do -->` không còn là "đã nhắc thì thôi" mà là "đã nhắc lúc nào" — đọc `createdAt` của comment mang mốc đó, đừng đếm số comment.
-  - ⬜ `watchdog.yml`: cùng luật 4 giờ cho ba loại cảnh báo còn lại của CHARTER 2.4.
-  - ⬜ Test: một issue đã @nhắc 3,9 giờ trước thì **không** nhắc lại; 4,1 giờ trước thì nhắc lại. Hàm quyết định tách khỏi bash (`ops/scripts/`), để test được mà không cần Actions.
-  - ⬜ CHARTER 2.4 sửa theo, kèm một dòng nhật ký thay đổi: câu "không @nhắc ở lần đầu" của `D-C06` bị thay, và phải nói rõ là bị thay.
+  - ✅ `main-ci.yml`: @nhắc nằm trong thân issue **ngay lần đỏ đầu**, và một comment nhắc lại khi lần @nhắc gần nhất đã quá **4 giờ**. Mốc `<!-- crux-escalate-main-do -->` không còn là "đã nhắc thì thôi" mà là "đã nhắc lúc nào" — đọc `createdAt` của comment mang mốc đó, đừng đếm số comment.
+  - ✅ `watchdog.yml`: cùng luật 4 giờ cho ba loại cảnh báo còn lại của CHARTER 2.4. Mốc riêng `<!-- crux-escalate-watchdog -->`, để hai cảnh báo không đếm nhầm nhịp của nhau.
+  - ✅ Test: một issue đã @nhắc 3,9 giờ trước thì **không** nhắc lại; 4,1 giờ trước thì nhắc lại. Hàm quyết định tách khỏi bash (`ops/scripts/alert-escalation.ts`), 14 bài kiểm ở `ops/test/alert-escalation.test.ts`, chạy được không cần Actions.
+  - ✅ CHARTER 2.4 sửa theo, kèm một dòng nhật ký thay đổi (**C9**): câu "không @nhắc ở lần đầu" của `D-C06` bị thay, và nói rõ là bị thay.
+- ✅ **Làm ở PR #198** (nhánh `claude/platform/P-034`, lượt `crux-worker-1` 2026-09-23). Ba chỗ phải đọc đúng, vì cả ba đều là chỗ luật này hỏng im lặng:
+  - **Comment cập nhật KHÔNG mang mốc.** Cả hai workflow đăng một comment tình trạng ở mỗi lượt (lịch mỗi giờ). Mốc lọt vào comment đó thì "lần @nhắc gần nhất" bị đẩy về hiện tại ở mọi lượt và nhịp 4 giờ **không bao giờ** tới hạn — @nhắc chết hẳn mà không gì đỏ.
+  - **Thân issue là một mục trong danh sách.** Lần @nhắc đầu tiên nằm ở thân chứ không ở comment, nên `gh issue view` phải lấy `body` + `createdAt` rồi nối trước `comments`. Bỏ thân ra thì lượt nào cũng thấy "chưa nhắc lần nào" và gọi chủ dự án mỗi giờ — đúng cái spam vế 2 muốn tránh.
+  - **`createdAt` không đọc được thì BỎ QUA và ĐẾM**, không tính thành một lần @nhắc: hướng an toàn của một cảnh báo khẩn là gọi thừa, không phải im. Số mục bị bỏ qua đi ra ngoài qua `unreadableMarkerComments` và bash in nó ra, nên phép đo không im lặng thành cận dưới.
+  - ⬜ **Chưa quan sát được bằng chạy thật** — nhịp 4 giờ chỉ chạy thật khi `main` đỏ hoặc người canh có dấu hiệu, và cả hai đang không xảy ra. Giữ `review`, không tự chuyển `done`: bài kiểm phủ phần quyết định, không phủ hai khối bash gọi nó.
 - **mã mục nhận lúc 2026-09-23 ~04:0x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên mọi nhánh PR đang mở** (`refs/pull/N/head` của cả 21 PR, không chỉ vài nhánh nhớ được): cao nhất là `P-033` (`#173`), nên `P-034` không đụng ai.
 
 ---

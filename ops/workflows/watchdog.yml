@@ -49,6 +49,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # P-034 · phần quyết định @nhắc nằm ở `ops/scripts/alert-escalation.ts`
+      # (chạy thẳng file `.ts`, cần Node ≥ 22.18). Không `pnpm install`: script
+      # đó chỉ dùng thư viện chuẩn, và một `install` ở đây là thêm một chỗ để
+      # người canh chết đúng lúc nó phải lên tiếng.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
 
       - name: Soát năm dấu hiệu im lặng
         env:
@@ -57,6 +64,9 @@ jobs:
           OWNER: HungQuach301
           TEST: ${{ inputs.test_alert }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          # P-034 · mốc "đã @nhắc lúc nào" của cảnh báo này. Khác mốc của
+          # `main-ci.yml` để hai cảnh báo không đếm nhầm nhịp của nhau.
+          MARKER: '<!-- crux-escalate-watchdog -->'
         run: |
           set -euo pipefail
           NOW=$(date -u +%s)
@@ -179,28 +189,66 @@ jobs:
           TITLE="[CẢNH BÁO] Nhà máy im lặng"
           EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
             --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+
+          # P-034 · thân cập nhật KHÔNG @nhắc và KHÔNG mang mốc.
+          #
+          # Trước mục này, mọi comment của workflow đều mở đầu bằng `@$OWNER`,
+          # và workflow chạy MỖI GIỜ: một dấu hiệu kéo dài một ngày là 24 lần
+          # gọi chủ dự án, ngược thước đo CHARTER 1.3. Nay @nhắc tách hẳn ra
+          # khối dưới và đi theo nhịp 4 giờ mà chủ dự án chốt kèm `#169`, còn
+          # comment này chỉ còn việc kể dấu hiệu đang thấy.
           BODY=$(printf '%s\n' \
-            "@$OWNER người canh có việc cần anh xem." \
-            "" \
-            "Người canh phát hiện:" \
+            "🤖 Người canh phát hiện:" \
             "" \
             "$PROBLEMS" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
             "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")
 
-          # Chạy thử dừng ở ĐÂY, không sớm hơn: bốn phép soát trên đã gọi
+          MENTION=$(printf '%s\n' \
+            "$MARKER" \
+            "@$OWNER người canh có việc cần anh xem." \
+            "" \
+            "$PROBLEMS" \
+            "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4. Nhắc lại mỗi 4 giờ tới khi các dấu hiệu hết (mục \`platform/P-034\`).")
+
+          # Chạy thử dừng ở ĐÂY, không sớm hơn: năm phép soát trên đã gọi
           # `gh issue list`, `gh pr list`, `gh run list` thật và đọc
           # `ops/logs/**` thật, nên lỗi quyền hay lệnh `gh` sai vẫn lộ ra.
           # Chỉ đúng thao tác ghi ra ngoài là bị chặn.
           if [ "$DRY_RUN" = "true" ]; then
-            printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n%s\n%s\n' \
+            printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n%s\n%s\n%s\n' \
               "$([ -n "$EXISTING" ] && echo "bình luận vào issue #$EXISTING" || echo "mở issue mới \"$TITLE\" nhãn alert")" \
-              "────────" "$BODY"
+              "────────" "$BODY" \
+              "$([ -n "$EXISTING" ] && echo "(@nhắc hay không do ops/scripts/alert-escalation.ts quyết, nhịp 4 giờ)" || echo "$MENTION")"
             exit 0
           fi
 
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
-          else
-            gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
+          if [ -z "$EXISTING" ]; then
+            # Issue MỚI mang @nhắc ngay trong thân — vế 1 của câu trả lời
+            # kèm `#169`. Mốc đi cùng để lượt sau biết đã nhắc lúc nào.
+            gh issue create --repo "$REPO" --title "$TITLE" --label alert \
+              --body "$(printf '%s\n\n%s\n' "$BODY" "$MENTION")"
+            echo "Mở issue người canh, @nhắc NGAY trong thân issue (P-034)."
+            exit 0
           fi
+
+          gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+
+          # Thân issue ĐỨNG ĐẦU danh sách: lần @nhắc đầu tiên nằm ở thân, bỏ
+          # nó ra thì lượt nào cũng thấy "chưa nhắc lần nào" và gọi chủ dự án
+          # mỗi giờ — đúng thứ mục P-034 vừa gỡ.
+          DECISION=$(gh issue view "$EXISTING" --repo "$REPO" --json body,createdAt,comments \
+            --jq '[{body, createdAt}] + [.comments[] | {body, createdAt}]' \
+            | node ops/scripts/alert-escalation.ts "$MARKER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          echo "Quyết định @nhắc: $DECISION"
+
+          UNREADABLE=$(echo "$DECISION" | jq -r '.unreadableMarkerComments')
+          if [ "$UNREADABLE" != "0" ]; then
+            echo "$UNREADABLE mục mang mốc có createdAt không đọc được — số giờ ở trên là CẬN DƯỚI."
+          fi
+
+          if [ "$(echo "$DECISION" | jq -r '.verdict')" != "mention" ]; then
+            echo "Lần @nhắc gần nhất chưa quá 4 giờ. Không nhắc lại."
+            exit 0
+          fi
+          gh issue comment "$EXISTING" --repo "$REPO" --body "$MENTION"

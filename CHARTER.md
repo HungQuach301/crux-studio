@@ -162,9 +162,18 @@ GitHub không gửi thông báo cho chính người thực hiện hành động.
 
 Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn quyết định không còn là một ngày bị gọi bốn lần; cả bốn nằm trong bản tin sáng.
 
+**Nhịp @nhắc của cảnh báo khẩn (mục `platform/P-034`, chỉ dẫn của chủ dự án kèm câu trả lời `#169`).** Mọi cảnh báo khẩn ở nhóm 2 theo đúng hai luật này, không có ngoại lệ:
+
+1. **@nhắc nằm ngay trong comment đầu tiên** — tức trong thân issue khi workflow tự mở issue. Không có độ trễ nào.
+2. **Nhắc lại mỗi 4 giờ** chừng nào chưa có phản hồi.
+
+> ⚠️ Luật này **thay** câu của `D-C06` rằng `main-ci.yml` không @nhắc ở lần đỏ đầu và chỉ @nhắc **đúng một lần** sau 2 giờ. Lý do `D-C06` viết vậy — "gọi người ở phút đầu là gọi người cho một việc mà máy sắp tự làm xong" — vẫn đúng về ý, nhưng số đo bác nó: cảnh báo `#131` mở lúc `2026-09-22T10:14Z` và **13 giờ** sau mới @nhắc, vì "đã nhắc thì thôi" cộng một lượt chạy trượt là một cảnh báo khẩn im lặng cả nửa ngày. Phần "máy đang tự chữa, anh chưa cần làm gì" nay nằm trong **lời** của @nhắc đầu tiên, không còn nằm trong **độ trễ** của nó.
+
+Cơ chế: mốc `<!-- crux-escalate-* -->` thôi mang nghĩa "đã nhắc thì thôi" và mang nghĩa **"đã nhắc lúc nào"** — `ops/scripts/alert-escalation.ts` đọc `createdAt` của mục mang mốc mới nhất (thân issue tính là một mục) rồi trả `mention` hay `quiet`. Phần quyết định nằm ở đó chứ không trong khối `run:`, để `pnpm test` kiểm được hai mốc 3,9 giờ và 4,1 giờ mà không cần để `main` đỏ thật.
+
 - **`notify.yml`:** comment `@HungQuach301` trên issue mới có nhãn `digest` hoặc `alert`. Nhờ đó GitHub Mobile đẩy thông báo về điện thoại. Nó **chỉ** phủ issue do người hoặc agent mở — issue do workflow khác mở không kích hoạt nó (KF-004), nên các workflow đó tự đặt `@nhắc` trong thân issue.
-- **`main-ci.yml`:** mở issue `alert` ngay khi `main` đỏ, nhưng **không** @nhắc ở lần đầu. Nó chỉ @nhắc khi issue đã mở **≥ 2 giờ** — tức là routine integrator đã có ít nhất một lượt để tự revert và không xong. Gọi người ở phút đầu là gọi người cho một việc mà máy sắp tự làm xong.
-- **`watchdog.yml`:** chạy theo lịch cron trong Actions (mỗi giờ), độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` khi xảy ra một trong các trường hợp:
+- **`main-ci.yml`:** mở issue `alert` ngay khi `main` đỏ, **kèm @nhắc ngay trong thân issue**, rồi nhắc lại mỗi **4 giờ** tới khi `main` xanh lại. Các lượt ở giữa vẫn comment tình trạng nhưng **không** @nhắc và **không** mang mốc — mang mốc vào comment chạy mỗi giờ sẽ đẩy "lần nhắc gần nhất" về hiện tại ở mọi lượt và nhịp 4 giờ không bao giờ tới hạn.
+- **`watchdog.yml`:** chạy theo lịch cron trong Actions (mỗi giờ), độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` **ngay trong thân issue**, rồi nhắc lại theo cùng nhịp 4 giờ ở trên — trước mục `P-034` mọi comment của nó đều @nhắc, tức một dấu hiệu kéo dài một ngày là 24 lần gọi chủ dự án, ngược thước đo mục 1.3. Các trường hợp nó lên tiếng:
   - quá 26 giờ không có bản tin mới;
   - quá 6 giờ không có PR nào được merge trong khi backlog vẫn còn mục `ready` (mục `P-020`, chỉ dẫn 4 trên issue bản tin #17 — ngưỡng cũ là 48 giờ);
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn;
@@ -595,6 +604,12 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 ---
 
 ## 14. Nhật ký thay đổi
+
+**C9 · 2026-09-23 · chỉ dẫn của chủ dự án kèm câu trả lời `#169`.** Cảnh báo khẩn (mục 2.4 nhóm 2) `@nhắc` **ngay ở comment đầu tiên** và nhắc lại **mỗi 4 giờ** khi chưa có phản hồi. Mục `platform/P-034`.
+- **Mục 2.4 · câu của `D-C06` bị THAY, và nói rõ là bị thay.** `D-C06` dặn `main-ci.yml` không @nhắc ở lần đỏ đầu và @nhắc **đúng một lần** sau 2 giờ. Số đo bác nó: cảnh báo `#131` mở `2026-09-22T10:14Z`, 13 giờ sau mới @nhắc. Ý đúng của `D-C06` — "máy đang tự chữa, chưa cần gọi người" — nay nằm trong **lời** của @nhắc đầu tiên, không nằm trong **độ trễ** của nó.
+- **Mốc `<!-- crux-escalate-* -->` đổi nghĩa:** từ "đã nhắc thì thôi" sang **"đã nhắc lúc nào"**. Đọc `createdAt` của mục mang mốc mới nhất, không đếm số comment — đếm comment là cách luật này hỏng ngay lần đầu ai sửa thân comment. Thân issue tính là một mục, vì lần @nhắc đầu tiên nằm ở đó.
+- **Phần quyết định rời khỏi bash:** `ops/scripts/alert-escalation.ts`, 14 bài kiểm, gồm đúng hai mốc 3,9 giờ (im) và 4,1 giờ (nhắc) mà tiêu chí xong của mục đòi. Một phép so ngày tháng nằm trong khối `run:` chỉ kiểm được bằng cách để `main` đỏ thật.
+- **`watchdog.yml` hết @nhắc mỗi giờ.** Trước mục này mọi comment của nó đều mở đầu `@HungQuach301`, mà nó chạy mỗi giờ: một dấu hiệu kéo dài một ngày là 24 lần gọi chủ dự án, ngược thước đo mục 1.3. Hai mốc tách riêng cho hai cảnh báo, để chúng không đếm nhầm nhịp của nhau.
 
 **C8 · 2026-09-23 · quyết định `irreversible` ở issue #169, phương án A (`D-C07`).** Cửa `automerge-delayed` có thêm **lối đi nhanh `hotfix`**: một `main` đỏ vì workflow không còn phải chờ 12 giờ mới xanh lại được. Mục `platform/P-032`, chữ ký ở `ops/known-failures.md` **KF-020**.
 - **Mục 3.3 · lối nhanh bỏ đúng MỘT thứ: khoảng chờ.** Sáu điều kiện kèm câu trả lời của chủ dự án nằm ở `ops/invariants.hotfix-lane.ts` dưới dạng phép kiểm máy, không phải lời dặn. Mọi phép kiểm khác — CI xanh trên đúng đầu nhánh, `fix-has-test`, không xung đột, không nháp, lời `dừng` — vẫn chặn y như cũ.
