@@ -116,12 +116,22 @@ Chỉ dẫn 4 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: issue #17, chỉ dẫn 4
+- **cửa merge: `automerge-delayed`** — chạm `CHARTER.md` mục 2 (ngoài mục 1 và 3) và `ops/workflows/watchdog.yml` (không dùng secret, không phát hành). Xác nhận bằng `node ops/invariants.protected-area.ts`, không đoán.
 - tiêu chí xong:
   - Ngưỡng "không có PR nào merge" rút từ **48 giờ xuống 6 giờ**.
   - Cảnh báo khi một routine **có lượt chạy lỗi**, hoặc **không chạy quá 3 giờ**.
   - Cảnh báo đi theo chuỗi báo động đã có ở `P-011` (tới thẳng điện thoại), không phụ thuộc workflow thứ hai — KF-004.
+- **Đã làm:**
+  - `ops/workflows/watchdog.yml`: ngưỡng dấu hiệu số 2 rút 48→6 giờ. Dấu hiệu số 5 mới — không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim quá 3 giờ. Nhịp tim = dòng `at` mới nhất trong **các dòng log bước 0**, vì bước 0 của phụ lục P1/P3 ghi một dòng ở **mọi** lượt worker/integrator, kể cả lượt không có gì để giải (P3 bước 0d) — không cần một cơ chế heartbeat riêng. Từ mục `P-023` mỗi lượt ghi một file riêng, nên watchdog quét cả `ops/logs` (như dấu hiệu số 4) rồi lọc theo trường `ref`. Ba hình dạng, vì bước 0 đã đổi chỗ ghi hai lần: `<làn>/step0-…` (hiện tại), `<làn>/P3-run-…` (trước đó) và `platform/P-016` (file dùng chung cũ nhất). Neo vào một tên file là cách dấu hiệu này hỏng im lặng ngay lượt đầu tiên tên file đổi; bỏ sót một hình dạng cũ là cách nó mất một nguồn nhịp tim mà cũng không gì đỏ. Giới hạn đã biết, ghi thẳng trong comment: cách này bắt "im hẳn", không bắt "lỗi giữa chừng nhưng vẫn kịp ghi xong bước 0". `crux-digest` không ghi dòng bước 0 nhưng đã có dấu hiệu số 1 (26 giờ không bản tin) canh riêng.
+  - Cron của `watchdog.yml` rút từ mỗi 6 giờ xuống **mỗi giờ** — nếu không, ngưỡng 3 giờ mới của dấu hiệu số 5 có thể bị phát hiện muộn tới 6 giờ, tức bản thân dấu hiệu vô nghĩa. Không nằm trong tiêu chí xong viết chữ nhưng cần thiết để tiêu chí đó có tác dụng thật.
+  - Sửa `CHARTER.md` mục 2.4 cho khớp danh sách 5 dấu hiệu mới (điều kiện 1 của D-C04/thói quen dự án: charter và code không được lệch nhau).
+  - Không đụng `ops/known-failures.md` (KF-003 dòng "48 giờ không merge"): dòng đó tường thuật một sự cố **đã xảy ra** lúc ngưỡng còn là 48 giờ, sửa số ở đó là viết lại lịch sử.
+  - `pnpm check`: **xanh** — `contracts` ok (6 payload v0, 6 artifact); `lint:deps` ok; `lint:workflows` ok (6 file, 12 khối run qua `bash -n`); sổ giả định ok (18 giả định, 46 liên kết); `tsc --noEmit` sạch; **318 test / 0 fail**.
+  - `pnpm replay`: tập vàng khớp snapshot, 6/6 xưởng — mục này không chạm đường chạy tập.
+  - `node ops/invariants.protected-area.ts --changed … --base-charter …`: `{"gate":"automerge-delayed","delayed":["CHARTER.md mục 2 — ngoài mục 1 và 3","ops/workflows/watchdog.yml — workflow không dùng secret, không phát hành"]}`.
+- **Còn treo, khai trước:** dấu hiệu số 5 không phân biệt được "routine lỗi ngay từ đầu, trước khi kịp ghi bước 0" với "routine không được lên lịch chạy" — cả hai đều là im lặng ở nhịp tim, và người canh không đọc được lịch routine trên `claude.ai/code/routines` (nằm ngoài repo). Không phải Z7 của `P-014` (Z7 canh **theo làn**, dùng `ops/logs/<lane>/**`; dấu hiệu này canh **routine**, dùng một file duy nhất) — hai cơ chế bổ sung nhau, không thay nhau.
 
 ### P-021 · Luật: routine và phiên không tự đặt vòng chờ
 Chỉ dẫn 5 của chủ dự án trên issue bản tin #17 (2026-09-21).
