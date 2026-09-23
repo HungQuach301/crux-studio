@@ -95,7 +95,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - uses: actions/download-artifact@v5
+      # `@v4` cho khớp `upload-artifact@v4` ở job `check` và ở
+      # `spike-canvas.yml` — repo chưa có tiền lệ nào dùng bản khác cho cặp
+      # này, và một cặp lệch bản là chỗ hỏng chỉ lộ ra khi `main` đã đỏ.
+      - uses: actions/download-artifact@v4
         with:
           name: main-ci-check-output
           path: ${{ runner.temp }}/check

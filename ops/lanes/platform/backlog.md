@@ -616,7 +616,7 @@ Giá phải trả, đo ở bước 0 cùng lượt: **6 / 16 PR đang mở** xun
 - deps: —
 - risk: **high** — mỗi lần `main` đỏ vì workflow là ~12 giờ toàn bộ hàng đợi merge đứng, không ai phải bấm sai gì cả.
 - status: review
-- nguồn: `🤖 [QĐ] #169` (**đã trả lời: A**, `01:19:54Z` ngày 2026-09-23, kèm sáu điều kiện) → `docs/decisions/D-C07.md`; `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
+- nguồn: `🤖 [QĐ] #169` (**đã trả lời: A**, `01:19:54Z` ngày 2026-09-23, kèm sáu điều kiện) → `docs/decisions/D-C07.md`; `🤖 [QĐ] #175` (PR `#168` ra cửa `owner-merge`, cần chủ dự án merge); `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
 - tiêu chí xong:
   - ✅ **`🤖 [QĐ] #169` đã có câu trả lời: A**, kèm sáu điều kiện, chốt lâu dài ở `docs/decisions/D-C07.md`. Sáu điều kiện là phép kiểm máy ở `ops/invariants.hotfix-lane.ts`, không phải lời dặn — đó là chỗ câu trả lời đòi khắt khe nhất.
   - ✅ **Chứng minh bằng chạy thật** (`origin/main = 00f2f84`, 2026-09-23 ~04:0xZ, đầu ra THẬT của `pnpm check` EXIT=1):
