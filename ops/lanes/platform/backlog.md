@@ -603,6 +603,28 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
   - Luật chung ghi vào `ops/known-failures.md` KF-018: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
+
+### P-033 · Chuỗi kẹt của bước 0 đếm bằng mắt từ văn xuôi, nên ngưỡng cảnh báo im lặng
+Phụ lục P3 bước 0b đòi ba số cho mỗi PR bị bỏ lại — giờ kẹt · làn sở hữu · **số lượt liên tiếp cùng chữ ký** — và nói thẳng lý do: *"thiếu chúng thì `pickPrToHandle` ở phụ lục P1 bước 2 không có nguồn để đếm"*. Nhưng nó không nói **ghi vào đâu**, nên mọi lượt ghi cả ba vào `note`, tức văn xuôi. Nguồn để đếm vì thế chưa bao giờ tồn tại ở dạng máy đọc được.
+
+Đo trên PR `#120` (2026-09-23, chữ ký `ops/scripts/digest-metrics.ts` + `ops/test/digest-metrics.test.ts` không đổi suốt bảy lượt): chuỗi thật tăng đều `1 → 7`, nhưng các lượt **ghi ra** `1 · 1 · 2 · 1 · 3 · 2 · 7` — không đơn điệu tăng, và hai worker ghi hai số khác nhau cho cùng một PR ở hai lượt cách nhau 19 phút (`01:20Z` ghi 1, `01:39Z` ghi 3). `ABORTED_INELIGIBLE_ALERT_THRESHOLD` là 3 và `shouldAlertStreak` là phép so `>=`, nên theo chuỗi thật ngưỡng chạm từ lượt **`00:46Z`**; trong năm lượt từ đó trở đi chỉ **một** lượt (`01:39Z`) nói ra rằng bản tin phải mang dòng cảnh báo, và nó bật ở con số 3 trong khi chuỗi thật lúc ấy là 5. Sáu PR (`#39` `#84` `#89` `#112` `#120` `#160`) đều mang nhãn `automerge-delayed`, tức đúng ca mà phụ lục P3 bắt bản tin phải nói ra ngay trong dòng "Đang chờ merge" — cùng hình dạng nhóm **Z** đã xảy ra với `#81`. Dòng log `01:39Z` còn **tự khai chỗ lệch** (*"lượt 01:20Z … đếm 1 vì nó chỉ thấy phần streak sau 21:38Z"*) rồi đi tiếp: lỗi đã được quan sát tại chỗ mà không có chỗ nào để sửa ở mức cơ chế.
+
+Hàng đợi merge đứng (`main` đỏ, `KF-020`) chỉ **làm lộ** lỗi này: các dòng bước 0 gần nhất nằm trong PR chưa merge nên không thấy được từ `main`. Kể cả khi hàng đợi chạy bình thường, hai worker song song vẫn đếm lệch nhau, vì cả hai đọc văn xuôi.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: `ops/known-failures.md` KF-021; CHARTER phụ lục P3 bước 0b; `ops/scripts/pr-triage.ts` (`pickPrToHandle`, `stuckStreak`, `shouldAlertStreak`); dòng log bước 0 của bảy lượt `23:33Z` → `02:51Z` ngày 2026-09-23
+- tiêu chí xong:
+  - ✅ `RunLogLine` có trường tuỳ chọn `step0` — mỗi PR bị bỏ lại là **một bản ghi có cấu trúc** (`pr`, `outcome`, `signature`, `hoursStuck`, `lane`), không còn chỉ là một câu trong `note`. `formatLogLine` ghi nó ra.
+  - ✅ `step0Streaks(lines)` ở `kernel/src/log.ts` đếm chuỗi đang chạy từ những bản ghi đó, tự lọc dòng bước 0 và tự sắp theo `at` (thứ tự dòng trong file không mang nghĩa — `merge=union`).
+  - ✅ Phép đếm **dừng** ở dòng đầu tiên không có `step0` thay vì đọc nó thành "không kẹt"; `readableRunsFromNewest` và `proseOnlyRuns` khai ra khi con số là **cận dưới**.
+  - ✅ **Hai chữ ký, hai luật trở về 0**, theo đúng CHARTER phụ lục P3 bước 0b: `aborted-ineligible` về 0 khi PR vắng mặt (0a đo lại nó mỗi lượt); `red-after-merge` **không** về 0 khi vắng mặt (0a không bao giờ đo lại nó) — hàm trả `redAfterMergeLastSeenAt` để bên gọi áp luật "PR có commit mới sau dòng log đó". Trộn hai luật làm ca `P-025` biến mất sau đúng một lượt.
+  - ✅ Một lượt đếm một lần cho mỗi chữ ký (`merge=union` không khử trùng lặp).
+  - ✅ Bài kiểm tái hiện: `kernel/test/step0-streak.test.ts`, **16 bài**, dựng lại đúng bảy lượt thật của `#120` và đòi ra **7**; một bài đối chứng cho thấy phép đếm cũ ra **1**. Phá thử ba lần: `aborted-ineligible` chỉ đọc lượt mới nhất → 7 bài đỏ; áp luật vắng-mặt cho `red-after-merge` → 1 bài đỏ; bỏ khử trùng lặp → 4 bài đỏ.
+  - ✅ Dòng log bước 0 của chính lượt này là dữ liệu thật đầu tiên ở dạng mới.
+  - ⬜ **Còn lại, không làm ở PR này để khỏi trộn phạm vi:** (a) một lớp máy bắt dòng bước 0 báo có PR bỏ lại mà **quên** trường `step0`; (b) bản tin (phụ lục P2) và `stuckStreak` gọi thẳng `step0Streaks` thay vì nhận số truyền tay; (c) sửa lời phụ lục P3 bước 0b để nó nói rõ ghi ba số **vào trường `step0`** — đó là sửa CHARTER ngoài mục 1 và mục 3, tức cửa `automerge-delayed`, nên đi ở PR riêng.
+- **mã mục nhận lúc 2026-09-23 ~02:5x Z** (`KF-005`): dò `### P-` trên `main` **và mọi** nhánh PR đang mở, cao nhất là `P-032` (`#168`), nên `P-033` không đụng ai.
 ### P-031 · `main` đỏ: `spike-canvas.yml` vào `main` với 4 vi phạm Z9/Z10 mà `node --test` không soi
 
 `origin/main` tại `cf5c7f9` **đỏ** ở `pnpm lint:workflows` — đo `2026-09-22 23:38Z` trên cây sạch, `EXIT=1`, bốn dòng: `spike-canvas.yml:47/69/84` thiếu `set -euo pipefail` (Z10) và `:63` nuốt lỗi không chú thích (Z9). File vào `main` lúc `23:05:06Z` cùng `7dfdfeb` (mục `visual/V-002`, PR #42).
