@@ -477,7 +477,10 @@ test('P-007 · dò xung đột hỏng thì bản tin rơi về CHƯA DÒ, KHÔNG
 // --- Tiến độ (mục `platform/P-019`) ---
 
 function item(id: string, status: string): BacklogItem {
-  return { id, status, title: id, hasHoldMarker: status === 'parked', statusLine: 1 };
+  // `deps: null` = mục không khai dòng `- deps:`, đúng hình dạng của fixture
+  // tối giản ở đây. `computeProgress` không đọc trường này; nó có mặt vì
+  // `BacklogItem` (mục `integration/I-015`) đòi khai đủ, không mặc định.
+  return { id, status, title: id, hasHoldMarker: status === 'parked', statusLine: 1, deps: null };
 }
 
 function step0Line(at: string): RunLogLine {
