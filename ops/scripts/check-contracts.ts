@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Tám việc:
+ * Chín việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -20,7 +20,11 @@
  *    quy ước thư mục `contracts/`; một schema đặt ngoài đó (ở `src/`, ở
  *    `packs/**`) vẫn thoát. Việc này quét phần còn lại để phạm vi kiểm buộc
  *    bằng một phép kiểm, không bằng chỗ đặt file.
- * 8. Mỗi `title-formulas.json` dưới `packs/channels/` hợp contract và không
+ * 8. Mọi file mô hình định lượng đã persist (`workshops/*\/data/models/*.json`)
+ *    hợp `kernel/contracts/model.schema.json` — mục `kernel/K-002`. Trước
+ *    mục đó, tám file của `topic/T-006` chỉ được test đơn vị của riêng
+ *    xưởng `topic` canh, không có cổng dùng chung nào ở tầng `pnpm contracts`.
+ * 9. Mỗi `title-formulas.json` dưới `packs/channels/` hợp contract và không
  *    có `id` trùng; `titles[].formula` của artifact `release` đối chiếu
  *    được với danh sách thật của đúng kênh nó khai — mục `release/R-001`.
  */
@@ -40,6 +44,7 @@ import {
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 import { scanSchemaScope } from './check-schema-scope.ts';
+import { modelDataFiles, modelDataProblems } from './check-models.ts';
 import {
   allTitleFormulasPackProblems,
   releaseFormulaProblems,
@@ -151,7 +156,11 @@ problems.push(...workshopContracts.problems);
 const schemaScope = scanSchemaScope(root);
 problems.push(...schemaScope.problems);
 
-// 8 · title-formulas.json của mỗi kênh (mục release/R-001) — kênh nào cũng soát, không hardcode tên
+// 8 · File mô hình định lượng đã persist hợp kernel/contracts/model.schema.json
+const modelFiles = modelDataFiles(root);
+problems.push(...modelDataProblems(root));
+
+// 9 · title-formulas.json của mỗi kênh (mục release/R-001) — kênh nào cũng soát, không hardcode tên
 const titleFormulas = allTitleFormulasPackProblems(root);
 problems.push(...titleFormulas.problems);
 
@@ -172,5 +181,6 @@ process.stdout.write(
     `${schemaScope.files.length} schema ngoài contracts/ (workshops+packs) qua phép kiểm từ khoá, ` +
     `${checked} artifact hợp lệ, ` +
     `${titleFormulas.checked} title-formulas.json, ` +
-    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng.\n`,
+    `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng, ` +
+    `${modelFiles.length} file mô hình định lượng hợp model.schema.json.\n`,
 );

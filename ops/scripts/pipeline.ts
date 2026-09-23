@@ -49,6 +49,16 @@ export const DEFINITIONS: Record<WorkshopName, WorkshopDefinition<object>> = {
   release,
 };
 
+/**
+ * Định nghĩa của một xưởng theo tên. Để `ops/scripts/run-workshop.ts` chạy
+ * một xưởng độc lập (mục `P-004`, quyết định `D-12`) mà KHÔNG phải mở thêm
+ * một chỗ thứ hai import cả sáu xưởng — tính chất "nơi duy nhất" ghi ở đầu
+ * file này là thứ giữ cho bất biến I3 đọc được bằng mắt.
+ */
+export function definitionFor(name: WorkshopName): WorkshopDefinition<object> {
+  return DEFINITIONS[name];
+}
+
 export interface PipelineOptions {
   root: string;
   episodeId: string;
