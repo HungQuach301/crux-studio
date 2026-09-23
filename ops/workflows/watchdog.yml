@@ -50,7 +50,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Soát năm dấu hiệu im lặng
+      # Dấu hiệu số 6 chạy `ops/scripts/lane-heartbeat.ts` — TypeScript chạy
+      # thẳng bằng node ≥ 22.18, không cần `pnpm install`: script chỉ nhập
+      # `kernel/src/*.ts`, không phụ thuộc gói nào.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Soát sáu dấu hiệu im lặng
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -158,14 +165,49 @@ jobs:
           #     tim mất một nguồn mà không gì đỏ — kể cả hình dạng hôm nay
           #     không bao giờ thắng `max`, vì thứ tự đó chỉ đúng chừng nào
           #     hình dạng mới còn được ghi.
+          #
+          #     Biểu thức dưới đây phải khớp NGUYÊN VĂN hằng `STEP0_REF_PATTERN`
+          #     của `ops/scripts/lane-heartbeat.ts`: `ops/test/lane-heartbeat.test.ts`
+          #     đọc chính file này và so, nên hai bản chép không lệch nhau im lặng
+          #     được (mục P-014 sóng 3, Z7). Chính phép so đó tìm ra hai hình dạng
+          #     BỊ THIẾU ở bản trước — `P1-step0-` (chuỗi `step0-` đứng sau `P1-`,
+          #     không sau `/`, nên không khớp; `ops/logs/platform/` có một dòng như
+          #     vậy) và `P3-daily-`, cả hai đều được `P-023` liệt kê là hình dạng cũ.
           LAST_BEAT=$(find ops/logs -name '*.jsonl' -exec cat {} + 2>/dev/null \
-            | jq -s -r 'map(select((.ref // "") | test("(^|/)(step0|P3-run)-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
+            | jq -s -r 'map(select((.ref // "") | test("(^|/)(step0|P1-step0|P3-run|P3-daily)-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
           if [ -z "$LAST_BEAT" ]; then
             add "Không đọc được dòng bước 0 nào trong \`ops/logs\` — không tính được nhịp tim của routine worker/integrator (dấu hiệu số 5, mục P-020). Hoặc chưa lượt nào ghi, hoặc hình dạng \`ref\` đã đổi."
           else
             AGE_MIN=$(( (NOW - $(date -u -d "$LAST_BEAT" +%s)) / 60 ))
             [ "$AGE_MIN" -gt 180 ] && add "Không routine \`crux-worker-*\`/\`crux-integrator\` nào ghi nhịp tim trong $AGE_MIN phút (ngưỡng 180 = 3 giờ, nhịp tim là dòng \`at\` mới nhất trong các dòng bước 0 của \`ops/logs\`). Có thể một routine đã lỗi hoặc đã dừng chạy."
           fi
+
+          # 6 · Nhịp tim THEO TỪNG LÀN (Z7, mục `P-014` sóng 3).
+          #     Dấu hiệu số 5 ở trên lấy `max` trên MỌI dòng bước 0, nên nó
+          #     trả lời đúng câu "routine còn chạy không" và sai câu "làn nào
+          #     đang đứng im": bước 0 ghi một dòng ở MỌI lượt worker (phụ lục
+          #     P3 bước 0d), nên chừng nào còn một worker thở thì `max` còn
+          #     mới, bất kể chín làn kia đã im mấy ngày. Đo được lúc thêm dấu
+          #     hiệu này: làn `integration` có nhịp tim 2,2 giờ khi TÍNH cả
+          #     dòng bước 0 và 23,4 giờ khi TRỪ chúng ra.
+          #
+          #     ⚠️ Dấu hiệu này KHÔNG tự mở/bình luận issue — nó chỉ in ra log
+          #     của lượt chạy và nối vào thân cảnh báo khi đã có dấu hiệu khác
+          #     nổ. Lý do khai thẳng, không giấu: một làn im là chỗ nghẽn của
+          #     MÁY, không phải việc chủ dự án bấm được (CHARTER 1.3), và
+          #     workflow này bình luận LẠI mỗi giờ chừng nào dấu hiệu còn —
+          #     một dấu hiệu kéo dài nhiều ngày sẽ thành nhiều chục lần @nhắc.
+          #     Nhịp cảnh báo là phạm vi của mục `P-034`. Đường phát hiện
+          #     độc lập của Z7 đi qua bản tin ngày (phụ lục P2 gọi
+          #     `pnpm lanes:heartbeat`), tốn 0 lần thao tác thêm của chủ dự án.
+          #
+          #     `|| LANE_REPORT=…`: script thoát khác 0 khi KHÔNG quét được
+          #     `ops/logs`. Nuốt ở đây là có chủ đích và hẹp — đây là MỘT
+          #     trong sáu dấu hiệu, không được phép giết năm dấu hiệu kia
+          #     (cùng lý do với `|| true` của dấu hiệu số 3).
+          LANE_REPORT=$(node ops/scripts/lane-heartbeat.ts) \
+            || LANE_REPORT="⚠ Không đo được nhịp tim theo làn (Z7) — xem log của lượt chạy này."
+          echo "$LANE_REPORT"
 
           if [ "$TEST" = "true" ]; then
             add "Đây là cảnh báo THỬ, do chủ dự án bấm tay. Nếu anh đọc được dòng này trên điện thoại thì đường thông báo đã thông (DoD Đợt 0)."
@@ -185,6 +227,8 @@ jobs:
             "Người canh phát hiện:" \
             "" \
             "$PROBLEMS" \
+            "$LANE_REPORT" \
+            "" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
             "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")
 

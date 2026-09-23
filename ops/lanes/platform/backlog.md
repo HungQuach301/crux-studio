@@ -281,6 +281,33 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     PR thì hai luật máy kiểm rẻ ở trên phải nằm chờ chủ dự án. Cả hai đáng một PR riêng.
   - `status` giữ **`ready`**, không chuyển `review`: mục này cố ý không đóng một lần, và phần còn lại của sóng 2
     cùng trọn sóng 3 vẫn đang chờ — đúng cách sóng 1 đã làm.
+- **Sóng 3 — xong một phần: Z7** (lượt `crux-worker-1`, 2026-09-23).
+  - **Z7** (nhịp tim theo từng làn): `ops/scripts/lane-heartbeat.ts` (`laneHeartbeats`, `laneHeartbeatProblems`),
+    script `pnpm lanes:heartbeat`, **17** bài ở `ops/test/lane-heartbeat.test.ts`. Chỗ Z7 khác dấu hiệu số 5 của
+    `watchdog` nằm gọn trong một câu: dấu hiệu số 5 lấy `max` trên **mọi** dòng bước 0, mà bước 0 ghi một dòng ở
+    **mọi** lượt worker (phụ lục P3 bước 0d) — nên chừng nào còn một worker thở thì nhịp tim còn mới, bất kể chín
+    làn kia đã im mấy ngày. **Đo được, không suy** (2026-09-23T14:50Z, `readRunLogs` trên 227 dòng): làn
+    `integration` có nhịp tim **2,2 giờ** khi tính cả dòng bước 0 và **23,4 giờ** khi trừ chúng ra; sáu làn quá
+    ngưỡng (`editorial` 35,6h · `visual` 37,6h · `verify` 36,8h · `kernel` 29,0h · `integration` 23,4h ·
+    `platform` 9,9h) và hai làn (`assembly`, `release`) **chưa có dòng log nào**. Có **phép phá** cho tính chất
+    quan trọng nhất: bài kiểm dựng đúng ca "làn chỉ còn dòng bước 0 là mới" rồi khẳng định bỏ luật loại dòng bước
+    0 thì nó ra `fresh` — tức luật không bao giờ đỏ được.
+  - **Phép so chống trôi, và nó bắt được lỗi ngay lần đầu chạy:** bài kiểm đọc thẳng `ops/workflows/watchdog.yml`
+    và đòi nó mang **nguyên văn** hằng `STEP0_REF_PATTERN`. Bản đầu đỏ đúng chỗ phải đỏ — dấu hiệu số 5 đang lọc
+    bằng `(^|/)(step0|P3-run)-`, **thiếu hai hình dạng** `ref` mà `P-023` đã liệt kê: `P1-step0-` (chuỗi `step0-`
+    đứng sau `P1-`, không sau `/`, nên không khớp; `ops/logs/platform/` có đúng một dòng như vậy) và `P3-daily-`.
+    Đã sửa `watchdog.yml` trong cùng PR.
+  - **Cố ý để lại, nói rõ chứ không im lặng.** Dấu hiệu số 6 **không tự mở issue**, nó chỉ nối bảng nhịp tim vào
+    thân cảnh báo khi đã có dấu hiệu khác nổ. Lý do: một làn im là chỗ nghẽn của **máy**, không phải việc chủ dự
+    án bấm được (CHARTER 1.3), mà `watchdog` bình luận **lại mỗi giờ** chừng nào dấu hiệu còn — một dấu hiệu kéo
+    dài nhiều ngày sẽ thành nhiều chục lần @nhắc, và đúng sáu làn đang quá ngưỡng ngay hôm nay. Nhịp cảnh báo là
+    phạm vi mục `P-034`. Đường phát hiện **độc lập** của Z7 đi qua bản tin ngày: CHARTER phụ lục P2 mục "Tiến độ"
+    nay gọi `pnpm lanes:heartbeat` — một lần mỗi ngày, 0 lần thao tác thêm của chủ dự án.
+  - **Z6 và Z14 chưa làm.** Z6 (nhịp tim của `cron`) đòi `main-ci` ghi một file vào repo, tức một đường ghi vào
+    `main` không qua PR — câu hỏi thiết kế riêng, không nhét chung được. Z14 (so số PR merged theo làn với số
+    dòng log cùng khoảng) sống trong `ops/scripts/digest-metrics.ts`, mà PR `#194` đang mở và đang sửa đúng file
+    đó; gộp vào đây là tự tạo một xung đột cho hàng đợi merge. Cả hai đáng một PR riêng.
+  - `status` giữ **`ready`**: Z2, Z6, Z8 và Z14 vẫn đang chờ.
 
 ### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
