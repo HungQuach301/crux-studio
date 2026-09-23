@@ -14,9 +14,15 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  joinContinuations,
   missingPermissions,
   brokenEventChains,
   subscribedEvents,
+  missingDryRun,
+  runBlocks,
+  blocksMissingPipefail,
+  secretsUsedWithoutEmptyCheck,
+  undocumentedSwallows,
   EXTERNAL_CONSUMERS,
 } from '../scripts/check-workflows.ts';
 
@@ -231,6 +237,131 @@ jobs:
   assert.deepEqual(missingPermissions(readOnly), []);
 });
 
+// ── KF-017 · Checks API là scope riêng ───────────────────────────────────
+
+test('KF-017 · `gh api .../check-runs` mà thiếu `checks: read` thì đỏ', () => {
+  // Đúng hình dạng đã làm hỏng `automerge.yml` từ 14:45Z ngày 2026-09-22:
+  // ba quyền khai ra trông rất đủ, và không quyền nào trong ba bao được
+  // scope `checks`. GitHub trả 403, `set -euo pipefail` giết cả bước, hàng
+  // đợi merge đứng im ~5,9 giờ mà không gì đỏ ngoài chính lượt automerge.
+  const broken = `name: automerge
+on: [workflow_dispatch]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  merge:
+    steps:
+      - run: |
+          FIX_HAS_TEST=$(gh api "repos/$REPO/commits/$HEAD/check-runs?per_page=100" \\
+            --jq '[.check_runs[] | select(.name == "fix-has-test")][0].conclusion // null')
+`;
+  const missing = missingPermissions(broken);
+  assert.equal(missing.length, 1, JSON.stringify(missing));
+  assert.match(missing[0]!, /checks: read/);
+  assert.match(missing[0]!, /403/);
+});
+
+test('KF-017 · khai `checks: read` thì hết đỏ, và `checks: write` cũng đủ', () => {
+  const body = `jobs:
+  merge:
+    steps:
+      - run: gh api "repos/$REPO/commits/$HEAD/check-runs?per_page=100"
+`;
+  const withRead = `name: x\non: [workflow_dispatch]\n\npermissions:\n  checks: read\n\n${body}`;
+  const withWrite = `name: x\non: [workflow_dispatch]\n\npermissions:\n  checks: write\n\n${body}`;
+  assert.deepEqual(missingPermissions(withRead), []);
+  assert.deepEqual(missingPermissions(withWrite), []);
+});
+
+test('KF-017 · `check-suites` cùng scope, và `gh pr checks` KHÔNG bị luật này bắt', () => {
+  const suites = `name: x
+on: [workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  j:
+    steps:
+      - run: gh api "repos/$REPO/commits/$SHA/check-suites"
+`;
+  assert.match(missingPermissions(suites).join(' · '), /checks: read/);
+
+  // `gh pr checks` đi qua scope `pull-requests` — luật cũ đã phủ, không
+  // được kéo nó sang `checks` và bắt workflow khai thừa quyền.
+  const prChecks = `name: x
+on: [workflow_dispatch]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  j:
+    steps:
+      - run: gh pr checks 12 --repo "$REPO"
+`;
+  assert.deepEqual(missingPermissions(prChecks), []);
+});
+
+test('KF-017 · lệnh trải nhiều dòng bằng `\\` vẫn bị bắt — vòng soát P-029', () => {
+  // Vòng soát đo 14 ca và tìm ra đúng lỗ này: mọi luật khớp trong phạm vi
+  // MỘT dòng, còn bash cho trải lệnh ra nhiều dòng. `automerge.yml` đang
+  // dùng đúng dấu `\` đó và chỉ tình cờ để URL ở dòng đầu — một lần rewrap
+  // cho dễ đọc là luật tắt tiếng và KF-017 quay lại mà không gì đỏ.
+  const head = `name: x
+on: [workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  j:
+    steps:
+      - run: |
+`;
+
+  const urlOnNextLine = `${head}          FIX=$(gh api \\
+            "repos/$REPO/commits/$HEAD/check-runs?per_page=100")
+`;
+  assert.match(missingPermissions(urlOnNextLine).join(' · '), /checks: read/);
+
+  // Lối viết `gh` thông dụng: cờ `-H` chen vào giữa, URL xuống tận dòng thứ ba.
+  const headerThenUrl = `${head}          gh api \\
+            -H "Accept: application/vnd.github+json" \\
+            "repos/$REPO/commits/$HEAD/check-runs"
+`;
+  assert.match(missingPermissions(headerThenUrl).join(' · '), /checks: read/);
+});
+
+test('joinContinuations nối đúng một dòng logic, và không đụng dòng thường', () => {
+  assert.equal(joinContinuations('a \\\n   b\n'), 'a b\n');
+  assert.equal(joinContinuations('a\nb\n'), 'a\nb\n');
+  // Nối rồi thì `permissions:` vẫn phải đọc được từ nguồn GỐC — đó là lý do
+  // `declaredPermissions` KHÔNG dùng bản đã nối (nó đọc theo thụt lề).
+  const src = `permissions:
+  checks: read
+
+jobs:
+  j:
+    steps:
+      - run: gh api \\
+          "repos/$R/commits/$S/check-runs"
+`;
+  assert.deepEqual(missingPermissions(src), []);
+});
+
+test('KF-017 · `automerge.yml` trên cây khai được `checks`', () => {
+  // Bài hồi quy neo thẳng vào file thật: luật trên có thể đúng mà file vẫn
+  // thiếu quyền, và đó chính là ca đã xảy ra.
+  const source = readFileSync(join(process.cwd(), 'ops', 'workflows', 'automerge.yml'), 'utf8');
+  assert.match(source, /\/check-runs/, 'automerge.yml không còn gọi Checks API — xem lại bài này');
+  assert.deepEqual(missingPermissions(source), []);
+});
+
 // ── Cây hiện tại phải sạch ───────────────────────────────────────────────
 
 test('cả sáu workflow trong ops/workflows/ khai đủ quyền chúng cần', () => {
@@ -241,6 +372,30 @@ test('cả sáu workflow trong ops/workflows/ khai đủ quyền chúng cần', 
     const missing = missingPermissions(readFileSync(join(dir, file), 'utf8'));
     assert.deepEqual(missing, [], `${file}: ${missing.join(' · ')}`);
   }
+});
+
+// KF-019 · `spike-canvas.yml` vào `main` với 3 khối `run: |` thiếu
+// `set -euo pipefail` và 1 `|| true` không chú thích, làm `pnpm check` ĐỎ
+// trên chính `main` (đo 2026-09-22 23:38Z, sau khi #42 merge lúc 23:05Z).
+//
+// Luật Z9 và Z10 đã có sẵn trong linter và `pnpm lint:workflows` bắt đúng —
+// chỗ thủng là `node --test` KHÔNG soi cây thật bằng hai luật đó. Hai bài
+// "cây hiện tại phải sạch" ngay trên chỉ soi quyền và action Node 20, nên
+// một lượt CI chạy lệch nhịp (KF-002: GitHub không dựng lần chạy cho commit
+// cuối) đủ để file lọt vào `main` mà không gì đỏ trước lúc merge.
+test('cây hiện tại sạch với Z10 (set -euo pipefail) và Z9 (nuốt lỗi có chú thích)', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  const offenders: string[] = [];
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const source = readFileSync(join(dir, file), 'utf8');
+    for (const line of blocksMissingPipefail(runBlocks(source, file))) {
+      offenders.push(`${file}:${line} — khối \`run: |\` thiếu set -euo pipefail (Z10)`);
+    }
+    for (const line of undocumentedSwallows(source)) {
+      offenders.push(`${file}:${line} — nuốt lỗi không có chú thích giải thích (Z9)`);
+    }
+  }
+  assert.deepEqual(offenders, [], offenders.join(' · '));
 });
 
 test('không workflow nào còn dùng action chạy Node 20', () => {
@@ -412,4 +567,332 @@ test('KF-004 · workflow sinh sự kiện `push` mà không khai báo thì đỏ
   assert.equal(found.length, 1, JSON.stringify(found));
   assert.equal(found[0]!.event, 'push');
   assert.deepEqual(found[0]!.consumers, ['.github/workflows/sync-workflows.yml']);
+});
+
+// ── Luật MỀM: thiếu inputs.dry_run (mục P-010) ───────────────────────────
+
+test('P-010 · workflow có tác dụng phụ mà thiếu dry_run thì CẢNH BÁO', () => {
+  const source = [
+    'name: x',
+    'on:',
+    '  workflow_dispatch:',
+    '',
+    'permissions:',
+    '  issues: write',
+    '',
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh issue create --title x --body y',
+    '',
+  ].join('\n');
+  const warning = missingDryRun('x.yml', source);
+  assert.notEqual(warning, null);
+  assert.match(warning!, /inputs\.dry_run/);
+});
+
+test('P-010 · có dry_run thì im', () => {
+  const source = [
+    'name: x',
+    'on:',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      dry_run:',
+    '        type: boolean',
+    '        default: false',
+    '',
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh issue create --title x --body y',
+    '',
+  ].join('\n');
+  assert.equal(missingDryRun('x.yml', source), null);
+});
+
+test('P-010 · workflow chỉ ĐỌC thì không bị cảnh báo — luật đỏ nhầm ép khai cờ vô nghĩa', () => {
+  const source = 'name: x\non:\n  workflow_dispatch:\n\njobs:\n  j:\n    steps:\n      - run: gh pr list --json number\n';
+  assert.equal(missingDryRun('x.yml', source), null);
+});
+
+test('P-010 · thiếu cả workflow_dispatch thì cảnh báo nói đúng chỗ đó', () => {
+  const source = 'name: x\non:\n  issues:\n    types: [opened]\n\njobs:\n  j:\n    steps:\n      - run: gh issue comment 1 --body y\n';
+  const warning = missingDryRun('x.yml', source);
+  assert.notEqual(warning, null);
+  assert.match(warning!, /KHÔNG có `workflow_dispatch`/);
+});
+
+test('P-010 · miễn trừ phải KÈM LÝ DO — một khai báo rỗng không đủ', () => {
+  // Cùng khuôn với `# KF-004 <sự kiện>: …`: bắt gõ ra lý do là chủ ý. Một
+  // khai báo cụt sẽ khớp ký tự đầu của DÒNG SAU nếu regex dùng `\s`, nên
+  // bài này canh đúng chỗ đó.
+  const body = [
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - run: gh issue create --title x --body y',
+    '',
+  ].join('\n');
+  const head = 'name: x\non:\n  workflow_dispatch:\n\n';
+
+  assert.notEqual(missingDryRun('x.yml', `${head}# P-010 dry-run:\n${body}`), null, 'khai rỗng KHÔNG được chấp nhận');
+  assert.equal(
+    missingDryRun('x.yml', `${head}# P-010 dry-run: job ghi khoá sau if: github.event_name == 'pull_request'\n${body}`),
+    null,
+    'khai kèm lý do thì im',
+  );
+});
+
+test('P-010 · cây thật không còn cảnh báo nào — cảnh báo thường trực là cảnh báo bị bỏ qua', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  const left: string[] = [];
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const warning = missingDryRun(file, readFileSync(join(dir, file), 'utf8'));
+    if (warning !== null) left.push(`${file} — ${warning}`);
+  }
+  assert.deepEqual(left, []);
+});
+
+// ── Z10 · thiếu `set -euo pipefail` ──────────────────────────────────────
+
+test('Z10 · khối run: | thiếu set -euo pipefail thì đỏ', () => {
+  const bad = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo hi
+          exit 1
+`;
+  const bad2 = `name: y
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo hi
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(bad, 'bad.yml')), [6]);
+  assert.deepEqual(blocksMissingPipefail(runBlocks(bad2, 'bad2.yml')), [6]);
+});
+
+test('Z10 · khối run: | có set -euo pipefail ở dòng đầu thì sạch', () => {
+  const ok = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          echo hi
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(ok, 'ok.yml')), []);
+});
+
+test('Z10 · dòng trống ở đầu khối trước set -euo pipefail không tính là thiếu — không lệnh nào chạy trước nó', () => {
+  const ok = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+
+          set -euo pipefail
+          echo hi
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(ok, 'ok.yml')), []);
+});
+
+test('Z10 · một lệnh thật chạy TRƯỚC set -euo pipefail thì đỏ — đúng lỗ hổng luật này chặn', () => {
+  const bad = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo "chạy trước khi có lưới an toàn"
+          set -euo pipefail
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(bad, 'bad.yml')), [6]);
+});
+
+test('Z10 · run: một dòng (không phải khối |) không thuộc phạm vi luật này', () => {
+  const single = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: pnpm check
+`;
+  assert.deepEqual(blocksMissingPipefail(runBlocks(single, 'single.yml')), []);
+});
+
+test('Z10 · cả sáu workflow thật trong ops/workflows/ đều mở khối run: | bằng set -euo pipefail', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const source = readFileSync(join(dir, file), 'utf8');
+    const bad = blocksMissingPipefail(runBlocks(source, file));
+    assert.deepEqual(bad, [], `${file}: dòng ${bad.join(', ')}`);
+  }
+});
+
+// ── Z5 · secret dùng mà không khẳng định không rỗng ──────────────────────
+
+test('Z5 · dùng secrets.X mà không có phép kiểm rỗng trước đó thì đỏ', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: echo "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}"
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), ['PUBLISH_REPO_TOKEN']);
+});
+
+test('Z5 · có dòng khẳng định X không rỗng TRƯỚC lần dùng đầu thì sạch', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          [ -n "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}" ] || { echo "thiếu PUBLISH_REPO_TOKEN"; exit 1; }
+          echo "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}"
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), []);
+});
+
+test('Z5 · phép kiểm rỗng nằm SAU lần dùng đầu không tính — phải kiểm TRƯỚC', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          echo "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}"
+          [ -n "${'$'}{{ secrets.PUBLISH_REPO_TOKEN }}" ] || exit 1
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), ['PUBLISH_REPO_TOKEN']);
+});
+
+test('Z5 · nhiều secret khác tên đều được kiểm riêng', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          [ -n "${'$'}{{ secrets.A }}" ] || exit 1
+          echo "${'$'}{{ secrets.A }}"
+          echo "${'$'}{{ secrets.B }}"
+`;
+  assert.deepEqual(secretsUsedWithoutEmptyCheck(source), ['B']);
+});
+
+test('Z5 · không nhắc secrets.* nào thì im lặng', () => {
+  assert.deepEqual(secretsUsedWithoutEmptyCheck('name: x\non: [workflow_dispatch]\njobs:\n  j:\n    steps:\n      - run: echo hi\n'), []);
+});
+
+test('Z5 · cả sáu workflow thật hiện không dùng secrets.* nào (D-C01: hai PAT còn lại đều ngoài ops/workflows/)', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const missing = secretsUsedWithoutEmptyCheck(readFileSync(join(dir, file), 'utf8'));
+    assert.deepEqual(missing, [], `${file}: ${missing.join(', ')}`);
+  }
+});
+
+// ── Z9 · `|| true` / `continue-on-error: true` không có lý do ────────────
+
+test('Z9 · || true không có chú thích ngay trên hay cùng dòng thì đỏ', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          rm -f maybe-missing.txt || true
+`;
+  assert.deepEqual(undocumentedSwallows(source), [8]);
+});
+
+test('Z9 · continue-on-error: true không có chú thích thì đỏ', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - name: bước mềm
+        continue-on-error: true
+        run: exit 1
+`;
+  assert.deepEqual(undocumentedSwallows(source), [7]);
+});
+
+test('Z9 · chú thích NGAY TRÊN thì sạch', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          # chủ ý: file có thể chưa tồn tại, không phải lỗi
+          rm -f maybe-missing.txt || true
+`;
+  assert.deepEqual(undocumentedSwallows(source), []);
+});
+
+test('Z9 · chú thích CÙNG DÒNG thì sạch', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          rm -f maybe-missing.txt || true  # chủ ý: file có thể chưa tồn tại
+`;
+  assert.deepEqual(undocumentedSwallows(source), []);
+});
+
+test('Z9 · lệnh nối nhiều dòng bằng `\\` chỉ cần MỘT chú thích ở đầu khối', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          # chủ ý: lỗi vặt của API không được giết cả job
+          SYNC=$(gh run list --limit 1 \\
+            --json conclusion \\
+            --jq '.[0].conclusion' || true)
+`;
+  assert.deepEqual(undocumentedSwallows(source), []);
+});
+
+test('Z9 · comment cách xa hơn một dòng (không nối bằng `\\`) không tính', () => {
+  const source = `name: x
+on: [workflow_dispatch]
+jobs:
+  j:
+    steps:
+      - run: |
+          set -euo pipefail
+          # chú thích cho lệnh khác, không phải lệnh dưới
+          echo "không liên quan"
+          rm -f maybe-missing.txt || true
+`;
+  const found = undocumentedSwallows(source);
+  assert.equal(found.length, 1, JSON.stringify(found));
+});
+
+test('Z9 · cả sáu workflow thật trong ops/workflows/ đều đã giải thích mọi || true / continue-on-error', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const found = undocumentedSwallows(readFileSync(join(dir, file), 'utf8'));
+    assert.deepEqual(found, [], `${file}: dòng ${found.join(', ')}`);
+  }
 });
