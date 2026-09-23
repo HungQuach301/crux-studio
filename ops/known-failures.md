@@ -677,6 +677,29 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
   **Còn thiếu, khai chứ không giấu:** chưa có lớp máy nào bắt một lượt bước 0 **quên** ghi trường `step0` — dòng đó vẫn hợp lệ và `misfiledLogLines` không đỏ. Tới khi có, lớp chặn là dòng này: **một dòng bước 0 báo có PR bị bỏ lại mà không mang trường `step0` là một dòng chưa viết xong.**
 
+## KF-023 · Luật đọc "dấu treo" bắt theo **chuỗi chữ**, nên cùng một ý viết khác chữ thì lọt — lần thứ hai, và lần này nó mở khoá một `deps`
+
+> Số **KF-023**: `KF-022` thuộc PR `#194` (nhánh `claude/dreamy-ride-t9gnbd`), đang mở. Dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã, đúng cách `KF-021` dặn.
+
+- **Lần gặp:** 2. Lần một: vòng soát chéo của mục `I-010` bắt bốn mục (`P-011`, `P-013`, `P-016`, `I-002`) bị lật sang `done` trong khi thân mục chặn bằng lời; cách chữa lúc đó là **thêm chuỗi** vào `HOLD_MARKERS`. Lần hai: lượt `crux-worker-1` ~21:48Z ngày 2026-09-23 chạy `pnpm backlog:status -- --fix` trên `main` ở `402444b` và lật thêm **ba** mục cùng kiểu — `editorial/E-001`, `platform/P-010`, `platform/P-007`. Vòng soát ngữ cảnh sạch bắt lại trước khi PR rời nháp.
+- **Chữ ký:** `pnpm backlog:status` xếp một mục vào nhóm `stale` trong khi thân mục nói bằng lời rằng nó chưa được đóng. Không gì đỏ: tiêu đề commit đúng dạng, không có `Revert`, `pnpm check` xanh, CI xanh. Mục lặng lẽ thành `done` và một `deps` mở khoá theo.
+- **Đo được, 2026-09-23** — ba câu lọt lưới, và vì sao:
+
+  | Mục | Câu trong thân mục | Chuỗi đã có | Vì sao không khớp |
+  |---|---|---|---|
+  | `editorial/E-001` | "mục này vẫn **không** tự chuyển `done`" | `chỉ chuyển \`done\`` | "tự chuyển" thay cho "chỉ chuyển" |
+  | `platform/P-010` | "phải đọc đúng lần chạy thật đó **trước khi coi mục này `done`**" | — | không chuỗi nào phủ |
+  | `platform/P-007` | "mục này **chỉ `done` khi** bản tin thật in ra…" | `chỉ đóng khi` | `done` thay cho `đóng` |
+
+- **Vì sao nó đắt hơn vẻ ngoài:** `E-001` là `deps` **trực tiếp** của `E-003` và `E-004`, và **bắc cầu** của `E-005`. Lật nhầm nó mở khoá cả một nhánh việc của làn `editorial` — và đây **không phải một chiếu**: bản nháp đầu của chính lượt này **đã** khai ra rằng `E-003`/`E-004` được mở khoá và lượt sau sẽ nhận `E-003`, rồi phải đính chính. Lỗi này không nằm yên; nó đã sinh ra một kết luận sai trong vòng đúng một lượt. `P-010` và `P-007` không phải `deps` của mục nào, nhưng cả hai **hẹn một bằng chứng chưa tồn tại** (một lần `ops/workflows/**` đổi kế tiếp; một lượt `crux-digest` chạy thật). Lật sang `done` là xoá mốc hẹn, và không ai quay lại.
+- **Nguyên nhân gốc:** `HOLD_MARKERS` là một danh sách **chuỗi con**, tức nó bắt *cách viết* chứ không bắt *ý*. Tiếng Việt có nhiều cách nói cùng một ý ("không tự chuyển `done`", "chỉ `done` khi", "trước khi coi mục này `done`"), nên mọi danh sách chuỗi đều thủng ở đúng câu chưa ai nghĩ tới. Đây là **giới hạn còn lại của thiết kế**, không phải một lỗi đã hết: xem phần dưới.
+- **Đã sửa ở đâu:** `ops/scripts/backlog-status.ts` — ba chuỗi đo từ ba ca thật được thêm vào `HOLD_MARKERS`: `tự chuyển \`done\``, `chỉ \`done\` khi`, `coi mục này \`done\``. Chuỗi thứ ba cố ý **bỏ hai chữ "trước khi"** của câu gốc — phần mang nghĩa nằm ở đoạn sau, và giữ nguyên cả câu là vá đúng một ca (vòng soát ngữ cảnh sạch nêu đúng chỗ này). Sửa ở tầng luật, **không** sửa tay ba dòng `status` của ba mục: vá sản phẩm ở lần gặp thứ hai là đúng thứ `CLAUDE.md` mục 13 cấm. Sau khi sửa, `--fix` trên cùng một nền lật **16** mục thay vì 19, và ba mục kia nằm đúng nhóm `held`.
+- **Máy chặn từ nay:** `ops/test/backlog-status.test.ts`, chạy trong `pnpm test`. **Hai** bài:
+  - `HOLD_MARKERS: ba biến thể lời văn lọt lưới lần hai — E-001, P-010, P-007` — ba câu thật là ba `assert`, **nguyên văn** chứ không rút gọn cho vừa chuỗi. Phá thử: gỡ ba chuỗi khỏi `HOLD_MARKERS` → **đúng một bài đỏ, đúng bài này**, ba bài `HOLD_MARKERS` cũ vẫn xanh; trả lại → xanh.
+  - `HOLD_MARKERS: giới hạn còn lại — một chữ chèn vào là lọt` — ba `assert` **âm** ghim chỗ thủng đã biết vào chỗ máy đọc được, thay vì để nó chỉ nằm trong văn xuôi ở đây. Khi `I-020` xong, ba `assert` đó phải đổi thành `true`; việc chúng đang là `false` chính là **thước đo nợ còn lại**.
+- **Còn thiếu, khai chứ không giấu — và đây mới là phần quan trọng của mục này:** lớp chặn trên chỉ bắt **ba câu đã gặp**. Câu thứ tư, viết bằng chữ khác nữa, vẫn lọt y như hai lần trước, và vẫn không gì đỏ. Danh sách chuỗi con **không** hội tụ; mỗi lần gặp chỉ vá một lỗ. Cách thoát thật sự là đổi **hình dạng dữ liệu** thay vì đoán lời văn — một dòng khai tường minh trong thân mục (ví dụ `- hold: <lý do>`) mà tool đọc như đọc `- status:` và `- deps:`, để "còn treo" là một **trường**, không phải một câu văn. Tới khi đó, lớp chặn là dòng này: **một mục không muốn bị lật phải nói ra bằng một trường, không bằng một câu.** Đáng một mục backlog riêng của làn `integration`, nối tiếp `I-010`.
+
+
 ---
 
 ## Cách thêm một mục

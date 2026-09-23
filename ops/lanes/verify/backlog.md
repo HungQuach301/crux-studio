@@ -177,7 +177,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - **cửa merge: `open`** — mục này chỉ chạm tài liệu, sổ giả định, backlog và log. Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
 - kiểm: cần hai PR song song mà **cả hai đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04` log tách tới mức mục, nên ca kiểm là hai lần chạy của cùng một mục (`ops/logs/<lane>/<id>.jsonl`) hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc **hai** thứ: trạng thái `mergeable` của PR kia trên GitHub, và kết quả `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau — ghi cả hai.
 - vì sao mục này treo lâu: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Phải chờ tới khi có một cặp PR mà **cả hai** đã mang sẵn luật. Xem G17.

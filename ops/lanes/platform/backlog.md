@@ -104,7 +104,7 @@ Chỉ dẫn 3 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
 - deps: P-005
 - risk: low
-- status: review
+- status: done
 - nguồn: issue #17, chỉ dẫn 3; CHARTER phụ lục P2
 - tiêu chí xong:
   - Bản tin có mục **Tiến độ**: số mục `done` trong 24 giờ · số mục còn lại theo từng đợt · thông lượng trung bình 3 ngày · ngày dự kiến xong từng đợt · **nút thắt hiện tại là máy hay người**.
@@ -386,7 +386,7 @@ Nguyên nhân: sự kiện `pull_request` chụp `github.event.pull_request.labe
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: bất biến I2; `ci` run #1 và #2 của PR #7
 - tiêu chí xong:
   - ✅ `ci.yml` thêm `labeled` và `unlabeled` vào `on.pull_request.types`, cạnh bộ mặc định `opened, synchronize, reopened`. Gắn hay gỡ nhãn `fix` đều chạy lại CI.
@@ -555,7 +555,7 @@ Quyết định `reversible` ở issue `#107`, phương án **A**. Một PR xung
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: issue `#107` phương án A; dòng log bước 0 ở `#106`; mục `P-022`; `ops/known-failures.md` nhóm Z
 - **cửa merge: `automerge-delayed`** — sửa Phụ lục P1/P2 của `CHARTER.md` (mục khác mục 1 và mục 3). Issue `#107` đoán là "không chạm vùng bảo vệ"; đoán đó **sai**, và ghi ra đây thay vì im: bảng lý do nằm trong Phụ lục P1 nên thêm một hàng vào code mà không sửa Phụ lục là để CHARTER nói "ba lý do" trong khi máy có bốn. Chạy `node ops/invariants.protected-area.ts` để xác nhận cửa.
 - tiêu chí xong:
@@ -695,7 +695,7 @@ Giá phải trả, đo ở bước 0 cùng lượt: **6 / 16 PR đang mở** xun
 
 - deps: —
 - risk: **high** — mỗi lần `main` đỏ vì workflow là ~12 giờ toàn bộ hàng đợi merge đứng, không ai phải bấm sai gì cả.
-- status: review
+- status: done
 - nguồn: `🤖 [QĐ] #169` (**đã trả lời: A**, `01:19:54Z` ngày 2026-09-23, kèm sáu điều kiện) → `docs/decisions/D-C07.md`; `🤖 [QĐ] #175` (PR `#168` ra cửa `owner-merge`, cần chủ dự án merge); `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
 - tiêu chí xong:
   - ✅ **`🤖 [QĐ] #169` đã có câu trả lời: A**, kèm sáu điều kiện, chốt lâu dài ở `docs/decisions/D-C07.md`. Sáu điều kiện là phép kiểm máy ở `ops/invariants.hotfix-lane.ts`, không phải lời dặn — đó là chỗ câu trả lời đòi khắt khe nhất.

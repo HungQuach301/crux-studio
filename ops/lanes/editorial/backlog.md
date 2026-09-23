@@ -63,7 +63,7 @@ Bất biến I6 được thực thi ở đây: mọi con số hiển thị đề
 
 - deps: E-001, T-003
 - risk: high
-- status: review
+- status: done
 - nguồn: CHARTER bất biến I6; spec KHỐI B
 - tiêu chí xong:
   - ✅ Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo — `factRiskProblems` (`ops/scripts/check-fact-risk.ts`) so mọi token số của `script.text` với các token số trong `statement` của claim mà kịch bản trích (`script.claimIds`); số lạc ra mã `untraceable-number`. `check-contracts.ts` (việc số 9, phần của `pnpm contracts`) **chặn** khi `producer.impl !== 'stub'`, **ghi nhận** ở stub — cùng khuôn stub-aware để tập vàng không đổi (CHARTER 6.1). Nghiệm thu S05 "gieo 3 con số sai bắt cả 3" có test.

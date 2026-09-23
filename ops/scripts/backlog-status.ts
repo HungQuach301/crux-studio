@@ -64,6 +64,26 @@ export const OPEN_BOX = '⬜';
  * (tốn một nhịp, và `held` được in ra để người đọc thấy) còn hơn mở khoá
  * nhầm một mục chưa xong.
  *
+ * **Lần thứ hai, cùng một chữ ký lỗi.** Lượt `crux-worker-1` ~21:48Z
+ * 2026-09-23 chạy `--fix` trên `main` ở `402444b` và lật ba mục nữa mà thân
+ * mục cấm đúng việc đó — `E-001`, `P-010`, `P-007`. Cả ba nói cùng một ý như
+ * bốn ca trên, chỉ khác chữ:
+ *
+ * | Mục | Câu trong thân mục | Vì sao lọt |
+ * |---|---|---|
+ * | `E-001` | "mục này vẫn **không** tự chuyển `done`" | có `chỉ chuyển \`done\``, không có `tự chuyển \`done\`` |
+ * | `P-010` | "phải đọc đúng lần chạy thật đó **trước khi coi mục này `done`**" | không chuỗi nào phủ |
+ * | `P-007` | "mục này **chỉ `done` khi** bản tin thật in ra…" | có `chỉ đóng khi`, không có `chỉ \`done\` khi` |
+ *
+ * `E-001` là ca đắt nhất: nó là `deps` của `E-003`, `E-004`, rồi `E-005`, nên
+ * lật nhầm nó mở khoá cả một nhánh việc chưa được phép chạy — đúng hướng sai
+ * mà khối trên đã cảnh báo, lặp lại nguyên si.
+ *
+ * CLAUDE.md mục 13 ("lỗi cùng loại lần thứ hai → sửa cơ chế, không vá sản
+ * phẩm") nên ba chuỗi dưới đây được thêm vào danh sách, chứ không sửa tay ba
+ * dòng `status`. Ba ca thật ở trên là ba bài kiểm, nằm ở
+ * `ops/test/backlog-status.test.ts`.
+ *
  * Cố ý KHÔNG nằm trong danh sách: "Chưa làm, cố ý" (`I-003`) — đó là loại
  * trừ phạm vi có chủ ý, không phải phần còn treo.
  */
@@ -74,6 +94,14 @@ export const HOLD_MARKERS: readonly string[] = [
   'chỉ đóng khi',
   'chưa kiểm bằng chạy thật',
   'còn treo',
+  // Ba chuỗi dưới đây đo từ ba ca thật `E-001`, `P-010`, `P-007` — xem bảng
+  // trong khối chú thích ngay trên. Chuỗi thứ ba cố ý BỎ hai chữ "trước khi"
+  // của câu gốc: phần mang nghĩa nằm ở đoạn sau, và giữ nguyên cả câu là vá
+  // đúng MỘT ca — nó trượt ngay ở "đừng coi mục này `done`". Nới về hướng
+  // giữ lại là hướng an toàn (xem khối chú thích trên).
+  'tự chuyển `done`',
+  'chỉ `done` khi',
+  'coi mục này `done`',
 ];
 
 export type ItemVerdict =
