@@ -163,11 +163,12 @@ Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn qu
 
 - **`notify.yml`:** comment `@HungQuach301` trên issue mới có nhãn `digest` hoặc `alert`. Nhờ đó GitHub Mobile đẩy thông báo về điện thoại. Nó **chỉ** phủ issue do người hoặc agent mở — issue do workflow khác mở không kích hoạt nó (KF-004), nên các workflow đó tự đặt `@nhắc` trong thân issue.
 - **`main-ci.yml`:** mở issue `alert` ngay khi `main` đỏ, nhưng **không** @nhắc ở lần đầu. Nó chỉ @nhắc khi issue đã mở **≥ 2 giờ** — tức là routine integrator đã có ít nhất một lượt để tự revert và không xong. Gọi người ở phút đầu là gọi người cho một việc mà máy sắp tự làm xong.
-- **`watchdog.yml`:** chạy theo lịch cron trong Actions, độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` khi xảy ra một trong các trường hợp:
+- **`watchdog.yml`:** chạy theo lịch cron trong Actions (mỗi giờ), độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` khi xảy ra một trong các trường hợp:
   - quá 26 giờ không có bản tin mới;
-  - quá 48 giờ không có PR nào được merge trong khi backlog vẫn còn mục `ready`;
+  - quá 6 giờ không có PR nào được merge trong khi backlog vẫn còn mục `ready` (mục `P-020`, chỉ dẫn 4 trên issue bản tin #17 — ngưỡng cũ là 48 giờ);
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn;
-  - chi phí tích luỹ trong `ops/logs/**/*.jsonl` (bất biến I8) vượt **80%** cận dưới của ngân sách học.
+  - chi phí tích luỹ trong `ops/logs/**/*.jsonl` (bất biến I8) vượt **80%** cận dưới của ngân sách học;
+  - không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim quá **3 giờ** — dấu hiệu một routine có lượt chạy lỗi hoặc đã ngừng chạy (mục `P-020`). Nhịp tim là dòng `at` mới nhất trong **các dòng log bước 0** (phụ lục P1/P3 ghi một dòng ở mọi lượt). Từ mục `P-023` các dòng đó nằm rải ở nhiều file, nên watchdog quét cả `ops/logs` rồi lọc theo trường `ref` — **không neo vào một tên file**.
 
 ### 2.5 Bản tin ngày — hộp quyết định duy nhất
 
