@@ -367,7 +367,7 @@ Khi tách, làm ba bước:
 2. **Sửa lỗi theo quy trình test trước.** Viết test tái hiện lỗi, sửa, rồi chạy toàn bộ bộ kiểm tra (xem I2).
 3. **Eval cho prompt.** Mỗi xưởng có một bộ mẫu chấm điểm. PR đổi prompt không được auto-merge nếu eval không đạt ngưỡng khai trong cấu hình. Quy tắc ba tập của spec tham chiếu giữ nguyên.
 4. **Soát độc lập.**
-   - Mỗi PR được một subagent reviewer có ngữ cảnh sạch soát trước khi gắn nhãn `automerge`.
+   - Mỗi PR được một subagent reviewer có ngữ cảnh sạch soát trước khi gắn **bất cứ** nhãn tự merge nào — `automerge`, `automerge-delayed`, hay `hotfix`. Câu cũ chỉ nói `automerge`, viết từ trước khi `D-C06` chia vùng bảo vệ làm hai mức. PR `hotfix` cần soát **kỹ nhất**, không phải nhẹ nhất: nó là loại PR duy nhất máy đưa vào `main` mà không có khoảng chờ nào để ai kịp nói `dừng` (`D-C07`).
    - Từ Đợt 1 thêm soát chéo bằng GPT trong CI, cần secret `OPENAI_API_KEY`.
 5. **Main đỏ thì revert.** Main đỏ được revert ngay. Việc sửa làm lại trên nhánh.
 6. **`ops/known-failures.md`.** Lỗi cùng loại xuất hiện lần thứ hai thì sửa spec, contract hoặc prompt, không vá sản phẩm.
