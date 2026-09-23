@@ -275,11 +275,31 @@ Mỗi xưởng gọi được độc lập bằng `workflow_dispatch` (CHARTER 5
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER 5.4; quyết định D-12
 - tiêu chí xong:
-  - Sáu file trong `ops/workflows/`, mỗi file nhận `episode` và `impl`.
-  - Mỗi lần chạy ghi một dòng vào `ops/logs/<xưởng>.jsonl` có `costUsd` (bất biến I8).
+  - ✅ Sáu file trong `ops/workflows/`, mỗi file nhận `episode` và `impl` — `workshop-topic.yml`,
+    `workshop-editorial.yml`, `workshop-visual.yml`, `workshop-audio.yml`, `workshop-assembly.yml`,
+    `workshop-release.yml`.
+  - ✅ Mỗi lần chạy ghi một dòng có `costUsd` (bất biến I8). Đường dẫn là
+    `ops/logs/<xưởng>/<episode>.jsonl`, **không** phải `ops/logs/<xưởng>.jsonl` như dòng tiêu chí
+    viết ra trước đó: từ `D-C04` (mục `P-018`) log tách tới mức mục, và sáu xưởng đều là tên làn.
+    Dòng được ghi kể cả khi lần chạy hỏng — I8 nói "mọi lần chạy", không nói "mọi lần chạy thành công".
+    Có **máy kiểm**, không chỉ có lời hứa: bốn bài trong `ops/test/run-workshop.test.ts` gọi script như
+    Actions gọi nó (tiến trình con, `--root` riêng) rồi ĐẾM dòng trong file log. Đo bằng chạy thật: tắt
+    lời gọi `appendRunLog` thì ba bài đỏ; đưa phần nạp pack ra ngoài `try` thì một bài đỏ. Khoảng trống
+    này do vòng soát chéo của chính mục tìm ra — trước đó tắt hẳn việc ghi log mà `pnpm check` vẫn xanh.
+  - ✅ Chỗ nối còn thiếu: `ops/scripts/run-workshop.ts` (`pnpm run:workshop`). `runWorkshopCli` của
+    kernel chạy xưởng rồi in ra, nó **không** ghi artifact và **không** ghi dòng log nào — một workflow
+    gọi thẳng nó sẽ xanh mà không để lại `costUsd` ở đâu cả.
+  - **Còn treo, không thuộc mục này:** dòng log chỉ sống trong lần chạy. Không commit ngược vào `main`
+    (CLAUDE.md mục 2), nên nó được dán vào tóm tắt lần chạy. Giữ lâu dài bằng Actions artifact hoặc
+    Releases là mục `kernel/K-004`.
+  - **Chưa kiểm bằng chạy thật trên GitHub:** workflow chỉ có hiệu lực sau khi merge vào `main` và
+    `sync-workflows.yml` chép sang `.github/workflows/` (giả định **G10**). Đã kiểm ở chỗ rẻ hơn:
+    `pnpm lint:workflows` (cú pháp YAML và `bash -n`), `ops/test/run-workshop.test.ts` (sáu file có
+    đúng tham số, gọi đúng xưởng của mình, không nội suy `${{ inputs… }}` vào bash), và chạy thật
+    trọn chuỗi sáu xưởng bằng `pnpm run:workshop` ở máy.
 
 ### P-005 · Script gom số liệu cho bản tin ngày
 Routine `crux-digest` không nên tự tính số — nó nên đọc số đã tính.
