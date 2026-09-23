@@ -164,8 +164,15 @@ jobs:
 
           # Điều kiện 6 · mọi PR đang mở mang nhãn `hotfix`. Cửa chọn PR số
           # nhỏ nhất, nên danh sách này phải đủ, không chỉ PR đang xét.
-          HOTFIX_PRS=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
-            --jq '[.[] | select(.labels | map(.name) | index("hotfix") != null) | .number]')
+          # `--paginate` cộng với một `--jq` trả MẢNG in ra một mảng CHO MỖI
+          # TRANG (`[171] []`), và chuỗi đó không phải JSON hợp lệ — `--argjson`
+          # dưới đây sẽ chết kéo cả bước theo `set -e`. Nên lấy DÒNG (như
+          # bước dựng `NUMS` phía trên đã làm) rồi ghép mảng bằng `jq` một lần.
+          HOTFIX_LIST=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+            --jq '.[] | select(.labels | map(.name) | index("hotfix") != null) | .number' \
+            | tr '\n' ' ')
+          HOTFIX_PRS=$(jq -cn --arg list "$HOTFIX_LIST" \
+            '$list | split(" ") | map(select(. != "")) | map(tonumber)')
           echo "D-C07 · PR mang nhãn hotfix: $HOTFIX_PRS"
           MERGED_HOTFIX=""
 

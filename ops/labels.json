@@ -42,6 +42,11 @@
       "description": "Vùng bảo vệ mức 2 (D-C06). Tự merge sau 12 giờ CI xanh, trừ khi chủ dự án nói 'dừng'."
     },
     {
+      "name": "hotfix",
+      "color": "B60205",
+      "description": "Lối đi nhanh D-C07: PR sửa main đỏ, bỏ cửa chờ 12 giờ. Máy kiểm sáu điều kiện."
+    },
+    {
       "name": "fix",
       "color": "D4C5F9",
       "description": "PR sửa lỗi. BẮT BUỘC kèm test tái hiện lỗi — CI chặn nếu thiếu (I2)."
