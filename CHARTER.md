@@ -150,7 +150,7 @@ Sau khi xử lý xong một quyết định, agent ghi quyết định có tính
 
 GitHub không gửi thông báo cho chính người thực hiện hành động. Vì agent hành động bằng danh tính của chủ dự án, cần hai workflow chạy bằng `github-actions[bot]`.
 
-**Phạm vi @nhắc (D-C06).** Chỉ **hai** thứ được phép gọi chủ dự án:
+**Phạm vi @nhắc (D-C06, mở rộng bởi `D-C07`).** Chỉ **ba** thứ được phép gọi chủ dự án:
 
 1. **Bản tin ngày** (nhãn `digest`) — hộp quyết định duy nhất, mục 2.5.
 2. **Cảnh báo khẩn** (nhãn `alert`), đúng **bốn** loại:
@@ -158,6 +158,7 @@ GitHub không gửi thông báo cho chính người thực hiện hành động.
    - watchdog báo nhà máy im lặng;
    - chi phí vượt **80%** ngân sách học (mục 8);
    - sự cố bảo mật.
+3. **Một lần merge qua lối đi nhanh `hotfix`** (`D-C07`, điều kiện 6 của chủ dự án): `automerge.yml` comment `@nhắc` ngay trên PR vừa merge. Đây là loại PR duy nhất máy đưa vào `main` **không có khoảng chờ** nào để ai kịp nói `dừng`, nên nó được gọi ngay chứ không chờ bản tin sáng. Kèm theo: bản tin kế tiếp có một mục riêng để soát lại (mục `platform/P-035`).
 
 Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn quyết định không còn là một ngày bị gọi bốn lần; cả bốn nằm trong bản tin sáng.
 
@@ -262,12 +263,15 @@ PAT có hạn dùng. Watchdog cảnh báo khi workflow sync thất bại (mục 
   |---|---|---|
   | `owner-merge` | — | máy không bao giờ merge |
   | `automerge-delayed` | `automerge-delayed` | CI xanh trên đầu nhánh, đủ **12 giờ**, không có lời `dừng` |
+  | `automerge-delayed` + lối nhanh | `automerge-delayed` + `hotfix` | như trên nhưng **không chờ**, khi sáu điều kiện của `D-C07` đạt |
   | `open` | `automerge` | CI xanh trên đầu nhánh |
+
+- **Lối đi nhanh `hotfix` (`D-C07`).** Một `main` đỏ vì một workflow thì mọi bản sửa của nó cũng chạm `ops/workflows/**`, nên cửa 12 giờ áp lên đúng thứ phải đi nhanh nhất — đo được ngày 2026-09-23: hàng đợi merge đứng ~8,6 giờ, 9 PR xung đột, 0 push (`KF-020`). Nhãn `hotfix` bỏ **đúng một thứ: khoảng chờ**. Sáu điều kiện, do `ops/invariants.hotfix-lane.ts` kiểm bằng máy, không phải bằng lời: (1) `main-ci` đang đỏ và có cảnh báo khẩn đang mở; (2) PR chỉ chạm đúng file mà cảnh báo nêu tên — so đường dẫn đầy đủ, không nới theo thư mục; (3) không chạm chính tầng luật đang bắt lỗi (chạm thì mở `🤖 [QĐ]`, không dùng lối nhanh); (4) xanh đủ 5 check trên đúng đầu nhánh; (5) không bao giờ áp cho `automerge.yml`, `ops/invariants.*` hay `.github/**`; (6) tối đa **một** PR `hotfix` mỗi sự cố, và chủ dự án được @nhắc ngay lúc merge. Thiếu dữ liệu ở bất cứ chỗ nào thì về cửa thường — hướng an toàn luôn là chờ.
 
 - Điều kiện chung cho cả hai cửa máy merge được: CI xanh **trên đúng commit đầu nhánh**, PR không còn nháp, PR không đang xung đột với `main` (KF-002), và không có comment `dừng` của chủ dự án. Merge bằng squash.
 - **Lời `dừng`** là comment của chủ dự án trên PR, không bắt đầu bằng 🤖, có chứa chữ `dừng` (không phân biệt hoa thường). Quy ước 🤖 ở 2.3 là thứ duy nhất phân biệt lời đó với một comment của chính agent.
 - Sau khi merge, workflow gọi tường minh các workflow đăng ký `on: push` vào `main`, theo danh sách mà `ops/invariants.post-merge-dispatch.ts` trả về. Merge bằng `GITHUB_TOKEN` không tự kích hoạt workflow khác (giả định G2, KF-004), và danh sách **không** được viết cứng trong bash: viết cứng nghĩa là thêm một bên nghe mà quên sửa bash thì không có gì báo.
-- Nếu `main` đỏ, routine `crux-integrator` revert commit gây lỗi. Chủ dự án chỉ được gọi khi `main` còn đỏ sau 2 giờ (2.4).
+- Nếu `main` đỏ, routine `crux-integrator` revert commit gây lỗi. Chủ dự án chỉ được gọi khi `main` còn đỏ sau 2 giờ (2.4). Nhãn của PR revert **không** được ghi cứng ở đâu: nó là trường `gate` do `ops/invariants.protected-area.ts` tính ra, cộng `hotfix` khi PR đủ sáu điều kiện của `D-C07` (phụ lục P3 bước 1).
 - Chủ dự án merge các PR `owner-merge` trên GitHub (web hoặc GitHub Mobile). **Không dùng nút "Merge it" trong Claude Projects.** Nút đó giao việc đó cho agent, và hook sẽ chặn thao tác này.
 
 ---
@@ -365,7 +369,7 @@ Khi tách, làm ba bước:
 2. **Sửa lỗi theo quy trình test trước.** Viết test tái hiện lỗi, sửa, rồi chạy toàn bộ bộ kiểm tra (xem I2).
 3. **Eval cho prompt.** Mỗi xưởng có một bộ mẫu chấm điểm. PR đổi prompt không được auto-merge nếu eval không đạt ngưỡng khai trong cấu hình. Quy tắc ba tập của spec tham chiếu giữ nguyên.
 4. **Soát độc lập.**
-   - Mỗi PR được một subagent reviewer có ngữ cảnh sạch soát trước khi gắn nhãn `automerge`.
+   - Mỗi PR được một subagent reviewer có ngữ cảnh sạch soát trước khi gắn **bất cứ** nhãn tự merge nào — `automerge`, `automerge-delayed`, hay `hotfix`. Câu cũ chỉ nói `automerge`, viết từ trước khi `D-C06` chia vùng bảo vệ làm hai mức. PR `hotfix` cần soát **kỹ nhất**, không phải nhẹ nhất: nó là loại PR duy nhất máy đưa vào `main` mà không có khoảng chờ nào để ai kịp nói `dừng` (`D-C07`).
    - Từ Đợt 1 thêm soát chéo bằng GPT trong CI, cần secret `OPENAI_API_KEY`.
 5. **Main đỏ thì revert.** Main đỏ được revert ngay. Việc sửa làm lại trên nhánh.
 6. **`ops/known-failures.md`.** Lỗi cùng loại xuất hiện lần thứ hai thì sửa spec, contract hoặc prompt, không vá sản phẩm.
@@ -591,6 +595,14 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 ---
 
 ## 14. Nhật ký thay đổi
+
+**C8 · 2026-09-23 · quyết định `irreversible` ở issue #169, phương án A (`D-C07`).** Cửa `automerge-delayed` có thêm **lối đi nhanh `hotfix`**: một `main` đỏ vì workflow không còn phải chờ 12 giờ mới xanh lại được. Mục `platform/P-032`, chữ ký ở `ops/known-failures.md` **KF-020**.
+- **Mục 3.3 · lối nhanh bỏ đúng MỘT thứ: khoảng chờ.** Sáu điều kiện kèm câu trả lời của chủ dự án nằm ở `ops/invariants.hotfix-lane.ts` dưới dạng phép kiểm máy, không phải lời dặn. Mọi phép kiểm khác — CI xanh trên đúng đầu nhánh, `fix-has-test`, không xung đột, không nháp, lời `dừng` — vẫn chặn y như cũ.
+- **Phụ lục P3 bước 1 · CHARTER thôi ghi cứng nhãn.** Câu cũ dặn dán `automerge` lên PR revert, còn `ops/invariants.protected-area.ts` tính ra `automerge-delayed` cho đúng loại PR đó: hai luật, hai nhãn, cùng một PR. Từ nay nhãn là trường `gate` do tool tính ra. Chính chủ dự án chỉ ra chỗ lệch này trong câu trả lời `#169`.
+- **Hướng an toàn.** Không dò được phạm vi sự cố, không có cảnh báo đang mở, hay `automerge.yml` không dựng được đầu vào: tất cả về cửa thường, tức vẫn chờ 12 giờ. Lối nhanh không bao giờ áp cho `automerge.yml`, `ops/invariants.*` hay `.github/**` (điều kiện 5), và không bao giờ áp cho một PR chạm chính luật đang bắt lỗi (điều kiện 3).
+- **Mục 2.4 · kênh @nhắc thứ ba.** Điều kiện 6 cho `automerge.yml` @nhắc ngay trên PR vừa merge qua lối nhanh, mà danh sách đóng ở 2.4 chỉ có hai kênh. Vòng soát ngữ cảnh sạch bắt đúng chỗ này — cùng chữ ký `KF-020`: hai luật đúng riêng lẻ, thủng ở chỗ gặp nhau. Nay 2.4 có ba kênh.
+- **Bốn lớp khoá thêm, do vòng soát ngữ cảnh sạch tìm ra và đều đã tái hiện được:** phạm vi chỉ đọc từ thân issue và comment của `github-actions[bot]` (một comment của agent từng **định nghĩa lại** được điều kiện 2 — bất biến I7); phạm vi phải nói đúng commit `main` đang đỏ; `ci.yml`, `main-ci.yml` và `main-red-scope.ts` vào danh sách loại trừ hẳn vì chúng là chính bên định nghĩa "5 check" và bên sinh ra phạm vi; và một PR **XOÁ** file thì không bao giờ đi lối nhanh, vì xoá file test đang đỏ vừa thoả điều kiện 2 vừa là "tắt test để CI xanh".
+- **Hai vế còn lại của câu trả lời** — @nhắc mỗi 4 giờ cho cảnh báo khẩn, và một mục riêng trong bản tin cho mỗi lần merge lối nhanh — nằm ở `platform/P-034` và `platform/P-035`, không nằm trong PR chốt quyết định này.
 
 **C7 · 2026-09-22 · quyết định `reversible` ở issue #107, phương án A.** Bảng lý do "worker phải nhận PR nào" có **bốn** hàng thay vì ba. Mục `platform/P-025`.
 - **Phụ lục P1 bước 2 · lý do thứ ba `red-after-merge`.** Một PR xung đột với `main` kẹt được theo hai cách, và bảng cũ chỉ đếm một: công cụ tự gộp bó tay (`aborted-ineligible`, đã có) và công cụ gộp **sạch** rồi chạy thử thì **đỏ** (chưa có). Cách thứ hai để nhánh PR không đổi, nên CI trên nhánh vẫn xanh và không chỉ báo nào đỏ — nhóm **Z**. PR #81 kẹt như vậy ba lượt liên tiếp mà không worker nào nhận.
@@ -857,8 +869,12 @@ Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên tron
 mỗi ngày, như trước khi đổi nhịp):
 
 1. Chạy `pnpm check` và tập vàng replay trên main. Nếu đỏ: tìm commit gây đỏ trong các merge 24 giờ qua, mở PR revert
-   (nhãn automerge, nhánh claude/integration/revert-<sha>), ghi vào ops/known-failures.md, và thêm một mục fix vào
-   backlog của làn gây lỗi.
+   (nhánh claude/integration/revert-<sha>), ghi vào ops/known-failures.md, và thêm một mục fix vào backlog của làn
+   gây lỗi. NHÃN CỬA MERGE: chạy `node ops/invariants.protected-area.ts` trên diff của PR đó rồi lấy trường `gate`,
+   ĐỪNG ghi cứng một nhãn ở đây — bản revert một workflow ra `automerge-delayed`, không phải `automerge`, và câu cũ
+   ("nhãn automerge") là một chỗ CHARTER nói ngược với chính lớp chặn của nó (`D-C07`, `KF-020`). Nếu PR revert chỉ
+   chạm đúng các file trong khối `crux-hotfix-scope` của issue cảnh báo thì gắn THÊM nhãn `hotfix`: lối đi nhanh của
+   `D-C07` (mục 3.3) bỏ khoảng chờ 12 giờ cho đúng ca này.
 2. Dọn dẹp: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
 3. Cập nhật ops/metrics.md: số file code so với số mục done, số lần revert, tỷ lệ main xanh.
 4. Nếu hôm nay là thứ Hai: chạy lại các kiểm tra tự động trong docs/assumptions.md. Giả định nào đổi trạng thái thì mở [QĐ]
