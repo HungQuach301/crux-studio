@@ -63,11 +63,12 @@ Bất biến I6 được thực thi ở đây: mọi con số hiển thị đề
 
 - deps: E-001, T-003
 - risk: high
-- status: ready
+- status: review
 - nguồn: CHARTER bất biến I6; spec KHỐI B
 - tiêu chí xong:
-  - Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo.
-  - Phản biện tối thiểu theo genre pack (`counterClaimsMin`) được kiểm bằng máy.
+  - ✅ Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo — `factRiskProblems` (`ops/scripts/check-fact-risk.ts`) so mọi token số của `script.text` với các token số trong `statement` của claim mà kịch bản trích (`script.claimIds`); số lạc ra mã `untraceable-number`. `check-contracts.ts` (việc số 9, phần của `pnpm contracts`) **chặn** khi `producer.impl !== 'stub'`, **ghi nhận** ở stub — cùng khuôn stub-aware để tập vàng không đổi (CHARTER 6.1). Nghiệm thu S05 "gieo 3 con số sai bắt cả 3" có test.
+  - ✅ Phản biện tối thiểu theo genre pack (`counterClaimsMin`) được kiểm bằng máy — đếm `topic.payload.counterClaims`, so với `limits.counterClaimsMin` của genre pack, mã `counterclaims-short`.
+- ✅ **Xong (review), 2026-09-23** (lượt `crux-worker-2`): `ops/scripts/check-fact-risk.ts` (logic thuần, trung tính thể loại) + `ops/test/check-fact-risk.test.ts` (11 bài, gồm bài tái hiện lỗi I2 và nghiệm thu S05) + việc số 9 của `check-contracts.ts`. Tập vàng stub hiện ghi nhận `counterclaims-short` (0 < 2) và **không** con số lạc nào — không đụng snapshot. Chặn thật tự bật khi xưởng biên tập lên `v1`.
 
 ### E-003 · Bộ eval cho prompt
 PR đổi prompt không được auto-merge nếu eval không đạt ngưỡng khai trong cấu hình.
