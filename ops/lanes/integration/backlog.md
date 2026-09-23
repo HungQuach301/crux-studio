@@ -627,7 +627,7 @@ muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bư
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~13:40Z; `ops/known-failures.md` `KF-015`; comment `09:46:12Z` trên PR `#42` (đã nêu đúng phần còn thiếu nhưng chưa ai nhận)
 - **Số hiệu I-017:** `I-015` đã bị PR `#112` nhận, `I-016` đã có mục riêng.
 - tiêu chí xong:
@@ -642,7 +642,48 @@ muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bư
     gọi vẫn thấy phần còn lại. Không nuốt lỗi — ca hỏng phải đọc được ở đầu ra.
   - `ops/known-failures.md` `KF-015` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
 
-### I-018 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
+### I-018 · `integrator-resolve.ts` gọi một cây hỏng cú pháp là `resolved` (KF-016)
+
+`fix`. Điều kiện đủ để bước 0 trả `outcome: "resolved"` và push hiện chỉ là **không bên nào xoá dòng**
+(đếm dòng xoá ở mỗi bên so với tổ tiên chung). Phép đếm đó đúng với ý định của nó — "gộp thuần cộng thêm
+thì an toàn" — nhưng nó đo **dòng**, còn thứ phải còn nguyên là **cú pháp**.
+
+Ca đã xảy ra thật, PR `#71` ngày 2026-09-22: hai phía cùng kết thúc một khối bằng dòng `});` giống hệt
+nhau, `main` viết thêm test **sau** dòng đó. `merge=union` giữ dòng chung một lần và đặt phần thêm của
+`main` vào **trước** nó, nên `});` đóng test cuối của nhánh biến mất. Không bên nào xoá dòng nào — phép
+đếm không thấy gì — và tool in `{"outcome":"resolved","files":["ops/test/check-workflows.test.ts"]}`, thoát
+`0`. `tsc` mới bắt được: `ops/test/check-workflows.test.ts(747,1): error TS1005: '}' expected`.
+
+Hai lượt bước 0 trước đó gộp **cùng** cây này mà không thấy, vì `pnpm check` đỏ sớm hơn ở `lint:workflows`
+nên chưa chạy tới `typecheck`. Tức lớp chặn duy nhất đang đứng giữa cây hỏng và `main` là **thứ tự các
+bước trong `pnpm check`**, không phải một phép kiểm có chủ đích.
+
+Vì sao nó đáng sửa ở cơ chế chứ không vá từng lượt: union được bật cho `ops/logs/**/*.jsonl`, nơi nó an
+toàn vì JSONL không có cú pháp lồng nhau. Nhưng `integrator-resolve.ts` áp cùng phép đếm cho **mọi** file
+nó gộp được, kể cả `.ts`, `.json` và `.yml` — những định dạng mà "không ai xoá dòng" không kéo theo "kết
+quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: lượt `crux-worker-1` 2026-09-22 ~16:45Z; `ops/known-failures.md` `KF-016`; `ops/logs/platform/P-010.jsonl`
+- **Số hiệu I-018:** `I-015` do PR `#112` giữ, `I-016` đã merge, `I-017` do PR `#150` giữ.
+- tiêu chí xong:
+  - `integrator-resolve.ts` kiểm **cây gộp còn đọc được** trước khi trả `resolved`, cho những định dạng có
+    cú pháp: ít nhất `.ts`/`.js` (parse), `.json` và `.yml`/`.yaml` (nạp). Không đọc được thì trả
+    `aborted-ineligible` kèm `reason` nói rõ file nào và lỗi gì — **không** trả `resolved` rồi để `pnpm
+    check` ở phía sau bắt, vì `check` có thể dừng ở một lỗi khác trước khi tới đó.
+  - Chỉ kiểm những file **tool vừa gộp** (`files` trong kết quả), không quét cả cây: bước 0 chạy ở đầu mọi
+    lượt worker, thêm một lượt quét toàn kho vào đó là thêm chi phí cho mọi lượt.
+  - Test tái hiện lỗi (bất biến I2, CI chặn): dựng hai nhánh mà union sinh ra đúng hình dạng trên (cùng một
+    dòng đóng khối ở cuối, một bên viết thêm sau nó), gọi tool. Bài kiểm phải **đỏ** trên bản `main` hiện
+    tại (tool trả `resolved`) và **xanh** sau bản sửa (`aborted-ineligible`).
+  - Phụ lục **P3 bước 0b** của `CHARTER.md` nói rõ: một cây `resolved` mà đỏ ở **lỗi cú pháp** là ca
+    `aborted-ineligible`, không phải "PR đỏ" — hai ca này đi hai đường khác nhau ở lượt sau (phụ lục P1
+    bước 2). Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+  - `ops/known-failures.md` `KF-016` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
+
+### I-019 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
 
 Tìm ra trong vòng soát chéo của `I-015` (reviewer ngữ cảnh sạch, PR `#112`). `I-015` chữa chỗ worker đọc
 `deps` **sai**; hai chỗ dưới đây là `deps` và `status` **viết sai trong chính backlog**, và cả hai im lặng:
@@ -661,10 +702,11 @@ Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi v
 - risk: low
 - status: ready
 - nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z
-- **Số hiệu I-018:** mục này mở ra trong PR `#112` với số `I-016`, đổi thành `I-017` lúc gộp `main`
-  lúc `11:32Z` (khi đó `I-016` vừa vào `main` qua PR `#132`). Lần gộp `main` này (`f61e318`, PR `#145`)
-  mang thêm một mục `I-017` **khác** vào `main` (KF-015, kho nông) — mục trên `main` đã chính danh nên
-  giữ nguyên, mục này lùi tiếp sang `I-018`. Giữ nguyên nội dung và `deps`.
+- **Số hiệu I-019:** mục này mở ra trong PR `#112` với số `I-016`, rồi lùi sang `I-017` (lúc `11:32Z`,
+  khi `I-016` vào `main` qua PR `#132`) và sang `I-018` (lúc `14:45Z`, khi `I-017` vào `main` qua PR
+  `#145`). Lần gộp `main` này mang thêm một mục `I-018` **khác** vào `main` (KF-016, cổng cú pháp của
+  `integrator-resolve.ts`) — mục trên `main` đã chính danh nên giữ nguyên, mục này lùi tiếp sang
+  `I-019`. Giữ nguyên nội dung và `deps`.
 - tiêu chí xong:
   - `readyQueue` (hoặc một phép kiểm cạnh nó) phát hiện vòng phụ thuộc và in ra thành một nhóm riêng,
     kèm đường đi của vòng. Test dựng một vòng hai mục và một vòng ba mục.
