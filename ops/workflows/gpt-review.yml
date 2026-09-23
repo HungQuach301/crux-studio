@@ -22,6 +22,16 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      # P-010 · chế độ chạy thử. `smoke-workflows.yml` gọi file này kèm
+      # `dry_run=true` sau mỗi lần `ops/workflows/**` đổi trên `main`, để lỗi
+      # quyền / lỗi cú pháp / lỗi lệnh lộ ra ngay thay vì nằm im tới lần một PR
+      # thật kích hoạt job. Chạy thử KHÔNG gọi OpenAI (tốn tiền) và KHÔNG đăng
+      # comment — hai tác dụng phụ thật duy nhất của job này.
+      dry_run:
+        description: 'Chạy thử: kiểm plumbing (checkout, install, fetch base), KHÔNG gọi OpenAI, KHÔNG đăng comment'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,7 +45,9 @@ jobs:
   gpt-review:
     name: gpt-review
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # Chạy trên PR (nhánh thật) HOẶC workflow_dispatch (để `smoke-workflows.yml`
+    # gọi được ở chế độ dry_run sau khi `ops/workflows/**` đổi trên main).
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     # `continue-on-error`: đây là job ADVISORY (CHARTER mục 6.4 không nói nó
     # chặn merge, chỉ nói "soát chéo"). Thiếu secret là NHÁNH BÌNH THƯỜNG ở
     # mọi PR cho tới khi chủ dự án thêm `OPENAI_API_KEY` — không được để nó
@@ -55,19 +67,47 @@ jobs:
       - name: Soát chéo bằng GPT (thiếu OPENAI_API_KEY thì tự bỏ qua, không tự tạo secret)
         id: review
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Chạy thử (P-010). Tác dụng phụ thật (gọi OpenAI, đăng comment) CHỈ
+          # được phép trên sự kiện `pull_request`. Mọi sự kiện khác —
+          # workflow_dispatch của smoke HAY một lần bấm tay — luôn là chạy thử,
+          # kể cả khi quên tick `dry_run`: không có ngữ cảnh PR để đăng comment
+          # nên chạy thật ở đó vừa tốn tiền vừa hỏng. Trên PR thì `inputs` rỗng
+          # → 'false' → chạy thật như thường.
+          DRY_RUN: ${{ github.event_name != 'pull_request' || inputs.dry_run }}
+          # Trên PR là nhánh đích; trên workflow_dispatch (chạy thử) không có
+          # ngữ cảnh PR nên lùi về 'main'.
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'main' }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
+          git fetch --no-tags origin "$BASE_REF"
+          # Chạy thử (P-010) vẫn CÓ GIÁ TRỊ: đã qua checkout, cài phụ thuộc và
+          # fetch base thật ở trên — đủ để lộ lỗi quyền / cú pháp / thiếu lệnh.
+          # Chỉ BỎ hai tác dụng phụ thật: gọi OpenAI (tốn tiền) và đăng comment.
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "CHẠY THỬ — không gọi OpenAI, không đăng comment. ĐỊNH soát diff so với origin/$BASE_REF."
+            echo "posted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Z5 (check-workflows.ts) là kiểm CHỮ đọc theo từng dòng: nó KHÔNG
+          # lần theo một secret được ánh xạ vào biến env rồi dùng gián tiếp —
+          # pattern cũ (env OPENAI_API_KEY + kiểm `${OPENAI_API_KEY:-}`) tuy
+          # đúng ngữ nghĩa vẫn bị Z5 đỏ. Nên khẳng định OPENAI_API_KEY KHÔNG
+          # rỗng NGAY tại lần dùng đầu tiên, tham chiếu thẳng giá trị secret
+          # (đúng pattern Z5 sanctioned trong ops/test/check-workflows.test.ts).
+          # Job này advisory (continue-on-error), nên thiếu secret là NHÁNH BÌNH
+          # THƯỜNG: bỏ qua soát chéo, KHÔNG exit 1, không tự tạo secret.
+          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
             echo "::notice::thiếu secret OPENAI_API_KEY — bỏ qua soát chéo bằng GPT (mục platform/P-003), không tự tạo secret."
             echo "posted=false" >> "$GITHUB_OUTPUT"
-          # Dùng làm điều kiện `if` nên KHÔNG kích hoạt `set -e` (chủ ý —
-          # ops/scripts/gpt-review.ts tự phân biệt "thành công" và "lỗi gọi
-          # OpenAI" bằng mã thoát; cả hai đều là nhánh bình thường của một
-          # job advisory, không phải lỗi cú pháp của chính bước này).
-          elif node ops/scripts/gpt-review.ts \
-              --base "origin/${{ github.event.pull_request.base.ref }}" \
+            exit 0
+          fi
+          # Truyền secret cho script QUA BIẾN MÔI TRƯỜNG (không thành đối số nên
+          # không lọt vào argv), và dùng làm điều kiện `if` nên KHÔNG kích hoạt
+          # `set -e` (chủ ý — ops/scripts/gpt-review.ts tự phân biệt "thành công"
+          # và "lỗi gọi OpenAI" bằng mã thoát; cả hai đều là nhánh bình thường
+          # của một job advisory, không phải lỗi cú pháp của chính bước này).
+          if OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" node ops/scripts/gpt-review.ts \
+              --base "origin/$BASE_REF" \
               --out "$RUNNER_TEMP/gpt-review-comment.md"; then
             echo "posted=true" >> "$GITHUB_OUTPUT"
           else
