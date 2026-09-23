@@ -110,7 +110,7 @@ test('Z7 · `isStep0Ref` nhận đủ năm hình dạng đã từng được ghi
   }
 });
 
-test('Z7 · `isStep0Ref` KHÔNG nhận nhầm dòng việc thật', () => {
+test('Z7 · `isStep0Ref` KHÔNG nhận nhầm `ref` nào NGOÀI file dùng chung cũ', () => {
   for (const ref of [
     'integration/I-018',
     'platform/P-014',
@@ -120,18 +120,34 @@ test('Z7 · `isStep0Ref` KHÔNG nhận nhầm dòng việc thật', () => {
   ]) {
     assert.equal(isStep0Ref(ref), false, ref);
   }
+  // Đánh đổi đã khai ở docblock của `STEP0_LEGACY_REF`: file dùng chung cũ
+  // TRỘN dòng bước 0 với 8 dòng việc thật của mục `P-016`, và cả 60 dòng
+  // mang cùng một `ref` nên không tách được. Luật loại cả cụm — hướng lệch
+  // an toàn (làn trông cũ hơn thật), và bài kiểm này nói thẳng ra thay vì
+  // để tiêu đề ở trên nghe như luật không bỏ sót gì.
+  assert.equal(isStep0Ref(STEP0_LEGACY_REF), true);
 });
 
-test('Z7 · `watchdog.yml` mang ĐÚNG hằng `STEP0_REF_PATTERN` — hai bản chép lệch nhau là một nguồn nhịp tim biến mất', () => {
+test('Z7 · ĐÚNG DÒNG `jq` của `watchdog.yml` mang hằng `STEP0_REF_PATTERN` — không phải chỉ đâu đó trong file', () => {
   const yml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
-  assert.ok(
-    yml.includes(STEP0_REF_PATTERN),
-    `\`ops/workflows/watchdog.yml\` không chứa nguyên văn ${JSON.stringify(STEP0_REF_PATTERN)}. ` +
-      'Dấu hiệu số 5 và `lane-heartbeat.ts` phải lọc dòng bước 0 bằng cùng một biểu thức.',
+  // So trên CẢ FILE là một chiều fail-open thật: một dòng chú thích chép
+  // nguyên văn hằng cũng giữ bài kiểm xanh, trong khi `jq` thật lọc bằng
+  // một biểu thức khác hẳn. Vòng soát ngữ cảnh sạch dựng đúng ca đó và bài
+  // kiểm bản đầu vẫn 17/17 xanh. Nên chỉ đọc dòng THỰC THI.
+  const jqLines = yml
+    .split('\n')
+    .filter((raw) => raw.includes('jq ') && !raw.trimStart().startsWith('#'));
+  assert.ok(jqLines.length > 0, '`watchdog.yml` không còn dòng `jq` nào — dấu hiệu số 5 đã biến mất?');
+
+  const step0Filter = jqLines.filter((raw) => raw.includes(STEP0_LEGACY_REF));
+  assert.equal(
+    step0Filter.length,
+    1,
+    `Cần đúng MỘT dòng \`jq\` lọc dòng bước 0 (nhận ra bằng ${JSON.stringify(STEP0_LEGACY_REF)}), thấy ${step0Filter.length}.`,
   );
   assert.ok(
-    yml.includes(STEP0_LEGACY_REF),
-    `\`ops/workflows/watchdog.yml\` không chứa ${JSON.stringify(STEP0_LEGACY_REF)}.`,
+    step0Filter[0]!.includes(STEP0_REF_PATTERN),
+    `Dòng \`jq\` của dấu hiệu số 5 không lọc bằng nguyên văn ${JSON.stringify(STEP0_REF_PATTERN)}:\n${step0Filter[0]}`,
   );
 });
 
@@ -142,6 +158,46 @@ test('Z7 · ngưỡng theo làn: cùng một khoảng 10 giờ, `platform` đỏ
   const beats = laneHeartbeats([line(at, 'platform', 'platform/P-014'), line(at, 'visual', 'visual/V-003')], NOW);
   assert.equal(beatOf(beats, 'platform').verdict, 'stale');
   assert.equal(beatOf(beats, 'visual').verdict, 'fresh');
+});
+
+test('Z7 · mốc Ở TƯƠNG LAI ra `future`, KHÔNG ra `fresh` — số âm nhỏ hơn mọi ngưỡng', () => {
+  // Ca thật, không dựng: dòng log của chính PR này mang `at` sớm hơn đồng
+  // hồ ~10 phút và làn `platform` hiện ra `-0,14h … fresh`. Một dòng ghi
+  // nhầm năm thì làn đó KHÔNG BAO GIỜ `stale` được, và không gì đỏ.
+  const beats = laneHeartbeats([line('2026-09-24T12:00:00.000Z', 'visual', 'visual/V-003')], NOW);
+  const visual = beatOf(beats, 'visual');
+  assert.equal(visual.verdict, 'future');
+  assert.equal(visual.hoursSinceLastBeat, -24);
+  assert.notEqual(visual.verdict, 'fresh');
+});
+
+test('Z7 · lệch đồng hồ vài giây vẫn là `fresh` — dung sai, không phải báo động', () => {
+  const beats = laneHeartbeats([line('2026-09-23T12:00:10.000Z', 'visual', 'visual/V-003')], NOW);
+  assert.equal(beatOf(beats, 'visual').verdict, 'fresh');
+});
+
+test('Z7 · `future` ra dòng cảnh báo riêng, nói rõ làn đó không bao giờ `stale` được', () => {
+  const problems = laneHeartbeatProblems(
+    laneHeartbeats([line('2026-09-24T12:00:00.000Z', 'visual', 'visual/V-003')], NOW),
+  );
+  const futureLine = problems.find((p) => p.includes('TƯƠNG LAI'));
+  assert.ok(futureLine !== undefined, `không có dòng cho ca future: ${JSON.stringify(problems)}`);
+  assert.match(futureLine, /`visual`/);
+  assert.match(futureLine, /KHÔNG BAO GIỜ/);
+});
+
+test('Z7 · thiếu ngưỡng của một làn thì NÉM — không để `> undefined` biến nó thành `fresh` vĩnh viễn', () => {
+  const broken = { ...LANE_THRESHOLD_HOURS } as Record<string, number>;
+  delete broken.visual;
+  assert.throws(
+    () =>
+      laneHeartbeats(
+        [line('2026-09-01T00:00:00.000Z', 'visual', 'visual/V-003')],
+        NOW,
+        broken as typeof LANE_THRESHOLD_HOURS,
+      ),
+    /visual/,
+  );
 });
 
 test('Z7 · bên gọi thay được bảng ngưỡng', () => {

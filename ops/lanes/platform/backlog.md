@@ -283,7 +283,7 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     cùng trọn sóng 3 vẫn đang chờ — đúng cách sóng 1 đã làm.
 - **Sóng 3 — xong một phần: Z7** (lượt `crux-worker-1`, 2026-09-23).
   - **Z7** (nhịp tim theo từng làn): `ops/scripts/lane-heartbeat.ts` (`laneHeartbeats`, `laneHeartbeatProblems`),
-    script `pnpm lanes:heartbeat`, **17** bài ở `ops/test/lane-heartbeat.test.ts`. Chỗ Z7 khác dấu hiệu số 5 của
+    script `pnpm lanes:heartbeat`, **21** bài ở `ops/test/lane-heartbeat.test.ts`. Chỗ Z7 khác dấu hiệu số 5 của
     `watchdog` nằm gọn trong một câu: dấu hiệu số 5 lấy `max` trên **mọi** dòng bước 0, mà bước 0 ghi một dòng ở
     **mọi** lượt worker (phụ lục P3 bước 0d) — nên chừng nào còn một worker thở thì nhịp tim còn mới, bất kể chín
     làn kia đã im mấy ngày. **Đo được, không suy** (2026-09-23T14:50Z, `readRunLogs` trên 227 dòng): làn
@@ -293,10 +293,26 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     quan trọng nhất: bài kiểm dựng đúng ca "làn chỉ còn dòng bước 0 là mới" rồi khẳng định bỏ luật loại dòng bước
     0 thì nó ra `fresh` — tức luật không bao giờ đỏ được.
   - **Phép so chống trôi, và nó bắt được lỗi ngay lần đầu chạy:** bài kiểm đọc thẳng `ops/workflows/watchdog.yml`
-    và đòi nó mang **nguyên văn** hằng `STEP0_REF_PATTERN`. Bản đầu đỏ đúng chỗ phải đỏ — dấu hiệu số 5 đang lọc
-    bằng `(^|/)(step0|P3-run)-`, **thiếu hai hình dạng** `ref` mà `P-023` đã liệt kê: `P1-step0-` (chuỗi `step0-`
-    đứng sau `P1-`, không sau `/`, nên không khớp; `ops/logs/platform/` có đúng một dòng như vậy) và `P3-daily-`.
-    Đã sửa `watchdog.yml` trong cùng PR.
+    và đòi **đúng dòng `jq` thực thi** mang **nguyên văn** hằng `STEP0_REF_PATTERN`. Bản đầu đỏ đúng chỗ phải đỏ
+    — dấu hiệu số 5 đang lọc bằng `(^|/)(step0|P3-run)-`, **thiếu hai hình dạng** `ref` mà `P-023` đã liệt kê:
+    `P1-step0-` (chuỗi `step0-` đứng sau `P1-`, không sau `/`, nên không khớp; `ops/logs/platform/` có đúng một
+    dòng như vậy) và `P3-daily-`. Đã sửa `watchdog.yml` trong cùng PR.
+  - **Vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) tìm ra bốn chỗ, đã sửa trước khi rời nháp.** Ba trong bốn là
+    chỗ luật mới **không đỏ khi phải đỏ** — tức đúng hình dạng mà chính mục này tồn tại để giết:
+    - **Mốc ở TƯƠNG LAI ⇒ `fresh` vĩnh viễn.** Đo trên chính dòng log của PR: `at` bản đầu ghi
+      `2026-09-23T15:05:00Z` trong khi đồng hồ lúc ghi là ~14:54Z, và tool in ra `platform  -0.14h  fresh`. Một
+      số âm nhỏ hơn **mọi** ngưỡng, nên một dòng ghi nhầm năm làm làn đó không bao giờ `stale` được. Thêm verdict
+      `future`, dung sai `FUTURE_TOLERANCE_HOURS` = 1 phút, một dòng cảnh báo riêng, 3 bài kiểm; `at` của dòng log
+      đã sửa về giờ thật (I8).
+    - **Phép so chống trôi quá rộng.** Bản đầu so `STEP0_REF_PATTERN` trên **cả file**, nên một dòng chú thích
+      chép nguyên văn hằng cũng giữ bài kiểm xanh trong khi `jq` thật lọc bằng `"KHONG-KHOP-GI-CA"` — vòng soát
+      dựng đúng ca đó và 17/17 vẫn xanh. Nay chỉ đọc dòng `jq` thực thi; phá y hệt ca đó ra `not ok 9`.
+    - **Thiếu ngưỡng của một làn ⇒ `> undefined` = false ⇒ `fresh` vĩnh viễn.** Chặn cứng bằng một phép ném.
+    - **Hình dạng nuốt lỗi vô hình.** `|| VAR=…` nuốt lỗi y hệt `|| true` mà luật Z9 (`undocumentedSwallows`)
+      **không thấy** — phá thử `X=$(false) || X="…"` không chú thích thì `pnpm lint:workflows` vẫn `EXIT 0`. PR
+      này **không** đưa hình dạng đó vào cây (dùng `if ! VAR=$(…); then`), và ghi giới hạn vào ô Z9 của
+      `ops/known-failures.md` thay vì để ô đó khai "✅ Đã có" trần. Nới `undocumentedSwallows` là đổi một luật
+      đang chạy, có thể đỏ chỗ khác — một PR riêng.
   - **Cố ý để lại, nói rõ chứ không im lặng.** Dấu hiệu số 6 **không tự mở issue**, nó chỉ nối bảng nhịp tim vào
     thân cảnh báo khi đã có dấu hiệu khác nổ. Lý do: một làn im là chỗ nghẽn của **máy**, không phải việc chủ dự
     án bấm được (CHARTER 1.3), mà `watchdog` bình luận **lại mỗi giờ** chừng nào dấu hiệu còn — một dấu hiệu kéo

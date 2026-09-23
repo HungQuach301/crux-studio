@@ -201,12 +201,16 @@ jobs:
           #     độc lập của Z7 đi qua bản tin ngày (phụ lục P2 gọi
           #     `pnpm lanes:heartbeat`), tốn 0 lần thao tác thêm của chủ dự án.
           #
-          #     `|| LANE_REPORT=…`: script thoát khác 0 khi KHÔNG quét được
-          #     `ops/logs`. Nuốt ở đây là có chủ đích và hẹp — đây là MỘT
-          #     trong sáu dấu hiệu, không được phép giết năm dấu hiệu kia
-          #     (cùng lý do với `|| true` của dấu hiệu số 3).
-          LANE_REPORT=$(node ops/scripts/lane-heartbeat.ts) \
-            || LANE_REPORT="⚠ Không đo được nhịp tim theo làn (Z7) — xem log của lượt chạy này."
+          #     Dùng `if !` chứ KHÔNG dùng `|| LANE_REPORT=…`: script thoát
+          #     khác 0 khi không quét được `ops/logs`, và bắt lỗi đó là có
+          #     chủ đích (đây là MỘT trong sáu dấu hiệu, không được phép giết
+          #     năm dấu hiệu kia). Nhưng `|| VAR=…` là một hình dạng nuốt lỗi
+          #     mà luật Z9 (`undocumentedSwallows`) KHÔNG nhìn thấy — nó chỉ
+          #     bắt `|| true` và `continue-on-error`. Đưa một hình dạng vô
+          #     hình vào cây là tự mở một chỗ nhóm Z mới, nên viết tường minh.
+          if ! LANE_REPORT=$(node ops/scripts/lane-heartbeat.ts); then
+            LANE_REPORT="⚠ Không đo được nhịp tim theo làn (Z7) — xem log của lượt chạy này."
+          fi
           echo "$LANE_REPORT"
 
           if [ "$TEST" = "true" ]; then
