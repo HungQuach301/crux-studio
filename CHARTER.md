@@ -594,6 +594,13 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 
 ## 14. Nhật ký thay đổi
 
+**C7 · 2026-09-22 · quyết định `reversible` ở issue #107, phương án A.** Bảng lý do "worker phải nhận PR nào" có **bốn** hàng thay vì ba. Mục `platform/P-025`.
+- **Phụ lục P1 bước 2 · lý do thứ ba `red-after-merge`.** Một PR xung đột với `main` kẹt được theo hai cách, và bảng cũ chỉ đếm một: công cụ tự gộp bó tay (`aborted-ineligible`, đã có) và công cụ gộp **sạch** rồi chạy thử thì **đỏ** (chưa có). Cách thứ hai để nhánh PR không đổi, nên CI trên nhánh vẫn xanh và không chỉ báo nào đỏ — nhóm **Z**. PR #81 kẹt như vậy ba lượt liên tiếp mà không worker nào nhận.
+- **Thứ tự.** `ci-red` → `unhandled-comment` → `red-after-merge` → `aborted-ineligible`. Lý do mới đứng **sau** comment của chủ dự án, không trước: đẩy một chỗ kẹt của máy lên trước một comment của anh là tiêu thời gian của anh để tiết kiệm thời gian của máy, ngược thước đo mục 1.3.
+- **Phụ lục P3 bước 0b · nhánh ĐỎ nay phải ghi đủ ba số** (giờ kẹt · làn sở hữu · số lượt liên tiếp), y như nhánh `aborted-ineligible` đã đòi từ `P-022`. Không có ba số đó thì `pickPrToHandle` không có nguồn để đếm, và hàng mới của bảng lý do thành hàng chết.
+- **Phụ lục P2 · bản tin đếm cả hai cách kẹt**, qua một hàm duy nhất `stuckStreak` thay vì bắt bản tin nhớ hai trường.
+- **Số hiệu C7, không phải C6:** `C6` đã bị PR #79 (`verify/VF-G12`) nhận và PR đó còn đang mở. Ghi ra đây để lượt sau không tưởng là thiếu một mục.
+
 **C5 · 2026-09-21 · quyết định `D-C04`.** Bất biến **I8** phân vùng log tới mức **mục**: `ops/logs/<lane>/<id>.jsonl` thay cho `ops/logs/<lane>.jsonl`. Chủ dự án trả lời **B** trên issue #14. Chi tiết và lý do ở `docs/decisions/D-C04.md`.
 - **Mục 3 · dòng I8.** Một file cho mỗi mục backlog hoặc mỗi tập, nên hai PR trong cùng một làn không bao giờ chạm cùng một file. `KF-005` hết nguyên nhân gốc thay vì được vá.
 - **Mục 7 · File nóng.** "Log tách theo làn" thành "log tách tới mức mục", kèm lý do: 2–3 worker song song làm hai mục trong một làn là chế độ chạy bình thường.
@@ -664,16 +671,26 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    Bước 0 rẻ: liệt kê PR xung đột, gọi ops/scripts/integrator-resolve.ts, chỉ chạy pnpm check khi có gộp thật.
    Không có PR nào xung đột thì in một dòng "không có PR xung đột" rồi đi tiếp — không bao giờ bỏ qua im lặng.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
-2. Ưu tiên (mục P-022, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó, đừng tự suy):
-   nếu có PR đang mở với CI đỏ, hoặc có comment chưa xử lý, HOẶC lượt bước 0 gần nhất của PR đó trả
-   `aborted-ineligible` (integrator đã bó tay, và "cần người" phải có người nhận — không rơi vào khoảng
-   trống giữa integrator và worker), và chưa có worker nào đang xử lý (không có commit mới trong 2 giờ):
-   xử lý đúng MỘT PR đó rồi kết thúc. Ba lý do xếp theo đúng thứ tự trên khi nhiều PR cùng đủ điều kiện.
-   Với ca thứ ba (aborted-ineligible), việc cần làm là gộp `main` vào nhánh đó bằng git bình thường,
-   giải xung đột thật bằng phán đoán (khác bước 0 của phụ lục P3 — bước đó CẤM sửa tay; ở đây PR đã có
-   chủ, worker đọc PR để biết nó định làm gì rồi mới giải, không phải giải mù), chạy `pnpm check` VÀ
-   `pnpm replay`, xanh thì push. Worker "nhận" không cần cùng làn với PR — biết đọc PR đó định làm gì là đủ;
-   làn suy từ tên nhánh (`laneFromBranch`) chỉ để ghi log cho đúng ngữ cảnh.
+2. Ưu tiên (mục P-022 và P-025, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó,
+   đừng tự suy): nếu có PR đang mở với CI đỏ, hoặc có comment chưa xử lý, hoặc lượt bước 0 gần nhất
+   của PR đó gộp SẠCH rồi chạy thử thì ĐỎ (`red-after-merge` — mục P-025), HOẶC lượt bước 0 gần nhất
+   trả `aborted-ineligible` (integrator đã bó tay, và "cần người" phải có người nhận — không rơi vào
+   khoảng trống giữa integrator và worker), và chưa có worker nào đang xử lý (không có commit mới trong
+   2 giờ): xử lý đúng MỘT PR đó rồi kết thúc. Bốn lý do xếp theo đúng thứ tự trên khi nhiều PR cùng đủ
+   điều kiện.
+   Hai ca cuối là hai việc KHÁC nhau, đừng trộn:
+   - `aborted-ineligible`: gộp `main` vào nhánh đó bằng git bình thường rồi **giải xung đột** bằng phán
+     đoán (khác bước 0 của phụ lục P3 — bước đó CẤM sửa tay; ở đây PR đã có chủ, worker đọc PR để biết nó
+     định làm gì rồi mới giải, không phải giải mù).
+   - `red-after-merge`: **không có xung đột nào để giải** — nhánh gộp sạch. Việc cần làm là gộp `main` vào,
+     đọc chỗ đỏ, rồi **sửa code thật** trên nhánh đó.
+   Cả hai ca: chạy `pnpm check` VÀ `pnpm replay`, xanh thì push. Worker "nhận" không cần cùng làn với PR
+   — biết đọc PR đó định làm gì là đủ; làn suy từ tên nhánh (`laneFromBranch`) chỉ để ghi log cho đúng
+   ngữ cảnh.
+
+   **Vì sao `red-after-merge` là lý do thứ ba, không phải thứ hai:** đặt nó trước "comment chưa xử lý"
+   sẽ đẩy một chỗ kẹt của máy lên trước một comment của chủ dự án, tức tiêu thời gian của anh để tiết
+   kiệm thời gian của máy — ngược thước đo mục 1.3.
 
    **Vì sao không ưu tiên "worker của làn sở hữu" trước:** hệ thống này không có khái niệm worker gắn với
    một làn — phụ lục này mở bằng "Bạn là worker `<N>`", không phải "worker của làn X", và MỌI worker duyệt
@@ -713,10 +730,14 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Dạng "#19 A, #14 B" là câu trả lời cho các quyết định; dạng "hoàn tác #N" là phủ quyết một reversible.
    Ghi lại những gì đọc được vào bản tin hôm nay, mục "Đã nhận câu trả lời", để worker xử lý ở lượt sau.
 
-2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang xung đột với main kèm
-   số giờ kẹt và số lượt `aborted-ineligible` liên tiếp (mục P-022, đọc **các dòng bước 0** bằng `readRunLogs`
-   trên cả `ops/logs` — từ mục `P-023` chúng nằm ở `ops/logs/integration/step0-*.jsonl`, một file mỗi lượt, cộng
-   các dòng cũ còn lại ở `ops/logs/platform/P-016.jsonl`; đừng neo vào một tên file);
+2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang **kẹt ở hàng đợi
+   merge** — xung đột với main, HOẶC gộp sạch rồi chạy thử thì đỏ (mục P-025; PR loại này KHÔNG xung đột,
+   nên đừng lọc theo chữ "xung đột" mà bỏ sót nó) — kèm số giờ kẹt và số lượt kẹt liên tiếp, cả
+   `aborted-ineligible` (mục P-022) lẫn `red-after-merge` (mục P-025). Hai chuỗi đó đọc từ **các dòng
+   bước 0**, bằng `readRunLogs` trên cả `ops/logs` — từ mục `P-023` chúng nằm ở
+   `ops/logs/integration/step0-*.jsonl`, một file mỗi lượt, cộng các dòng cũ còn lại ở
+   `ops/logs/platform/P-016.jsonl`; đừng neo vào một tên file. Có hai chuỗi rồi thì gộp lại bằng
+   `stuckStreak` của `ops/scripts/pr-triage.ts` (hàm thuần trên hai con số, nó KHÔNG tự đọc log);
    PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3; và số liệu **Tiến độ**
@@ -737,11 +758,16 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Đang chờ merge
      Mỗi PR automerge-delayed một dòng: link · còn mấy giờ · chạm gì trong vùng bảo vệ.
      Nói rõ: không làm gì thì nó tự vào main; muốn giữ lại thì comment "dừng" ngay trên PR đó.
-     PR nào đang xung đột (mục P-022): thay "còn mấy giờ" bằng "xung đột, kẹt <giờ> giờ" — đồng hồ 12
-     giờ không chạy khi đang xung đột. Từ lượt `aborted-ineligible` liên tiếp thứ 3 trở đi (đọc các dòng bước 0
-     bằng `readRunLogs` trên cả `ops/logs` — `ops/logs/integration/step0-*.jsonl` từ mục `P-023`, cộng các dòng
-     cũ ở `ops/logs/platform/P-016.jsonl` — đừng tự `cat` và đừng neo vào một tên file), thêm "· N lượt liên tiếp không
-     tự giải được" ngay trên dòng đó, để nó không im lặng như đã từng xảy ra (nhóm Z). PR mang nhãn
+     PR nào đang kẹt ở hàng đợi merge — xung đột (mục P-022), HOẶC gộp sạch rồi đỏ (mục P-025, PR loại
+     này gộp SẠCH nên không được lọc theo chữ "xung đột"): thay "còn mấy giờ" bằng "kẹt <giờ> giờ" kèm
+     cách kẹt ("xung đột" hoặc "gộp sạch rồi đỏ") — đồng hồ 12 giờ không chạy khi PR chưa merge được.
+     Từ lượt kẹt liên tiếp thứ 3 trở đi (đọc các dòng bước 0 bằng `readRunLogs` trên cả `ops/logs` —
+     `ops/logs/integration/step0-*.jsonl` từ mục `P-023`, cộng các dòng cũ ở
+     `ops/logs/platform/P-016.jsonl` — đừng tự `cat` và đừng neo vào một tên file; chuỗi lấy bằng
+     `stuckStreak`), thêm "· N lượt liên tiếp không tự giải được" ngay trên dòng đó, để nó không im lặng
+     như đã từng xảy ra (nhóm Z). Đếm CẢ HAI cách kẹt: `aborted-ineligible` và `red-after-merge` (gộp
+     sạch rồi đỏ, mục P-025) — PR #81 kẹt theo cách thứ hai ba lượt liên tiếp mà không dòng nào nói ra.
+     PR mang nhãn
      `owner-merge` mà cũng vướng ca này thì thêm cùng dạng dòng ngay dưới các dòng `automerge-delayed`,
      ghi rõ nhãn `owner-merge` để phân biệt — mục này không đợi cổng merge nào để đáng được thấy.
 
@@ -791,7 +817,14 @@ Làn integration của Crux Studio.
       - `outcome: "resolved"`, hoặc `"clean"` **có** commit merge mới (kiểm bằng `git log -1` đổi so với trước khi
         gọi tool — trường hợp PR đã đứng sau `main` sẵn thì `"clean"` không tạo commit gì, bỏ qua PR đó, không push):
         chạy `pnpm check` VÀ `pnpm replay`. Xanh thì `git push`. Đỏ thì `git reset --hard` về commit trước khi gộp
-        (không push — đỏ sau khi gộp là tín hiệu thật, không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do.
+        (không push — đỏ sau khi gộp là tín hiệu thật, không được nuốt), và đưa PR vào ghi chú của lần chạy kèm lý do,
+        **cộng đúng ba số như ca `aborted-ineligible` dưới đây**: số giờ đã kẹt, làn sở hữu (`laneFromBranch`), và
+        **số lượt `red-after-merge` liên tiếp cùng chữ ký** tính cả lượt này (mục `P-025`). Ba số này KHÔNG tuỳ chọn:
+        thiếu chúng thì `pickPrToHandle` ở phụ lục P1 bước 2 không có nguồn để đếm, và PR kẹt kiểu này lại không có
+        chủ — đúng chỗ PR #81 đã rơi vào ba lượt liên tiếp. **Chuỗi này về 0 khi PR có commit mới sau dòng log đó**,
+        không phải khi PR "hết xung đột": PR kẹt kiểu này vốn đã gộp sạch, và bước 0a chỉ liệt kê PR đang xung đột
+        nên nó không bao giờ được đo lại ở đây. Thiếu luật về 0 thì PR đã chữa xong vẫn bị chọn lại mỗi lượt mà
+        không gì đỏ.
       - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
         `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt**, tên file gây
         vướng (có sẵn trong `reason` của kết quả), **làn sở hữu** (suy từ tên nhánh bằng `laneFromBranch`,
