@@ -34,7 +34,7 @@ import {
   type GhPr,
 } from '../scripts/digest-metrics.ts';
 import type { BacklogItem } from '../scripts/backlog-status.ts';
-import type { LaneName, RunLogLine } from '@crux/kernel';
+import { step0LogRef, type LaneName, type RunLogLine } from '@crux/kernel';
 import { conflictRows } from '../scripts/conflict-watch.ts';
 
 const NOW = new Date('2026-09-21T18:00:00.000Z');
@@ -560,6 +560,24 @@ test('computeProgress: nút thắt người đứng trước máy; đếm đúng
   assert.equal(computeProgress(new Map(), [], [], 2, 5, now).bottleneck, 'người'); // người thắng máy
   assert.equal(computeProgress(new Map(), [], [], 0, 3, now).bottleneck, 'máy');
   assert.equal(computeProgress(new Map(), [], [], 0, 0, now).bottleneck, 'không tắc');
+});
+
+test('P-036 · đếm cả dòng bước 0 hình dạng P-023 (`integration/step0-…`), không chỉ file phẳng cũ', () => {
+  // Tái hiện lỗi nhóm Z ở bản tin #193: sau khi P-023 vào `main`, mọi dòng
+  // bước 0 mang `ref` do `step0LogRef` sinh (`integration/step0-…`). `isStep0Line`
+  // cũ chỉ khớp `platform/P-016`, nên số lượt routine tụt về 0 im lặng. Trước
+  // bản vá dòng này ra 0; sau bản vá ra 3 (không đếm dòng `kind: stage` và dòng
+  // mục thường trùng cửa sổ thời gian).
+  const now = new Date('2026-09-23T14:00:00.000Z');
+  const logs: RunLogLine[] = [
+    { at: '2026-09-23T12:26:03.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-23T12:26:03.000Z', 'crux-worker-2'), status: 'ok', durationMs: 0, costUsd: 0 },
+    { at: '2026-09-23T12:38:30.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-23T12:38:30.000Z', 'crux-worker-1'), status: 'ok', durationMs: 0, costUsd: 0 },
+    step0Line('2026-09-23T06:00:00.000Z'), // hình dạng cũ `platform/P-016`, vẫn phải đếm
+    { at: '2026-09-21T06:00:00.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-21T06:00:00.000Z', 'crux-worker-3'), status: 'ok', durationMs: 0, costUsd: 0 }, // ngoài 24h
+    { at: '2026-09-23T12:00:00.000Z', lane: 'integration', kind: 'stage', ref: step0LogRef('2026-09-23T12:00:00.000Z', 'crux-worker-1'), status: 'ok', durationMs: 0, costUsd: 0 }, // kind stage → không tính
+    { at: '2026-09-23T12:00:00.000Z', lane: 'platform', kind: 'lane', ref: 'platform/P-019', status: 'ok', durationMs: 0, costUsd: 0 }, // dòng mục thường → không tính
+  ];
+  assert.equal(computeProgress(new Map(), [], logs, 0, 0, now).routineRuns24h, 3);
 });
 
 test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí xong của P-019', () => {

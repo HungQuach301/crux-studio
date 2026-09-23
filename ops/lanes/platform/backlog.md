@@ -781,3 +781,20 @@ Hệ quả đo được, không phải suy đoán: **17 PR đang mở, CI xanh c
   - ✅ Ghi `ops/known-failures.md` **KF-019**.
   - ⬜ **Câu hỏi còn mở, không thuộc phạm vi PR này:** vì sao CI của #42 xanh trong khi `lint:workflows` bắt được bốn chỗ này? Giả thuyết là `KF-002` (GitHub không dựng lần chạy cho commit cuối của PR, nên nhãn xanh là của một commit cũ hơn). Chưa đo, nên chưa viết vào KF-019 như một khẳng định. Nếu đúng thì lỗ hổng lớn hơn một file: **mọi** PR đều có thể merge với một commit chưa bao giờ chạy CI. Đáng một mục riêng của làn `verify`.
 - **mã mục nhận lúc 2026-09-22 23:4x giờ UTC**: `P-030` là mã cao nhất trên `main` **và** trên cả 17 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-031` không đụng ai.
+
+### P-036 · `digest-metrics.ts` đếm 0 lượt routine sau P-023 vì `isStep0Line` chỉ khớp file phẳng cũ
+
+Bản tin `#193` (2026-09-23) in **`Lượt chạy routine 24h: 0`** rồi tự khai ⚠️ ngay bên cạnh: `digest-metrics.ts` in ra 0 vì `isStep0Line` chưa mở cho `ref` mới. Đo được, không suy: `routineRuns24h` lọc dòng bước 0 bằng `isStep0Line`, mà hàm đó chỉ khớp `ref === 'platform/P-016'` — hình dạng **file phẳng cũ**. Từ khi `platform/P-023` vào `main`, mọi dòng bước 0 mang `ref` do `step0LogRef` sinh (`integration/step0-<mốc>-<routine>`), nên **không dòng nào** khớp và số lượt tụt về 0. Đúng nhóm **Z**: chính comment doc của `isStep0Line` đã khai trước "khi P-023 vào `main`, mở rộng cho khớp — nếu không số lượt tụt về 0 một cách im lặng", nhưng việc mở rộng chưa ai làm, và không gì đỏ.
+
+Con số này là số để kiểm giả định `G3` (trần lượt chạy routine mỗi ngày). Sai thành 0 làm mục "Tiến độ" của bản tin (và số liệu `#131`) mất một nguồn mà không cảnh báo.
+
+- deps: —
+- risk: low — số hiển thị sai, không chặn merge; nhưng giấu một tín hiệu `G3`.
+- status: review
+- nguồn: bản tin `#193` (câu trả lời chủ dự án 2026-09-23T14:18Z); comment doc `isStep0Line` (`platform/P-023`); `ops/known-failures.md` KF-022; `kernel/src/log.ts` (`step0LogRef`, `isStep0LogId`, `logIdFromRef`)
+- tiêu chí xong:
+  - ✅ `isStep0Line` nhận **cả hai** hình dạng `ref`: file phẳng cũ (`platform/P-016`) và hình dạng P-023 mà phần mã là một `step0LogId` (`isStep0LogId(logIdFromRef(ref))`). Lọc theo phần mã, không neo vào một `ref` cứng.
+  - ✅ Bài tái hiện lỗi (bất biến I2) ở `ops/test/digest-metrics.test.ts`: dựng dòng bước 0 bằng chính `step0LogRef` và đòi `routineRuns24h` đếm cả chúng. Phá thử: khôi phục `isStep0Line` cũ → bài đỏ (đếm 1 thay vì 3); bản vá → 32/32 xanh.
+  - ✅ Comment doc của `isStep0Line` cập nhật: hết "khi P-023 vào `main` thì mở rộng", nay nói thẳng đã nhận cả hai hình dạng.
+  - ✅ Ghi `ops/known-failures.md` KF-022.
+- **mã mục nhận lúc 2026-09-23 ~14:3x giờ UTC** (`KF-005`): dò `### P-` trên `main` và mọi nhánh PR đang mở, cao nhất là `P-035`, nên `P-036` không đụng ai.

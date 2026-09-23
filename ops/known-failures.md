@@ -682,3 +682,15 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 ```
 
 Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
+
+---
+
+## KF-022 · `digest-metrics.ts` đếm 0 lượt routine sau khi P-023 vào `main` — `isStep0Line` chỉ khớp file phẳng cũ
+
+> Số **KF-022**: dò `## KF-` trên `main` **và mọi** nhánh PR đang mở (KF-005), cao nhất là `KF-021`, nên `KF-022` không đụng ai.
+
+- **Lần gặp:** 1 — bản ghi đầu tiên. Quan sát trên bản tin `#193` (2026-09-23): mục "Tiến độ" in `Lượt chạy routine 24h: 0` kèm ⚠️ tự khai lỗi; chủ dự án nhắc lại trong câu trả lời bản tin (`14:18Z`) và giao một worker sửa.
+- **Chữ ký:** `renderDigestMetrics` in `Lượt chạy routine 24h: 0` trong khi `ops/logs/integration/step0-*.jsonl` có hàng chục dòng bước 0 trong 24 giờ. Không gì đỏ: `pnpm check` xanh, CI xanh, số chỉ **sai**.
+- **Nguyên nhân gốc:** `routineRuns24h` lọc dòng bước 0 bằng `isStep0Line`, mà hàm đó so `ref === 'platform/P-016'` — hình dạng file phẳng **trước** `P-023`. Mục `platform/P-023` chuyển dòng bước 0 sang một file mỗi lượt, `ref` do `step0LogRef` sinh (`integration/step0-<mốc>-<routine>`), nên không dòng mới nào khớp. Comment doc của chính `isStep0Line` đã **khai trước** đúng lỗ này ("khi P-023 vào `main`, mở rộng cho khớp — nếu không số lượt tụt về 0 một cách im lặng") nhưng việc mở rộng chưa ai làm. Cùng hình dạng nhóm **Z**: một luật đã biết trước, một thay đổi làm nó sai, không lần chạy nào đặt hai thứ cạnh nhau.
+- **Đã sửa ở đâu:** `ops/scripts/digest-metrics.ts` — `isStep0Line` nay nhận cả hai hình dạng `ref`: file phẳng cũ (`platform/P-016`) và hình dạng P-023 (`isStep0LogId(logIdFromRef(ref))`). Lọc theo **phần mã** `step0-…`, không neo vào một `ref` cứng — cùng lẽ với `readRunLogs` quét cả thư mục.
+- **Máy chặn từ nay:** `ops/test/digest-metrics.test.ts` — bài `P-036` dựng dòng bước 0 bằng chính `step0LogRef` và đòi `routineRuns24h` đếm cả chúng (bất biến I2). Phá thử: khôi phục `isStep0Line` cũ → bài đỏ (đếm 1 thay vì 3). Còn hở, ghi rõ: bài này khoá phép **đếm**; nó không khoá được việc một hình dạng `ref` bước 0 **thứ ba** trong tương lai lại rơi khỏi phép lọc — nhưng nay phép lọc dựa trên `isStep0LogId` của kernel (một chỗ sinh mã), nên một hình dạng mới chỉ cần đi qua `step0LogId` là tự khớp.
