@@ -187,7 +187,7 @@ jobs:
             "$BODY" \
             "" \
             "$MARKER" \
-            "@$OWNER \`main\` vừa đỏ." \
+            "🤖 @$OWNER \`main\` vừa đỏ." \
             "" \
             "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng. Máy vẫn đang tự chữa (integrator revert, CHARTER 6.5), nên anh chưa cần làm gì; nếu nó không xong, cảnh báo này nhắc lại mỗi 4 giờ.")
 
@@ -216,7 +216,9 @@ jobs:
           CREATED=$(echo "$EXISTING" | cut -f2)
           # Comment cập nhật này KHÔNG mang mốc và KHÔNG @nhắc: nó chạy mỗi
           # lượt (lịch mỗi giờ), nên mang mốc vào đây sẽ đẩy "lần @nhắc gần
-          # nhất" về hiện tại ở mọi lượt và nhịp 4 giờ không bao giờ tới hạn.
+          # nhất" về hiện tại ở mọi lượt và nhịp 4 giờ không bao giờ tới hạn
+          # — @nhắc chết hẳn mà không gì đỏ.
+          # `ops/test/alert-escalation-workflows.test.ts` canh đúng luật này.
           gh issue comment "$NUM" --repo "$REPO" --body "$BODY"
 
           AGE=$(( ( $(date -u +%s) - $(date -u -d "$CREATED" +%s) ) / 3600 ))
@@ -224,9 +226,24 @@ jobs:
           # Thân issue ĐỨNG ĐẦU danh sách, rồi tới các comment: lần @nhắc đầu
           # tiên nằm ở thân, bỏ nó ra thì lượt nào cũng thấy "chưa nhắc lần
           # nào" và gọi chủ dự án mỗi giờ.
-          DECISION=$(gh issue view "$NUM" --repo "$REPO" --json body,createdAt,comments \
-            --jq '[{body, createdAt}] + [.comments[] | {body, createdAt}]' \
-            | node ops/scripts/alert-escalation.ts "$MARKER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          #
+          # I7 · CHỈ đọc thân và comment của `github-actions[bot]`, y như
+          # `automerge.yml` làm với khối phạm vi sự cố. Không lọc thì bất kỳ
+          # ai cũng đặt lại được đồng hồ 4 giờ chỉ bằng một comment mang
+          # chuỗi mốc — và không cần ác ý: nút "Quote reply" của GitHub chép
+          # nguyên markdown thô, HTML comment kể cả.
+          #
+          # Z9 · `if ! DECISION=…`: `gh` lỗi vặt hay JSON lạ dưới `set -euo
+          # pipefail` sẽ giết cả bước, mà comment tình trạng thì đã đăng rồi
+          # — tức là @nhắc mất trong im lặng, đúng chữ ký hỏng mục này sinh
+          # ra để chữa. Rơi về `mention`: gọi thừa một lần là phiền, một
+          # cảnh báo khẩn câm là chỗ hỏng.
+          if ! DECISION=$(gh issue view "$NUM" --repo "$REPO" --json author,body,createdAt,comments \
+            --jq '[select(.author.login == "github-actions[bot]") | {body, createdAt}] + [.comments[] | select(.author.login == "github-actions[bot]") | {body, createdAt}]' \
+            | node ops/scripts/alert-escalation.ts "$MARKER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"); then
+            DECISION='{"verdict":"mention","lastMentionAt":null,"hoursSinceLastMention":null,"unreadableMarkerComments":0}'
+            echo "Không đọc được lịch sử @nhắc (gh hoặc alert-escalation.ts lỗi) — rơi về mention."
+          fi
           echo "main đã đỏ $AGE giờ. Quyết định @nhắc: $DECISION"
 
           UNREADABLE=$(echo "$DECISION" | jq -r '.unreadableMarkerComments')
@@ -240,6 +257,6 @@ jobs:
           fi
           gh issue comment "$NUM" --repo "$REPO" --body "$(printf '%s\n' \
             "$MARKER" \
-            "@$OWNER \`main\` đã đỏ $AGE giờ mà máy chưa tự sửa được." \
+            "🤖 @$OWNER \`main\` đã đỏ $AGE giờ mà máy chưa tự sửa được." \
             "" \
             "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng. Nhắc lại mỗi 4 giờ tới khi \`main\` xanh lại (mục \`platform/P-034\`).")"

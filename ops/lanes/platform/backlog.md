@@ -732,6 +732,23 @@ Luật hiện hành đi ngược lại có chủ đích: `main-ci.yml` cố ý *
 
 ---
 
+### P-037 · CHARTER mục 3 còn dẫn về ngưỡng @nhắc 2 giờ đã bị thay
+Mục 3, dòng về `main` đỏ, vẫn viết: *"Chủ dự án chỉ được gọi khi `main` còn đỏ sau 2 giờ (2.4)."* Câu đó dẫn về đúng luật mà `P-034` đã thay ở mục 2.4 (@nhắc ngay ở comment đầu, nhắc lại mỗi 4 giờ) — tài liệu nói một đằng, `main-ci.yml` làm một nẻo. Routine integrator đọc chính dòng này khi xử lý `main` đỏ.
+
+Tách khỏi `P-034` vì **cửa merge khác**, không phải vì phạm vi khác: đo bằng `node ops/invariants.protected-area.ts --base-charter` thì `P-034` (mục 2 và 14) ra `automerge-delayed`, còn sửa thêm dòng này kéo cả PR sang `owner-merge` vì luật cắt CHARTER **theo mục** và đây là mục 3. Gộp vào sẽ bắt chủ dự án merge tay một PR vốn máy tự merge được — ngược thước đo mục 1.3.
+
+- deps: `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau
+- risk: low — một câu tài liệu, không chạm code
+- status: blocked
+- nguồn: vòng soát ngữ cảnh sạch của PR `#198`; CHARTER 2.4 nhật ký **C9**
+- tiêu chí xong:
+  - ⬜ CHARTER mục 3 sửa câu đó thành "@nhắc ngay từ lần đỏ đầu, nhắc lại mỗi 4 giờ (2.4)".
+  - ⬜ Nhãn cửa merge lấy bằng tool (sẽ ra `owner-merge`), kèm issue `🤖 [QĐ]` tóm tắt cần duyệt gì.
+  - ⬜ Quét lại cả repo xem còn chỗ nào dẫn về ngưỡng 2 giờ: `grep -rn "2 giờ" CHARTER.md docs/ CLAUDE.md ops/`.
+- **mã mục nhận lúc 2026-09-23 ~15:5x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên mọi nhánh PR đang mở** (`refs/pull/N/head` của cả 13 PR): cao nhất là `P-036` (nhánh `claude/dreamy-ride-t9gnbd`, PR `#194`), nên `P-037` không đụng ai.
+
+---
+
 ### P-035 · Bản tin có một mục riêng cho mỗi PR merge qua lối đi nhanh `hotfix`
 Điều kiện 6 của `D-C07` có hai vế, và chỉ vế thứ nhất đã xong: `automerge.yml` @nhắc chủ dự án ngay lúc merge một PR `hotfix`. Vế còn lại — *"một mục riêng trong bản tin kế tiếp để tôi soát lại"* — chưa có chỗ nào thực hiện.
 

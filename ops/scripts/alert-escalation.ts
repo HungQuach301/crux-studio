@@ -73,11 +73,13 @@ export interface LastMentionResult {
  * `createdAt` của mục mang mốc **mới nhất**, cộng số mục mang mốc mà
  * `createdAt` không đọc được.
  *
- * Hướng an toàn khi không đọc được: bỏ qua mục đó (tức là nghiêng về
- * **@nhắc lại**), chứ không coi nó là một lần @nhắc mới. Một cảnh báo khẩn
- * bị gọi thừa một lần là phiền; một cảnh báo khẩn im lặng 13 giờ là đúng
- * chỗ hỏng mà mục này sinh ra để chữa. Số mục bị bỏ qua đi ra ngoài qua
- * `unreadable` để không có gì biến mất trong im lặng.
+ * Hướng an toàn khi không đọc được: **bỏ qua mục đó, và khai nó ra** qua
+ * `unreadable` — không bao giờ coi nó là một lần @nhắc mới. Hệ quả tuỳ ca,
+ * và phải nói đúng cả hai: không còn mục nào đọc được thì kết quả là
+ * `mention` (nghiêng về gọi thừa, hướng đúng cho một cảnh báo khẩn); còn
+ * một mục đọc được gần đây thì kết quả vẫn là `quiet`, và lúc đó
+ * `unreadable` là thứ duy nhất nói cho bên gọi biết phép đo là **cận
+ * dưới**. Không có gì biến mất trong im lặng.
  */
 export function lastMentionAt(
   comments: readonly AlertComment[],

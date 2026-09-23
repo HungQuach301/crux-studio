@@ -154,7 +154,7 @@ GitHub không gửi thông báo cho chính người thực hiện hành động.
 
 1. **Bản tin ngày** (nhãn `digest`) — hộp quyết định duy nhất, mục 2.5.
 2. **Cảnh báo khẩn** (nhãn `alert`), đúng **bốn** loại:
-   - `main` đỏ **quá 2 giờ** mà máy không tự sửa được;
+   - `main` đỏ — @nhắc **ngay từ lần đỏ đầu**, nhắc lại mỗi 4 giờ (mục `platform/P-034`; ngưỡng cũ "quá 2 giờ" đã bị thay, xem khối dưới);
    - watchdog báo nhà máy im lặng;
    - chi phí vượt **80%** ngân sách học (mục 8);
    - sự cố bảo mật.
