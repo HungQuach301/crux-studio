@@ -33,7 +33,14 @@ import { definition as release } from '@crux/workshop-release';
  * đó" — ranh giới thật do contract giữ, và `runWorkshop` validate đầu ra
  * theo đúng contract của xưởng trước khi trả về.
  */
-const DEFINITIONS: Record<WorkshopName, WorkshopDefinition<object>> = {
+/**
+ * Định nghĩa của cả sáu xưởng. `pipeline.ts` là nơi DUY NHẤT được import
+ * nhiều xưởng (bất biến I3, `lint-deps.ts`), nên đây cũng là nguồn duy nhất
+ * cho `definition.consumes` của từng xưởng — bên khác cần danh sách tiêu thụ
+ * (ví dụ `check-fixtures.ts`) lấy từ đây, không tự chép lại (mục
+ * `integration/I-011`).
+ */
+export const DEFINITIONS: Record<WorkshopName, WorkshopDefinition<object>> = {
   topic,
   editorial,
   visual,
@@ -41,6 +48,16 @@ const DEFINITIONS: Record<WorkshopName, WorkshopDefinition<object>> = {
   assembly,
   release,
 };
+
+/**
+ * Định nghĩa của một xưởng theo tên. Để `ops/scripts/run-workshop.ts` chạy
+ * một xưởng độc lập (mục `P-004`, quyết định `D-12`) mà KHÔNG phải mở thêm
+ * một chỗ thứ hai import cả sáu xưởng — tính chất "nơi duy nhất" ghi ở đầu
+ * file này là thứ giữ cho bất biến I3 đọc được bằng mắt.
+ */
+export function definitionFor(name: WorkshopName): WorkshopDefinition<object> {
+  return DEFINITIONS[name];
+}
 
 export interface PipelineOptions {
   root: string;

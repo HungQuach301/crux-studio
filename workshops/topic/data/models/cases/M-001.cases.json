@@ -1,0 +1,41 @@
+[
+  {
+    "caseId": "sec-fee-0p25",
+    "params": {
+      "initialBalanceUsd": 100000,
+      "grossAnnualReturnPct": 4,
+      "expenseRatioPct": 0.25,
+      "years": 20
+    },
+    "expected": {
+      "endingBalanceUsd": 208000
+    },
+    "computedBy": "SEC Office of Investor Education and Advocacy, 'How Fees and Expenses Affect Your Investment Portfolio' — đường màu xanh: 'At the end of 20 years, the portfolio would be worth approximately $208,000.'"
+  },
+  {
+    "caseId": "sec-fee-0p50",
+    "params": {
+      "initialBalanceUsd": 100000,
+      "grossAnnualReturnPct": 4,
+      "expenseRatioPct": 0.5,
+      "years": 20
+    },
+    "expected": {
+      "endingBalanceUsd": 198000
+    },
+    "computedBy": "SEC, cùng bản tin — đường màu đỏ: 'the portfolio would be worth approximately $198,000.'"
+  },
+  {
+    "caseId": "sec-fee-1p00",
+    "params": {
+      "initialBalanceUsd": 100000,
+      "grossAnnualReturnPct": 4,
+      "expenseRatioPct": 1,
+      "years": 20
+    },
+    "expected": {
+      "endingBalanceUsd": 179000
+    },
+    "computedBy": "SEC, cùng bản tin — đường màu xanh lá: 'the portfolio would be worth approximately $179,000.'"
+  }
+]

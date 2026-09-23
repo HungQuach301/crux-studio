@@ -39,69 +39,132 @@ Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập
 
 - deps: T-001
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-010, mục Lõi định lượng 1
 - tiêu chí xong:
-  - Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung.
-  - Mỗi ảnh chụp có `asOfDate` và băm nội dung; chạy lại cùng `asOfDate` cho ra cùng dữ liệu.
-  - Thiếu secret nguồn dữ liệu thì **DỪNG và báo tên secret thiếu**, không tự tạo secret.
+  - ✅ Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung (`workshops/topic/contracts/snapshot.v0.schema.json`, `workshops/topic/src/snapshot.ts` — `normalizeFred/Bls/Census` cùng trả `{period, value}` ISO date).
+  - ✅ Mỗi ảnh chụp có `asOfDate` và băm nội dung; `contentHash` không gồm `fetchedAt` nên chạy lại cùng `asOfDate` trên cùng dữ liệu cho ra cùng băm (test `sameData`, `chạy lại cùng asOfDate ...`).
+  - ✅ Thiếu secret thì `requireSecret` ném `MissingSecretError` mang đúng tên biến (`FRED_API_KEY`/`BLS_API_KEY`/`CENSUS_API_KEY`), chạy TRƯỚC mọi lần chạm mạng, không tự tạo secret (I1).
+- ✅ **Xong, 2026-09-22** (PR `#114`, lượt `crux-worker-3`): ba adapter + contract snapshot chung + 19 test. `pnpm check` xanh 511/511, `pnpm replay` khớp snapshot 6/6. Phần gọi API thật để lỏng qua `transport` tiêm vào — Đợt 0 không gọi API trả tiền (CHARTER mục 9), `transport` mặc định ném `LiveFetchNotWiredError`; xây thật khi tới runtime, cùng hình dạng với corpus/`T-011`. Chọn ba chuỗi ví dụ trong test (FRED `UNRATE`, BLS `LNS14000000`, Census `B25077_001E`) — kho chuỗi cụ thể cho từng tập lấp dần khi có khoá.
 
 ### T-004 · Phát hiện dữ liệu thay đổi và đính chính
 Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh sau công bố, tự mở issue chỉ đúng tập nào, claim nào, con số nào.
 
 - deps: T-003
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec WP-011, sổ rủi ro R6 và R7
 - tiêu chí xong:
-  - So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi.
-  - Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi.
+  - ✅ So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi (`diffSnapshots` tách `revised`/`added`/`removed`; đổi từ/đến ô thiếu `null` tính là `revised`).
+  - ✅ Issue sinh ra dẫn ngược tới `claimId` và tập bị ảnh hưởng, không chỉ tới tên chuỗi (`impactedClaims` + `buildChangeIssue` mang `episodeId`, `claimId`, con số đã phát hành và con số mới).
+- ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, bước 3): `workshops/topic/src/change-detect.ts` + contract tra ngược `workshops/topic/contracts/claim-source.v0.schema.json` + 15 test. Phân biệt ba loại thay đổi của WP-011 §3b (`new-period` không mở issue · `revision` · `definition-change` mức cao chạm mọi claim); ngưỡng tuyệt đối thắng phần trăm, gần 0 xử lý riêng; khử trùng theo `provider:seriesId:nextAsOfDate`; điều kiện dừng §5b (thiếu trường ràng buộc → `ClaimTraceError` nêu tên trường). `pnpm check` xanh 531/531, `pnpm replay` khớp snapshot 6/6.
+  - **Còn treo, ngoài phạm vi tiêu chí xong (nên giữ `review`, không `done`):** WP-011 §3 muốn một workflow `.github/workflows/detect-changes.yml` và §7 muốn "một issue thật được mở trong repo bằng dữ liệu giả". Cả hai là việc của runtime — agent không ghi `.github/` (CLAUDE.md mục 4) và Đợt 0 không mở issue thật; module trả nội dung issue như **dữ liệu**, người/runtime mở. Cũng chưa làm: kiểm **hạn** của chuỗi `annual-reset` (§5).
 
 ### T-005 · Thư viện mô hình và kiểm bốn cấp
 Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bốn cấp. WP này xây **công cụ**; nội dung tám mô hình do T-006 tạo.
 
 - deps: T-003
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-012, mục Lõi định lượng 2
 - tiêu chí xong:
-  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy.
-  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7).
+  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy. ✅ `workshops/topic/src/model-runner.ts` (`runModel`) — không đọc đồng hồ hệ thống, không random; test chạy lặp lại và xen kẽ hai bộ tham số cho ra cùng kết quả từng chữ số.
+  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7). ✅ `workshops/topic/src/model-verify.ts`: `computeVerification` khai kiểu trả về `PendingOrFailed` (`'pending' | 'failed'`), không có giá trị `'verified'` nào để gán — khoá ở tầng kiểu (`tsc --noEmit`), không phải quy ước. `verifiedClaimProblems` chỉ ĐỌC LẠI một claim `verified` đã gõ tay, không bao giờ đặt.
+- công cụ: `kernel/contracts/model.schema.json` (contract, đóng — chuyển từ `workshops/topic/contracts/model.v0.schema.json` sang kernel ở mục `kernel/K-002`, cấu trúc trung tính thể loại) · `workshops/topic/src/model-runner.ts` (registry công thức + chạy xác định) · `workshops/topic/src/model-verify.ts` (bốn cấp kiểm + trạng thái tổng hợp). `formula` trong contract là khoá tra registry, không phải biểu thức eval. T-006 đăng ký công thức thật và tạo `M-001.json`…`M-008.json`.
 
 ### T-006 · Tám mô hình định lượng đầu tiên
 Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra đời.
 
 - deps: T-005
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
-  - Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.**
-  - Công thức do agent soạn, có trích nguồn, và được một mô hình **khác họ, không phải Claude** tính lại độc lập. Lệch nhau thì mở `🤖 [QĐ]`.
-  - Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` với hai lựa chọn: thuê chuyên gia viết, hoặc bỏ mô hình đó.
-  - Mỗi mô hình có một issue `irreversible` tóm tắt (giả định, công thức, nguồn, kết quả đối chiếu) đọc được trong vài phút.
+  - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
+  - ⬜ **Chưa làm, chặn ngoài phạm vi mục này:** công thức được một mô hình **khác họ, không phải Claude** tính lại độc lập. Cơ chế là mục `platform/P-003`, mục đó cần secret `OPENAI_API_KEY` — chưa có trên repo, và PR #66 của nó đang chờ chủ dự án merge (issue #67). Cấp kiểm 4 (`llm-assumption-check`) của cả tám mô hình vì vậy ghi `pass: false` kèm lý do, và `verification.status` của cả tám là `pending`.
+  - ✅ Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` — **không mô hình nào rơi vào ca này**: cả tám đều có ví dụ tính sẵn đã công bố. Điều kiện kích hoạt không xảy ra nên không có issue nào phải mở.
+  - ⬜ **Chưa làm, cố ý, chờ tiêu chí 2:** mỗi mô hình một issue `irreversible` tóm tắt. Issue đó là đường duy nhất đưa `verification.status` lên `verified` (D-C02 điểm c), và phần "kết quả đối chiếu" của nó chính là thứ đang thiếu. Mở tám issue lúc cấp 4 còn `pass: false` là xin duyệt cho thứ chưa đủ bằng chứng, và tốn tám dòng bản tin (mặc định M8, rủi ro B11).
+- **Chưa chuyển `done`:** hai tiêu chí trên còn ⬜. Mục này ở `review` cho tới khi `P-003` chạy được; lúc đó phần còn lại là một lượt cơ học (chạy soát chéo, ghi bằng chứng cấp 4, mở issue tóm tắt).
+- **Hai mâu thuẫn trong chính nguồn, đã ghi chứ không nuốt** (xem `ops/known-failures.md` KF-012): TreasuryDirect in 4,03% trong khi khối ví dụ của chính nó tính ra 4,26%; IRS Pub 590-A có câu hướng dẫn dòng 4 không cùng thoả một cách đọc với ví dụ điền sẵn của chính nó ($6.830 so với $6.825). Cả hai nằm trong `assumptions` của file mô hình tương ứng để Fact & Risk Pass đọc được.
+- công cụ: `workshops/topic/data/models/M-001.json`…`M-008.json` (mô tả theo contract) · `cases/M-00N.cases.json` (ca kiểm cấp 1 kèm trích dẫn) · `workshops/topic/src/models.ts` (tám công thức + registry) · `workshops/topic/test/models.test.ts` (74 test: khớp nguồn, kiểm đột biến, biên, xác định, trần dung sai).
 
 ### T-007 · Sensitivity Pass
 Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng giá trị hợp lệ và tìm mọi điểm đảo chiều. Đây là chữ ký khác biệt của kênh, và là cách bù cho việc chủ dự án không sống ở thị trường Mỹ: không đoán tham số vùng miền, quét hết khoảng của nó.
 
 - deps: T-006
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-013, mục Lõi định lượng 3
 - tiêu chí xong:
-  - Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số.
-  - Không có điểm đảo chiều cũng là một kết quả hợp lệ, và phải được ghi thành `stableConclusion` có bằng chứng.
+  - ✅ Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số. — `runSensitivityPass(model, registry, options)` nhận thẳng `ModelDefinition` đã nạp (cùng hình dạng với `runModel`); bên gọi tự `loadModel(modelId)` trước. Quét từng tham số một (giữ các tham số khác ở giá trị nền), tìm điểm đảo chiều bằng cách theo dõi dấu của một "biến kết luận" (`conclusionOutput`) đổi từ dương sang âm hay ngược lại, nhị phân tinh chỉnh giá trị đảo chiều.
+  - ✅ Không có điểm đảo chiều cũng là một kết quả hợp lệ, và phải được ghi thành `stableConclusion` có bằng chứng. — bắt buộc ở tầng ứng dụng (`sensitivityProblems`, vì validator của kernel không hỗ trợ if/then, cùng lý do `approvedIssueUrl` của `model.v0.schema.json`), sinh tự động từ dấu quan sát được ở đầu mỗi khoảng quét.
+- **Đã làm, 2026-09-22** (lượt `crux-worker-3`): `workshops/topic/contracts/sensitivity.v0.schema.json` (payload v0, đóng, theo mẫu `model.v0.schema.json`) · `workshops/topic/src/sensitivity.ts` (`runSensitivityPass`, `validateSensitivity`, `sensitivityProblems`) · `workshops/topic/test/sensitivity.test.ts` (14 test, gồm ba acceptance test của WP-013 mục 6: tìm đúng điểm đảo chiều đã biết trước bằng đại số trên `M-002` thật, chạy hai lần ra cùng một JSON, tham số không tồn tại thì dừng và nêu đúng tên).
+  - Bắt buộc quét mọi tham số `geoVarying: true` (WP-013 mục 5) — chưa mô hình nào trong tám mô hình hiện có mang cờ này thật (ghi trong `verification.tiers`), nên luật được kiểm bằng một mô hình tổng hợp trong test, không phải bằng dữ liệu thật.
+  - Trần 1.000.000 điểm quét cho một tham số (WP-013 mục 5b) — đo được thật trên `M-002.loanAmountUsd` (validRange rộng, step=1 ra 49.999.001 điểm), không phải số tự nghĩ.
+  - **Một lỗ hổng nhóm Z tự phát hiện khi viết acceptance test 1:** bản đầu dùng `runModel` (đòi MỌI output khai trong contract hữu hạn) để tính giá trị quét — nhưng `M-002.breakEvenMonths = pointsCostUsd / monthlySavingsUsd` chia cho 0 đúng tại điểm đảo chiều thật (`monthlySavingsUsd = 0`), nên lần chạy đầu tiên trên dữ liệu thật ném `NonFiniteOutputError` của một output KHÔNG liên quan `conclusionOutput`. Sửa: tự giải tham số + gọi công thức trực tiếp, chỉ kiểm hữu hạn đúng `conclusionOutput` — các output khác được phép vô định tại điểm Sensitivity Pass đang tìm.
+- **Soát chéo (subagent, ngữ cảnh sạch)** theo CHARTER mục 3–6, tìm 2 phát hiện CHẶN + 3 khoảng trống test, cả năm đã sửa trước khi rời nháp:
+  - **CHẶN 1:** trailer `Co-Authored-By` mang tên model ("Claude Sonnet 5"), trái `CLAUDE.md` mục 6 — sửa lại `Co-Authored-By: Claude <noreply@anthropic.com>` (amend + force-push nhánh của chính phiên này, cùng cách PR #79/#109 đã làm).
+  - **CHẶN 2:** dòng log I8 (`ops/logs/topic/T-007.jsonl`) khai "pnpm check và pnpm replay xanh", trong khi `pnpm check` thật ra 696/697 test (1 fail — `ops/test/step0-log-path.test.ts`, mục `P-023`/`ops/scripts/gate-flow.ts`, xác nhận **đã đỏ trên `origin/main` trước khi nhánh này tách ra**, không liên quan `T-007`). `CLAUDE.md` mục 8 cấm ghi "đã chạy, xanh" khi chưa đúng — đã sửa lại dòng log ghi đúng số thật.
+  - Cổng chặn 1.000.000 điểm quét đếm THIẾU 1 so với mảng thật sự dựng khi `step` không chia hết khoảng (điểm `max` được chèn thêm không được cộng vào trước khi so ngưỡng) — `actualPointCount` nay là nguồn duy nhất cho cả cổng chặn lẫn `scanPoints`.
+  - Ba test mới cho ba ca chưa có bài kiểm: điểm đảo chiều rơi đúng một điểm lưới (khử trùng lặp, dùng step=5 chạm thẳng `baseRatePct`), điểm ĐẦU khoảng quét bằng 0 chẵn (không tính là flip, có chủ đích — không có "trước" trong miền quét để so), bước quét không dương thì ném.
+- **Cố ý bỏ qua so với WP-013 gốc, có lý do:** checkpoint 2b của WP-013 ("≥2 mô hình `verified`") không áp dụng — `T-006` đã ghi rõ (D-C02) không mô hình nào trong tám mô hình được `verified` cho tới khi `platform/P-003` (cần `OPENAI_API_KEY`, đang `owner-merge`) chạy được, và backlog hiện hành (CHARTER thắng spec khi mâu thuẫn) đặt `deps: T-006` chứ không đặt điều kiện đó. CLI `scripts/run-sensitivity.ts` của WP-013 mục 3 và việc commit một kết quả quét thật làm ví dụ tham chiếu (WP-013 mục 7) **chưa làm** — ngoài hai bullet tiêu chí xong ở trên, để giữ PR gọn theo một mục tiêu; đáng một mục backlog riêng nếu cần CLI độc lập.
 
 ### T-008 · Corpus đối thủ, kiểm mới lạ, đại lượng nhu cầu
 Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **giới hạn của từng thứ khai rõ trong chính dữ liệu**, không nằm trong ghi chú.
 
 - deps: T-002
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-014
 - tiêu chí xong:
-  - Corpus xây trong hạn mức quota, và hạn mức được đo, không được đoán.
-  - Kiểm mới lạ chạy tự động cho một thesis và trả về lý do, không chỉ trả về điểm.
+  - ⬜ **Corpus xây trong hạn mức quota, và hạn mức được đo, không được đoán.** Nửa "trong hạn mức" đã
+    xong và chạy được: `quotaGate` dừng ở mốc 20% dự trữ của WP-014 mục 5, trả lý do thay vì ném lỗi để
+    bản xây ghi được corpus một phần (mục 5b), và `corpusProblems` đỏ khi `quota.spent.searchCalls` lệch
+    tổng `pagesFetched` — số tiêu không khai tay được. Nửa "hạn mức được đo" thì **chưa**, và nó cần
+    người: đọc Google Cloud Console (giả định **G19**, mục `verify/VF-G19`). Tới lúc đó, con số trung
+    thực nằm trong chính dữ liệu — `quota.limits.source` khoá ở `vendor-docs`, không phải một dòng ghi
+    chú trong tài liệu. Phần **gọi API để xây** corpus tách sang `T-011`, đang chặn vì chưa có secret.
+  - ✅ **Kiểm mới lạ chạy tự động cho một thesis và trả về lý do, không chỉ trả về điểm.** `checkNovelty`
+    thuần, không gọi mạng, không đọc đồng hồ; `reasons` là trường bắt buộc có ít nhất một phần tử trong
+    contract, và mỗi lối ra nạp lý do trước khi chốt `verdict`. Bốn kiểm âm của WP-014 mục 6 có test
+    thật: `contradictingCount = 0` với `similarCount` cao ra `crowded-in-corpus` chứ không ra mới lạ;
+    corpus dưới ngưỡng ra `insufficient-corpus`; bình luận thô và tên người dùng bị `forbiddenKeyPaths`
+    chặn; hết bucket thì cửa quota đóng sạch.
+- ✅ **Đã làm, 2026-09-21** (lượt `crux-worker-2`): ba contract v0 trong `workshops/topic/contracts/`
+  (`corpus`, `novelty-check`, `demand-signal`), ba module trong `workshops/topic/src/`
+  (`corpus.ts`, `novelty.ts`, `demand.ts`), một corpus mẫu 38 video trong `workshops/topic/data/corpus/`,
+  bảng ngân sách quota ở `packs/channels/us-personal-finance/quota-budget.md`, và 38 test mới
+  (corpus 14, novelty 12, demand 12). Ba giới hạn
+  của WP-014 mục 3c được mã hoá thành **trường bắt buộc**, không thành ghi chú: `coverage.contentLevel`
+  khoá `metadata-only`; `verdict` không có giá trị `novel` và `limitation` bắt buộc dài ≥ 40 ký tự;
+  ba đại lượng nhu cầu bắt buộc mang `asOf`, `region`, `language`, `knownBias`.
+- ⬜ **Còn treo, cần người:** G19 (`VF-G19`) và secret nền tảng (`T-011`). Giữ `review`, không `done`.
+
+### T-011 · Xây corpus bằng API nền tảng — đang chặn vì chưa có secret
+Phần **gọi API** của WP-014, tách khỏi `T-008` vì nó chặn ở chỗ khác hẳn: không phải thiếu cơ chế, mà
+thiếu quyền. `T-008` đã để sẵn mọi thứ nó cần — contract `corpus.v0`, `quotaGate`, `corpusProblems` — nên
+mục này là phần nối dây, không phải phần thiết kế lại.
+
+Hai thứ còn thiếu, và không thứ nào agent tự lấy được:
+
+1. **Khoá API nền tảng** cho `search.list`. Chọn nhà cung cấp và ký điều khoản là `irreversible`
+   (CHARTER 2.3 nhóm 3); bật billing là nhóm 1.
+2. **`EMBEDDINGS_API_KEY`** cho phép so ngữ nghĩa. Thiếu nó, `checkNovelty` chạy bằng so **từ vựng** —
+   bỏ sót cách diễn đạt khác chữ, nên nó chệch về phía kết luận `novel-in-corpus`. Chệch đúng hướng nguy
+   hiểm, và câu đó đã nằm trong `limitation` của mọi kết quả.
+
+Giả định **G19** (hạn mức `search.list`) đứng dưới mục này ở mức `tài liệu nói vậy`; dự phòng đã viết sẵn
+nên nó không chặn, chỉ làm số tiêu cần đối chiếu lại sau lần chạy thật đầu tiên.
+
+- deps: T-008, G19
+- risk: high
+- status: blocked
+- nguồn: spec WP-014 mục 2b, 3, 5b; `docs/assumptions.md` G19; CHARTER 2.3 nhóm 1 và 3
+- tiêu chí xong:
+  - Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003`).
+  - Corpus xây ra đi qua `corpusProblems` sạch, và `quota.spent.searchCalls` là số đếm thật của lần chạy.
+  - Hết bucket giữa chừng thì ghi corpus một phần với `coverage.partial = true` và `partialReason` có
+    chữ — không hạ chất lượng truy vấn để lấp cho đủ số video (WP-014 mục 5b).
 
 ### T-009 · Thesis Engine
 Sinh thesis đạt chuẩn từ dữ liệu, đủ duy trì bank ≥15 mục khả dụng ở nhịp mục tiêu. Điều kiện tiên quyết của D-08 và là cổng chặn Mốc 3.
@@ -124,3 +187,27 @@ Thay stub bằng bản thật, qua tập vàng.
 - tiêu chí xong:
   - Tập vàng chạy lại xanh với `impl: v1`, băng ghi có phản hồi thật đã ghi lại.
   - Cổng chất lượng đầu ra riêng của xưởng có ngưỡng khai trong cấu hình, không nằm trong code.
+
+### T-012 · Contract corpus không có chỗ đặt "đơn vị mỗi lần gọi", và bảng quota trôi tự do khỏi `quota.limits`
+Ba chỗ rò cùng một gốc, tìm ra trong vòng soát ngữ cảnh sạch của PR `#100` (mục `verify/VF-G19`). Cả ba đều **đo được**, không phải suy luận, và cả ba đều là hình dạng nhóm **Z** — hỏng mà mọi chỉ báo đều xanh.
+
+**(a) Contract từ chối ghi con số mà issue #101 đang xin.** `quota.limits` trong `workshops/topic/contracts/corpus.v0.schema.json` có `additionalProperties: false` và đúng bốn trường (`searchCallsPerDay`, `reserveFraction`, `source`, `checkedAt`). Không có `unitsPerCall`. Nên khi chủ dự án dán hai số đọc từ Cloud Console vào #101, con số thứ hai **không lưu được vào dữ liệu** — nó buộc phải quy đổi bằng tay thành `searchCallsPerDay`, và bước quy đổi đó không để lại vết ở đâu. Giả định **G19** là chỗ phép chia ấy đi vào.
+
+Nhân đây, một lệch luật có trước mục này: `additionalProperties: false` ở `quota` và `quota.limits` ngược với `CLAUDE.md` mục 12 — *"payload contract v0 để lỏng: chỉ trường bắt buộc tối thiểu, cho phép thêm trường"*. Siết sớm ở đúng chỗ số đo còn chưa đọc xong.
+
+**(b) Phép kiểm "bảng và dữ liệu không trôi khỏi nhau" chỉ phủ `spent`, không phủ `limits`.** `packs/channels/us-personal-finance/quota-budget.md` tự khẳng định bảng không trôi khỏi dữ liệu được, vì `corpusProblems` đỏ khi `quota.spent.searchCalls` lệch tổng `pagesFetched`. Đọc `workshops/topic/src/corpus.ts`: phép kiểm đó có thật, ở dòng 172–174, nhưng **chỉ cho `spent`**. Hai dòng hạn mức của bảng (`100` lần gọi mỗi ngày, `1` đơn vị mỗi lần gọi) không có phép kiểm nào buộc chúng khớp `quota.limits` — sửa bảng mà quên sửa dữ liệu, hoặc ngược lại, không gì đỏ.
+
+**(c) Lớp dự phòng thứ hai của G19 là văn xuôi, chưa có code.** `docs/assumptions.md` (G19) khai lớp hai: *"mỗi corpus ghi `quota.spent.searchCalls` đã tiêu thật, nên lần đầu nhà cung cấp trả 429 là lần ta đọc được hạn mức thật từ chính số đã tiêu"*. Đo: `grep -rn "429" workshops/ kernel/ ops/scripts/` ra **0 kết quả**. Lớp một (hạn mức là tham số) đã kiểm và đúng; lớp hai thì chưa tồn tại. `CLAUDE.md` mục 7 cho phép xây trên giả định chưa kiểm **chỉ khi** phương án dự phòng đã viết sẵn — nên khoảng cách giữa hai lớp này phải đóng hoặc phải khai đúng là chưa có.
+
+- deps: —
+- risk: low
+- status: review
+- nguồn: vòng soát ngữ cảnh sạch của PR `#100`; issue `#101`; giả định **G19** (`docs/assumptions.md`); mục `verify/VF-G19`; `CLAUDE.md` mục 12 (contract-first, contract v0 để lỏng) và mục 13 (sửa ở chỗ sinh ra lỗi, không vá sản phẩm)
+- **cửa merge:** chạm `workshops/topic/contracts/**`, không chạm `kernel/contracts/**` — chạy `node ops/invariants.protected-area.ts`, đừng đoán
+- tiêu chí xong:
+  - `quota.limits` nhận `unitsPerCall` (và `unitsPerDay` nếu Console hiển thị theo đơn vị), để **hai số nguyên bản** của #101 ghi được vào dữ liệu mà không phải quy đổi bằng tay trước.
+  - `quotaGate` hoặc một hàm cạnh nó **dẫn xuất** `searchCallsPerDay` từ hai số đó khi có, thay vì để người quy đổi. Có test cho đúng phép chia, kèm ca đơn vị không chia hết.
+  - `corpusProblems` đỏ khi hai dòng hạn mức của `quota-budget.md` lệch `quota.limits` của corpus — cùng hình dạng phép kiểm đã dùng cho `spent`. Test phải **đỏ thật** khi gỡ phép kiểm đó.
+  - Nới `additionalProperties` ở `quota` và `quota.limits` cho đúng `CLAUDE.md` mục 12, hoặc ghi rõ tại chỗ vì sao ca này cố ý siết.
+  - Lớp dự phòng 429 của G19: hoặc có code đọc hạn mức thật ra từ `quota.spent.searchCalls` khi nhà cung cấp trả 429, hoặc sổ giả định sửa lại cho đúng là lớp hai **chưa tồn tại**. Không để câu khai đứng một mình.
+- ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, PR đang mở): (a) `corpus.v0.schema.json` thêm `unitsPerCall`/`unitsPerDay` vào `quota.limits`; `deriveSearchCallsPerDay` (làm tròn xuống, có test kèm ca không chia hết) là chỗ duy nhất quy đổi; `corpusProblems` đỏ khi `searchCallsPerDay` lệch phép dẫn xuất. (b) `parseQuotaBudget` + `corpusProblems(corpus, budget)` buộc hai dòng hạn mức của `quota-budget.md` khớp `quota.limits` — cùng hình dạng phép soát của `spent`, test đỏ thật khi gỡ; corpus mẫu thêm `unitsPerCall: 1` khớp bảng. (c) `additionalProperties` ở `quota` và `quota.limits` nới thành `true` (CLAUDE.md mục 12). (d) G19 khai rõ lớp dự phòng 429 **chưa có code** (đo `grep 429` = 0), thuộc `T-011` đang chặn vì chưa có secret. `pnpm check` xanh 489/489, `pnpm replay` khớp tập vàng 6/6. Còn treo: hai số Console thật vẫn chờ #101 (`VF-G19` `parked`); khi có, agent điền `unitsPerDay`/`unitsPerCall` và đổi `source` sang `console-measured`.

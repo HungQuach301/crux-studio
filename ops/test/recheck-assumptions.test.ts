@@ -16,16 +16,25 @@ import {
   AUTO_CHECKS,
   AUTO_CHECK_IDS,
   collectCommits,
+  collectRoutineRuns,
   formatDecisionIssue,
   isToolCommit,
   judgeTrailerEvidence,
   judgeUnionRuns,
+  judgeWorkerFleet,
   listRemoteClaudeBranches,
   parseLedger,
+  readFleetLogs,
   runUnionExperiment,
   type CheckReport,
   type CommitTrailerInfo,
 } from '../scripts/recheck-assumptions.ts';
+import type { RunLogLine } from '@crux/kernel';
+
+/** Không gọi `gh` thật trong test — mọi lời gọi `collectCommits` dưới đây tự khai nhánh nào đang có PR mở. */
+function openBranches(...branches: string[]): () => Set<string> {
+  return () => new Set(branches);
+}
 
 const LEDGER_MAU = `# Sổ
 
@@ -103,6 +112,22 @@ test('isToolCommit chỉ nhận đúng message do máy sinh, không nhận commi
   assert.ok(isToolCommit('Merge branch \'main\' into claude/topic/T-001'));
   assert.ok(!isToolCommit('topic: T-001 — bản đồ đề tài'));
   assert.ok(!isToolCommit('Gộp hai mô hình định lượng vào một bảng'), 'commit việc thật có chữ "Gộp" vẫn là của agent');
+});
+
+test('I-012 · isToolCommit nhận thêm commit sync-workflows và merge tay "Gộp main vào <nhánh>"', () => {
+  // Quan sát thật, lượt crux-integrator 2026-09-22 02:05 (thân mục I-012).
+  assert.ok(isToolCommit('chore: sync workflows from ops/workflows [skip ci]'));
+  assert.ok(isToolCommit('Gộp main vào claude/integration/I-009'));
+  assert.ok(isToolCommit('Gộp origin/main vào claude/verify/VF-G11'));
+  assert.ok(isToolCommit('Gộp main (920146f) vào V-001 — không xung đột'), 'sha ngắn kèm sau "main" vẫn phải nhận');
+  assert.ok(
+    !isToolCommit('Gộp hai mô hình định lượng vào một bảng'),
+    'mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ "Gộp … vào" nói chung',
+  );
+  assert.ok(
+    !isToolCommit('chore: sync workflows nhưng viết tay, không phải Action'),
+    'phải khớp đúng tiền tố sinh bởi Action, không khớp mọi câu có chữ "sync workflows"',
+  );
 });
 
 test('G14 khớp khi mọi commit của agent đều mang trailer', () => {
@@ -286,7 +311,7 @@ function initRepoCoSquash(): { root: string; repo: string } {
 test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash trên main', () => {
   const { root, repo } = initRepoCoSquash();
   try {
-    const commits = collectCommits(repo);
+    const commits = collectCommits(repo, 14, openBranches('claude/topic/T-002'));
     assert.equal(commits.length, 1, 'chỉ commit chưa vào main mới được tính');
     assert.match(commits[0]!.subject, /T-002/);
     assert.equal(commits[0]!.hasSessionTrailer, true);
@@ -296,6 +321,140 @@ test('collectCommits chỉ nhặt commit nhánh PR, KHÔNG nhặt commit squash 
     );
     // Và kết luận cuối cùng phải là `khớp`, không phải `sai` như bản đầu.
     assert.equal(judgeTrailerEvidence(commits).verdict, 'khớp');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Mục `I-012`, hình dạng đã quan sát thật (lượt `crux-integrator`
+ * 2026-09-22 02:05): `origin/claude/platform/P-009` còn ref trên remote dù
+ * PR `#9` đã squash-merge từ lâu — nhánh mang cả ba commit gốc của CHÍNH
+ * chủ dự án (trước cả CLAUDE.md), không có trailer và KHÔNG THỂ có trailer.
+ * Trước bản sửa này, `collectCommits` cứ thấy ref là quét, nên G14 báo
+ * `sai` mãi mãi cho một nhánh sẽ không bao giờ được sửa.
+ *
+ * Dựng đúng hình dạng đó: một nhánh KHÔNG có PR mở (mô phỏng bằng
+ * `openBranches` không liệt kê nó) mang commit thiếu trailer, đứng cạnh một
+ * nhánh CÓ PR mở mang toàn commit đủ trailer. `collectCommits` phải bỏ hẳn
+ * nhánh đầu, và G14 phải ra `khớp` — không phải vì commit thiếu trailer
+ * biến mất, mà vì nó chưa từng nằm trong phạm vi quét.
+ */
+function initRepoCoNhanhStale(): { root: string; repo: string } {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-stale-branch-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  mkdirSync(repo, { recursive: true });
+  initBare(bare);
+
+  const git = gitIn(repo);
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'user.email', 'test@example.invalid']);
+  git(['config', 'user.name', 'Test']);
+  git(['config', 'commit.gpgsign', 'false']);
+  git(['remote', 'add', 'origin', bare]);
+
+  writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+  git(['add', '.']);
+  git(['commit', '-q', '-m', 'goc']);
+  git(['push', '-q', '-u', 'origin', 'main']);
+
+  // Nhánh stale: PR đã merge (squash) từ lâu, ref vẫn còn trên remote,
+  // KHÔNG có PR mở. Commit của chính chủ dự án, qua giao diện web — không
+  // trailer, và đúng như vậy theo thiết kế (CLAUDE.md mục 5 chỉ ràng buộc
+  // commit của agent).
+  git(['checkout', '-q', '-b', 'claude/platform/P-009']);
+  writeFileSync(join(repo, 'p009.txt'), 'chu du an\n', 'utf8');
+  git(['add', '.']);
+  git(['commit', '-q', '-m', 'Initial commit']);
+  git(['push', '-q', 'origin', 'claude/platform/P-009']);
+
+  // Nhánh sống: PR đang mở, commit của agent, đủ trailer.
+  git(['checkout', '-q', 'main']);
+  git(['checkout', '-q', '-b', 'claude/topic/T-005']);
+  writeFileSync(join(repo, 't005.txt'), 'viec dang lam\n', 'utf8');
+  git(['add', '.']);
+  git([
+    'commit',
+    '-q',
+    '-m',
+    'topic: T-005 — việc đang làm\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_song',
+  ]);
+  git(['push', '-q', 'origin', 'claude/topic/T-005']);
+
+  return { root, repo };
+}
+
+test('I-012 · nhánh đã squash-merge còn sót trên remote (không PR mở) bị loại khỏi phạm vi quét G14', () => {
+  const { root, repo } = initRepoCoNhanhStale();
+  try {
+    // Chỉ claude/topic/T-005 còn PR mở — claude/platform/P-009 không được liệt kê.
+    const commits = collectCommits(repo, 14, openBranches('claude/topic/T-005'));
+    assert.equal(commits.length, 1, 'chỉ nhánh còn PR mở mới được quét');
+    assert.match(commits[0]!.subject, /T-005/);
+    assert.ok(
+      !commits.some((c) => c.subject.includes('Initial commit')),
+      'commit của nhánh stale (không PR mở) không được lọt vào, dù nó thiếu trailer thật',
+    );
+    assert.equal(
+      judgeTrailerEvidence(commits).verdict,
+      'khớp',
+      'G14 không được kêu oan cho một nhánh đã xong việc và sẽ không bao giờ được sửa',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-012 · phép lọc nhánh còn PR mở KHÔNG nuốt tín hiệu thật — commit thiếu trailer trên nhánh sống vẫn ra `sai`', () => {
+  const root = mkdtempSync(join(tmpdir(), 'recheck-nhanh-song-thieu-trailer-'));
+  const bare = join(root, 'origin.git');
+  const repo = join(root, 'work');
+  try {
+    mkdirSync(repo, { recursive: true });
+    initBare(bare);
+
+    const git = gitIn(repo);
+    git(['init', '-q', '-b', 'main']);
+    git(['config', 'user.email', 'test@example.invalid']);
+    git(['config', 'user.name', 'Test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    git(['remote', 'add', 'origin', bare]);
+    writeFileSync(join(repo, 'a.txt'), 'goc\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'goc']);
+    git(['push', '-q', '-u', 'origin', 'main']);
+
+    // Nhánh CÓ PR mở, đúng hình dạng `7fc292a` trong thân mục I-012: commit
+    // của agent, thiếu trailer thật — tín hiệu G14 phải bắt được.
+    git(['checkout', '-q', '-b', 'claude/integration/I-099']);
+    writeFileSync(join(repo, 'b.txt'), 'viec that\n', 'utf8');
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'integration: bước 0 của P3 — thiếu trailer thật']);
+    git(['push', '-q', 'origin', 'claude/integration/I-099']);
+
+    const commits = collectCommits(repo, 14, openBranches('claude/integration/I-099'));
+    assert.equal(commits.length, 1);
+    assert.equal(commits[0]!.hasSessionTrailer, false);
+    assert.equal(
+      judgeTrailerEvidence(commits).verdict,
+      'sai',
+      'nhánh còn PR mở không được phép trốn sau phép lọc mới',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('I-012 · mọi nhánh khớp đều hết PR mở: collectCommits trả rỗng, KHÔNG ném', () => {
+  const { root, repo } = initRepoCoNhanhStale();
+  try {
+    // Không nhánh nào còn PR mở — cả hai đã xong việc (merge hoặc đóng).
+    const commits = collectCommits(repo, 14, openBranches());
+    assert.deepEqual(commits, []);
+    const outcome = judgeTrailerEvidence(commits);
+    assert.equal(outcome.verdict, 'khớp');
+    assert.equal(outcome.observedNothing, true, 'phải in ◦ chưa quan sát được, không phải ⚠ broken');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -455,7 +614,7 @@ test('I-005 · origin/main cục bộ cũ KHÔNG được làm commit squash l�
       git(['update-ref', '-d', ref]);
     }
 
-    const commits = collectCommits(repo);
+    const commits = collectCommits(repo, 14, openBranches('claude/topic/T-003'));
     assert.ok(
       !commits.some((c) => c.subject.includes('(#99)')),
       'commit squash đã vào main không được lọt vào phạm vi quét chỉ vì origin/main cục bộ cũ',
@@ -518,5 +677,160 @@ test('I-005 · lệnh thật in ⚠ KHÔNG CHẠY ĐƯỢC cho G14, không in �
     assert.match(run.stdout, /G17/, 'một bài kiểm hỏng không được nuốt các bài kiểm còn lại');
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+
+// ───────────────────────────────── G1 · đội worker đang chạy thật ──
+
+/** Dòng log tối thiểu — chỉ `at` và `note` có nghĩa với bài kiểm G1. */
+function logLine(at: string, note: string): RunLogLine {
+  return { at, lane: 'platform', kind: 'lane', ref: 'platform/P-000', status: 'ok', durationMs: 0, costUsd: 0, note };
+}
+
+/** N lượt của một routine, cách nhau `gapHours`, bắt đầu từ `2026-09-21T00:00:00Z`. */
+function runsOf(name: string, count: number, gapHours = 1): RunLogLine[] {
+  const base = Date.parse('2026-09-21T00:00:00.000Z');
+  return Array.from({ length: count }, (_, index) =>
+    logLine(new Date(base + index * gapHours * 3600000).toISOString(), `Lượt ${name} nhận mục.`),
+  );
+}
+
+test('G1 khớp khi quan sát được ba worker rời nhau — cấu hình 3 worker còn sống', () => {
+  const outcome = judgeWorkerFleet(
+    collectRoutineRuns([...runsOf('crux-worker-1', 3), ...runsOf('crux-worker-2', 3), ...runsOf('crux-worker-3', 3)]),
+  );
+  assert.equal(outcome.verdict, 'khớp');
+  assert.ok(!outcome.observedNothing);
+  assert.match(outcome.observed, /3 worker/);
+});
+
+test('G1 SAI khi đội tụt về hai worker — đó là kịch bản hỏng thật mà bài kiểm phải bắt', () => {
+  const outcome = judgeWorkerFleet(collectRoutineRuns([...runsOf('crux-worker-1', 4), ...runsOf('crux-worker-2', 4)]));
+  assert.equal(outcome.verdict, 'sai');
+  assert.match(outcome.observed, /Plan B/);
+});
+
+test('G1 phân biệt "không có gì để quan sát" với "đã quan sát và thấy đúng"', () => {
+  // Có dòng log, nhưng không dòng nào nhắc tên routine — ví dụ khi quy ước
+  // ghi `note` đổi. Phải ra `◦`, KHÔNG được ra `khớp`: ra `khớp` thì một bài
+  // kiểm không bao giờ quan sát được gì trông y hệt một bài kiểm luôn xanh.
+  const outcome = judgeWorkerFleet(collectRoutineRuns([logLine('2026-09-21T00:00:00.000Z', 'Chạy tập ep-0001-stub.')]));
+  assert.equal(outcome.observedNothing, true);
+  assert.notEqual(outcome.verdict, 'sai');
+});
+
+test('G1 · `crux-integrator` KHÔNG được tính vào đội worker', () => {
+  // Nếu tính nhầm thì hai worker cộng integrator ra 3, và bài kiểm bỏ lọt
+  // đúng ca nó phải bắt.
+  const outcome = judgeWorkerFleet(
+    collectRoutineRuns([...runsOf('crux-worker-1', 3), ...runsOf('crux-worker-2', 3), ...runsOf('crux-integrator', 9)]),
+  );
+  assert.equal(outcome.verdict, 'sai');
+  assert.ok(outcome.evidence.some((line) => line.includes('crux-integrator')), 'integrator vẫn phải hiện trong bằng chứng');
+});
+
+test('G1 gom nhiều dòng log của CÙNG một lượt thành một lượt', () => {
+  // Một lượt worker ghi nhiều dòng (bước 0, rồi mục nhận được). Đếm từng
+  // dòng thành một lượt sẽ thổi phồng số lượt và làm nhịp đo được vô nghĩa.
+  const at = '2026-09-21T10:00:00.000Z';
+  const later = '2026-09-21T10:20:00.000Z';
+  const collected = collectRoutineRuns([
+    logLine(at, 'Lượt crux-worker-2 bước 0.'),
+    logLine(later, 'Lượt crux-worker-2 nhận mục.'),
+  ]);
+  assert.deepEqual(collected.runs.get('crux-worker-2')?.length, 1);
+});
+
+test('G1 · một dòng log tính cho ĐÚNG MỘT routine — dòng kể lại routine khác không thổi số', () => {
+  // Lỗi thật, đo được ngay trên dòng log đầu tiên của chính mục VF-G1: báo
+  // cáo của worker kể lại số lượt của cả bốn routine, nên bản đầu (đếm mọi
+  // tên nhắc tới) tính dòng ấy thành một lượt cho TỪNG routine. Bước 0 của
+  // phụ lục P3 luôn nhắc `crux-integrator`, nên lỗi này lặp lại mãi.
+  const collected = collectRoutineRuns([
+    logLine(
+      '2026-09-21T21:00:00.000Z',
+      'Lượt crux-worker-2: bước 0 gọi crux-integrator; đo được crux-worker-1 4 lượt, crux-worker-3 5 lượt.',
+    ),
+  ]);
+  assert.deepEqual([...collected.runs.keys()], ['crux-worker-2'], 'chỉ routine viết dòng log mới được tính');
+  assert.equal(collected.mentions, 1);
+});
+
+test('G1 · luật "tên đầu tiên" sai theo chiều AN TOÀN — không che được đội đã tụt về Plan B', () => {
+  // Hai worker thật, nhưng mỗi dòng log đều kể thêm hai tên khác. Nếu đếm
+  // mọi tên thì ra 4 worker và bài kiểm kết luận `khớp` — đúng ca hỏng mà
+  // nó phải bắt. Với luật "tên đầu tiên" thì vẫn ra `sai`.
+  const noisy = [
+    ...runsOf('crux-worker-1', 4).map((line) => ({ ...line, note: `${line.note} So với crux-worker-3 và crux-integrator.` })),
+    ...runsOf('crux-worker-2', 4).map((line) => ({ ...line, note: `${line.note} So với crux-worker-3 và crux-integrator.` })),
+  ];
+  assert.equal(judgeWorkerFleet(collectRoutineRuns(noisy)).verdict, 'sai');
+});
+
+test('G1 · dòng log có `at` không đọc được thì được ĐẾM và nói ra, không bỏ im lặng', () => {
+  const collected = collectRoutineRuns([
+    logLine('không-phải-ngày-tháng', 'Lượt crux-worker-1.'),
+    ...runsOf('crux-worker-1', 1),
+    ...runsOf('crux-worker-2', 1),
+    ...runsOf('crux-worker-3', 1),
+  ]);
+  assert.equal(collected.unparsedAt, 1);
+  const outcome = judgeWorkerFleet(collected);
+  assert.ok(
+    outcome.evidence.some((line) => line.includes('không đọc được')),
+    'bỏ một phần trong im lặng là đúng nhóm lỗi Z: số lượt tụt mà không dòng nào nói vì sao',
+  );
+});
+
+test('G1 · dòng log ngoài cửa sổ 7 ngày không được tính', () => {
+  const collected = collectRoutineRuns([
+    logLine('2026-09-01T00:00:00.000Z', 'Lượt crux-worker-1 cũ.'),
+    logLine('2026-09-02T00:00:00.000Z', 'Lượt crux-worker-2 cũ.'),
+    logLine('2026-09-21T00:00:00.000Z', 'Lượt crux-worker-3 mới.'),
+  ]);
+  assert.deepEqual([...collected.runs.keys()], ['crux-worker-3']);
+});
+
+test('G1 · cửa sổ neo vào dòng log MỚI NHẤT, không vào `now`', () => {
+  // Quan sát cũ nhiều tháng vẫn phải cho đúng kết luận như lúc nó được ghi —
+  // neo vào `now` thì mọi dòng rơi ra ngoài cửa sổ và bài kiểm ra "chưa quan
+  // sát được" cho một bản clone hoàn toàn bình thường.
+  //
+  // `observedNothing` phải được khẳng định RIÊNG, không gộp vào phép so
+  // `verdict`: cả hai ca đều trả `verdict: 'khớp'`, nên chỉ so `verdict` thì
+  // bài kiểm này xanh cả khi cửa sổ neo sai — đúng nhóm lỗi Z mà chính mục
+  // `G1` lên án, và bản đầu của test này đã dính (đo bằng phép phá thật).
+  const old = ['crux-worker-1', 'crux-worker-2', 'crux-worker-3'].map((name, index) =>
+    logLine(`2024-01-0${index + 1}T00:00:00.000Z`, `Lượt ${name}.`),
+  );
+  const outcome = judgeWorkerFleet(collectRoutineRuns(old));
+  assert.ok(!outcome.observedNothing, 'phải quan sát được, không được rơi ra ngoài cửa sổ');
+  assert.equal(outcome.verdict, 'khớp');
+  assert.match(outcome.observed, /3 worker/);
+});
+
+test('G1 · thiếu hẳn ops/logs/ thì NÉM LỖI, không trả rỗng (mục I-005)', () => {
+  // `listLogFiles` của kernel trả [] cho thư mục không tồn tại. Không chặn
+  // thì "chưa quét được" in ra y hệt "quét rồi không thấy gì".
+  const root = mkdtempSync(join(tmpdir(), 'crux-fleet-'));
+  try {
+    assert.throws(() => readFleetLogs(root), /không có thư mục/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('G1 · readFleetLogs đọc được khi ops/logs/ có thật', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-fleet-'));
+  try {
+    mkdirSync(join(root, 'ops', 'logs', 'platform'), { recursive: true });
+    writeFileSync(
+      join(root, 'ops', 'logs', 'platform', 'P-000.jsonl'),
+      `${JSON.stringify(logLine('2026-09-21T00:00:00.000Z', 'Lượt crux-worker-1.'))}\n`,
+    );
+    assert.equal(readFleetLogs(root).length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

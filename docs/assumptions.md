@@ -39,11 +39,11 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 | Mã | Giả định | Độ tin cậy | Trạng thái | Mục kiểm |
 |---|---|---|---|---|
-| G1 | Tài khoản có Claude Code Projects | `suy luận` | giao làn `verify` | `VF-G1` |
+| G1 | Tài khoản có Claude Code Projects | `suy luận` | mệnh đề CHƯA kiểm được; hệ quả vận hành đã đo và đã có bài kiểm canh | `VF-G1` |
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
-| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
+| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | **`đã kiểm một phần`** | hiệu năng và dung lượng đã đo; phút Actions chưa | `VF-G5`, `V-002` |
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
@@ -57,6 +57,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G16 | Phiên cloud và routine chạy trọn mà không cần người bấm cấp quyền | `suy luận` | dự phòng đã viết sẵn | `VF-G16` |
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
+| G19 | `search.list` của YouTube Data API cho 100 lần gọi mỗi ngày, bucket riêng với `videos.insert` | `tài liệu nói vậy` | dự phòng đã viết sẵn · chặn phần XÂY corpus, không chặn phần đã làm của `T-008` | `VF-G19` |
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G7`, `G14`) đã kiểm được một phần — cũng ở dưới; `G2` và `G14` ngay trong Đợt 0. `G7` là ca đáng chú ý nhất: phần chưa kiểm không phải vì chưa ai làm, mà vì **phiên cloud không ra được các trang điều khoản** (mục `VF-G7`). `G11` đã kiểm **xong** phần routine ngày 2026-09-21, mục `VF-G11`.
 
@@ -68,11 +69,36 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 
 - **Nội dung:** tài khoản của chủ dự án có tính năng Claude Code Projects, nên thread do Project khởi chạy được song song với routine.
 - **Nguồn:** chưa có. Đây là suy luận từ mô tả sản phẩm.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · CHARTER phụ lục P1 (số worker và nhịp chạy)
+- **Độ tin cậy:** `suy luận` — **không đổi**, và đây là chỗ dễ nhầm nhất của mục này.
+
+  Lượt `VF-G1` ngày 2026-09-21 đo được nhiều thứ, nhưng **không phần nào của chính mệnh đề "tài khoản có Claude Code Projects" được kiểm**. Thứ đo được là một *hệ quả* mà phụ lục P1 treo lên G1, và hệ quả ấy **không phân biệt được** Projects với ba routine hourly rời nhau. Nâng lên `đã kiểm một phần` (bản đầu của lượt này đã làm, vòng soát chéo bắt lại) là nới một cổng thật: CHARTER 11.1 luật 2 cấm xây mục backlog trên giả định còn `suy luận`, nên đổi nhãn sẽ mở cổng đó ra bằng bằng chứng không đỡ nổi nó. Khác với `G2`, nơi phần lõi của **chính mệnh đề** đã chạy thật.
+- **Phần phụ thuộc:** `CLAUDE.md` · `ops/lanes/verify/backlog.md` · `ops/scripts/recheck-assumptions.ts` · CHARTER phụ lục P1 (số worker và nhịp chạy)
 - **Cách kiểm:** mở `claude.ai/code`, xem có tạo được Project không. **Chỉ chủ dự án làm được** — agent không thấy trang cấu hình tài khoản.
 - **Dự phòng:** Plan B — chỉ dùng routines. Nhịp chạy chuyển sang cấu hình mặc định của P1: 2 worker, preset hourly. Không mất gì về mặt kiến trúc, chỉ chậm hơn.
-- **Trạng thái:** giao làn `verify`, mục `VF-G1`. Hỏi trong issue `🤖 [QĐ]` về các giả định cần chủ dự án.
+
+**Giả định này có hai vế, và chỉ một vế kiểm được từ trong repo.** Tách ra vì gộp lại thì vế đo được bị vế không đo được giữ mãi ở `suy luận`:
+
+| Vế | Kiểm được từ repo? | Trạng thái |
+|---|---|---|
+| (a) Tài khoản **có tính năng** Claude Code Projects | **không** — trang cấu hình tài khoản | vẫn `suy luận`, hỏi ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) |
+| (b) **Hệ quả vận hành** mà phụ lục P1 treo lên G1: chạy được cấu hình 3 worker hay phải lùi về Plan B 2 worker | **có** — `ops/logs/**` (bất biến I8) | **đã kiểm, 2026-09-21** |
+
+- **Bằng chứng cho vế (b), 2026-09-21 (lượt `crux-worker-2`), đo từ `ops/logs/**`, không đọc tài liệu:** **ba** worker chạy thật trong cửa sổ quan sát — `crux-worker-1` (4 lượt), `crux-worker-2` (8 lượt), `crux-worker-3` (5 lượt) — cộng `crux-integrator` 13 lượt, nhịp **trung vị 1,0 giờ** (8 trên 12 khoảng cách nằm trong 0,9–1,1 giờ; bốn khoảng còn lại 1,9 / 2,9 / 1,1 / 1,0 — phần lệch là các lượt không để lại dòng log, xem giới hạn (1) ngay dưới). Tức là **cấu hình 3 worker đang chạy**.
+
+  **Đọc đúng phạm vi của kết luận này — Plan B có hai vế:** "chỉ dùng routines" **và** "2 worker, preset hourly". Quan sát trên bác được **đúng vế sau** (không phải 2 worker). Vế "chỉ dùng routines" thì nó **không** bác được, và còn tương thích hoàn toàn với Plan B: thứ đo được là các routine tên `crux-worker-<N>` — đúng tên routine của phụ lục P1 — chạy ở độ phân giải giờ. Nói "Plan B chưa phải dùng tới" là vượt bằng chứng; nói đúng phải là **phần "2 worker" của Plan B không mô tả hiện trạng**.
+- **Giới hạn của bằng chứng, khai trước:**
+  1. Con số là **cận dưới, không phải số đúng**. Phụ lục P1 bước 3 bảo worker không nhận được mục nào thì in `idle` và kết thúc **không commit gì** — lượt đó không để lại dòng log. Khoảng cách 7,0 / 5,0 / 4,1 giờ giữa các lượt quan sát được gần như chắc chắn là các lượt `idle` không ghi gì, chứ không phải routine đứng im.
+  2. Vì (1), **nhịp thật của từng worker không chốt được** từ log. Nhịp trung vị đo được của ba worker là 4,0 / 2,0 / 2,6 giờ, nhưng các khoảng 7,0 và 7,2 giờ xen giữa những khoảng 0,9 giờ cho thấy đó là khoảng cách giữa các lượt **có ghi log**, không phải nhịp chạy. Chốt được đúng một điều: có ít nhất ba worker, và chúng chạy ở độ phân giải giờ chứ không phải 3 giờ một lượt như phụ lục P1 mô tả cho cấu hình 3 worker.
+  3. **Một dòng log tính cho đúng một routine — tên xuất hiện đầu tiên**, vì dòng log mở bằng chính routine viết nó. Bản đầu của bài kiểm đếm *mọi* tên nhắc trong `note` và sai ngay ở dòng log đầu tiên của chính mục này: dòng ấy **kể lại** số lượt của cả bốn routine nên tự tính thành một lượt cho từng routine. Báo cáo worker nhắc tên routine khác là chuyện thường (bước 0 của phụ lục P3 luôn nhắc `crux-integrator`), nên lỗi đó sẽ lặp mãi nếu không chặn. Luật "tên đầu tiên" sai theo chiều **an toàn**: nó chỉ làm phép đếm nhỏ đi, nên không bao giờ che được một đội đã tụt về Plan B.
+  3. Quan sát này **không** chứng minh vế (a). Ba routine hourly rời nhau cho đúng cùng một quan sát. Nó chỉ nói cấu hình đang chạy là cấu hình nào, và đó đúng là thứ phụ lục P1 cần biết.
+- **Kiểm tự động:** `worker-fleet-cadence` — **bài kiểm này canh vế dự phòng, không đi chứng minh mệnh đề**, đúng cùng kiểu với bài kiểm của `G17` ("không đi tìm lại kết luận đã có, mà canh các điều kiện dự phòng đang đứng lên trên"). Nó đọc `ops/logs/**` bằng `readRunLogs` của kernel (không tự `cat`: thứ tự dòng trong file không mang nghĩa), gom các dòng log nhắc tên routine thành từng **lượt** (hai dòng cách nhau quá 50 phút là hai lượt), rồi đếm số worker rời nhau trong cửa sổ 7 ngày tính lùi từ dòng log **mới nhất**.
+
+  Cửa sổ neo vào dòng log mới nhất chứ không vào `now`: neo vào `now` thì một bản clone cũ, hoặc một tuần repo nằm yên, tự đẩy bài kiểm sang `sai` vì một lý do chẳng dính gì tới G1.
+
+  Chiều kết luận hẹp có chủ đích, theo đúng giới hạn (1) ở trên: **≥ 3 worker → `khớp`** (cấu hình 3 worker còn sống); **1–2 worker mà cửa sổ vẫn có dòng nhắc routine → `sai`** (đội đã tụt về Plan B, phụ lục P1 và sổ đang ghi một cấu hình không còn tồn tại); **không dòng nào nhắc routine → `◦ chưa quan sát được`, không phải `khớp`** — tên routine nằm trong `note` dạng văn xuôi, nên đổi quy ước ghi `note` phải ra "chưa quan sát được", không được ra "vẫn ổn". Đây là cùng bài học fail-open của danh sách trắng `isToolCommit` ở mục `G14`.
+
+  Thiếu hẳn thư mục `ops/logs/` thì bài kiểm **ném lỗi** và ra `⚠ … KHÔNG CHẠY ĐƯỢC` (mục `I-005`), không ra `◦`: `listLogFiles` của kernel trả mảng rỗng cho thư mục không tồn tại, nên nếu không chặn thì "chưa quét được" in ra y hệt "quét rồi không thấy gì".
+- **Trạng thái:** vế (b) **đã kiểm** bằng chạy thật và nay có bài kiểm hồi quy chạy lại mỗi thứ Hai. Vế (a) vẫn giao làn `verify` mục `VF-G1` và vẫn chờ chủ dự án ở issue [#5](https://github.com/HungQuach301/crux-studio/issues/5) (mở từ 2026-09-20, chưa có câu trả lời).
 
 ## G2 · `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci`
 
@@ -112,11 +138,18 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G5 · Quota phút Actions và dung lượng artifact đủ cho việc render
 
 - **Nội dung:** quota phút Actions và dung lượng lưu artifact của gói hiện tại đủ để render một tập ~36.000 khung, cộng proof render.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md`
+- **Độ tin cậy:** `đã kiểm một phần`
+- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md` · `spike/canvas/RESULT.md` · `ops/workflows/spike-canvas.yml`
 - **Cách kiểm:** spike canvas (`V-002`) và thử nghiệm engine dựng (`A-001`) đều **đo phút Actions thật** cho một đoạn mẫu, rồi ngoại suy. Không tốn tiền API, chỉ tốn phút Actions của chính lần đo.
 - **Dự phòng:** đưa chi phí vào ngân sách học, hoặc chuyển sang runner khác. Nếu sai nặng, chốt 30fps thay vì 60fps ở `A-001`.
-- **Trạng thái:** giao làn `verify`, mục `VF-G5`. **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh.
+- ✅ **Đã kiểm bằng chạy thật, 2026-09-21 (mục `V-002`) — phần hiệu năng và dung lượng.** 27.000 khung, bốn cấu hình, canvas 6000×3400, trên container 4 nhân / 16 GB (trùng cấu hình `ubuntu-latest` hiện hành về nhân và RAM). Bảng đầy đủ ở `spike/canvas/RESULT.md`, sinh từ `measurements.json` chứ không gõ tay.
+  - **Thời gian:** 5.400 khung ở 30fps mất **6,4 phút** một worker, ngưỡng WP-003 là ≤25 phút. 60fps (10.800 khung) mất 12,2 phút. 30fps có mờ chuyển động 4 mẫu mất 8,9 phút.
+  - **Bộ nhớ:** đỉnh RSS cả cây tiến trình trình duyệt **565 MB** trên 16 GB — không gần trần, ở mọi cấu hình.
+  - **Dung lượng artifact:** đoạn 3 phút ở 30fps nặng **46,0 MB** (H.264 CRF 20), tức ~15,3 MB mỗi phút → **~307 MB cho một tập 20 phút**. Đây là con số cho vế "dung lượng artifact" của giả định này. Đối chứng: cùng số khung nhưng máy quay đứng yên chỉ cho 1,6 MB — chênh lệch đó là cái giá có thật của quy tắc "không khung nào đứng yên".
+  - **Chi phí của kiến trúc `D-04` rất nhỏ:** vẽ một khung mất 3,2 ms, tức 4,4% thời gian mỗi khung; 67,8 ms còn lại là lấy khung ra khỏi trình duyệt. Nếu sau này đụng ngưỡng thì chỗ phải tối ưu là đường ống xuất khung, **không** phải ngữ pháp chuyển động.
+- ⬜ **Chưa kiểm — phút Actions tính tiền.** Số trên đo ở container phiên cloud, không phải runner Actions. Workflow đo nó là `ops/workflows/spike-canvas.yml`, và theo CHARTER 3.2 nó chỉ chạy được **sau khi PR của `V-002` merge vào `main`** rồi `sync-workflows` chép sang `.github/workflows/`. Lượt worker sau chạy nó bằng `workflow_dispatch` và điền nốt. Cho tới lúc đó vế "quota phút Actions" của giả định này vẫn là `suy luận`.
+- ⚠️ **Số đo là cận dưới, không phải số của thư viện dựng hình.** Spike đo canvas 2D trần, không thêm phụ thuộc nào: chọn thư viện dựng hình React mà spec WP-003 mục 5 nêu là **chọn nhà cung cấp** kèm điều khoản thương mại (`irreversible` nhóm 3, CHARTER 2.3), và mục 7c đòi ghi điều khoản giấy phép — thứ mà bức tường mạng (issue #36) không cho đọc. Một thư viện có vòng đời React mỗi khung sẽ cộng vào đúng cột đang chiếm 4,4%. Việc chốt thư viện thuộc `A-001`.
+- **Trạng thái:** `đã kiểm một phần` — hiệu năng và dung lượng đã đo bằng chạy thật; phút Actions còn treo. **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh — và phần đắt nhất của nó (kiến trúc canvas liên tục có khả thi không) nay đã có câu trả lời: **có**, còn rất xa ngưỡng.
 
 ## G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
 
@@ -268,12 +301,15 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 - **Nội dung:** phiên cloud của Claude **không** có quyền push file trong `.github/workflows/`.
 - **Nguồn:** có báo lỗi công khai. Đây cũng là một trong ba nhận định sai của bản C1 (điểm b) — bản C1 giả định ngược lại.
 - **Độ tin cậy:** `tài liệu nói vậy`
-- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/workflows/ci.yml` · `CLAUDE.md` · `.claude/hooks/guard.mjs`
+- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/workflows/ci.yml` · `ops/workflows/smoke-workflows.yml` · `CLAUDE.md` · `.claude/hooks/guard.mjs`
 - **Cách kiểm:** trong một nhánh vứt đi, thử ghi một file vào `.github/workflows/` và push. **Không merge.**
   > Lưu ý về cách kiểm: hook `guard.mjs` chặn chính agent ghi vào `.github/`, nên bài kiểm này **không thực hiện được từ một phiên agent bình thường** — và agent không được tự nới hook để kiểm. Bài kiểm cần chủ dự án chạy, hoặc cần một PR `owner-merge` mở một ngoại lệ hẹp cho đúng một file thử rồi đóng lại ngay.
 - **Dự phòng nếu giả định đúng:** giữ nguyên cơ chế sync và PAT — đang dùng.
 - **Nếu hoá ra ghi được ổn định:** có thể gỡ bỏ cơ chế sync và PAT, **thông qua một quyết định riêng**. Agent không tự gỡ: việc đó đổi cách toàn bộ workflow tới được GitHub.
-- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10`.
+- **Trạng thái:** đang dựa vào, giao làn `verify` mục `VF-G10` — mục đó nay `parked` (2026-09-21, lượt `crux-worker-2`).
+- ⬜ **Vì sao `parked`:** cách kiểm ở trên là đúng thứ phụ lục P1 của CHARTER và `CLAUDE.md` mục 4 cấm tuyệt đối, và lớp chặn máy vẫn sống — đo lại trong lượt worker 2026-09-21 ~22:25Z, `guard.mjs` chặn cả một lệnh **đọc** `.github/workflows/ci.yml`. Đi vòng qua hook bằng công cụ khác là lách lớp chặn, không làm. Bài kiểm cần chủ dự án chạy, hoặc cần một ngoại lệ hẹp có thời hạn trong `guard.mjs` qua PR `owner-merge` — nới lớp chặn là CHARTER 2.3 nhóm 5. Issue **#88** nêu ba phương án; lời hứa "đề xuất riêng" về G10 có từ issue #5 (2026-09-20) và tới nay mới thực hiện.
+- ⬜ **Dữ liệu gián tiếp, đo kỹ rồi vẫn KHÔNG kết luận được:** `git log origin/main -- .github/` (tới `c7179c6`) trả **3** commit — `9b97cea` và `9928c75` của `crux-sync` (PAT `WORKFLOW_SYNC_TOKEN`) là ghi thật; `939ebb0` là commit **gốc** của lịch sử đang thấy (committer `GitHub <noreply@github.com>`, bản squash của PR #15), không có cha nên cả cây hiện ra dạng `A`, gồm 7 file `.github/workflows/*.yml` đã tồn tại từ trước — đầu nhánh thật của PR #15 (`c5a164a`) **không** chạm `.github/`. Cạm bẫy đo: `git diff-tree -r --name-status <sha>` trả rỗng cho commit gốc, phải có `--root`. Dữ liệu này không nói được gì về quyền của phiên agent — chưa phiên nào thử, vì hook chặn — nên độ tin cậy giữ nguyên `tài liệu nói vậy`.
+- **Không chặn làn nào:** dự phòng "giữ nguyên cơ chế sync và PAT" đang chạy thật; câu trả lời chỉ mở đường **gỡ** cơ chế đó, mà việc gỡ vốn đã cần một quyết định riêng.
 
 ## G11 · Hook và luật deny có hiệu lực trong routine và thread
 
@@ -395,13 +431,22 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 
   Kết luận: **git đọc `.gitattributes` của nhánh đích ở trạng thái TRƯỚC lần gộp.** Một luật merge do `main` mang tới **không tự áp cho chính lần gộp mang nó tới**. Hai lần thử của `P-015` đều đặt luật sẵn ở commit gốc, nên cả hai đều bỏ sót đúng điều kiện đã làm hỏng việc thật.
 
-  **Chỗ vẫn chưa kiểm, và phải nói rõ:** bằng chứng trên **không** chứng minh được GitHub bỏ qua `.gitattributes` khi nó tự tính trạng thái `mergeable`. Trong tình huống của PR #11, git ở phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Câu hỏi "GitHub có dùng `.gitattributes` không" chỉ trả lời được bằng hai PR mà **cả hai đều đã mang sẵn** `.gitattributes` — chưa có cặp nào như thế. Giữ nó ở mục `VF-G17`.
-- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes` · `ops/scripts/recheck-assumptions.ts`
-- **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04`, log tách tới mức mục nên hai PR khác mục không còn dùng chung file — ca kiểm phải là hai lần chạy của **cùng một mục** (`ops/logs/<lane>/<id>.jsonl`), hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai.
-- **Kiểm tự động:** `union-merge-order` — dựng hai repo git thật trong thư mục tạm, khác nhau **đúng một điều kiện**: nhánh đã mang `.gitattributes` trước lần gộp hay chưa. Bài kiểm không đi tìm lại kết luận `sai` đã có, mà canh **hai điều kiện dự phòng đang đứng lên trên**: (1) luật do `main` mang tới vẫn KHÔNG áp cho chính lần gộp mang nó tới — nếu git đổi hành vi này thì G17 hết `sai`; (2) union VẪN cứu được lần gộp khi nhánh đã mang sẵn luật — nếu hỏng thì `.gitattributes` thành đồ trang trí và KF-005 phải viết lại. Phần *GitHub tự tính `mergeable`* thì **không** tự kiểm được ở đây: nó cần hai PR thật trên GitHub, vẫn nằm ở `VF-G17`.
+  **Câu hỏi còn mở nay đã trả lời — 2026-09-22, và câu trả lời là KHÔNG.** Bằng chứng ở PR #11 phía trên **không** nói được gì về GitHub: lúc đó git ở phía dưới cũng xung đột thật, nên GitHub báo xung đột là **đúng**. Ca kiểm mà mục `VF-G17` mô tả — hai PR **đều đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only — từ đó đã xảy ra thật, và được đo **hai lần độc lập**:
+
+  | Lần quan sát | PR | `mergeable_state` GitHub tự tính | `git merge-tree --write-tree` ở phía worker |
+  |---|---|---|---|
+  | lượt `crux-integrator`, 2026-09-22 02:05 giờ VN | `#56`, `#65` | `dirty` | `EXIT=0`, gộp sạch |
+  | lượt `crux-worker-1`, 2026-09-21 19:38Z | `#75` | `dirty` | `EXIT=0`, gộp sạch |
+
+  Lần quan sát thứ hai tách biến sạch hơn lần đầu, và đó là lý do nó đáng ghi riêng: `base.sha` của `#75` **đúng bằng** `main` tại lúc đo (`296869b`), nên `dirty` không thể là trạng thái cũ GitHub chưa tính lại; và file **duy nhất** mà nhánh với `main` cùng chạm là `ops/logs/platform/P-016.jsonl`, vốn đã khai `merge=union`. Bật/tắt đúng một biến trên cùng một phép đo: union bật → `EXIT=0`; ghi `ops/logs/**/*.jsonl -merge` vào `.git/info/attributes` (thắng `.gitattributes` trong cây) → `EXIT=1`, `CONFLICT (content) in ops/logs/platform/P-016.jsonl`; xoá dòng đó đi → `EXIT=0` trở lại. Và một **đối chứng chặt hơn**, vì `-merge` là *unset* nên git rơi về trình merge nhị phân và luôn báo xung đột (kèm `warning: Cannot merge binary files`, dù file là văn bản thuần): chạy lại với `merge=text` — trình văn bản thường — vẫn `EXIT=1`, `CONFLICT (content)`, **không** cảnh báo nhị phân. Chênh lệch giữa hai phía đúng là do luật union, không phải do cách tắt luật.
+
+  **Hệ quả:** `.gitattributes` một mình không bao giờ đủ, vì lớp tự merge chỉ nghe **một** phía — phía GitHub, phía không áp luật. Ghi đầy đủ ở `ops/known-failures.md` **KF-009**. Kết luận này **không** làm đổi trạng thái giả định nào: G17 đã `sai` và đã chuyển dự phòng từ trước. Nó siết thêm lý do dự phòng (`P-016`, bước 0 của phụ lục P3) phải chạy ở đầu **mọi** lượt worker chứ không phải một lần mỗi ngày.
+- **Phần phụ thuộc:** `ops/known-failures.md` · `ops/lanes/platform/backlog.md` · `ops/lanes/verify/backlog.md` · `.gitattributes` · `ops/scripts/recheck-assumptions.ts` · `kernel/src/log.ts` · `ops/test/step0-log-path.test.ts` (mục `P-023`: hình dạng "một lượt chạy, một file" cho dòng bước 0 được **thúc đẩy bởi** G17 — nếu G17 hết `sai`, hình dạng này vẫn đúng và vẫn nên giữ, nó chỉ bớt cấp bách)
+- **Cách kiểm:** hai PR song song cùng làn, **cả hai** đã mang `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04`, log tách tới mức mục nên hai PR khác mục không còn dùng chung file — ca kiểm phải là hai lần chạy của **cùng một mục** (`ops/logs/<lane>/<id>.jsonl`), hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc trạng thái `mergeable` của PR kia trên GitHub **và** chạy `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau, và phải ghi cả hai. **Đã thực hiện, hai lần độc lập** (2026-09-22 và 2026-09-21 19:38Z) — hai câu trả lời **đúng là khác nhau**, cả hai đã ghi ở phần độ tin cậy trên.
+- **Kiểm tự động:** `union-merge-order` — dựng hai repo git thật trong thư mục tạm, khác nhau **đúng một điều kiện**: nhánh đã mang `.gitattributes` trước lần gộp hay chưa. Bài kiểm không đi tìm lại kết luận `sai` đã có, mà canh **hai điều kiện dự phòng đang đứng lên trên**: (1) luật do `main` mang tới vẫn KHÔNG áp cho chính lần gộp mang nó tới — nếu git đổi hành vi này thì G17 hết `sai`; (2) union VẪN cứu được lần gộp khi nhánh đã mang sẵn luật — nếu hỏng thì `.gitattributes` thành đồ trang trí và KF-005 phải viết lại. Phần *GitHub tự tính `mergeable`* thì **không** tự kiểm được ở đây: nó cần hai PR thật trên GitHub. Phần đó nay **đã trả lời bằng quan sát** (xem độ tin cậy ở trên và `KF-009`) chứ không bằng bài kiểm tự động — và nó vẫn sẽ không tự kiểm được, nên thứ canh nó là bước 0 của phụ lục P3 cộng dòng log bắt buộc, không phải `pnpm recheck:assumptions`.
 - **Dự phòng — đã chuyển sang, không còn là ghi chú:** union giữ lại vì nó vẫn cứu được mọi lần gộp **sau khi** nhánh đã mang luật — không mất gì. Nhưng nó không còn được coi là cơ chế chính. Cơ chế chính chuyển sang mục `P-016`: routine integrator **tự gộp `main`** vào mọi PR đang mở bị xung đột mà nó giải được, chạy `pnpm check`, rồi push. Việc giải xung đột trở thành việc của máy, không phải việc của người.
 - **Bài học chung, vượt ra ngoài mục này:** hai lần thử của `P-015` là chạy thật, và vẫn cho kết luận sai — vì cả hai đều dựng ở **trạng thái sau cùng**, không dựng ở trạng thái mà lỗi thật sẽ xảy ra. "Kiểm bằng chạy thật" (CHARTER 11.1 luật 3) chưa đủ. Bài thử phải tái hiện **đúng điều kiện đầu vào của lần chạy thật**, và điều kiện dễ bỏ sót nhất là *thứ tự thời gian*: ai có gì, vào lúc nào.
-- **Trạng thái:** `sai`, đã chuyển dự phòng ngay trong cùng PR ghi nhận nó (quyết định `reversible` theo CLAUDE.md mục 7). Phần còn mở giao làn `verify` mục `VF-G17`.
+- **Trạng thái:** `sai`, đã chuyển dự phòng ngay trong cùng PR ghi nhận nó (quyết định `reversible` theo CLAUDE.md mục 7). **Phần còn mở đã đóng ngày 2026-09-22** (mục `VF-G17`, làn `verify`): GitHub **không** dùng `.gitattributes` khi tự tính `mergeable`. Không còn câu hỏi nào treo ở giả định này; trạng thái `sai` giữ nguyên, dự phòng giữ nguyên.
 
 ---
 
@@ -431,3 +476,18 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 - **Cách kiểm lại:** lặp đúng hai dòng trong bảng trên. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi registry npm, mà các lệnh kiểm của repo phải chạy được khi không có mạng — một bài kiểm im lặng bỏ qua vì không ra được internet còn tệ hơn là không có bài kiểm nào. Mục `VF-G18` giữ phần kiểm định kỳ.
 - **Dự phòng — chưa cần viết sẵn:** nếu giả định này hoá ra sai, cơ chế `I-004` không mất an toàn, nó chỉ mất tính "ít xáo trộn nhất": lockfile vẫn khớp manifest và CI vẫn gác. Khi đó `integrator-lockfile.ts` chuyển sang `aborted-ineligible` cho mọi xung đột lockfile và giao lại cho người — một dòng sửa, hành vi quay về đúng như trước mục `I-004`.
 - **Trạng thái:** đã kiểm, đang được dùng. Kiểm lại khi nâng `pnpm` qua một phiên bản chính.
+
+## G19 · Hạn mức `search.list` của YouTube Data API
+
+- **Nội dung:** method `search.list` có bucket **riêng** 100 lần gọi mỗi ngày, mỗi lần 1 đơn vị, và mỗi trang kết quả tiếp theo tốn thêm một lần gọi. Bucket này không dùng chung với `videos.insert`, nên xây corpus không tranh quota với việc đăng video.
+- **Vì sao nó chịu tải:** toàn bộ ngân sách quota của corpus đối thủ (`packs/channels/us-personal-finance/quota-budget.md`) và cửa dừng `quotaGate` đứng trên con số 100. Sai theo hướng **thấp hơn** thì một lần xây corpus tiêu hết quota của ngày mà cửa dừng không kịp đóng — và vì `search.list` không dùng chung bucket với việc đăng, hỏng đó **không** lan sang lịch phát hành, nhưng nó vẫn làm mọi việc tìm kiếm khác trong ngày chết lặng.
+- **Nguồn:** tài liệu nhà cung cấp. **Chưa đọc Cloud Console** — WP-014 mục 7 đòi đúng việc đó, và phiên cloud không có project nào để mở.
+- **Độ tin cậy:** `tài liệu nói vậy`
+- **Phần phụ thuộc:** `workshops/topic/src/corpus.ts` · `packs/channels/us-personal-finance/quota-budget.md` · `ops/lanes/topic/backlog.md` (T-008, T-011)
+- **Cách kiểm:** mở Google Cloud Console của project, đọc hạn mức thật của `search.list`, so với 100. **Chỉ chủ dự án làm được** — cần tài khoản và một project có bật API. Cố ý **không** đăng ký vào `pnpm recheck:assumptions`: bài kiểm này cần gọi ra ngoài, mà các lệnh kiểm của repo phải chạy được khi không có mạng.
+- **Dự phòng — lớp một đã viết sẵn, lớp hai CHƯA có code (khai rõ, không để câu khai đứng một mình):** con số **không nằm trong code**. `quotaGate` nhận `searchCallsPerDay` và `reserveFraction` làm tham số, và cả hai đọc từ trường `quota.limits` của chính ảnh chụp corpus. Giả định sai thì sửa đúng một số trong dữ liệu, không sửa dòng code nào — đây là **lớp một**, đã kiểm bằng chạy thật (xem dưới). **Lớp hai (đọc hạn mức thật ra từ `quota.spent.searchCalls` khi nhà cung cấp trả 429) HIỆN CHƯA TỒN TẠI:** đo 2026-09-22 (mục `topic/T-012`), `grep -rn "429" workshops/ kernel/ ops/scripts/` ra **0 kết quả**. Nó thuộc phần **xây** corpus (`T-011`), phần duy nhất gọi API và gặp được 429 — mà `T-011` đang chặn vì chưa có secret nào. Nên tới khi `T-011` chạy, dự phòng của G19 **chỉ có lớp một**; `CLAUDE.md` mục 7 cho phép xây trên giả định chưa kiểm chỉ khi dự phòng đã viết sẵn, và lớp một đã đủ cho phần đang chạy (không gọi API). Lớp hai là tiêu chí xong của `T-011`, không phải của mục này.
+
+  **Đã kiểm bằng chạy thật, 2026-09-22 (lượt `crux-worker-1`, `main` ở `f873967`)** — câu "con số không nằm trong code" ở trên nay là số đo, không phải lời hứa: `quotaGate` nhận hạn mức qua tham số `QuotaState` và thân hàm chỉ đọc `state.*`, **không hằng số nào**. (Chuỗi `100` có mặt trên hai dòng trong `workshops/topic/src/`, không dòng nào là hạn mức: `corpus.ts:227` là chú thích của `quotaGate`, `demand.ts:120` là hệ số làm tròn `Math.round(… * 100) / 100`.) giá trị thật nằm ở `workshops/topic/data/corpus/us-personal-finance-2026-09-01.json` kèm `source: "vendor-docs"`, và `corpus.v0.schema.json` bắt trường đó bằng `enum`. Test `workshops/topic/test/corpus.test.ts:132` khẳng định `source === 'vendor-docs'`.
+
+  **Chỗ dự phòng trước đây chưa phủ, nay đã phủ (mục `topic/T-012`):** bảng `quota-budget.md` có hai dòng số nhưng cửa dừng vẫn chỉ tiêu thụ `searchCallsPerDay` — nó đếm **lần gọi**, không đếm **đơn vị**. Trước `T-012`, `unitsPerCall` không tồn tại trong code, nên nếu Cloud Console hiển thị hạn mức theo đơn vị thì giữa số đọc được và số code dùng có một phép chia làm bằng tay — một chỗ sai số đi vào mà không gì đỏ. Từ `T-012`: `quota.limits` **có** `unitsPerCall` và `unitsPerDay` (hai số nguyên bản của #101 ghi thẳng vào dữ liệu); phép chia nằm ở đúng một chỗ có test (`deriveSearchCallsPerDay`, làm tròn xuống); và `corpusProblems` đỏ khi `searchCallsPerDay` lệch phép dẫn xuất, và khi hai dòng hạn mức của `quota-budget.md` (`parseQuotaBudget`) lệch `quota.limits` của corpus. Issue **#101** vẫn xin hai số nguyên bản như Console hiển thị, không xin số đã quy đổi.
+- **Trạng thái:** `tài liệu nói vậy`, giao làn `verify`, mục `VF-G19` — **`parked` từ 2026-09-22**, vì bài kiểm nằm ngoài repo và chỉ chủ dự án chạy được (issue **#101** nêu ba phương án; có câu trả lời thì mục mở lại thành `ready`). Phần đã làm của `T-008` (contract, kiểm mới lạ, ba đại lượng nhu cầu) **không** đứng trên giả định này — nó chạy trên corpus có sẵn và không gọi API. Phần **xây** corpus (`T-011`) thì có, và đang chặn ở chỗ khác nặng hơn: chưa có secret nào.

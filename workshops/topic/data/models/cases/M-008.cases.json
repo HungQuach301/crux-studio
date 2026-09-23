@@ -1,0 +1,36 @@
+[
+  {
+    "caseId": "irs590a-example-1",
+    "params": {
+      "phaseoutTopUsd": 146000,
+      "phaseoutWidthUsd": 20000,
+      "modifiedAgiUsd": 126500,
+      "phaseoutPct": 35,
+      "compensationUsd": 66000,
+      "contributionUsd": 7000
+    },
+    "expected": {
+      "phaseoutAllowanceUsd": 6825,
+      "iraDeductionUsd": 6825,
+      "nondeductibleContributionUsd": 175
+    },
+    "computedBy": "IRS Pub 590-A (2025), 'Worksheet 1-2 ... Example 1 Illustrated': dòng 1 = 146,000, dòng 2 = 126,500, dòng 4 = 6,825, dòng 7 = 6,825, dòng 8 = 175."
+  },
+  {
+    "caseId": "irs590a-example-2",
+    "params": {
+      "phaseoutTopUsd": 246000,
+      "phaseoutWidthUsd": 10000,
+      "modifiedAgiUsd": 238500,
+      "phaseoutPct": 70,
+      "compensationUsd": 38500,
+      "contributionUsd": 7000
+    },
+    "expected": {
+      "phaseoutAllowanceUsd": 5250,
+      "iraDeductionUsd": 5250,
+      "nondeductibleContributionUsd": 1750
+    },
+    "computedBy": "IRS Pub 590-A (2025), 'Worksheet 1-2 ... Example 2 Illustrated': dòng 1 = 246,000, dòng 2 = 238,500, dòng 4 = 5,250, dòng 7 = 5,250, dòng 8 = 1,750."
+  }
+]

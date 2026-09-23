@@ -10,6 +10,7 @@ import { definition } from '../src/index.ts';
 const { episode, input: fixture } = readInputFile(
   fileURLToPath(new URL('../../../', import.meta.url)),
   fileURLToPath(new URL('../fixtures/input.json', import.meta.url)),
+  definition.consumes,
 );
 const packs = fixture.packs;
 const targetDurationMs = (packs['genre'] as { limits: { targetDurationMs: number } }).limits

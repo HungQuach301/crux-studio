@@ -36,6 +36,7 @@ export class Cassette {
   private readonly entries: Map<string, CassetteEntry>;
   private readonly recorded: CassetteEntry[] = [];
   private spentUsd = 0;
+  private callCount = 0;
 
   constructor(mode: CassetteMode, entries: readonly CassetteEntry[] = []) {
     this.mode = mode;
@@ -55,6 +56,18 @@ export class Cassette {
     return this.recorded;
   }
 
+  /**
+   * Số lời gọi ra ngoài ĐÃ ĐI QUA băng này — tính cả lần lấy lại từ băng, vì
+   * một lần replay vẫn là một lời gọi mà stage đó thật sự thực hiện.
+   *
+   * Đây là tín hiệu để một xưởng biết nó CÓ gọi mô hình hay không, thay vì
+   * suy từ cờ `impl`. `costUsd` không thay được: một lời gọi đã ghi có thể
+   * có `costUsd` bằng 0, nên 0 đồng không có nghĩa là không gọi.
+   */
+  get calls(): number {
+    return this.callCount;
+  }
+
   async call<T>(
     provider: string,
     operation: string,
@@ -65,6 +78,7 @@ export class Cassette {
     const hit = this.entries.get(key);
     if (hit) {
       this.spentUsd += hit.costUsd;
+      this.callCount += 1;
       return hit.response as T;
     }
     if (this.mode === 'replay') {
@@ -82,6 +96,7 @@ export class Cassette {
     this.entries.set(key, entry);
     this.recorded.push(entry);
     this.spentUsd += costUsd;
+    this.callCount += 1;
     return response;
   }
 }

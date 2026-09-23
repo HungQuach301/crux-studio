@@ -15,6 +15,7 @@ import { definition } from '../src/index.ts';
 const { episode, input: fixture } = readInputFile(
   fileURLToPath(new URL('../../../', import.meta.url)),
   fileURLToPath(new URL('../fixtures/input.json', import.meta.url)),
+  definition.consumes,
 );
 
 const limits = (fixture.packs['genre'] as { limits: { sceneCount: [number, number] } }).limits;

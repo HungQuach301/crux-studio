@@ -378,7 +378,7 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
 
 - deps: `I-009`
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
 - tiêu chí xong:
   - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
@@ -387,3 +387,243 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
   - Danh sách viết cứng trong `kernel/test/input.test.ts` cũng phải hết — một bài kiểm chép lại đúng thứ
     nó đang kiểm thì không kiểm gì.
   - Kiểm nằm trong `pnpm check`, và **đỏ thật** khi đổi `consumes` của một xưởng mà không đổi fixture.
+- **Đã làm:**
+  - Chọn phương án **bỏ bản chép**, đúng khuyến nghị "nếu làm được". `UpstreamFrom` bỏ trường `workshops`;
+    fixture chỉ khai `{ "golden": "<tập>" }`. `readInputFile(root, path, consumes)` nhận danh sách xưởng
+    cần nạp từ bên gọi: CLI truyền `definition.consumes` (`kernel/src/cli.ts`), năm fixture `upstreamFrom`
+    bỏ mảng `workshops`, năm stub test truyền `definition.consumes`. Một nguồn duy nhất
+    (`definition.consumes` ở `workshops/<tên>/src/index.ts`), không còn bản chép thứ hai để trôi.
+  - `check-fixtures.ts` lấy `consumes` từ `DEFINITIONS` của `pipeline.ts` (nơi DUY NHẤT được import nhiều
+    xưởng, bất biến I3) — không tự chép lại danh sách. `pipeline.ts` export `DEFINITIONS` cho việc này.
+  - Danh sách viết cứng trong `kernel/test/input.test.ts` (bài "sáu fixture … khớp ĐÚNG snapshot") đã hết:
+    chuyển sang `ops/test/check-fixtures.test.ts`, lấy `consumes` từ `DEFINITIONS`, không khai tay.
+  - Kiểm đỏ thật, đo bằng chạy thật: (a) đổi `consumes` của một xưởng thì `inputs`/`inputsHash` của output
+    đổi theo, tập vàng replay đỏ ngay (`pnpm check`) — đo với `release` bỏ `topic`: snapshot `release` lệch
+    ở `inputsHash`. (b) `upstreamFrom.workshops` sót lại trong fixture nay **đỏ** ở `pnpm contracts`
+    (`upstreamFromWorkshopsProblems`), không còn bị bỏ qua im lặng như trước.
+  - `ops/known-failures.md` hàng **Z16**: ghi phần `upstreamFrom.workshops` đã bỏ ở `I-011`.
+
+### I-012 · Bài kiểm G14 quét cả nhánh đã merge, nên nó kêu oan và sẽ kêu mãi mãi
+
+Tìm ra ở lượt `crux-integrator` 2026-09-22 02:05 giờ VN — lần đầu phụ lục P3 bước 4 có cơ chế thật để
+chạy (`pnpm recheck:assumptions`, mục `I-003`). Đã đo bằng chạy thật.
+
+`collectCommits` quét `refs/remotes/origin/claude/*` trừ `^refs/remotes/origin/main`. Phép loại đó đúng
+với ý định — chú thích của `judgeTrailerEvidence` nói rõ loại `main` ra vì **squash làm mất trailer, không
+phải agent làm mất** — nhưng nó rò: GitHub merge kiểu **squash**, nên nhánh đã merge vẫn còn trên remote
+với **toàn bộ** lịch sử không nằm trong `main`. Bài kiểm vì thế đếm lại đúng những commit mà nó định loại.
+
+Đo được, lượt 2026-09-22: **14/131 commit "thiếu trailer"**, và phân loại từng commit thì
+
+- **10** nằm trên đúng một nhánh stale, `origin/claude/platform/P-009` (PR `#9` đã merge, nhánh chưa xoá).
+  Trong đó có `99d6bcf Initial commit`, `e01a667 Add files via upload`, `087246e Delete .github/...` —
+  commit của **chính chủ dự án** qua giao diện web, không bao giờ có trailer và không nên có;
+- **2** là `chore: sync workflows from ops/workflows [skip ci]`, do GitHub Action `sync-workflows` sinh;
+- **2** là merge tay dạng `Gộp main vào <nhánh>` mà `isToolCommit` không khớp (nó chỉ nhận
+  `Gộp … (integrator,` và `Merge branch …`);
+- **1** là tín hiệu thật: `7fc292a` (`integration: bước 0 của P3 lượt 23:05`, trên
+  `origin/claude/keen-mayer-nzkvdy`) — commit do agent soạn, thiếu trailer `Claude-Session`. Đây là đúng
+  phần mà giả định **G14** còn để ngỏ, và là thứ duy nhất trong 14 dòng đáng gọi là quan sát.
+
+Vì sao đáng một mục chứ không phải một dòng ghi chú: bài kiểm này **không bao giờ xanh được nữa**. Commit
+của chủ dự án trên nhánh stale sẽ nằm đó mãi, nên mỗi thứ Hai nó lại in sẵn một thân issue `🤖 [QĐ]` cho
+một giả định chẳng đổi trạng thái — đúng lý do mà chính script đã bỏ kết luận `nâng` ("một cảnh báo kêu
+mọi lượt là một cảnh báo không ai đọc"), và đúng hình dạng `I-005`/`I-007` đã sửa một lần cho ca "kêu
+oan". Lượt này phải điều tra tay 14 commit mới dám không mở issue; lượt sau sẽ không may như vậy.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: lượt `crux-integrator` 2026-09-22 02:05 giờ VN, `ops/logs/integration/P3-daily-2026-09-22.jsonl`;
+  `docs/assumptions.md` G14; mục `I-003`, `I-005`, `I-007`
+- tiêu chí xong:
+  - Phạm vi quét chỉ còn commit **của agent, trên nhánh còn sống**. Loại nhánh đã merge bằng câu hỏi trả
+    lời được — ví dụ đối chiếu với danh sách PR đang mở, hoặc loại mọi commit có trước điểm rẽ của nhánh
+    khỏi `main` — chứ không phải nới `isToolCommit` cho tới khi hết đỏ. Nới danh sách chữ ký là vá sản
+    phẩm (CLAUDE.md mục 13).
+  - `isToolCommit` nhận thêm hai dạng đã đo được: `chore: sync workflows…` (máy sinh) và merge tay dạng
+    `Gộp <ref> vào <nhánh>`. Mỗi dạng một test âm.
+  - Một test dựng kho bare thật có **đúng hình dạng đã gặp** — một nhánh đã squash-merge còn sót trên
+    remote, mang commit không trailer — và bài kiểm G14 phải ra `khớp`, không `sai`. Cùng quy ước "không
+    mô phỏng" với các test G14/G17 đang có trong `ops/test/recheck-assumptions.test.ts`.
+  - `7fc292a` không được biến mất cùng với nhiễu: sau khi siết phạm vi, một commit agent thật sự thiếu
+    trailer vẫn phải ra `sai`. Có test cho đúng điều đó.
+- **Đã làm:**
+  - `collectCommits` (`ops/scripts/recheck-assumptions.ts`) nay lọc `refs/remotes/origin/claude/*` còn
+    đúng nhánh có **PR mở**, trước khi `git log` — trả lời "trả lời được" mà tiêu chí xong đòi, không đoán
+    theo ngày hay theo lịch sử git (squash không giữ SHA cũ nên "điểm rẽ khỏi `main`" của một nhánh stale
+    không nói lên gì). `fetchOpenPrBranches()` gọi `gh pr list --state open` — cùng quy ước gọi lệnh với
+    `fetchMergedPrs()` của `ops/scripts/update-metrics.ts`, không phải cách mới. Nhánh hết PR mở (đã
+    merge/đã đóng) loại thẳng khỏi phạm vi quét: `liveRefs.length === 0` trả `[]` như một quan sát hợp lệ
+    (cùng nhánh `observedNothing` với ca "kho không còn nhánh nào" của `I-007`), không phải lỗi.
+  - `isToolCommit` nhận thêm đúng hai dạng đã đo được, neo chặt để không rơi lại thành danh sách đen:
+    `chore: sync workflows from ops/workflows` (tiền tố do Action `sync-workflows` sinh) và
+    `Gộp (origin/)?main(...) vào ` (mốc neo là "main"/"origin/main" ngay sau "Gộp", không phải chữ
+    "Gộp … vào" nói chung — giữ nguyên vẹn ca âm `"Gộp hai mô hình định lượng vào một bảng"` đã có).
+  - Test mới trong `ops/test/recheck-assumptions.test.ts`: hai test cho `isToolCommit`, ba test cho
+    `collectCommits` (nhánh stale bị loại dù thiếu trailer thật; nhánh sống vẫn ra `sai` khi thật sự thiếu
+    trailer — phép lọc mới không được nuốt tín hiệu thật; mọi nhánh hết PR mở thì trả rỗng, không ném).
+    Ba test `collectCommits` cũ (mục `I-005`, `I-007`) cập nhật để tự khai nhánh nào có PR mở, không gọi
+    `gh` thật trong test.
+  - `ops/known-failures.md` hàng **Z15**: thêm đoạn "Sửa tiếp ở mục `I-012`".
+
+### I-013 · Contract của xưởng nằm ngoài tầm quét của `pnpm contracts`
+
+Tìm ra trong vòng soát của `topic/T-008` (reviewer ngữ cảnh sạch, PR `#91`).
+
+`ops/scripts/check-contracts.ts` chạy `unsupportedKeywords` trên phong bì cộng sáu payload v0 của
+`kernel/contracts/`, và chỉ thế. Mục `T-008` thêm ba contract ở `workshops/topic/contracts/` — đúng luật
+phân định của CLAUDE.md mục 12, vì corpus và kiểm mới lạ không trung tính với thể loại lẫn kênh, nên chúng
+không thuộc `kernel/`. Nhưng thư mục đó **không ai quét**.
+
+`T-008` tự bù bằng ba test gọi `unsupportedKeywords` cho ba schema của nó. Cơ chế bù đó là **opt-in**:
+contract thứ tư thả vào `workshops/*/contracts/` mà tác giả quên viết test tương ứng thì nó dùng từ khoá
+validator chưa hiểu, ràng buộc im lặng không được kiểm, và **không gì đỏ**. Đúng hình dạng nhóm **Z** —
+và đúng cái mà chính `pnpm contracts` tồn tại để chặn ("một ràng buộc được viết ra nhưng không được kiểm
+còn tệ hơn là không viết").
+
+- deps: —
+- risk: low
+- status: review
+- nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
+- tiêu chí xong:
+  - ✅ `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/` —
+    việc số 6, `ops/scripts/check-workshop-contracts.ts`. Quét **đệ quy**, nên thư mục con không thoát.
+  - ✅ Phép quét **đỏ thật** khi thả một schema dùng từ khoá ngoài `SUPPORTED_KEYWORDS` vào thư mục đó — có
+    test tái hiện, không chỉ có lời. `ops/test/check-workshop-contracts.test.ts` bài cuối chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát, kèm bài đối chứng với schema sạch.
+    Đã kiểm rằng bài đó **đỏ** khi gỡ dòng nối ở `check-contracts.ts` — quét đúng mà không ai gọi vẫn là
+    "không gì đỏ".
+  - ✅ Ba test `unsupportedKeywords` viết tay trong `workshops/topic/test/` bỏ đi được, vì chúng trở thành
+    bản chép của phép quét chung (cùng luật Z16 với `I-008`, `I-009`, `I-011`). Mỗi file giữ một ghi chú
+    nói phép kiểm đó nay nằm ở đâu.
+- PR: `#95`
+
+### I-014 · Phạm vi quét contract vẫn buộc bằng quy ước thư mục, không bằng phép kiểm
+
+Tìm ra trong vòng soát của `I-013` (reviewer ngữ cảnh sạch, PR `#95`).
+
+`I-013` đưa `workshops/<tên>/contracts/**/*.schema.json` vào `pnpm contracts`. Phạm vi đó dừng ở **quy ước
+thư mục**: một `*.schema.json` đặt ở `workshops/<tên>/src/`, ở `packs/**`, hay bất cứ đâu khác vẫn ngoài
+tầm quét, và **không gì buộc** "file mà `src/*.ts` nạp" phải nằm trong tập được quét. Hôm nay hai bên trùng
+nhau vì quy ước, không vì một phép kiểm — đúng hình dạng nhóm **Z** một tầng nữa: đổi chỗ một file là phép
+kiểm biến mất mà mọi chỉ báo vẫn xanh.
+
+- deps: `I-013`
+- risk: low
+- status: review
+- nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
+- PR: `#99`
+- tiêu chí xong:
+  - ✅ Mọi `*.schema.json` dưới `workshops/` và `packs/` đều chịu phép kiểm từ khoá, dù nằm ở thư mục nào —
+    việc số 7, `ops/scripts/check-schema-scope.ts`. Không dựa vào vị trí: chọn cách "kiểm mọi nơi" chứ
+    không "đòi nằm trong `contracts/`", vì `packs/` là chỗ hợp lệ cho schema của pack mà không có phép quét
+    `contracts/` riêng. Schema đã nằm trong `workshops/<tên>/contracts/` do việc số 6 lo, việc số 7 bỏ qua
+    để không kiểm hai lần.
+  - ✅ Có test tái hiện: thả một schema dùng `oneOf` (ngoài `SUPPORTED_KEYWORDS`) ở `workshops/topic/src/`
+    thì `pnpm contracts` đỏ. `ops/test/check-schema-scope.test.ts` bài *nối thật* chạy chính
+    `ops/scripts/check-contracts.ts` trên một gốc tạm và đọc mã thoát; đã kiểm đột biến: gỡ dòng nối ở
+    `check-contracts.ts` thì bài đó **đỏ** (`not ok`). Cùng bài đối chứng với schema sạch. Thêm bài cho
+    `packs/`, symlink trá hình, quét đệ quy, và ca "đã trong contracts/ thì không kiểm hai lần".
+
+### I-016 · `main` đỏ: hai PR xanh riêng lẻ, gộp vào nhau thì bất biến mới gặp vi phạm cũ (KF-013)
+
+`fix`. Tìm ra ở bước 0/bước 2 của một lượt worker (`crux-worker-2`, 2026-09-22 ~10:20Z): `main` đỏ ngay
+sau khi PR `#85` (`P-023`) merge lúc 10:12Z. `P-023` thêm bất biến "không file code nào neo vào một đường
+dẫn log bước 0 cố định" (`ops/test/step0-log-path.test.ts`), còn `P-027` (đã merge trước đó) thêm
+`ops/scripts/gate-flow.ts` với một chú thích nhắc đích danh `ops/logs/platform/P-016.jsonl`. Mỗi nhánh chỉ
+mang **một** trong hai file nên CI từng PR xanh; chỉ khi cả hai vào `main` bất biến mới gặp vi phạm. Nhóm
+**Z**, cùng họ với `KF-009` nhưng ở tầng nội dung thay vì `mergeable`.
+
+- risk: low
+- status: review
+- nguồn: lượt `crux-worker-2` 2026-09-22; `ops/known-failures.md` `KF-013`
+- PR: nhánh `claude/dreamy-ride-kvztso`
+- **Số hiệu I-016, không phải I-015:** `I-015` đã bị PR `#112` (`integration/readyNow`) nhận và PR đó còn mở.
+- tiêu chí xong:
+  - ✅ `main` xanh lại: `ops/scripts/gate-flow.ts` đổi chú thích từ tên file đích danh sang lời chung
+    ("các dòng log bước 0"). Không đụng cơ chế — `gate-flow.ts` vốn KHÔNG đọc file đó, chỉ chú thích nhắc
+    tên. Forward-fix một dòng, không revert `P-023`/`P-027` (cả hai đều đúng, revert làm mất cơ chế thật).
+  - ✅ Có test tái hiện (bất biến I2): `ops/test/step0-log-path.test.ts` — ca âm **đích danh** `gate-flow.ts`
+    thêm cạnh bất biến quét-cả-kho có sẵn của `P-023`. Đã kiểm đột biến: trả `gate-flow.ts` về bản `main`
+    thì cả hai bài **đỏ** (`not ok 4`, `not ok 5`); bản sửa thì xanh. `pnpm check` 684 pass / 0 fail; tập
+    vàng khớp snapshot.
+  - ⬜ Chặn thật lỗ hổng gốc — "bất biến ở nhánh A, vi phạm ở nhánh B, không phép đo per-PR nào thấy trước
+    merge" — vẫn để ngỏ: cần chạy `pnpm check` trên kết quả gộp thử của từng cặp PR đang mở, việc lớn hơn
+    một mục fix. Ghi ở `KF-013` dòng *Máy chặn từ nay*.
+
+### I-017 · Phép đo xung đột của bước 0 chạy trên kho **nông** nên kết luận sai (KF-015)
+
+`fix`. `ops/scripts/conflict-watch.ts` mở đầu bằng đúng nguyên tắc cần thiết — "không tin `mergeable` của
+API, đo lại bằng chạy thật". Nhưng phép đo thật đó chạy trên bất cứ kho nào bên gọi đưa cho nó, và phiên
+cloud clone kho ở dạng **nông**: `git rev-parse --is-shallow-repository` trả `true`. Trên kho nông,
+`git merge-tree --write-tree` không tìm được tổ tiên chung vì tổ tiên đó nằm ngoài phần lịch sử đã tải, và
+`git rev-list --max-parents=0` trả commit **biên bị ghép (grafted)** chứ không phải root thật — nên cả phép
+đo lẫn phép kiểm chéo đều ra kết luận ngược.
+
+`fetchProbeRefs()` nạp `main` và đầu các PR trong một lần `git fetch`, nhưng **không** unshallow. Nó đã
+nhận trách nhiệm "`main` đi cùng chuyến chứ không để bên gọi tự lo" vì đúng lý do này (một `origin/main` cũ
+cho ra số trông hợp lý và sai) — độ sâu lịch sử là cùng một loại phụ thuộc, chỉ chưa được nhận.
+
+Hai lần gặp thật, chi tiết ở `ops/known-failures.md` `KF-015`. Lần đầu nó sinh một comment báo động **sai**
+trên PR `#42` yêu cầu chủ dự án force-push dựng lại nhánh hoặc đóng PR mở lại — đúng thứ CHARTER mục 1.2
+muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bước 0 và vào cả tiêu đề một commit trên
+`main`.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: lượt `crux-worker-1` 2026-09-22 ~13:40Z; `ops/known-failures.md` `KF-015`; comment `09:46:12Z` trên PR `#42` (đã nêu đúng phần còn thiếu nhưng chưa ai nhận)
+- **Số hiệu I-017:** `I-015` đã bị PR `#112` nhận, `I-016` đã có mục riêng.
+- tiêu chí xong:
+  - `fetchProbeRefs()` tự kiểm `git rev-parse --is-shallow-repository` và unshallow **trước khi** đo. Ném
+    lỗi nói rõ nếu không unshallow được, chứ không đo tiếp trên lịch sử thiếu — một phép đo sai ở đây đi
+    thẳng vào bản tin và vào comment gửi chủ dự án.
+  - Test tái hiện lỗi (bất biến I2, CI chặn): dựng một kho **nông** trong thư mục tạm với một nhánh gộp
+    sạch, gọi `measureConflicts`. Bài kiểm phải **đỏ** trên bản `main` hiện tại (ra "xung đột" hoặc ném
+    `refusing to merge unrelated histories`) và **xanh** sau bản sửa.
+  - `measureConflicts()` không để một PR làm hỏng cả mẻ: hiện tại mã thoát ngoài `0`/`1` của một PR ném lỗi
+    ra ngoài vòng lặp, nên một PR hỏng làm tắt phép đo của 18 PR còn lại. Trả lỗi **theo từng PR** để bên
+    gọi vẫn thấy phần còn lại. Không nuốt lỗi — ca hỏng phải đọc được ở đầu ra.
+  - `ops/known-failures.md` `KF-015` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
+
+### I-018 · `integrator-resolve.ts` gọi một cây hỏng cú pháp là `resolved` (KF-016)
+
+`fix`. Điều kiện đủ để bước 0 trả `outcome: "resolved"` và push hiện chỉ là **không bên nào xoá dòng**
+(đếm dòng xoá ở mỗi bên so với tổ tiên chung). Phép đếm đó đúng với ý định của nó — "gộp thuần cộng thêm
+thì an toàn" — nhưng nó đo **dòng**, còn thứ phải còn nguyên là **cú pháp**.
+
+Ca đã xảy ra thật, PR `#71` ngày 2026-09-22: hai phía cùng kết thúc một khối bằng dòng `});` giống hệt
+nhau, `main` viết thêm test **sau** dòng đó. `merge=union` giữ dòng chung một lần và đặt phần thêm của
+`main` vào **trước** nó, nên `});` đóng test cuối của nhánh biến mất. Không bên nào xoá dòng nào — phép
+đếm không thấy gì — và tool in `{"outcome":"resolved","files":["ops/test/check-workflows.test.ts"]}`, thoát
+`0`. `tsc` mới bắt được: `ops/test/check-workflows.test.ts(747,1): error TS1005: '}' expected`.
+
+Hai lượt bước 0 trước đó gộp **cùng** cây này mà không thấy, vì `pnpm check` đỏ sớm hơn ở `lint:workflows`
+nên chưa chạy tới `typecheck`. Tức lớp chặn duy nhất đang đứng giữa cây hỏng và `main` là **thứ tự các
+bước trong `pnpm check`**, không phải một phép kiểm có chủ đích.
+
+Vì sao nó đáng sửa ở cơ chế chứ không vá từng lượt: union được bật cho `ops/logs/**/*.jsonl`, nơi nó an
+toàn vì JSONL không có cú pháp lồng nhau. Nhưng `integrator-resolve.ts` áp cùng phép đếm cho **mọi** file
+nó gộp được, kể cả `.ts`, `.json` và `.yml` — những định dạng mà "không ai xoá dòng" không kéo theo "kết
+quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
+
+- deps: —
+- risk: medium
+- status: ready
+- nguồn: lượt `crux-worker-1` 2026-09-22 ~16:45Z; `ops/known-failures.md` `KF-016`; `ops/logs/platform/P-010.jsonl`
+- **Số hiệu I-018:** `I-015` do PR `#112` giữ, `I-016` đã merge, `I-017` do PR `#150` giữ.
+- tiêu chí xong:
+  - `integrator-resolve.ts` kiểm **cây gộp còn đọc được** trước khi trả `resolved`, cho những định dạng có
+    cú pháp: ít nhất `.ts`/`.js` (parse), `.json` và `.yml`/`.yaml` (nạp). Không đọc được thì trả
+    `aborted-ineligible` kèm `reason` nói rõ file nào và lỗi gì — **không** trả `resolved` rồi để `pnpm
+    check` ở phía sau bắt, vì `check` có thể dừng ở một lỗi khác trước khi tới đó.
+  - Chỉ kiểm những file **tool vừa gộp** (`files` trong kết quả), không quét cả cây: bước 0 chạy ở đầu mọi
+    lượt worker, thêm một lượt quét toàn kho vào đó là thêm chi phí cho mọi lượt.
+  - Test tái hiện lỗi (bất biến I2, CI chặn): dựng hai nhánh mà union sinh ra đúng hình dạng trên (cùng một
+    dòng đóng khối ở cuối, một bên viết thêm sau nó), gọi tool. Bài kiểm phải **đỏ** trên bản `main` hiện
+    tại (tool trả `resolved`) và **xanh** sau bản sửa (`aborted-ineligible`).
+  - Phụ lục **P3 bước 0b** của `CHARTER.md` nói rõ: một cây `resolved` mà đỏ ở **lỗi cú pháp** là ca
+    `aborted-ineligible`, không phải "PR đỏ" — hai ca này đi hai đường khác nhau ở lượt sau (phụ lục P1
+    bước 2). Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+  - `ops/known-failures.md` `KF-016` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.

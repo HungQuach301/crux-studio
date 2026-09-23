@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 0,
+  "modelId": "data-explainer/M-008",
+  "version": "1.0",
+  "title": "Khấu trừ IRA truyền thống bị giảm theo thu nhập",
+  "question": "Ở mức thu nhập nào thì khấu trừ cho khoản đóng vào IRA truyền thống bắt đầu bị cắt, và ở một mức MAGI cụ thể thì còn khấu trừ được bao nhiêu?",
+  "assumptions": [
+    "Theo Worksheet 1-2 của IRS Pub 590-A; số dòng trong code giữ nguyên số dòng bản gốc.",
+    "phaseoutPct KHÔNG suy được từ độ rộng khoảng: 35% (40% nếu từ 50 tuổi) khi khai chung VÀ chính mình có kế hoạch hưu ở nơi làm, 70% (80%) cho mọi trường hợp còn lại. Hai ví dụ của IRS khác nhau đúng ở ô này.",
+    "Sàn $200: phần tính ra nhỏ hơn $200 thì lấy $200. Bỏ sàn này là cắt nhầm khấu trừ của nhóm sát mép trên.",
+    "line3 >= phaseoutWidthUsd nghĩa là CHƯA bị giảm chút nào — hướng bất đẳng thức ngược với trực giác.",
+    "Không xử lý Kay Bailey Hutchison Spousal IRA như một ca riêng: theo chính Pub 590-A, mỗi người điền một worksheet riêng, nên chạy mô hình hai lần là đúng cách.",
+    "GHI NHẬN MÂU THUẪN TRONG CHÍNH NGUỒN: câu hướng dẫn dòng 4 nói \"If the result isn't a multiple of $10, round it to the next highest multiple of $10 (For example, $611.40 is rounded to $620)\", nhưng Worksheet 1-2 Example 1 điền sẵn của cùng tài liệu ghi dòng 4 là $6.825 — không phải bội số của $10. Theo đúng mặt chữ thì ô đó phải là $6.830 và khấu trừ cuối đổi theo. Cài đặt dùng một quy tắc tái hiện được cả ba con số đã công bố — không phải cách đọc duy nhất khớp (\"làm tròn lên bội số $10 trừ khi đã là bội số của $5\" cũng khớp cả ba), và bằng chứng đang có không chọn được giữa chúng ($611,40 → $620 · $6.825 → $6.825 · $5.250 → $5.250): chỉ làm tròn lên khi kết quả còn phần lẻ dưới một đô la. Chênh lệch tối đa giữa hai cách đọc là $5 của trần khấu trừ. Phải xác nhận bằng nguồn thứ hai trước khi một tập phát ngôn con số của M-008 sát mép $10. Xem iraPhaseoutRounding trong workshops/topic/src/models.ts."
+  ],
+  "parameters": [
+    {
+      "name": "phaseoutTopUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        1000000
+      ],
+      "defaultValue": 146000,
+      "source": "irs/p590a-worksheet-1-2-table"
+    },
+    {
+      "name": "phaseoutWidthUsd",
+      "unit": "usd",
+      "validRange": [
+        1,
+        1000000
+      ],
+      "defaultValue": 20000,
+      "source": "irs/p590a-worksheet-1-2-line-3"
+    },
+    {
+      "name": "modifiedAgiUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000000
+      ],
+      "defaultValue": 126500,
+      "source": "irs/p590a-worksheet-1-2-example-1"
+    },
+    {
+      "name": "phaseoutPct",
+      "unit": "percent",
+      "validRange": [
+        0,
+        100
+      ],
+      "defaultValue": 35,
+      "source": "irs/p590a-worksheet-1-2-line-4"
+    },
+    {
+      "name": "compensationUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        100000000
+      ],
+      "defaultValue": 66000,
+      "source": "irs/p590a-worksheet-1-2-line-5"
+    },
+    {
+      "name": "contributionUsd",
+      "unit": "usd",
+      "validRange": [
+        0,
+        20000
+      ],
+      "defaultValue": 7000,
+      "source": "irs/p590a-worksheet-1-2-line-6"
+    }
+  ],
+  "formula": "reduced-ira-deduction",
+  "outputs": [
+    {
+      "name": "iraDeductionUsd",
+      "unit": "usd",
+      "interpretation": "Khấu trừ được — dòng 20 của Schedule 1 (Form 1040)."
+    },
+    {
+      "name": "nondeductibleContributionUsd",
+      "unit": "usd",
+      "interpretation": "Phần đóng vào nhưng không khấu trừ được — dòng 1 của Form 8606."
+    },
+    {
+      "name": "phaseoutAllowanceUsd",
+      "unit": "usd",
+      "interpretation": "Trần khấu trừ do khoảng giảm dần áp đặt, trước khi so với lương và khoản đóng thật."
+    }
+  ],
+  "verification": {
+    "status": "pending",
+    "tiers": [
+      {
+        "method": "hand-worked-case",
+        "required": true,
+        "pass": true,
+        "detail": "Hai worksheet điền sẵn khớp từng đô la: $6.825 / $175 ở Example 1 và $5.250 / $1.750 ở Example 2.",
+        "tolerancePct": 0.05,
+        "evidenceRef": "workshops/topic/data/models/cases/M-008.cases.json",
+        "checkedAt": "2026-09-22T00:00:00Z"
+      },
+      {
+        "method": "published-benchmark",
+        "required": false,
+        "pass": null,
+        "detail": "IRS Interactive Tax Assistant có mục 'Can I deduct my IRA contribution?' nhưng đòi phiên tương tác. Chưa chạy đối chiếu: hai worksheet điền sẵn của Pub 590-A đã dùng làm ca cấp 1.",
+        "benchmarkUrl": "https://www.irs.gov/pub/irs-pdf/p590a.pdf"
+      },
+      {
+        "method": "second-implementation",
+        "required": false,
+        "pass": null,
+        "detail": "Chưa bắt buộc: không tham số nào geoVarying và mô hình chưa dùng ở tập nào."
+      },
+      {
+        "method": "llm-assumption-check",
+        "required": true,
+        "pass": false,
+        "detail": "Chưa có báo cáo kiểm giả định và đơn vị từ nhà cung cấp khác Claude. Cơ chế là mục platform/P-003, cần secret OPENAI_API_KEY, chưa có trên repo (D-C02 điểm b)."
+      }
+    ]
+  }
+}
