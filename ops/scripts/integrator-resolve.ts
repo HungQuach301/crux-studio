@@ -13,6 +13,12 @@
  * thành xoá+thêm. Hễ một file xung đột có xoá/sửa ở một trong hai bên,
  * TOÀN BỘ lần gộp bị huỷ (`git merge --abort`) — không giải một phần.
  *
+ * **Và điều kiện đó một mình chưa đủ** (mục `I-018`, `KF-016`): phép đếm đo
+ * **dòng**, còn thứ phải còn nguyên là **cú pháp**. Sau khi union xong, cây
+ * phải qua cổng `mergedSyntaxProblem` (`ops/scripts/merge-syntax.ts`) —
+ * không đọc được thì cũng là `aborted-ineligible`, chứ không phải `resolved`
+ * rồi để `pnpm check` phía sau bắt.
+ *
  * Không bao giờ `--ours`, `--theirs`, rebase hay force-push. `--ours` và
  * `--theirs` không phải "giữ cả hai bên", chúng xoá hẳn một bên — đúng thứ
  * KF-002 cấm. Cách giải ở đây là `git merge-file --union`, cùng thuật toán
@@ -47,6 +53,7 @@ import {
   verifyLockfileInstall,
 } from './integrator-lockfile.ts';
 import type { RegenerateOptions } from './integrator-lockfile.ts';
+import { mergedSyntaxProblem } from './merge-syntax.ts';
 
 export type ResolveOutcome = 'clean' | 'resolved' | 'aborted-ineligible' | 'aborted-error';
 
@@ -501,6 +508,29 @@ function resolveAfterMergeAttempt(
     }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
+  }
+
+  // Mục `I-018` (`KF-016`) — **không bên nào xoá dòng** không kéo theo **kết
+  // quả còn đọc được.** Union giữ một dòng chung đúng một lần, nên khi hai
+  // phía cùng kết thúc một khối bằng dòng giống hệt nhau và một bên viết
+  // thêm sau nó, dòng đóng khối của bên kia biến mất — mà phép đếm dòng xoá
+  // ở trên không thấy gì. Cổng chạy TRƯỚC khi tạo lại lockfile và trước
+  // commit: một cây hỏng cú pháp không đáng một lần `pnpm install`, và trả
+  // `resolved` rồi để `pnpm check` bắt là không được — `check` dừng ở lỗi
+  // ĐẦU TIÊN, nên nó có thể đỏ ở một cổng khác trước khi tới `typecheck`.
+  // Đó đúng là cách cây hỏng của PR `#71` đi qua hai lượt bước 0.
+  //
+  // Chỉ kiểm `additive` — những file tool vừa gộp bằng union. Lockfile
+  // không nằm ở đây vì nó được `pnpm` SINH RA, không union; và không quét cả
+  // cây, vì bước 0 chạy ở đầu mọi lượt worker (tiêu chí xong của `I-018`).
+  const broken = mergedSyntaxProblem(cwd, additive);
+  if (broken !== null) {
+    git(cwd, ['merge', '--abort']);
+    return {
+      outcome: 'aborted-ineligible',
+      files: conflicted,
+      reason: `${broken.file}: cây sau khi union ${broken.detail} — không tự giải, cần người`,
+    };
   }
 
   // Lockfile: tạo lại từ manifest của cây vừa gộp, bản mồi lấy từ
