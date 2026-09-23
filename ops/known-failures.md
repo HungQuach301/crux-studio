@@ -562,17 +562,25 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 - **Chữ ký:** hai dòng log bước 0 kề nhau ghi **chuỗi giảm đi** cho cùng một PR với cùng một chữ ký xung đột — ví dụ `streak=2` ở `00:46Z` rồi `streak=1` ở `01:20Z`. Không có gì đỏ: cả hai dòng đều đúng định dạng, `pnpm check` xanh, CI xanh.
 - **Đo được, 2026-09-23 (PR `#120`, chữ ký `ops/scripts/digest-metrics.ts` + `ops/test/digest-metrics.test.ts` không đổi suốt bảy lượt):**
 
-  | lượt bước 0 | routine | chuỗi mà lượt đó **ghi ra** | chuỗi **thật** |
-  |---|---|---|---|
-  | `23:33Z` | `crux-worker-2` | 1 | 1 |
-  | `23:38Z` | `crux-worker-1` | 1 | 2 |
-  | `00:46Z` | `crux-worker-1` | **2** | 3 |
-  | `01:20Z` | `crux-worker-2` | **1** | 4 |
-  | `01:39Z` | `crux-worker-1` | — | 5 |
-  | `02:24Z` | `crux-worker-2` | **2** | 6 |
-  | `02:51Z` | `crux-worker-1` | 7 | 7 |
+  | lượt bước 0 | routine | chuỗi mà lượt đó **ghi ra** | chuỗi **thật** | lượt đó có bật cảnh báo ngưỡng? |
+  |---|---|---|---|---|
+  | `23:33Z` | `crux-worker-2` | 1 | 1 | — (chưa tới ngưỡng) |
+  | `23:38Z` | `crux-worker-1` | 1 | 2 | — (chưa tới ngưỡng) |
+  | `00:46Z` | `crux-worker-1` | **2** | **3** | **không** |
+  | `01:20Z` | `crux-worker-2` | **1** | **4** | **không** |
+  | `01:39Z` | `crux-worker-1` | **3** | **5** | **có** |
+  | `02:24Z` | `crux-worker-2` | **2** | **6** | **không** |
+  | `02:51Z` | `crux-worker-1` | 7 | 7 | có |
 
-  `ABORTED_INELIGIBLE_ALERT_THRESHOLD` là **3**, nên `shouldAlertStreak` phải bật từ lượt `01:20Z`. Không lượt nào bật nó. Sáu PR (`#39` `#84` `#89` `#112` `#120` `#160`) đều mang nhãn `automerge-delayed`, tức đúng ca mà phụ lục P3 bước 0b bắt bản tin phải nói ra — và bản tin im lặng bốn lượt liên tiếp, **đúng hình dạng nhóm Z đã xảy ra một lần với `#81`**.
+  Chuỗi thật tăng đều `1 → 7`; **chuỗi ghi ra không đơn điệu tăng** — `1 · 1 · 2 · 1 · 3 · 2 · 7`. Hai worker ghi hai con số khác nhau cho **cùng một PR** ở hai lượt cách nhau 19 phút (`01:20Z` ghi 1, `01:39Z` ghi 3).
+
+  `shouldAlertStreak(streak) = streak >= ABORTED_INELIGIBLE_ALERT_THRESHOLD`, và ngưỡng là **3** (chạy thật: `shouldAlertStreak(2) === false`, `shouldAlertStreak(3) === true`). Theo chuỗi thật, ngưỡng chạm từ lượt **`00:46Z`**. Trong năm lượt từ `00:46Z` trở đi, chỉ **một** lượt (`01:39Z`) nói ra rằng bản tin phải mang dòng cảnh báo; ba lượt không.
+
+  > ⚠️ **Bản đầu của mục này viết "không lượt nào bật nó" và "bản tin im lặng bốn lượt liên tiếp". SAI**, và vòng soát ngữ cảnh sạch bắt được bằng cách đọc dòng log thật trên nhánh chưa merge. Lượt `01:39Z` **có** bật: dòng log của nó ghi nguyên văn *"CẢNH BÁO NGƯỠNG — #120 CHẠM `shouldAlertStreak`: streak 3 ≥ `ABORTED_INELIGIBLE_ALERT_THRESHOLD` (3)"*. Giữ lỗi này trong mục vì nó đúng chữ ký `KF-005`: một câu kết luận mạnh hơn phép đo đỡ được nó, viết ra trong chính mục đang cảnh báo về chuyện đó.
+
+  Và chi tiết đắt nhất nằm ngay trong dòng log `01:39Z`: nó **tự khai chỗ lệch** — *"lượt `01:20Z` của `crux-worker-2` đếm 1 vì nó chỉ thấy phần streak sau `21:38Z`"*. Lỗi đã được **quan sát tại chỗ** rồi đi tiếp, vì không có chỗ nào để sửa nó ở mức cơ chế. Lượt `01:39Z` cũng bật cảnh báo ở con số **3** trong khi chuỗi thật lúc đó là **5**.
+
+  Sáu PR (`#39` `#84` `#89` `#112` `#120` `#160`) đều mang nhãn `automerge-delayed`, tức đúng ca mà phụ lục P3 bước 0b bắt bản tin phải nói ra ngay trong dòng "Đang chờ merge".
 
 - **Nguyên nhân gốc — hai lớp, lớp thứ hai mới là gốc:**
   1. *Lớp nhìn thấy trước:* hàng đợi merge đứng (`main` đỏ, `KF-020`), nên mọi dòng bước 0 từ `21:38Z` trở đi nằm trong PR **chưa merge**. Một lượt chỉ nhìn `ops/logs/` của cây làm việc thì không thấy chúng, và đếm lại từ đầu.
@@ -580,10 +588,16 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 - **Vì sao nó đắt hơn vẻ ngoài:** ba số đó không phải ghi chép cho người đọc. `abortedIneligibleStreak` và `redAfterMergeStreak` là **đầu vào của `pickPrToHandle`** (phụ lục P1 bước 2), và `shouldAlertStreak` là cổng duy nhất bắt bản tin lên tiếng về một PR kẹt lâu. Đếm thiếu thì PR kẹt lâu nhất không bao giờ chạm ngưỡng, không bao giờ vào bản tin, và chủ dự án không bao giờ thấy nó — trong khi mọi chỉ báo đều xanh.
 - **Đã sửa ở đâu:** `kernel/src/log.ts`. `RunLogLine` có thêm trường tuỳ chọn `step0?: readonly Step0Stuck[]` — mỗi PR bỏ lại là **một bản ghi có cấu trúc** (`pr`, `outcome`, `signature`, `hoursStuck`, `lane`), và `formatLogLine` ghi nó ra. `step0Streaks(lines)` đếm chuỗi đang chạy từ những bản ghi đó. Sửa ở chỗ **hình dạng dữ liệu**, không vá bằng cách dặn worker đọc kỹ hơn — dặn người đọc kỹ hơn là vá sản phẩm (`CLAUDE.md` mục 13).
 - **Ba chỗ cố ý bảo thủ trong cách đếm**, vì một con số quá cao còn tệ hơn một con số thiếu ở đây:
-  1. Chỉ PR có mặt ở **lượt mới nhất** mới có chuỗi đang chạy.
-  2. Chữ ký phải **khớp qua từng lượt**; đổi file vướng là một chỗ kẹt khác, đếm lại từ 1 — cùng luật mà CHARTER mục 13 dùng cho "một chữ ký lỗi ba lần".
-  3. Gặp một dòng bước 0 **không có** trường `step0` thì phép đếm **dừng** chứ không đọc nó thành "PR này không kẹt". `readableRunsFromNewest` và `proseOnlyRuns` nói thẳng phép đếm đi được bao xa, nên bên gọi biết khi nào con số của mình là **cận dưới**. Đây là chỗ dễ tái phát nhất: mọi dòng bước 0 hiện có đều là văn xuôi, nên ở lượt kế tiếp `readableRunsFromNewest` bằng **1**.
-- **Máy chặn từ nay:** `kernel/test/step0-streak.test.ts`, chạy trong `pnpm test`. 11 bài, trong đó bài tái hiện dựng lại đúng bảy lượt thật của `#120` và đòi ra **7**, cộng một bài đối chứng cho thấy phép đếm cũ (chỉ nhìn lượt mới nhất) ra **1** — tức đúng con số đã bị ghi sai. Phá thử hai lần: bắt vòng lặp chỉ đọc lượt mới nhất → **7 bài đỏ**; bỏ `signature` khỏi khoá đếm → **1 bài đỏ**; khôi phục → 11/11 xanh.
+  1. Chữ ký phải **khớp qua từng lượt**; đổi file vướng (hay đổi cổng đỏ) là một chỗ kẹt khác, đếm lại từ 1 — cùng luật mà CHARTER mục 13 dùng cho "một chữ ký lỗi ba lần".
+  2. Gặp một dòng bước 0 **không có** trường `step0` thì phép đếm **dừng** chứ không đọc nó thành "PR này không kẹt". `readableRunsFromNewest` và `proseOnlyRuns` nói thẳng phép đếm đi được bao xa, nên bên gọi biết khi nào con số của mình là **cận dưới**. Đây là chỗ dễ tái phát nhất: mọi dòng bước 0 hiện có đều là văn xuôi, nên ở lượt kế tiếp `readableRunsFromNewest` bằng **1**.
+  3. **Một lượt đếm một lần cho mỗi chữ ký.** `merge=union` không khử trùng lặp (xem `.gitattributes`), nên một lượt có thể mang hai dòng y hệt nhau; cộng chúng thành 2 là làm chuỗi phồng lên, mà một con số quá cao còn tệ hơn một con số thiếu ở đây.
+
+- **Hai chữ ký có HAI luật trở về 0, và trộn chúng là cách lỗi `P-025` quay lại.** Vòng soát ngữ cảnh sạch bắt được điều này ở bản đầu của `step0Streaks`, vốn áp luật "vắng mặt là hết chuỗi" cho cả hai:
+  - `aborted-ineligible` — bước 0a đo lại PR này ở **mọi** lượt, nên **vắng mặt LÀ bằng chứng**, chuỗi về 0.
+  - `red-after-merge` — CHARTER phụ lục P3 bước 0b nói thẳng: PR kiểu này đã gộp sạch, mà 0a chỉ liệt kê PR *đang xung đột*, nên *"nó không bao giờ được đo lại ở đây"*. **Vắng mặt KHÔNG phải bằng chứng**; luật trở về 0 của nó là *"PR có commit mới sau dòng log đó"*, tức dữ liệu commit mà `step0Streaks` không có. Hàm trả `redAfterMergeLastSeenAt` để bên gọi tự áp luật đó bằng phép đo nó đã có (`hoursSinceLastCommit`).
+
+  Áp nhầm một luật cho cả hai làm mọi chuỗi `red-after-merge` tụt về 0 sau **đúng một lượt**, tức xoá sạch ca "gộp sạch rồi đỏ" mà `P-025` (issue `#107`, PR `#109`) vừa thêm vào `pickPrToHandle` — và lại không gì đỏ. Đúng nhóm Z mà mục này đang chữa, lần này do chính bản vá sinh ra.
+- **Máy chặn từ nay:** `kernel/test/step0-streak.test.ts`, chạy trong `pnpm test`. **16 bài**, trong đó bài tái hiện dựng lại đúng bảy lượt thật của `#120` và đòi ra **7**, cộng một bài đối chứng cho thấy phép đếm cũ (chỉ nhìn lượt mới nhất) ra **1** — tức đúng con số đã bị ghi sai. Phá thử ba lần, mỗi lần khôi phục rồi chạy lại: bắt `aborted-ineligible` chỉ đọc lượt mới nhất → **7 bài đỏ**; áp luật "vắng mặt là hết chuỗi" cho `red-after-merge` → **1 bài đỏ**; bỏ khử trùng lặp trong một lượt → **4 bài đỏ**. Khôi phục → **16/16 xanh**.
 
   **Còn thiếu, khai chứ không giấu:** chưa có lớp máy nào bắt một lượt bước 0 **quên** ghi trường `step0` — dòng đó vẫn hợp lệ và `misfiledLogLines` không đỏ. Tới khi có, lớp chặn là dòng này: **một dòng bước 0 báo có PR bị bỏ lại mà không mang trường `step0` là một dòng chưa viết xong.**
 

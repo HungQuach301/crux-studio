@@ -8,10 +8,11 @@
  * gần nhất nằm trong PR **chưa merge**, không thấy được từ `main`.
  *
  * Số thật đo ngày 2026-09-23 trên PR `#120`: bảy lượt bước 0 liên tiếp
- * (`23:33Z` → `02:46Z`) đều ra `aborted-ineligible` cùng một chữ ký, nhưng
- * ba lượt ghi ra ba con số khác nhau — `2`, rồi `1`, rồi `2`. Ngưỡng
- * `ABORTED_INELIGIBLE_ALERT_THRESHOLD = 3` bị vượt từ lượt `01:20Z` mà
- * không lượt nào nói ra, và không có gì đỏ (nhóm **Z**).
+ * (`23:33Z` → `02:51Z`) đều ra `aborted-ineligible` cùng **một** chữ ký,
+ * nên chuỗi thật là `1 · 2 · 3 · 4 · 5 · 6 · 7`. Các lượt ghi ra
+ * `1 · 1 · 2 · 1 · 3 · 2 · 7` — không đơn điệu tăng, và hai worker ghi hai
+ * số khác nhau cho cùng một PR ở hai lượt cách nhau 19 phút. Không có gì
+ * đỏ (nhóm **Z**).
  */
 
 import { strict as assert } from 'node:assert';
@@ -56,7 +57,7 @@ const SEVEN_RUNS: RunLogLine[] = [
   step0Line('2026-09-23T01:20:08Z', 'crux-worker-2', [stuck(120, SIG_120), stuck(39, 'a'), stuck(84, 'b'), stuck(89, 'c'), stuck(160, 'd'), stuck(112, 'e')]),
   step0Line('2026-09-23T01:39:00Z', 'crux-worker-1', [stuck(120, SIG_120), stuck(39, 'a'), stuck(84, 'b'), stuck(89, 'c'), stuck(160, 'd'), stuck(112, 'e')]),
   step0Line('2026-09-23T02:24:19Z', 'crux-worker-2', [stuck(120, SIG_120), stuck(39, 'a'), stuck(84, 'b'), stuck(89, 'c'), stuck(160, 'd'), stuck(112, 'e')]),
-  step0Line('2026-09-23T02:46:00Z', 'crux-worker-1', [stuck(120, SIG_120), stuck(39, 'a'), stuck(84, 'b'), stuck(89, 'c'), stuck(160, 'd'), stuck(112, 'e'), stuck(79, 'f'), stuck(142, 'g'), stuck(171, 'h')]),
+  step0Line('2026-09-23T02:51:00Z', 'crux-worker-1', [stuck(120, SIG_120), stuck(39, 'a'), stuck(84, 'b'), stuck(89, 'c'), stuck(160, 'd'), stuck(112, 'e'), stuck(79, 'f'), stuck(142, 'g'), stuck(171, 'h')]),
 ];
 
 test('tái hiện KF-021: bảy lượt cùng chữ ký ra chuỗi 7, không phải 1 hay 2', () => {
@@ -91,14 +92,14 @@ test('thứ tự dòng trong file không mang nghĩa: đảo dòng vẫn ra cùn
 });
 
 test('chuỗi về 0 khi PR vắng mặt ở lượt mới nhất', () => {
-  const runs = [...SEVEN_RUNS.slice(0, 6), step0Line('2026-09-23T02:46:00Z', 'crux-worker-1', [stuck(39, 'a')])];
+  const runs = [...SEVEN_RUNS.slice(0, 6), step0Line('2026-09-23T02:51:00Z', 'crux-worker-1', [stuck(39, 'a')])];
   const report = step0Streaks(runs);
   assert.equal(report.streaks.has(120), false);
   assert.equal(report.streaks.get(39)?.abortedIneligible, 7);
 });
 
 test('đổi chữ ký thì chuỗi bắt đầu lại từ 1, không nối vào chuỗi cũ', () => {
-  const runs = [...SEVEN_RUNS.slice(0, 6), step0Line('2026-09-23T02:46:00Z', 'crux-worker-1', [stuck(120, 'CHARTER.md')])];
+  const runs = [...SEVEN_RUNS.slice(0, 6), step0Line('2026-09-23T02:51:00Z', 'crux-worker-1', [stuck(120, 'CHARTER.md')])];
   assert.equal(step0Streaks(runs).streaks.get(120)?.abortedIneligible, 1);
 });
 
@@ -130,11 +131,64 @@ test('dòng chỉ có văn xuôi KHÔNG bị đọc thành "không kẹt" — ph
 test('hai chữ ký đếm riêng: red-after-merge không cộng vào aborted-ineligible', () => {
   const runs = [
     step0Line('2026-09-23T01:00:00Z', 'crux-worker-1', [stuck(89, 'lint:workflows', { outcome: 'red-after-merge' })]),
-    step0Line('2026-09-23T02:00:00Z', 'crux-worker-2', [stuck(89, 'lint:workflows', { outcome: 'red-after-merge' })]),
+    step0Line('2026-09-23T02:00:00Z', 'crux-worker-2', [
+      stuck(89, 'lint:workflows', { outcome: 'red-after-merge' }),
+      stuck(89, 'docs/assumptions.md'),
+    ]),
   ];
   const report = step0Streaks(runs);
   assert.equal(report.streaks.get(89)?.redAfterMerge, 2);
-  assert.equal(report.streaks.get(89)?.abortedIneligible, 0);
+  assert.equal(report.streaks.get(89)?.abortedIneligible, 1);
+});
+
+test('red-after-merge KHÔNG về 0 khi PR vắng mặt ở lượt sau — bước 0a không đo lại nó', () => {
+  // CHARTER phụ lục P3 bước 0b: PR kẹt kiểu này đã gộp sạch, mà 0a chỉ liệt
+  // kê PR đang xung đột, nên nó không bao giờ được đo lại ở đây. Bản đầu của
+  // step0Streaks áp luật "vắng mặt là hết chuỗi" cho cả hai chữ ký và xoá
+  // sạch ca P-025 sau đúng một lượt.
+  const runs = [
+    step0Line('2026-09-23T01:00:00Z', 'crux-worker-1', [stuck(200, 'pnpm check', { outcome: 'red-after-merge' })]),
+    step0Line('2026-09-23T02:00:00Z', 'crux-worker-2', [stuck(300, 'x')]),
+    step0Line('2026-09-23T03:00:00Z', 'crux-worker-1', [stuck(300, 'x')]),
+  ];
+  const report = step0Streaks(runs);
+  assert.equal(report.streaks.get(200)?.redAfterMerge, 1);
+  assert.equal(report.streaks.get(200)?.redAfterMergeLastSeenAt, '2026-09-23T01:00:00Z');
+  assert.equal(report.streaks.get(300)?.abortedIneligible, 2);
+});
+
+test('red-after-merge: đổi cổng đỏ là chữ ký khác, chuỗi bắt đầu lại từ 1', () => {
+  const runs = [
+    step0Line('2026-09-23T01:00:00Z', 'crux-worker-1', [stuck(200, 'pnpm test', { outcome: 'red-after-merge' })]),
+    step0Line('2026-09-23T02:00:00Z', 'crux-worker-2', [stuck(200, 'lint:workflows', { outcome: 'red-after-merge' })]),
+  ];
+  assert.equal(step0Streaks(runs).streaks.get(200)?.redAfterMerge, 1);
+});
+
+test('aborted-ineligible VẪN về 0 khi vắng mặt — hai chữ ký không dùng chung luật', () => {
+  const runs = [
+    step0Line('2026-09-23T01:00:00Z', 'crux-worker-1', [stuck(200, 'x')]),
+    step0Line('2026-09-23T02:00:00Z', 'crux-worker-2', [stuck(300, 'y')]),
+  ];
+  const report = step0Streaks(runs);
+  assert.equal(report.streaks.has(200), false);
+  assert.equal(report.streaks.get(300)?.abortedIneligible, 1);
+});
+
+test('bản ghi trùng trong CÙNG một lượt chỉ đếm một lần, không phồng chuỗi lên', () => {
+  // `merge=union` không khử trùng lặp (xem .gitattributes), nên một lượt có
+  // thể mang hai dòng y hệt nhau.
+  const entry = stuck(120, SIG_120);
+  const runs = [step0Line('2026-09-23T02:00:00Z', 'crux-worker-1', [entry, entry, entry])];
+  assert.equal(step0Streaks(runs).streaks.get(120)?.abortedIneligible, 1);
+});
+
+test('hai lượt cùng `at` cho cùng một kết quả, bất kể thứ tự dòng trong file', () => {
+  const a = step0Line('2026-09-23T02:00:00Z', 'crux-worker-1', [stuck(120, SIG_120)]);
+  const b = step0Line('2026-09-23T02:00:00Z', 'crux-worker-2', [stuck(55, 'z')]);
+  const forward = step0Streaks([a, b]);
+  const backward = step0Streaks([b, a]);
+  assert.deepEqual([...forward.streaks].sort(), [...backward.streaks].sort());
 });
 
 test('dòng không phải bước 0 bị bỏ qua, kể cả khi nó mang trường step0', () => {

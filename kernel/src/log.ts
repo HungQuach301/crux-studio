@@ -243,20 +243,39 @@ export function step0LogRef(at: string, runner: string): string {
   return `${STEP0_LOG_LANE}/${step0LogId(at, runner)}`;
 }
 
-/** Chuỗi kẹt đang chạy của một PR, tách theo hai chữ ký như `TriageCandidate`. */
+/**
+ * Chuỗi kẹt đang chạy của một PR, tách theo hai chữ ký như `TriageCandidate`.
+ *
+ * Hai số này **không cùng một luật trở về 0**, và trộn chúng là cách lỗi
+ * `P-025` quay lại — xem tài liệu của `step0Streaks`.
+ */
 export interface Step0Streak {
   abortedIneligible: number;
   redAfterMerge: number;
+  /**
+   * `at` của lượt bước 0 **gần nhất** có ghi `red-after-merge` cho PR này.
+   * Vắng mặt khi `redAfterMerge` bằng 0.
+   *
+   * Bên gọi **phải** dùng nó: luật trở về 0 của `red-after-merge` là *"PR có
+   * commit mới sau dòng log đó"* (CHARTER phụ lục P3 bước 0b), và
+   * `step0Streaks` không có dữ liệu commit để tự áp. Bỏ qua trường này là
+   * để một chuỗi đã chữa xong sống mãi.
+   */
+  redAfterMergeLastSeenAt?: string;
 }
 
 /**
  * Kết quả của `step0Streaks` — chuỗi **cộng với** phần khai giới hạn của
- * chính phép đo. Hai số sau không phải trang trí: một dòng bước 0 không có
+ * chính phép đo. Ba số sau không phải trang trí: một dòng bước 0 không có
  * trường `step0` là dòng **không đọc được bằng máy**, và im lặng đếm nó
  * thành "PR này không kẹt" chính là lỗi mà `KF-021` ghi lại.
  */
 export interface Step0StreakReport {
-  /** Chuỗi đang chạy, khoá là số PR. Chỉ PR có mặt ở lượt MỚI NHẤT mới có mặt ở đây. */
+  /**
+   * Chuỗi đang chạy, khoá là số PR. Một PR có mặt ở đây khi nó còn chuỗi
+   * `aborted-ineligible` (tức có mặt ở lượt mới nhất) **hoặc** còn chuỗi
+   * `red-after-merge` chưa bị bên gọi cho về 0.
+   */
   streaks: Map<number, Step0Streak>;
   /** Tổng số lượt bước 0 đọc vào. */
   totalRuns: number;
@@ -283,31 +302,64 @@ const stuckKey = (entry: Step0Stuck): string =>
  * trước đây do người viết prompt tự đếm từ `note` của các lượt trước —
  * **văn xuôi**, và chỉ những lượt đã vào `main`. Hàng đợi merge đứng thì
  * dòng bước 0 của các lượt gần nhất nằm trong PR **chưa merge**, nên mỗi
- * lượt đếm lại từ đầu và ra số nhỏ hơn thật. Đo được 2026-09-23: cùng PR
- * `#120`, lượt `00:46Z` ghi chuỗi `2`, lượt `01:20Z` ghi `1`, lượt `02:24Z`
- * ghi `2`, trong khi chuỗi thật (đếm đủ bảy lượt) là `7`. Ngưỡng cảnh báo
- * `3` bị vượt từ `01:20Z` mà không lượt nào nói ra, và **không gì đỏ** —
- * nhóm Z.
+ * lượt đếm lại từ đầu và ra số nhỏ hơn thật. Đo được 2026-09-23 trên PR
+ * `#120`, chữ ký không đổi suốt bảy lượt: các lượt ghi ra `1 · 1 · 2 · 1 ·
+ * 3 · 2 · 7` cho một chuỗi thật là `1 · 2 · 3 · 4 · 5 · 6 · 7`. Con số
+ * không đơn điệu tăng, và hai worker ghi hai số khác nhau cho cùng một PR
+ * ở hai lượt cách nhau 19 phút. **Không gì đỏ** — nhóm Z.
  *
- * Cách đếm, cố ý bảo thủ ở cả ba chỗ:
+ * ## Hai chữ ký, HAI luật trở về 0 — đừng trộn
  *
- * 1. **Chỉ PR có mặt ở lượt mới nhất** mới có chuỗi đang chạy. Một PR vắng
- *    mặt ở lượt mới nhất nghĩa là nó không còn kẹt kiểu đó, chuỗi kết thúc.
- * 2. **Chữ ký phải khớp** qua từng lượt. Đổi file vướng là một chỗ kẹt
- *    khác, đếm lại từ 1.
- * 3. **Dừng ở lượt đầu tiên không đọc được.** Không suy ra gì từ một dòng
+ * Đây là chỗ dễ sai nhất của hàm này, và CHARTER phụ lục P3 bước 0b nói
+ * thẳng ra nó:
+ *
+ * - **`aborted-ineligible`** — bước 0a đo lại PR này ở **mọi** lượt (nó
+ *   còn đang xung đột). Nên **vắng mặt là bằng chứng**: PR không có trong
+ *   lượt mới nhất nghĩa là nó hết kẹt kiểu đó, chuỗi về 0.
+ * - **`red-after-merge`** — PR kiểu này **gộp sạch**, mà bước 0a chỉ liệt
+ *   kê PR *đang xung đột*, nên *"nó không bao giờ được đo lại ở đây"*.
+ *   Vắng mặt vì thế **không** phải bằng chứng gì cả. Luật trở về 0 của nó
+ *   là *"PR có commit mới sau dòng log đó"* — dữ liệu commit, thứ hàm này
+ *   không có. Hàm trả `redAfterMergeLastSeenAt` để bên gọi tự áp luật đó
+ *   bằng phép đo nó đã có (`hoursSinceLastCommit` của `pickPrToHandle` đọc
+ *   đúng cùng một thứ).
+ *
+ * Áp luật thứ nhất cho cả hai — điều bản đầu của hàm này đã làm — sẽ cho
+ * mọi chuỗi `red-after-merge` tụt về 0 sau đúng một lượt, tức xoá sạch ca
+ * "gộp sạch rồi đỏ" mà `P-025` (issue `#107`) vừa thêm vào
+ * `pickPrToHandle`, và lại **không gì đỏ**.
+ *
+ * ## Ba chỗ cố ý bảo thủ
+ *
+ * 1. **Chữ ký phải khớp** qua từng lượt, ở cả hai chữ ký. Đổi file vướng
+ *    (hay đổi cổng đỏ) là một chỗ kẹt khác, đếm lại từ 1 — cùng luật mà
+ *    CHARTER mục 13 dùng cho "một chữ ký lỗi ba lần".
+ * 2. **Dừng ở lượt đầu tiên không đọc được.** Không suy ra gì từ một dòng
  *    chỉ có văn xuôi; `readableRunsFromNewest` nói thẳng phép đếm đi được
  *    bao xa.
+ * 3. **Một lượt đếm một lần cho mỗi chữ ký.** Hai bản ghi trùng nhau trong
+ *    cùng một lượt (`merge=union` không khử trùng lặp) không được cộng
+ *    thành 2 — một con số quá cao còn tệ hơn một con số thiếu.
  *
- * Bên gọi truyền vào **mọi** dòng log đọc được (`readRunLogs`); hàm tự lọc
- * lấy dòng bước 0 và tự sắp theo `at` — thứ tự dòng trong file không mang
- * nghĩa vì `merge=union` không xếp theo thời gian.
+ * ## Giới hạn đã khai, không giấu
+ *
+ * Với `red-after-merge`, "liên tiếp" chỉ tính trên những lượt **có ghi**
+ * PR đó, nên hai lần kẹt cách nhau nhiều lượt vẫn cộng vào một chuỗi.
+ * Đó là hệ quả trực tiếp của "vắng mặt không phải bằng chứng"; chỗ chặn
+ * đúng là luật commit mới ở bên gọi, không phải ở đây.
+ *
+ * Bên gọi truyền vào **mọi** dòng log đọc được (`readRunLogs`, vốn đã qua
+ * `normalizeAt` nên `at` chắc chắn parse được); hàm tự lọc lấy dòng bước 0
+ * và tự sắp theo `at` — thứ tự dòng trong file không mang nghĩa vì
+ * `merge=union` không xếp theo thời gian. Khoá phụ khi `at` bằng nhau là
+ * `ref`, để hai lượt rơi vào cùng một mốc không cho hai kết quả khác nhau
+ * tuỳ thứ tự dòng.
  */
 export function step0Streaks(lines: readonly RunLogLine[]): Step0StreakReport {
   const runs = lines
     .filter((line) => isStep0LogId(logIdFromRef(line.ref)))
     .slice()
-    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.ref.localeCompare(b.ref));
 
   const report: Step0StreakReport = {
     streaks: new Map(),
@@ -316,46 +368,64 @@ export function step0Streaks(lines: readonly RunLogLine[]): Step0StreakReport {
     readableRunsFromNewest: 0,
   };
 
-  const running = new Map<string, { entry: Step0Stuck; count: number }>();
-  const ended = new Set<string>();
-
+  /** Mỗi lượt đếm một lần cho mỗi chữ ký (luật bảo thủ 3). */
+  const readable: { entries: Map<string, Step0Stuck>; at: string }[] = [];
   for (let index = runs.length - 1; index >= 0; index -= 1) {
     const run = runs[index]!;
     if (run.step0 === undefined) break;
     report.readableRunsFromNewest += 1;
+    const entries = new Map<string, Step0Stuck>();
+    for (const entry of run.step0) entries.set(stuckKey(entry), entry);
+    readable.push({ entries, at: run.at });
+  }
+  if (readable.length === 0) return report;
 
-    const keysThisRun = new Set(run.step0.map(stuckKey));
-    for (const key of running.keys()) {
-      if (!keysThisRun.has(key)) ended.add(key);
-    }
+  const upsert = (pr: number): Step0Streak => {
+    const existing = report.streaks.get(pr);
+    if (existing !== undefined) return existing;
+    const fresh: Step0Streak = { abortedIneligible: 0, redAfterMerge: 0 };
+    report.streaks.set(pr, fresh);
+    return fresh;
+  };
 
-    const isNewest = index === runs.length - 1;
-    for (const entry of run.step0) {
-      const key = stuckKey(entry);
-      if (ended.has(key)) continue;
-      const current = running.get(key);
-      if (current === undefined) {
-        // Xuất hiện lần đầu ở một lượt CŨ hơn lượt mới nhất: không nối vào
-        // chuỗi đang chạy, vì nó đã đứt ở đâu đó giữa chừng.
-        if (!isNewest) {
-          ended.add(key);
-          continue;
-        }
-        running.set(key, { entry, count: 1 });
-      } else {
-        current.count += 1;
-      }
+  // ── `aborted-ineligible`: vắng mặt LÀ bằng chứng, nên chỉ chữ ký có mặt
+  //    ở lượt mới nhất mới có chuỗi đang chạy.
+  const newest = readable[0]!;
+  for (const [key, entry] of newest.entries) {
+    if (entry.outcome !== 'aborted-ineligible') continue;
+    let count = 0;
+    for (const run of readable) {
+      if (!run.entries.has(key)) break;
+      count += 1;
     }
+    const streak = upsert(entry.pr);
+    streak.abortedIneligible = Math.max(streak.abortedIneligible, count);
   }
 
-  for (const { entry, count } of running.values()) {
-    const streak = report.streaks.get(entry.pr) ?? { abortedIneligible: 0, redAfterMerge: 0 };
-    if (entry.outcome === 'aborted-ineligible') {
-      streak.abortedIneligible = Math.max(streak.abortedIneligible, count);
-    } else {
-      streak.redAfterMerge = Math.max(streak.redAfterMerge, count);
+  // ── `red-after-merge`: vắng mặt KHÔNG phải bằng chứng. Đếm những lượt có
+  //    ghi, bỏ qua lượt vắng mặt, và dừng khi chữ ký đổi. Luật trở về 0 là
+  //    việc của bên gọi, qua `redAfterMergeLastSeenAt`.
+  const seenPrs = new Set<number>();
+  for (const run of readable) {
+    for (const entry of run.entries.values()) {
+      if (entry.outcome !== 'red-after-merge' || seenPrs.has(entry.pr)) continue;
+      seenPrs.add(entry.pr);
+      const key = stuckKey(entry);
+      let count = 0;
+      for (const older of readable) {
+        if (older.entries.has(key)) {
+          count += 1;
+          continue;
+        }
+        const otherSignature = [...older.entries.values()].some(
+          (other) => other.pr === entry.pr && other.outcome === 'red-after-merge',
+        );
+        if (otherSignature) break;
+      }
+      const streak = upsert(entry.pr);
+      streak.redAfterMerge = count;
+      streak.redAfterMergeLastSeenAt = run.at;
     }
-    report.streaks.set(entry.pr, streak);
   }
 
   return report;
