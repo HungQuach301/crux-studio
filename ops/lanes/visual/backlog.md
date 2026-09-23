@@ -22,12 +22,15 @@ Trả lời **bằng số đo thật**: canvas liên tục với máy quay di ch
 
 - deps: —
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-003, quyết định D-04; giả định G5
 - tiêu chí xong:
-  - Có số đo thật: thời gian render mỗi khung, bộ nhớ, và chi phí phút Actions cho một đoạn mẫu.
-  - Kết quả **DỪNG** cũng là kết quả hợp lệ, và phải mở `🤖 [QĐ]` ngay: khi đó `motion-grammar`, `visual-quality-bar`, `layouts.json` và prompt dựng cảnh phải viết lại.
-  - Kết quả ghi vào `docs/assumptions.md` cho G5.
+  - ✅ **Số đo thật, 2026-09-21** — thời gian mỗi khung và bộ nhớ đỉnh đo bằng chạy thật trên bốn cấu hình (30fps không mờ · đối chứng máy quay đứng yên · 30fps có mờ · 60fps không mờ), 27.000 khung. Bảng sáu chỉ số ở `spike/canvas/RESULT.md`, sinh từ `measurements.json` chứ không gõ tay.
+  - ⬜ **Chi phí phút Actions — chưa có, và chưa lấy được ở lượt này.** Workflow đo nó (`ops/workflows/spike-canvas.yml`) chỉ có hiệu lực **sau khi PR merge vào `main`** rồi `sync-workflows` chép sang `.github/workflows/` (CLAUDE.md mục 4). Lượt worker sau chạy `spike-canvas` bằng `workflow_dispatch`, đọc số phút ở job summary, rồi cập nhật `RESULT.md` và `G5`. Đây là lý do mục giữ `review`, không `done`.
+  - ✅ Kết quả ghi vào `docs/assumptions.md` cho G5.
+  - **Kịch bản DỪNG không xảy ra** — ba chỉ số hiệu năng đều đạt, nên không phải viết lại `motion-grammar`, `visual-quality-bar`, `layouts.json` hay prompt dựng cảnh. Không mở `🤖 [QĐ]` cho ca DỪNG.
+  - ⬜ **Chỉ số 4–6 chờ mắt chủ dự án**, đúng theo WP-003 mục 5 ("không kết luận thay chủ dự án"). Ba clip là nhị phân nên không commit (CHARTER 5.3); chúng ra theo artifact `spike-canvas` của lần chạy workflow ở trên. Chốt 30fps hay 60fps là việc của `A-001`.
+  - ⚠️ Spike đo **canvas 2D trần, không thêm phụ thuộc nào**, không phải thư viện dựng hình React mà spec WP-003 mục 5 nêu: chọn thư viện đó là chọn nhà cung cấp kèm điều khoản thương mại (`irreversible` nhóm 3, CHARTER 2.3), và mục 7c đòi ghi điều khoản giấy phép — thứ mà bức tường mạng (issue #36) không cho đọc. Số đo vì vậy là **cận dưới** cho mọi thư viện dựng trên cùng nền trình duyệt. Việc chốt thư viện thuộc `A-001`.
 
 ### V-003 · Phòng thí nghiệm layout
 Chạy một layout ra ảnh mà không cần chạy cả tập, để vòng lặp thử layout tính bằng phút chứ không tính bằng giờ.

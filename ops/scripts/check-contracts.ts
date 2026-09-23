@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Chín việc:
+ * Mười việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -20,8 +20,12 @@
  *    quy ước thư mục `contracts/`; một schema đặt ngoài đó (ở `src/`, ở
  *    `packs/**`) vẫn thoát. Việc này quét phần còn lại để phạm vi kiểm buộc
  *    bằng một phép kiểm, không bằng chỗ đặt file.
- * 8. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
- * 9. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
+ * 8. Mọi file mô hình định lượng đã persist (`workshops/*\/data/models/*.json`)
+ *    hợp `kernel/contracts/model.schema.json` — mục `kernel/K-002`. Trước
+ *    mục đó, tám file của `topic/T-006` chỉ được test đơn vị của riêng
+ *    xưởng `topic` canh, không có cổng dùng chung nào ở tầng `pnpm contracts`.
+ * 9. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
+ * 10. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -43,6 +47,7 @@ import {
 import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 import { scanSchemaScope } from './check-schema-scope.ts';
+import { modelDataFiles, modelDataProblems } from './check-models.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -140,7 +145,11 @@ problems.push(...workshopContracts.problems);
 const schemaScope = scanSchemaScope(root);
 problems.push(...schemaScope.problems);
 
-// 8 · layouts.json của mỗi genre pack đã tồn tại (mục V-001). Genre nào
+// 8 · File mô hình định lượng đã persist hợp kernel/contracts/model.schema.json
+const modelFiles = modelDataFiles(root);
+problems.push(...modelDataProblems(root));
+
+// 9 · layouts.json của mỗi genre pack đã tồn tại (mục V-001). Genre nào
 // chưa có layouts.json thì bỏ qua — chưa tới lượt genre đó, không phải lỗi.
 let genresChecked = 0;
 const genresDir = join(root, 'packs', 'genres');
@@ -156,7 +165,7 @@ if (existsSync(genresDir)) {
   }
 }
 
-// 9 · visual-tokens.json của mỗi channel pack (mục V-001).
+// 10 · visual-tokens.json của mỗi channel pack (mục V-001).
 let channelsChecked = 0;
 const channelsDir = join(root, 'packs', 'channels');
 if (existsSync(channelsDir)) {
@@ -181,5 +190,6 @@ process.stdout.write(
     `${schemaScope.files.length} schema ngoài contracts/ (workshops+packs) qua phép kiểm từ khoá, ` +
     `${checked} artifact hợp lệ, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng, ` +
+    `${modelFiles.length} file mô hình định lượng hợp model.schema.json, ` +
     `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json.\n`,
 );
