@@ -45,16 +45,17 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { readRunLogs, LANES, type LaneName } from '@crux/kernel';
-import { parseBacklog } from './backlog-status.ts';
+import { readRunLogs, LANES, type LaneName, type RunLogLine } from '@crux/kernel';
+import { parseBacklog, type BacklogItem } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
 import {
   conflictRows,
   fetchProbeRefs,
+  isProbeError,
   measureConflicts,
   renderConflictRow,
-  type ConflictOrigin,
+  type ConflictProbe,
   type ConflictRow,
 } from './conflict-watch.ts';
 import {
@@ -274,6 +275,186 @@ export interface CostSummary {
   percent: number;
 }
 
+// --- Tiến độ (mục `platform/P-019`) ---
+
+/**
+ * Đợt của kế hoạch (CHARTER mục 10). Chỉ hai đợt có mục backlog sống ở
+ * giai đoạn hiện tại: **Đợt 0** (khung, contract, hạ tầng vận hành) và
+ * **Đợt 1** (các làn song song). Đợt 2–4 là cổng quyết định và vận hành,
+ * chưa sinh mục theo làn — thêm vào `LANE_BATCH` khi tới lúc.
+ */
+export type Batch = 'Đợt 0' | 'Đợt 1';
+
+/**
+ * Mô hình khai báo (bất biến I6: mọi con số hiển thị có nguồn hoặc có mô
+ * hình). Backlog **không** gắn thẻ đợt cho từng mục, nên đợt của một mục
+ * suy từ **làn** của nó theo CHARTER mục 10: Đợt 0 là "khung, contract,
+ * hạ tầng vận hành" (`kernel`, `platform`, `integration`), Đợt 1 là "các
+ * làn song song" (sáu xưởng cộng `verify`). Đây là dữ liệu sẵn có, không
+ * phải suy đoán từng mục — đổi kế hoạch thì đổi đúng một bảng này.
+ */
+export const LANE_BATCH: Record<LaneName, Batch> = {
+  topic: 'Đợt 1',
+  editorial: 'Đợt 1',
+  visual: 'Đợt 1',
+  audio: 'Đợt 1',
+  assembly: 'Đợt 1',
+  release: 'Đợt 1',
+  verify: 'Đợt 1',
+  kernel: 'Đợt 0',
+  platform: 'Đợt 0',
+  integration: 'Đợt 0',
+};
+
+/** Thứ tự hiển thị đợt trên bản tin — cố định, không đổi theo dữ liệu (cùng lý do `mergedByLane`). */
+export const BATCH_ORDER: readonly Batch[] = ['Đợt 0', 'Đợt 1'];
+
+/**
+ * Ref của dòng log **bước 0** trên `main` hiện tại. Mỗi lượt worker và mỗi
+ * lượt integrator chạy bước 0 đúng một lần và ghi đúng một dòng này (phụ
+ * lục P1 bước 0, P3 bước 0, bất biến I8), nên đếm số dòng này trong 24 giờ
+ * = số lượt chạy routine **có làm việc thật** — chính là số để kiểm giả
+ * định `G3`. Lượt `crux-digest` không chạy bước 0 nên không tính ở đây;
+ * đó là một lượt mỗi ngày, chủ dự án cộng tay nếu cần trần tuyệt đối.
+ *
+ * ⚠️ Mục `platform/P-023` chuyển dòng bước 0 sang file-mỗi-lượt
+ * (`ops/logs/integration/step0-…`, `ref` mang lane `integration`). Khi
+ * P-023 vào `main`, mở rộng `isStep0Line` cho khớp — nếu không số lượt tụt
+ * về 0 một cách im lặng (đúng nhóm lỗi Z).
+ */
+export const STEP0_LOG_REF = 'platform/P-016';
+
+function isStep0Line(line: Pick<RunLogLine, 'kind' | 'ref'>): boolean {
+  return line.kind === 'lane' && line.ref === STEP0_LOG_REF;
+}
+
+/**
+ * Làn của một PR mục việc, suy từ **tiêu đề** `[<lane>] <id> …` (P1 bước 4
+ * bắt buộc mẫu này). Suy từ tiêu đề chứ không từ tên nhánh vì nhánh
+ * log-only của routine (`claude/<tên-ngẫu-nhiên>`) không mang làn. `null`
+ * nếu tiêu đề không theo mẫu hoặc làn lạ — khi đó PR không được tính là
+ * một mục `done`.
+ */
+export function laneFromTitle(title: string): LaneName | null {
+  const m = /^\[([a-z]+)\]\s+\S/.exec(title);
+  if (m === null) return null;
+  const lane = m[1]!;
+  return (LANES as readonly string[]).includes(lane) ? (lane as LaneName) : null;
+}
+
+export interface BatchProgress {
+  batch: Batch;
+  /** Mục chưa `done` và không `parked`. */
+  remaining: number;
+  /** Mục `parked` — nằm ngoài dòng chảy, nên tách khỏi `remaining`. */
+  parked: number;
+  /** Số mục `done` của đợt này trong 3 ngày qua (đếm từ PR merged). */
+  done3d: number;
+  /**
+   * Ngày dự kiến xong (chỉ phần ngày, `YYYY-MM-DD`), chiếu thẳng
+   * `remaining / (done3d / 3)`. `null` khi chưa đủ dữ liệu để chiếu:
+   * đợt không có mục nào `done` trong 3 ngày mà vẫn còn việc. Ngày hôm nay
+   * nếu đợt đã hết `remaining`.
+   */
+  projectedDone: string | null;
+}
+
+export interface ProgressMetrics {
+  doneLast24h: number;
+  done3d: number;
+  /** Thông lượng trung bình 3 ngày: `done3d / 3`, làm tròn hai chữ số. */
+  throughputPerDay: number;
+  byBatch: BatchProgress[];
+  /**
+   * Nút thắt hiện tại (mô hình, bất biến I6):
+   * - `người` — có PR `owner-merge` đang mở **hoặc** quyết định
+   *   `irreversible`/chưa phân loại đang chờ: chỉ chủ dự án gỡ được.
+   * - `máy` — không vướng người nhưng có PR đang xung đột với `main`
+   *   **hoặc** CI đỏ: xử lý tự động đang kẹt.
+   * - `không tắc` — cả hai đều bằng 0.
+   *
+   * Người đứng trước máy: một việc chờ người thì máy chạy nhanh cỡ nào cũng
+   * không tới `main` được.
+   */
+  bottleneck: 'người' | 'máy' | 'không tắc';
+  /** Số lượt chạy routine (bước 0) trong 24 giờ — số liệu để kiểm `G3`. */
+  routineRuns24h: number;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Phép tính thuần cho mục "Tiến độ" của bản tin. Không đọc đĩa, không gọi
+ * mạng — bên gọi (`collectMetrics`) đưa vào backlog đã parse, PR merged,
+ * dòng log, và hai số đếm nút thắt lấy từ snapshot GitHub.
+ */
+export function computeProgress(
+  itemsByLane: ReadonlyMap<LaneName, readonly BacklogItem[]>,
+  mergedPrs: readonly GhPr[],
+  logLines: readonly RunLogLine[],
+  humanWaiting: number,
+  machineWaiting: number,
+  now: Date,
+): ProgressMetrics {
+  const ms24 = now.getTime() - 24 * 60 * 60 * 1000;
+  const ms3d = now.getTime() - 3 * 24 * 60 * 60 * 1000;
+
+  let doneLast24h = 0;
+  let done3d = 0;
+  const done3dByBatch = new Map<Batch, number>();
+  for (const pr of mergedPrs) {
+    if (typeof pr.mergedAt !== 'string') continue;
+    const t = Date.parse(pr.mergedAt);
+    if (!Number.isFinite(t)) continue;
+    const lane = laneFromTitle(pr.title);
+    if (lane === null) continue; // PR không mang mã mục (gộp, revert…) — không phải một mục done.
+    if (t >= ms24) doneLast24h++;
+    if (t >= ms3d) {
+      done3d++;
+      const b = LANE_BATCH[lane];
+      done3dByBatch.set(b, (done3dByBatch.get(b) ?? 0) + 1);
+    }
+  }
+
+  const remainingByBatch = new Map<Batch, number>();
+  const parkedByBatch = new Map<Batch, number>();
+  for (const [lane, items] of itemsByLane) {
+    const b = LANE_BATCH[lane];
+    for (const item of items) {
+      if (item.status === 'done') continue;
+      const target = item.status === 'parked' ? parkedByBatch : remainingByBatch;
+      target.set(b, (target.get(b) ?? 0) + 1);
+    }
+  }
+
+  const byBatch: BatchProgress[] = BATCH_ORDER.map((batch) => {
+    const remaining = remainingByBatch.get(batch) ?? 0;
+    const parked = parkedByBatch.get(batch) ?? 0;
+    const d3 = done3dByBatch.get(batch) ?? 0;
+    const ratePerDay = d3 / 3;
+    let projectedDone: string | null;
+    if (remaining === 0) projectedDone = isoDate(now);
+    else if (ratePerDay > 0)
+      projectedDone = isoDate(new Date(now.getTime() + Math.ceil(remaining / ratePerDay) * 24 * 60 * 60 * 1000));
+    else projectedDone = null;
+    return { batch, remaining, parked, done3d: d3, projectedDone };
+  });
+
+  const routineRuns24h = logLines.filter(
+    (l) => isStep0Line(l) && Number.isFinite(Date.parse(l.at)) && Date.parse(l.at) >= ms24,
+  ).length;
+
+  const bottleneck = humanWaiting > 0 ? 'người' : machineWaiting > 0 ? 'máy' : 'không tắc';
+
+  return { doneLast24h, done3d, throughputPerDay: round2(done3d / 3), byBatch, bottleneck, routineRuns24h };
+}
+
 // --- Kết xuất ---
 
 export interface DigestMetrics {
@@ -300,6 +481,8 @@ export interface DigestMetrics {
   parked: ParkedItem[];
   decisions: DecisionRow[];
   cost: CostSummary;
+  /** Mục "Tiến độ" (mục `platform/P-019`). */
+  progress: ProgressMetrics;
 }
 
 function prLabel(row: OpenPrRow): string {
@@ -390,6 +573,23 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
     `Chi phí: 24 giờ ${cost24h} USD · tích luỹ ${total} USD · ${percent}% ngân sách học (${budget} USD, CHARTER mục 8)`,
   );
 
+  // Mục "Tiến độ" (mục `platform/P-019`, chỉ dẫn 3 của chủ dự án ở issue #17).
+  const p = metrics.progress;
+  out.push(
+    '',
+    'Tiến độ',
+    `- Mục done 24 giờ: ${p.doneLast24h} · thông lượng 3 ngày: ${p.throughputPerDay} mục/ngày`,
+  );
+  for (const b of p.byBatch) {
+    const parkedSuffix = b.parked > 0 ? ` (${b.parked} parked)` : '';
+    const eta = b.projectedDone === null ? 'chưa đủ dữ liệu để chiếu' : b.projectedDone;
+    out.push(`- ${b.batch}: ${b.remaining} mục còn lại${parkedSuffix} · dự kiến xong: ${eta}`);
+  }
+  out.push(
+    `- Nút thắt hiện tại: ${p.bottleneck}`,
+    `- Lượt chạy routine 24 giờ: ${p.routineRuns24h} (số để kiểm giả định G3)`,
+  );
+
   return `${out.join('\n')}\n`;
 }
 
@@ -397,10 +597,11 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
 
 /**
  * Kết quả gộp thử của mục `P-007`: mốc kẹt của từng PR đang mở, khoá là số
- * PR. `null` cho một PR nghĩa là PR đó **không** xung đột. Bên gọi truyền
- * `null` cho cả tham số nghĩa là lượt chạy chưa dò gì cả.
+ * PR. `null` cho một PR nghĩa là PR đó **không** xung đột; một
+ * `ConflictProbeError` nghĩa là **không dò được riêng PR đó** (`I-017`). Bên
+ * gọi truyền `null` cho cả tham số nghĩa là lượt chạy chưa dò gì cả.
  */
-export type ConflictOrigins = ReadonlyMap<number, ConflictOrigin | null>;
+export type ConflictOrigins = ReadonlyMap<number, ConflictProbe>;
 
 /**
  * Mốc mỗi lần đổi đầu nhánh của từng PR `automerge-delayed`, **mới trước cũ
@@ -434,10 +635,17 @@ export function collectMetrics(
     if (ib === -1) return -1;
     return ia - ib;
   });
+  // Mục `platform/P-019`: cùng vòng đọc backlog dùng cho "Tiến độ", gom
+  // mục theo làn. Chỉ làn hợp lệ (`LANES`) mới vào bảng đợt — thư mục lạ
+  // không suy được đợt, nhưng mục `parked` của nó vẫn được giữ.
+  const itemsByLane = new Map<LaneName, readonly BacklogItem[]>();
+  const knownLane = new Set<string>(LANES as readonly string[]);
   for (const lane of laneDirs) {
     const path = join(lanesDir, lane, 'backlog.md');
     if (!existsSync(path)) continue;
-    parked.push(...parkedItems(lane, readFileSync(path, 'utf8')));
+    const content = readFileSync(path, 'utf8');
+    parked.push(...parkedItems(lane, content));
+    if (knownLane.has(lane)) itemsByLane.set(lane as LaneName, parseBacklog(content));
   }
 
   // Bất biến I8: tiền đọc từ log qua `readRunLogs` — nó gom nhiều file và
@@ -446,26 +654,42 @@ export function collectMetrics(
   const total = sumCostUsd(logLines);
   const cost24h = sumCostUsd(linesSince(logLines, since));
 
-  // Mục `P-007`. Chỉ PR **đã dò ra mốc** mới vào mục xung đột. Hai ca rơi
-  // ra ngoài và cả hai đều đúng: khoá có mà giá trị `null` là PR gộp sạch;
-  // khoá vắng hẳn là PR chưa dò. Ca thứ hai không xảy ra ở đường đang
-  // dùng — `measureConflicts` đặt khoá cho MỌI số PR — nhưng bên gọi có
-  // thể đưa vào một map dựng tay, nên bộ lọc phải chịu được cả hai. Số PR
-  // ở mục "PR đang mở" ngay trên vẫn đủ để thấy chênh lệch.
+  // Mục `P-007`. Ba ca của giá trị map, ba cách xử lý đúng:
+  //  - khoá vắng hẳn, hoặc giá trị `null`: PR gộp sạch (hoặc chưa dò nếu
+  //    dựng map bằng tay) — KHÔNG vào mục xung đột.
+  //  - `ConflictOrigin`: PR đang xung đột, vào mục kèm mốc kẹt.
+  //  - `ConflictProbeError` (`I-017`): dò riêng PR đó hỏng — vẫn vào mục,
+  //    với `origin: null` để dòng bản tin ghi "KHÔNG dò được mốc kẹt". Một
+  //    PR hỏng là PR CHƯA BIẾT, không phải PR sạch: nuốt nó đi là đúng nhóm
+  //    Z, nên nó phải hiện ra, không biến mất.
   const conflicts =
     origins === null
       ? null
       : conflictRows(
           snapshot.openPrs
             .filter((pr) => origins.get(pr.number) != null)
-            .map((pr) => ({
-              number: pr.number,
-              title: pr.title,
-              labels: labelNames(pr.labels),
-              origin: origins.get(pr.number)!,
-            })),
+            .map((pr) => {
+              const probe = origins.get(pr.number)!;
+              return {
+                number: pr.number,
+                title: pr.title,
+                labels: labelNames(pr.labels),
+                origin: isProbeError(probe) ? null : probe,
+                probeError: isProbeError(probe) ? probe.error : null,
+              };
+            }),
           now.toISOString(),
         );
+
+  const openPrs = openPrRows(snapshot.openPrs);
+  const decisions = decisionRows(snapshot.decisionIssues);
+
+  // Nút thắt (mục `platform/P-019`). Người: PR `owner-merge` đang mở, cộng
+  // quyết định đang chờ chủ dự án. Máy: PR đang xung đột (đã dò), cộng PR
+  // CI đỏ. `conflicts === null` (chưa dò) đóng góp 0 — không đoán là có tắc.
+  const humanWaiting = openPrs.filter((row) => row.labels.includes('owner-merge')).length + needOwnerCount(decisions);
+  const machineWaiting = (conflicts?.length ?? 0) + openPrs.filter((row) => row.ci === 'đỏ').length;
+  const progress = computeProgress(itemsByLane, snapshot.mergedPrs, logLines, humanWaiting, machineWaiting, now);
 
   // Mục `P-027`. Cùng luật với `conflicts` ngay trên: không đo được thì
   // `null`, không phải mảng rỗng.
@@ -489,12 +713,13 @@ export function collectMetrics(
   return {
     since,
     merged: mergedByLane(snapshot.mergedPrs, since),
-    openPrs: openPrRows(snapshot.openPrs),
+    openPrs,
     conflicts,
     delayed,
     parked,
-    decisions: decisionRows(snapshot.decisionIssues),
+    decisions,
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
+    progress,
   };
 }
 

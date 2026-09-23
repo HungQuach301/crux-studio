@@ -21,8 +21,24 @@ import { workflowsToDispatch } from '../invariants.post-merge-dispatch.ts';
 
 const names = (changed: string[]): string[] => workflowsToDispatch(changed).map((d) => d.workflow);
 
-test('KF-004 · PR chạm ops/workflows/ thì PHẢI gọi sync-workflows', () => {
-  assert.deepEqual(names(['ops/workflows/ci.yml']), ['main-ci.yml', 'sync-workflows.yml']);
+test('KF-004 · PR chạm ops/workflows/ thì PHẢI gọi sync-workflows, rồi smoke-workflows', () => {
+  assert.deepEqual(names(['ops/workflows/ci.yml']), [
+    'main-ci.yml',
+    'sync-workflows.yml',
+    'smoke-workflows.yml',
+  ]);
+});
+
+test('P-010 · smoke-workflows đứng SAU sync-workflows, không bao giờ trước', () => {
+  // Thứ tự này là nội dung, không phải hình thức: chạy thử một workflow
+  // trước khi bản mới được chép sang `.github/workflows/` là chạy thử BẢN
+  // CŨ — và nó sẽ XANH. Đúng loại "xanh sai" tệ nhất (nhóm Z).
+  const order = names(['ops/workflows/ci.yml']);
+  assert.ok(order.indexOf('sync-workflows.yml') < order.indexOf('smoke-workflows.yml'));
+});
+
+test('P-010 · không chạm ops/workflows/ thì KHÔNG gọi smoke-workflows', () => {
+  assert.ok(!names(['ops/labels.json', 'kernel/src/index.ts']).includes('smoke-workflows.yml'));
 });
 
 test('KF-004 · xoá một workflow cũng là chạm ops/workflows/', () => {
@@ -42,11 +58,12 @@ test('ops/labels.json đổi thì gọi labels, không đổi thì thôi', () =>
   assert.deepEqual(names(['ops/labels.md']), ['main-ci.yml']);
 });
 
-test('một PR chạm cả hai thì gọi cả ba, main-ci đứng đầu', () => {
+test('một PR chạm cả hai thì gọi cả bốn, main-ci đứng đầu', () => {
   assert.deepEqual(names(['ops/labels.json', 'ops/workflows/notify.yml']), [
     'main-ci.yml',
     'labels.yml',
     'sync-workflows.yml',
+    'smoke-workflows.yml',
   ]);
 });
 

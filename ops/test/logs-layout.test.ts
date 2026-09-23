@@ -25,7 +25,16 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { flatLogFiles, listLogFiles, misfiledLogLines } from '@crux/kernel';
+import {
+  flatLogFiles,
+  listLogFiles,
+  misfiledLogLines,
+  isStep0LogId,
+  step0LogId,
+  parseRunLogs,
+  STEP0_LOG_LANE,
+} from '@crux/kernel';
+import { readFileSync } from 'node:fs';
 
 const LOGS_DIR = join(process.cwd(), 'ops', 'logs');
 
@@ -150,5 +159,52 @@ test('D-C04 · test âm — dòng nằm sai file PHẢI bị bắt', () => {
     assert.equal(misfiledLogLines(dir).length, 2);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Mục `P-023` · **mốc trong tên file phải khớp `at` của dòng bên trong.**
+ *
+ * `misfiledLogLines` chỉ hỏi `lane` và `logIdFromRef(ref)` có khớp đường dẫn
+ * không. Với file bước 0 thì chưa đủ: `ref` khớp tên file là chuyện dễ —
+ * bên ghi ghép cả hai từ cùng một chuỗi — nhưng **mốc** trong tên file có
+ * đúng là mốc của lượt chạy đó không thì không ai hỏi. Lệch mốc là hai lượt
+ * khác nhau mang tên trùng, hoặc một lượt mang tên khai sai giờ, mà không
+ * gì đỏ: nhóm Z.
+ *
+ * Bài kiểm này quan trọng hơn bình thường vì **chưa routine nào gọi
+ * `step0LogPath` từ trong code** — dòng bước 0 do routine viết theo văn xuôi
+ * của CHARTER phụ lục P3 bước 0d. Chừng nào còn vậy, chỗ duy nhất bắt được
+ * một tên file ghép tay sai là ở đây.
+ */
+test('P-023 · file log bước 0: mốc trong tên file khớp `at` của từng dòng', () => {
+  const step0Files = listLogFiles(LOGS_DIR).filter((path) => {
+    const parts = relative(LOGS_DIR, path).split(sep);
+    return parts.length === 2 && isStep0LogId(parts[1]!.replace(/\.jsonl$/, ''));
+  });
+
+  assert.ok(
+    step0Files.length > 0,
+    'không thấy file log bước 0 nào — bài kiểm này sẽ xanh giả. ' +
+      'Nếu đúng là chưa có, đó là dấu hiệu CHARTER P3 bước 0d không được làm theo.',
+  );
+
+  for (const path of step0Files) {
+    const id = relative(LOGS_DIR, path).split(sep)[1]!.replace(/\.jsonl$/, '');
+    const lines = parseRunLogs([readFileSync(path, 'utf8')]);
+    assert.ok(lines.length > 0, `${id}: file log bước 0 rỗng`);
+
+    for (const line of lines) {
+      assert.equal(line.lane, STEP0_LOG_LANE, `${id}: dòng bước 0 phải mang lane ${STEP0_LOG_LANE}`);
+      // Tên routine là phần sau mốc; lấy lại nó từ chính tên file rồi dựng
+      // lại mã từ `at`. Khớp thì mốc đúng, không khớp thì tên file nói dối.
+      const runner = id.slice('step0-'.length).split('-').slice(3).join('-');
+      assert.equal(
+        step0LogId(line.at, runner),
+        id,
+        `${id}: mốc trong tên file không khớp \`at\` của dòng (${line.at}). ` +
+          'Dùng step0LogPath/step0LogRef của kernel, đừng ghép tên file bằng tay.',
+      );
+    }
   }
 });

@@ -65,35 +65,49 @@ Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bố
 
 - deps: T-003
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-012, mục Lõi định lượng 2
 - tiêu chí xong:
-  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy.
-  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7).
+  - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy. ✅ `workshops/topic/src/model-runner.ts` (`runModel`) — không đọc đồng hồ hệ thống, không random; test chạy lặp lại và xen kẽ hai bộ tham số cho ra cùng kết quả từng chữ số.
+  - Agent **không** đặt được `verification.status = "verified"` bằng code — trạng thái đó chỉ đến từ một issue `irreversible` đã được duyệt (D-C02, mặc định M7). ✅ `workshops/topic/src/model-verify.ts`: `computeVerification` khai kiểu trả về `PendingOrFailed` (`'pending' | 'failed'`), không có giá trị `'verified'` nào để gán — khoá ở tầng kiểu (`tsc --noEmit`), không phải quy ước. `verifiedClaimProblems` chỉ ĐỌC LẠI một claim `verified` đã gõ tay, không bao giờ đặt.
+- công cụ: `kernel/contracts/model.schema.json` (contract, đóng — chuyển từ `workshops/topic/contracts/model.v0.schema.json` sang kernel ở mục `kernel/K-002`, cấu trúc trung tính thể loại) · `workshops/topic/src/model-runner.ts` (registry công thức + chạy xác định) · `workshops/topic/src/model-verify.ts` (bốn cấp kiểm + trạng thái tổng hợp). `formula` trong contract là khoá tra registry, không phải biểu thức eval. T-006 đăng ký công thức thật và tạo `M-001.json`…`M-008.json`.
 
 ### T-006 · Tám mô hình định lượng đầu tiên
 Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra đời.
 
 - deps: T-005
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
-  - Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.**
-  - Công thức do agent soạn, có trích nguồn, và được một mô hình **khác họ, không phải Claude** tính lại độc lập. Lệch nhau thì mở `🤖 [QĐ]`.
-  - Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` với hai lựa chọn: thuê chuyên gia viết, hoặc bỏ mô hình đó.
-  - Mỗi mô hình có một issue `irreversible` tóm tắt (giả định, công thức, nguồn, kết quả đối chiếu) đọc được trong vài phút.
+  - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
+  - ⬜ **Chưa làm, chặn ngoài phạm vi mục này:** công thức được một mô hình **khác họ, không phải Claude** tính lại độc lập. Cơ chế là mục `platform/P-003`, mục đó cần secret `OPENAI_API_KEY` — chưa có trên repo, và PR #66 của nó đang chờ chủ dự án merge (issue #67). Cấp kiểm 4 (`llm-assumption-check`) của cả tám mô hình vì vậy ghi `pass: false` kèm lý do, và `verification.status` của cả tám là `pending`.
+  - ✅ Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` — **không mô hình nào rơi vào ca này**: cả tám đều có ví dụ tính sẵn đã công bố. Điều kiện kích hoạt không xảy ra nên không có issue nào phải mở.
+  - ⬜ **Chưa làm, cố ý, chờ tiêu chí 2:** mỗi mô hình một issue `irreversible` tóm tắt. Issue đó là đường duy nhất đưa `verification.status` lên `verified` (D-C02 điểm c), và phần "kết quả đối chiếu" của nó chính là thứ đang thiếu. Mở tám issue lúc cấp 4 còn `pass: false` là xin duyệt cho thứ chưa đủ bằng chứng, và tốn tám dòng bản tin (mặc định M8, rủi ro B11).
+- **Chưa chuyển `done`:** hai tiêu chí trên còn ⬜. Mục này ở `review` cho tới khi `P-003` chạy được; lúc đó phần còn lại là một lượt cơ học (chạy soát chéo, ghi bằng chứng cấp 4, mở issue tóm tắt).
+- **Hai mâu thuẫn trong chính nguồn, đã ghi chứ không nuốt** (xem `ops/known-failures.md` KF-012): TreasuryDirect in 4,03% trong khi khối ví dụ của chính nó tính ra 4,26%; IRS Pub 590-A có câu hướng dẫn dòng 4 không cùng thoả một cách đọc với ví dụ điền sẵn của chính nó ($6.830 so với $6.825). Cả hai nằm trong `assumptions` của file mô hình tương ứng để Fact & Risk Pass đọc được.
+- công cụ: `workshops/topic/data/models/M-001.json`…`M-008.json` (mô tả theo contract) · `cases/M-00N.cases.json` (ca kiểm cấp 1 kèm trích dẫn) · `workshops/topic/src/models.ts` (tám công thức + registry) · `workshops/topic/test/models.test.ts` (74 test: khớp nguồn, kiểm đột biến, biên, xác định, trần dung sai).
 
 ### T-007 · Sensitivity Pass
 Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng giá trị hợp lệ và tìm mọi điểm đảo chiều. Đây là chữ ký khác biệt của kênh, và là cách bù cho việc chủ dự án không sống ở thị trường Mỹ: không đoán tham số vùng miền, quét hết khoảng của nó.
 
 - deps: T-006
 - risk: high
-- status: ready
+- status: review
 - nguồn: spec WP-013, mục Lõi định lượng 3
 - tiêu chí xong:
-  - Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số.
-  - Không có điểm đảo chiều cũng là một kết quả hợp lệ, và phải được ghi thành `stableConclusion` có bằng chứng.
+  - ✅ Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số. — `runSensitivityPass(model, registry, options)` nhận thẳng `ModelDefinition` đã nạp (cùng hình dạng với `runModel`); bên gọi tự `loadModel(modelId)` trước. Quét từng tham số một (giữ các tham số khác ở giá trị nền), tìm điểm đảo chiều bằng cách theo dõi dấu của một "biến kết luận" (`conclusionOutput`) đổi từ dương sang âm hay ngược lại, nhị phân tinh chỉnh giá trị đảo chiều.
+  - ✅ Không có điểm đảo chiều cũng là một kết quả hợp lệ, và phải được ghi thành `stableConclusion` có bằng chứng. — bắt buộc ở tầng ứng dụng (`sensitivityProblems`, vì validator của kernel không hỗ trợ if/then, cùng lý do `approvedIssueUrl` của `model.v0.schema.json`), sinh tự động từ dấu quan sát được ở đầu mỗi khoảng quét.
+- **Đã làm, 2026-09-22** (lượt `crux-worker-3`): `workshops/topic/contracts/sensitivity.v0.schema.json` (payload v0, đóng, theo mẫu `model.v0.schema.json`) · `workshops/topic/src/sensitivity.ts` (`runSensitivityPass`, `validateSensitivity`, `sensitivityProblems`) · `workshops/topic/test/sensitivity.test.ts` (14 test, gồm ba acceptance test của WP-013 mục 6: tìm đúng điểm đảo chiều đã biết trước bằng đại số trên `M-002` thật, chạy hai lần ra cùng một JSON, tham số không tồn tại thì dừng và nêu đúng tên).
+  - Bắt buộc quét mọi tham số `geoVarying: true` (WP-013 mục 5) — chưa mô hình nào trong tám mô hình hiện có mang cờ này thật (ghi trong `verification.tiers`), nên luật được kiểm bằng một mô hình tổng hợp trong test, không phải bằng dữ liệu thật.
+  - Trần 1.000.000 điểm quét cho một tham số (WP-013 mục 5b) — đo được thật trên `M-002.loanAmountUsd` (validRange rộng, step=1 ra 49.999.001 điểm), không phải số tự nghĩ.
+  - **Một lỗ hổng nhóm Z tự phát hiện khi viết acceptance test 1:** bản đầu dùng `runModel` (đòi MỌI output khai trong contract hữu hạn) để tính giá trị quét — nhưng `M-002.breakEvenMonths = pointsCostUsd / monthlySavingsUsd` chia cho 0 đúng tại điểm đảo chiều thật (`monthlySavingsUsd = 0`), nên lần chạy đầu tiên trên dữ liệu thật ném `NonFiniteOutputError` của một output KHÔNG liên quan `conclusionOutput`. Sửa: tự giải tham số + gọi công thức trực tiếp, chỉ kiểm hữu hạn đúng `conclusionOutput` — các output khác được phép vô định tại điểm Sensitivity Pass đang tìm.
+- **Soát chéo (subagent, ngữ cảnh sạch)** theo CHARTER mục 3–6, tìm 2 phát hiện CHẶN + 3 khoảng trống test, cả năm đã sửa trước khi rời nháp:
+  - **CHẶN 1:** trailer `Co-Authored-By` mang tên model ("Claude Sonnet 5"), trái `CLAUDE.md` mục 6 — sửa lại `Co-Authored-By: Claude <noreply@anthropic.com>` (amend + force-push nhánh của chính phiên này, cùng cách PR #79/#109 đã làm).
+  - **CHẶN 2:** dòng log I8 (`ops/logs/topic/T-007.jsonl`) khai "pnpm check và pnpm replay xanh", trong khi `pnpm check` thật ra 696/697 test (1 fail — `ops/test/step0-log-path.test.ts`, mục `P-023`/`ops/scripts/gate-flow.ts`, xác nhận **đã đỏ trên `origin/main` trước khi nhánh này tách ra**, không liên quan `T-007`). `CLAUDE.md` mục 8 cấm ghi "đã chạy, xanh" khi chưa đúng — đã sửa lại dòng log ghi đúng số thật.
+  - Cổng chặn 1.000.000 điểm quét đếm THIẾU 1 so với mảng thật sự dựng khi `step` không chia hết khoảng (điểm `max` được chèn thêm không được cộng vào trước khi so ngưỡng) — `actualPointCount` nay là nguồn duy nhất cho cả cổng chặn lẫn `scanPoints`.
+  - Ba test mới cho ba ca chưa có bài kiểm: điểm đảo chiều rơi đúng một điểm lưới (khử trùng lặp, dùng step=5 chạm thẳng `baseRatePct`), điểm ĐẦU khoảng quét bằng 0 chẵn (không tính là flip, có chủ đích — không có "trước" trong miền quét để so), bước quét không dương thì ném.
+- **Cố ý bỏ qua so với WP-013 gốc, có lý do:** checkpoint 2b của WP-013 ("≥2 mô hình `verified`") không áp dụng — `T-006` đã ghi rõ (D-C02) không mô hình nào trong tám mô hình được `verified` cho tới khi `platform/P-003` (cần `OPENAI_API_KEY`, đang `owner-merge`) chạy được, và backlog hiện hành (CHARTER thắng spec khi mâu thuẫn) đặt `deps: T-006` chứ không đặt điều kiện đó. CLI `scripts/run-sensitivity.ts` của WP-013 mục 3 và việc commit một kết quả quét thật làm ví dụ tham chiếu (WP-013 mục 7) **chưa làm** — ngoài hai bullet tiêu chí xong ở trên, để giữ PR gọn theo một mục tiêu; đáng một mục backlog riêng nếu cần CLI độc lập.
 
 ### T-008 · Corpus đối thủ, kiểm mới lạ, đại lượng nhu cầu
 Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **giới hạn của từng thứ khai rõ trong chính dữ liệu**, không nằm trong ghi chú.

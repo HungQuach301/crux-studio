@@ -46,6 +46,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readRunLogs, type RunLogLine } from '@crux/kernel';
+import { sliceLedgerSections } from './ledger-sections.ts';
 
 export type Verdict = 'khớp' | 'sai';
 
@@ -80,14 +82,15 @@ export interface CheckReport extends CheckOutcome {
 
 // ───────────────────────────────────────────────────────────── đọc sổ ──
 
-/** Tách sổ giả định thành từng mục. Thuần, không đụng đĩa — để test được. */
+/**
+ * Tách sổ giả định thành từng mục. Thuần, không đụng đĩa — để test được.
+ *
+ * Ranh giới mục do `ledger-sections.ts` sinh ra, KHÔNG cắt tại chỗ: hai
+ * bên đọc sổ từng mang hai bản chép của cùng một phép cắt, và cả hai cùng
+ * cắt mục cuối tới hết file (rà soát **Z12**, `ops/known-failures.md`).
+ */
 export function parseLedger(ledger: string): LedgerEntry[] {
-  const headings = [...ledger.matchAll(/^## (G\d+) · (.+)$/gm)];
-  return headings.map((heading, index) => {
-    const start = heading.index! + heading[0].length;
-    const end = index + 1 < headings.length ? headings[index + 1]!.index! : ledger.length;
-    const body = ledger.slice(start, end);
-
+  return sliceLedgerSections(ledger).map(({ code, body }) => {
     const confidence =
       /\*\*Độ tin cậy:\*\*\s*\*?\*?`?([^`*\n]+)`?/.exec(body)?.[1]?.trim() ?? 'không khai';
 
@@ -102,7 +105,7 @@ export function parseLedger(ledger: string): LedgerEntry[] {
 
     const autoCheck = /\*\*Kiểm tự động:\*\*\s*`([^`]+)`/.exec(body)?.[1]?.trim();
 
-    return { code: heading[1]!, confidence, dependencies, autoCheck };
+    return { code, confidence, dependencies, autoCheck };
   });
 }
 
@@ -596,6 +599,206 @@ export function runUnionExperiment(): UnionRuns {
   };
 }
 
+// ───────────────────────────────── G1 · đội worker đang chạy thật ──
+
+/** Hai dòng log cách nhau quá ngần này thì thuộc hai lượt chạy khác nhau. */
+export const RUN_CLUSTER_MINUTES = 50;
+
+/** Cửa sổ quét, tính lùi từ dòng log MỚI NHẤT (không phải từ `now` — xem `collectRoutineRuns`). */
+export const FLEET_WINDOW_DAYS = 7;
+
+/**
+ * Số worker của phương án dự phòng Plan B trong sổ G1 và trong phụ lục P1
+ * ("Mặc định: 2 worker"). Quan sát được ≤ ngần này tức là đội đã tụt về
+ * dự phòng, và đó là điều bài kiểm phải kêu.
+ */
+export const PLAN_B_WORKERS = 2;
+
+/** `crux-worker-2`, `crux-integrator`, `crux-digest` — tên routine của phụ lục P1/P2/P3. */
+const ROUTINE_MENTION = /crux-(?:worker-\d+|digest|integrator)/g;
+
+export interface RoutineRuns {
+  /** Tên routine → mốc bắt đầu của từng lượt, đã sắp tăng dần. */
+  runs: Map<string, number[]>;
+  /** Số dòng log có nhắc tên routine trong cửa sổ. 0 nghĩa là không có gì để quan sát. */
+  mentions: number;
+  /**
+   * Số dòng log bị loại vì `at` không đọc được. Bỏ im lặng thì số lượt tụt
+   * mà không dòng nào nói vì sao — bỏ **hết** ra `◦` (không xanh giả), nhưng
+   * bỏ **một phần** là đúng nhóm lỗi Z. Nên nó được đếm và in vào `evidence`.
+   */
+  unparsedAt: number;
+}
+
+/**
+ * Đếm các lượt routine quan sát được từ chính `ops/logs/**`, nguồn mà bất
+ * biến I8 buộc mọi lượt chạy phải ghi vào.
+ *
+ * **Giới hạn khai trước, vì nó quyết định chiều hỏng của bài kiểm:**
+ *
+ * 1. **Log đếm THIẾU, không bao giờ đếm THỪA.** Phụ lục P1 bước 3 bảo worker
+ *    không nhận được mục nào thì in `idle` và kết thúc **không commit gì** —
+ *    lượt đó không để lại dòng log nào. Nên mọi con số ở đây là **cận dưới**:
+ *    "đo được N worker" nghĩa là "ít nhất N", không phải "đúng N". Kết luận
+ *    duy nhất rút ra được vì thế là kết luận theo chiều ≥, và đó đúng là
+ *    chiều mà G1 cần (2 worker hay 3 worker).
+ * 2. Tên routine nằm trong **`note`** dạng văn xuôi, không có trường riêng.
+ *    Nếu quy ước ghi `note` đổi, phép đếm về 0 và bài kiểm ra
+ *    `observedNothing` (dấu `◦`), **không** ra `khớp` — tức là nó im lặng
+ *    thành "chưa quan sát được", không im lặng thành "vẫn ổn". Đây là cùng
+ *    bài học fail-open của `isToolCommit` ở trên.
+ * 3. **Một dòng log tính cho ĐÚNG MỘT routine: tên xuất hiện đầu tiên.**
+ *    Đây không phải chi tiết vụn — bản đầu đếm *mọi* tên nhắc tới trong
+ *    `note`, và nó sai ngay ở dòng log đầu tiên mà chính mục `VF-G1` ghi:
+ *    dòng đó **kể lại** số lượt của cả bốn routine, nên nó tự tính thành
+ *    một lượt cho từng routine và thổi cả bốn con số lên. Báo cáo của
+ *    worker nhắc tên routine khác là chuyện bình thường (bước 0 của phụ
+ *    lục P3 luôn nhắc `crux-integrator`), nên lỗi này sẽ lặp lại mãi.
+ *
+ *    Luật "tên đầu tiên" khớp quy ước `note` đang dùng thật — dòng log mở
+ *    bằng chính routine viết nó (`Lượt worker crux-worker-1 …`,
+ *    `… (phụ lục P1 bước 3-4, routine crux-worker-3)`) — và nó sai theo
+ *    chiều **an toàn**: nó chỉ có thể làm phép đếm NHỎ đi, tức là chỉ có
+ *    thể đẩy bài kiểm về phía `sai`, không bao giờ che được một đội đã tụt
+ *    về Plan B.
+ *
+ * Cửa sổ neo vào dòng log **mới nhất** chứ không vào `now`: một lần chạy lại
+ * trên bản clone cũ phải cho đúng kết quả như lúc nó được ghi, nếu không thì
+ * bài kiểm tự chuyển sang `sai` chỉ vì repo nằm yên vài ngày — một kết luận
+ * không dính gì tới G1.
+ */
+export function collectRoutineRuns(lines: readonly RunLogLine[]): RoutineRuns {
+  const parsed = lines.map((line) => ({ at: Date.parse(line.at), note: line.note ?? '' }));
+  const stamped = parsed.filter((row) => Number.isFinite(row.at));
+  const unparsedAt = parsed.length - stamped.length;
+
+  const newest = stamped.reduce((max, row) => (row.at > max ? row.at : max), Number.NEGATIVE_INFINITY);
+  const floor = newest - FLEET_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  const seen = new Map<string, Set<number>>();
+  let mentions = 0;
+  for (const row of stamped) {
+    if (row.at < floor) continue;
+    // CHỈ tên routine ĐẦU TIÊN trong `note` — xem `authorOfLine` dưới đây.
+    const author = row.note.match(ROUTINE_MENTION)?.[0];
+    if (author === undefined) continue;
+    mentions += 1;
+    let bucket = seen.get(author);
+    if (bucket === undefined) seen.set(author, (bucket = new Set()));
+    bucket.add(row.at);
+  }
+
+  const gap = RUN_CLUSTER_MINUTES * 60 * 1000;
+  const runs = new Map<string, number[]>();
+  for (const [name, stamps] of seen) {
+    const sorted = [...stamps].sort((a, b) => a - b);
+    const starts: number[] = [];
+    for (const at of sorted) {
+      if (starts.length === 0 || at - starts[starts.length - 1]! > gap) starts.push(at);
+    }
+    runs.set(name, starts);
+  }
+
+  return { runs, mentions, unparsedAt };
+}
+
+/**
+ * Đọc log cho bài kiểm G1, và **phân biệt "chưa quét được" với "quét rồi
+ * không thấy gì"** (mục `I-005`).
+ *
+ * `listRunLogs`/`listLogFiles` của kernel trả mảng rỗng khi `ops/logs/`
+ * không tồn tại — đúng cho bên gọi bình thường, sai cho một bài kiểm: thiếu
+ * cả thư mục log và có thư mục log rỗng sẽ in ra y hệt nhau (dấu `◦`), tức
+ * là bài kiểm không chạy được trông như bài kiểm đã chạy và không thấy gì.
+ * Ném lỗi ở đây để `main()` xếp nó vào `⚠ … KHÔNG CHẠY ĐƯỢC` và thoát khác 0.
+ */
+export function readFleetLogs(root: string): RunLogLine[] {
+  const logsDir = join(root, 'ops', 'logs');
+  if (!existsSync(logsDir)) {
+    throw new Error(`không có thư mục ${logsDir} — không quét được lượt routine nào (bất biến I8 đòi thư mục này tồn tại)`);
+  }
+  return readRunLogs(logsDir);
+}
+
+/** Khoảng cách giữa các lượt, theo giờ, đã sắp tăng dần. */
+function gapsInHours(starts: readonly number[]): number[] {
+  return starts.slice(1).map((at, index) => (at - starts[index]!) / 3600000).sort((a, b) => a - b);
+}
+
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const mid = Math.floor(values.length / 2);
+  return values.length % 2 === 1 ? values[mid]! : (values[mid - 1]! + values[mid]!) / 2;
+}
+
+/**
+ * G1 nói: tài khoản có Claude Code Projects, nên chạy được cấu hình 3 worker
+ * của phụ lục P1 thay vì Plan B 2 worker.
+ *
+ * Bài kiểm này **không** kiểm được vế "có Projects hay không" — đó là trang
+ * cấu hình tài khoản, chỉ chủ dự án thấy (mục `VF-G1`, issue #5). Nó canh
+ * đúng **hệ quả vận hành** mà phụ lục P1 treo lên G1, và là thứ duy nhất
+ * quan sát được từ trong repo: **đội worker đang chạy thật có mấy con.**
+ *
+ * Vì thế chiều kết luận hẹp và có chủ đích:
+ * - ≥ 3 worker quan sát được → `khớp`: cấu hình 3 worker đang chạy, dự phòng
+ *   Plan B chưa phải dùng tới. (Không suy ra "có Projects": ba routine
+ *   hourly rời nhau cũng cho đúng quan sát này.)
+ * - 1–2 worker, mà cửa sổ CÓ dòng nhắc routine → `sai`: đội đã tụt về Plan B.
+ *   Lúc đó phụ lục P1 và sổ G1 đang ghi một cấu hình không còn tồn tại, và
+ *   `main()` in sẵn thân issue `🤖 [QĐ]`.
+ * - Không dòng nào nhắc routine → `observedNothing`, không phải `khớp`.
+ */
+export function judgeWorkerFleet(collected: RoutineRuns): CheckOutcome {
+  const workers = [...collected.runs.keys()].filter((name) => name.startsWith('crux-worker-')).sort();
+  const evidence: string[] = [];
+
+  for (const name of [...collected.runs.keys()].sort()) {
+    const starts = collected.runs.get(name)!;
+    const mid = median(gapsInHours(starts));
+    const cadence = mid === null ? 'một lượt, chưa đo được nhịp' : `nhịp giữa các lượt (trung vị) ${mid.toFixed(1)} giờ`;
+    evidence.push(`\`${name}\`: ${starts.length} lượt quan sát được, ${cadence}.`);
+  }
+  evidence.push(
+    `Cửa sổ ${FLEET_WINDOW_DAYS} ngày tính lùi từ dòng log mới nhất; ${collected.mentions} dòng log có nhắc tên routine.`,
+    'Con số là **cận dưới**: lượt worker ra `idle` không commit gì (phụ lục P1 bước 3) nên không để lại dòng log nào.',
+  );
+  if (collected.unparsedAt > 0) {
+    evidence.push(`⚠ ${collected.unparsedAt} dòng log bị loại vì \`at\` không đọc được — số lượt ở trên đã tụt đi vì lý do KHÔNG dính gì tới G1.`);
+  }
+
+  if (collected.mentions === 0) {
+    return {
+      verdict: 'khớp',
+      observed: 'Không dòng log nào trong cửa sổ nhắc tên routine — chưa quan sát được đội worker.',
+      evidence,
+      observedNothing: true,
+    };
+  }
+
+  if (workers.length <= PLAN_B_WORKERS) {
+    return {
+      verdict: 'sai',
+      observed: `Chỉ quan sát được ${workers.length} worker (${workers.join(', ') || 'không có'}) — đội đã tụt về số worker của Plan B (${PLAN_B_WORKERS}).`,
+      evidence: [
+        ...evidence,
+        `Sổ G1 và phụ lục P1 đang ghi cấu hình ≥ ${PLAN_B_WORKERS + 1} worker; quan sát không còn đỡ được con số đó.`,
+        'Việc cần làm là sửa con số trong phụ lục P1 cho khớp hiện trạng, KHÔNG phải kết luận gì về vế "tài khoản có Projects" — hai thứ đó không suy ra nhau.',
+      ],
+    };
+  }
+
+  return {
+    verdict: 'khớp',
+    // KHÔNG viết "không phải Plan B": Plan B có hai vế ("chỉ dùng routines"
+    // và "2 worker"), và quan sát này chỉ bác được vế sau — thứ đo được
+    // chính là các routine `crux-worker-<N>`. Xem `docs/assumptions.md` mục
+    // `G1`; vòng soát chéo đã bắt đúng chỗ nới nghĩa này một lần.
+    observed: `Quan sát được ${workers.length} worker đang chạy thật (${workers.join(', ')}) — cấu hình ≥ ${PLAN_B_WORKERS + 1} worker, nhiều hơn số worker của Plan B (${PLAN_B_WORKERS}).`,
+    evidence,
+  };
+}
+
 // ───────────────────────────────────────────────────────── sổ bài kiểm ──
 
 export interface AutoCheck {
@@ -605,6 +808,11 @@ export interface AutoCheck {
 }
 
 export const AUTO_CHECKS: AutoCheck[] = [
+  {
+    id: 'worker-fleet-cadence',
+    code: 'G1',
+    run: (root) => judgeWorkerFleet(collectRoutineRuns(readFleetLogs(root))),
+  },
   {
     id: 'session-trailer-on-branch',
     code: 'G14',
