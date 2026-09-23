@@ -569,10 +569,10 @@ Hệ quả đo được, không phải suy đoán: **17 PR đang mở, CI xanh c
 - deps: —
 - risk: **high** — `main` đỏ chặn mọi làn; mọi PR đang mở đỏ ngay khi gộp `main`.
 - status: review
-- nguồn: đo ở lượt `crux-worker-1` 2026-09-22 23:3x–23:5xZ; `ops/known-failures.md` **KF-018** (và KF-013, KF-002); CLAUDE.md mục 13 (`main` đỏ thì sửa ngay), CHARTER phụ lục P3 bước 1
+- nguồn: đo ở lượt `crux-worker-1` 2026-09-22 23:3x–23:5xZ; `ops/known-failures.md` **KF-019** (và KF-013, KF-002); CLAUDE.md mục 13 (`main` đỏ thì sửa ngay), CHARTER phụ lục P3 bước 1
 - tiêu chí xong:
   - ✅ `ops/workflows/spike-canvas.yml` hết bốn vi phạm: `set -euo pipefail` vào ba khối `run: |`, một chú thích tại chỗ cho `"$found" --version || true`. **Không** nới luật, **không** thêm ngoại lệ — luật đúng, file sai.
   - ✅ Bài tái hiện lỗi (bất biến I2) ở `ops/test/check-workflows.test.ts`: `blocksMissingPipefail(runBlocks(...))` và `undocumentedSwallows(...)` chạy trên **mọi** `ops/workflows/*.yml` của cây thật, trong `node --test`. Phá thử: bỏ bản sửa ra khỏi cây thì đỏ với đúng bốn chuỗi, khôi phục thì 57/57 xanh.
-  - ✅ Ghi `ops/known-failures.md` **KF-018**.
-  - ⬜ **Câu hỏi còn mở, không thuộc phạm vi PR này:** vì sao CI của #42 xanh trong khi `lint:workflows` bắt được bốn chỗ này? Giả thuyết là `KF-002` (GitHub không dựng lần chạy cho commit cuối của PR, nên nhãn xanh là của một commit cũ hơn). Chưa đo, nên chưa viết vào KF-018 như một khẳng định. Nếu đúng thì lỗ hổng lớn hơn một file: **mọi** PR đều có thể merge với một commit chưa bao giờ chạy CI. Đáng một mục riêng của làn `verify`.
+  - ✅ Ghi `ops/known-failures.md` **KF-019**.
+  - ⬜ **Câu hỏi còn mở, không thuộc phạm vi PR này:** vì sao CI của #42 xanh trong khi `lint:workflows` bắt được bốn chỗ này? Giả thuyết là `KF-002` (GitHub không dựng lần chạy cho commit cuối của PR, nên nhãn xanh là của một commit cũ hơn). Chưa đo, nên chưa viết vào KF-019 như một khẳng định. Nếu đúng thì lỗ hổng lớn hơn một file: **mọi** PR đều có thể merge với một commit chưa bao giờ chạy CI. Đáng một mục riêng của làn `verify`.
 - **mã mục nhận lúc 2026-09-22 23:4x giờ UTC**: `P-030` là mã cao nhất trên `main` **và** trên cả 17 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-031` không đụng ai.

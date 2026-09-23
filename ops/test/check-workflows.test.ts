@@ -374,7 +374,7 @@ test('cả sáu workflow trong ops/workflows/ khai đủ quyền chúng cần', 
   }
 });
 
-// KF-018 · `spike-canvas.yml` vào `main` với 3 khối `run: |` thiếu
+// KF-019 · `spike-canvas.yml` vào `main` với 3 khối `run: |` thiếu
 // `set -euo pipefail` và 1 `|| true` không chú thích, làm `pnpm check` ĐỎ
 // trên chính `main` (đo 2026-09-22 23:38Z, sau khi #42 merge lúc 23:05Z).
 //

@@ -17,7 +17,7 @@ test('bốn hình dạng hợp lệ đều khớp', () => {
   assert.ok(matchesTestGlob('workshops/topic/test/stub.test.ts'));
   assert.ok(matchesTestGlob('ops/test/labels.test.ts'));
   assert.ok(matchesTestGlob('ops/test/a/b/nested.test.ts'), 'ops/test/**/*.test.ts phải quét sâu nhiều cấp');
-  // KF-018: hình dạng thứ tư, thêm bởi mục `visual/V-002` (PR #42).
+  // KF-019: hình dạng thứ tư, thêm bởi mục `visual/V-002` (PR #42).
   assert.ok(matchesTestGlob('spike/canvas/test/camera.test.ts'));
   assert.ok(matchesTestGlob('spike/canvas/test/a/b/nested.test.ts'), 'spike/**/test/**/*.test.ts phải quét sâu nhiều cấp');
 });
@@ -39,7 +39,7 @@ test('Z11 · workshops/<tên>/test/ chỉ khớp đúng MỘT cấp tên xưởn
   assert.ok(matchesTestGlob('workshops/topic/test/stub.test.ts'));
 });
 
-// KF-018 · `matchesTestGlob` là bản chép tay của `package.json` → `scripts.test`.
+// KF-019 · `matchesTestGlob` là bản chép tay của `package.json` → `scripts.test`.
 // Mục `visual/V-002` (PR #42) thêm glob thứ tư vào `package.json` mà quên hàm
 // này, và `pnpm check` đỏ trên chính `main`. Bài dưới đây neo hai nguồn vào
 // nhau: đọc `scripts.test` THẬT rồi đòi mỗi glob trong đó có một file mẫu
@@ -53,7 +53,7 @@ test('Z11 · workshops/<tên>/test/ chỉ khớp đúng MỘT cấp tên xưởn
 // cố ý chặn (bài Z11 ngay dưới khẳng định điều đó), và `spike/**/test/**`
 // với `**` khớp 0 cấp sẽ phủ `spike/test/x.test.ts` mà regex từ chối. Đó là
 // thu hẹp CÓ CHỦ ĐÍCH, không phải lỗ hổng.
-test('KF-018 · mọi glob trong package.json scripts.test đều có luật tương ứng ở matchesTestGlob', () => {
+test('KF-019 · mọi glob trong package.json scripts.test đều có luật tương ứng ở matchesTestGlob', () => {
   const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   };
@@ -119,7 +119,7 @@ test('mọi file *.test.ts thật trong repo đều khớp glob của pnpm test'
     walk(dir);
     return n;
   };
-  // KF-018: gốc thứ tư `spike/<tên>/test/` đi cùng glob thứ tư trong
+  // KF-019: gốc thứ tư `spike/<tên>/test/` đi cùng glob thứ tư trong
   // `package.json`. Quên nó ở đây thì hai cách đếm lệch nhau và bài này đỏ —
   // đúng như đã xảy ra khi PR #42 thêm `spike/canvas/test/`.
   const expected =

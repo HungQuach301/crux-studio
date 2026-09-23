@@ -487,7 +487,7 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
 ---
 
-## KF-018 · `main` đỏ vì một workflow vào được `main` mà không luật nào soi nó ở `node --test`
+## KF-019 · `main` đỏ vì một workflow vào được `main` mà không luật nào soi nó ở `node --test`
 
 - **Lần gặp:** 1
 - **Chữ ký:** `pnpm check` dừng ngay ở `pnpm lint:workflows` **trên chính `origin/main`**, in `spike-canvas.yml:47/69/84 — khối `run: |` thiếu `set -euo pipefail` (Z10)` cộng `spike-canvas.yml:63 — `|| true` … không có chú thích (Z9)`. Mọi PR đang mở kế thừa đúng bốn dòng đó ngay khi gộp `main`, nên chúng đỏ mà không ai đụng vào chúng.
