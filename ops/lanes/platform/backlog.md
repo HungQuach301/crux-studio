@@ -248,6 +248,52 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
   - Z1 **không** nằm trong mục này: đã xong ở P-011.
   - Mục này không đóng một lần. Mỗi đợt xong thì ghi vào bảng nhóm Z ở `ops/known-failures.md` — đổi cột phải từ cách làm sang ✅ kèm tên bài kiểm.
 - **Đợt 1 — xong.** Năm luật, mỗi luật kèm test âm (`ops/test/check-workflows.test.ts`, `ops/test/check-test-coverage.test.ts`, `ops/test/check-workflows-synced.test.ts`): `blocksMissingPipefail` (Z10), `testFilesMissedByGlob` qua script mới `pnpm check:tests` (Z11), `unsyncedWorkflows` qua script mới gọi riêng từ `main-ci.yml` — KHÔNG trong `pnpm check`, xem lý do trong chú thích đầu `ops/scripts/check-workflows-synced.ts` (Z3), `secretsUsedWithoutEmptyCheck` (Z5), `undocumentedSwallows` (Z9, kèm sửa 5 chỗ trong cây hiện tại để qua được chính luật mới). Chi tiết đầy đủ ở từng dòng bảng nhóm Z. Còn treo: Đợt 2 (Z2, Z8, Z13) và Đợt 3 (Z6, Z7, Z14).
+- **Đợt 2 — xong một phần: Z12 và Z13** (lượt `crux-worker-1`, 2026-09-22).
+  - **Z12** ("sửa ngay, không chờ đợt"): `ops/scripts/ledger-sections.ts` giữ **một** phép cắt sổ giả định, dùng
+    chung cho `check-assumptions.ts` và `recheck-assumptions.ts`. Hai bên trước đây mang **hai bản chép** của cùng
+    phép cắt, và cả hai cùng cắt mục cuối tới hết file — sửa một bên là hình dạng Z16 chờ sẵn, nên gộp về một chỗ.
+    Mục nay kết thúc ở ranh giới đầu tiên sau nó (một heading `## ` bất kỳ, hoặc một dòng `---`). Năm bài ở
+    `ops/test/ledger-sections.test.ts`, một trong đó đọc chính `docs/assumptions.md`: đo được lúc sửa, `G17` đang
+    nuốt trọn phần "Cách thêm một giả định" (nó nằm **giữa** `G17` và `G18`, nên ca này tái hiện mà không cần dựng
+    sổ giả). Kiểm bằng **phép phá**: dựng lại phép cắt cũ thì 3/5 bài đỏ đúng chỗ, khôi phục thì 5/5 xanh.
+  - **Z13**: `goldenOnlyProblems` trong `ops/scripts/check-golden-pr.ts`, chạy ở job `golden-solo` của
+    `ops/workflows/ci.yml`. Ngoại lệ đúng hai thư mục — `ops/logs/**` (bất biến I8) và `ops/lanes/**` (CLAUDE.md
+    mục 2) — và đó là **tính chất kiểm được**, không phải châm chước: `replay.ts` đọc `ops/golden/**` rồi chạy các
+    xưởng, không đọc dòng log nào và không đọc backlog nào. Đọc "không kèm thay đổi nào khác" theo mặt chữ thì
+    không PR nào hợp lệ được, và một luật không ai qua được là một luật sẽ bị tắt ở lần đầu nó chạy. Mười bài ở
+    `ops/test/check-golden-pr.test.ts`: năm bài dựng ca luật **phải đỏ** (kể cả ca đường dẫn bị `git`
+    bọc ngoặc kép vì `core.quotePath` — chiều fail-open duy nhất của luật), năm bài canh chiều không được đỏ
+    nhầm. Đầu vào rỗng thì ĐỎ chứ không xanh im lặng (bài học Z15).
+  - **Cố ý để lại, nói rõ chứ không im lặng.** **Z2**: phần *cơ chế* đã xong ở `P-009` (đã vào `main`); phần còn
+    lại là một luật linter, mà **7 trong 10** chỗ `if:` của `ops/workflows/**` tại nhánh này là `if:` **mức job** chứ không
+    phải mức step (trên `main` là 6/9; chính PR này thêm một job-level nữa), trong khi câu luật ở bảng nhóm Z chỉ mô tả ca mức step — hình dạng luật cho ca mức job là một
+    câu hỏi thiết kế riêng. **Z8**: sửa nó là sửa `ops/workflows/automerge.yml`, vùng `owner-merge`; gộp vào cùng
+    PR thì hai luật máy kiểm rẻ ở trên phải nằm chờ chủ dự án. Cả hai đáng một PR riêng.
+  - `status` giữ **`ready`**, không chuyển `review`: mục này cố ý không đóng một lần, và phần còn lại của sóng 2
+    cùng trọn sóng 3 vẫn đang chờ — đúng cách sóng 1 đã làm.
+
+### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
+Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
+
+`ops/workflows/ci.yml` gắn nhãn `cross-lane` bằng `grep -Eo '^(workshops|ops/lanes)/[a-z]+'` trên danh sách file
+đã đổi. Hai tiền tố đó **không phủ `ops/logs/<làn>/`** — mà từ `D-C04` thì mỗi mục có một file log riêng dưới
+đúng tên làn của nó, và bước 0 của phụ lục P3 ghi vào `ops/logs/integration/` ở **mọi** lượt worker, kể cả lượt
+nhận một mục của làn khác. Nên ca "một PR chạm hai làn" phổ biến nhất hiện nay lại đúng là ca bộ dò không thấy.
+
+Luật mềm (CHARTER mục 4) không chặn gì, nên hỏng ở đây **không làm gì đỏ** — nhóm **Z**, cùng hình dạng với
+phần còn lại của `P-014`.
+
+- deps: —
+- risk: low
+- status: ready
+- nguồn: vòng soát của `P-014` sóng 2; CHARTER mục 4; `D-C04`
+- tiêu chí xong:
+  - Bộ dò đếm cả `ops/logs/<làn>/`, và **không** đếm trùng khi một PR chạm cả `ops/lanes/x/` lẫn `ops/logs/x/`
+    (cùng một làn `x`, không phải hai làn).
+  - Có test âm: một tập file đã đổi chạm `ops/lanes/platform/` và `ops/logs/integration/` phải ra **2** làn;
+    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**.
+  - Luật tách khỏi YAML sang một script có test, cùng lý do đã ghi ở `check-golden-pr.ts`: `ci.yml` chạy theo
+    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test.
 
 ### P-002 · `decision-relay.yml` và routine `crux-decision`
 Rút độ trễ trả lời quyết định từ một nhịp worker xuống vài phút.
