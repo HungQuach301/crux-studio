@@ -248,6 +248,23 @@ const PERMISSION_RULES: readonly PermissionRule[] = [
     accepts: [{ scope: 'contents', need: 'write' }],
     why: 'merge một pull request ghi vào nhánh đích.',
   },
+  {
+    // Đo được, 2026-09-22: `automerge.yml` gọi endpoint này từ 14:45Z (mục
+    // `P-009`) mà khối `permissions:` không khai `checks`. GitHub trả
+    // **403 `Resource not accessible by integration`**, `set -euo pipefail`
+    // giết cả bước, và vì vòng lặp duyệt CẢ hàng đợi nên MỌI PR đứng lại —
+    // 35 lượt `automerge` đỏ liên tiếp, 0 PR merge trong ~5,9 giờ.
+    //
+    // Đây là nhóm **Z**: `pnpm lint:workflows` xanh, CI xanh, nhãn đúng, mà
+    // nhà máy dừng. Luật cũ chỉ biết các lệnh `gh <lệnh con>`; một endpoint
+    // gọi thẳng qua `gh api` không rơi vào luật nào. Xem `KF-017`.
+    //
+    // `checks` là scope RIÊNG: `contents`, `pull-requests`, `actions` đều
+    // KHÔNG bao nó. `checks: read` là đủ để đọc.
+    match: /\bgh\s+api\s+[^\n]*\/check-(runs|suites)\b/,
+    accepts: [{ scope: 'checks', need: 'read' }],
+    why: 'đọc check run qua Checks API. Scope `checks` KHÔNG nằm trong `contents`, `pull-requests` hay `actions` — thiếu nó cho ra 403 "Resource not accessible by integration".',
+  },
 ];
 
 /** Đọc khối `permissions:` ở mức gốc của workflow. */
@@ -280,6 +297,27 @@ function satisfies(granted: string | undefined, need: 'read' | 'write'): boolean
   return need === 'read' && granted === 'read';
 }
 
+/**
+ * Nối các dòng bị `\` cuối dòng cắt ra thành **một dòng logic**, trước khi
+ * đem khớp `PERMISSION_RULES`.
+ *
+ * Vì sao bắt buộc: mọi luật ở trên khớp trong phạm vi một dòng (`[^\n]*`),
+ * còn bash thì cho viết một lệnh trải nhiều dòng. Vòng soát của `P-029` đo
+ * được 14 ca và tìm ra đúng chỗ này: `gh api \` rồi URL ở dòng sau —
+ * hoặc `gh api \` rồi `-H "Accept: …"` rồi URL — **lọt hết**. Nguy ở chỗ
+ * `automerge.yml` đang dùng đúng dấu `\` đó và chỉ tình cờ để URL ở dòng
+ * đầu: một lần rewrap lệnh cho dễ đọc là luật tắt tiếng, và `KF-017` quay
+ * lại y nguyên mà không gì đỏ.
+ *
+ * Nối ở đây, không nối trong `declaredPermissions`: hàm đó đọc khối
+ * `permissions:` theo **thụt lề**, nên nối dòng sẽ làm nó đọc sai.
+ */
+export function joinContinuations(source: string): string {
+  // `[ \t]*` chứ không phải `\s*` ở đầu: `\s` gồm cả `\n`, nên một dòng chỉ
+  // có mỗi dấu `\` sẽ kéo luôn dòng TRƯỚC vào cùng lệnh.
+  return source.replace(/[ \t]*\\\n\s*/g, ' ');
+}
+
 export function missingPermissions(source: string): string[] {
   const declared = declaredPermissions(source);
   // Không khai `permissions` thì workflow nhận quyền mặc định của repo.
@@ -287,9 +325,10 @@ export function missingPermissions(source: string): string[] {
   if (declared === null) return [];
   if (declared.get('*') === 'write') return [];
 
+  const joined = joinContinuations(source);
   const missing: string[] = [];
   for (const rule of PERMISSION_RULES) {
-    if (!rule.match.test(source)) continue;
+    if (!rule.match.test(joined)) continue;
     const ok = rule.accepts.some((grant) =>
       satisfies(declared.get(grant.scope) ?? declared.get('*'), grant.need),
     );

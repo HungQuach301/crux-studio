@@ -7,16 +7,19 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { matchesTestGlob, testFilesMissedByGlob, findTestFiles } from '../scripts/check-test-coverage.ts';
 
-test('ba hình dạng hợp lệ đều khớp', () => {
+test('bốn hình dạng hợp lệ đều khớp', () => {
   assert.ok(matchesTestGlob('kernel/test/validate.test.ts'));
   assert.ok(matchesTestGlob('workshops/topic/test/stub.test.ts'));
   assert.ok(matchesTestGlob('ops/test/labels.test.ts'));
   assert.ok(matchesTestGlob('ops/test/a/b/nested.test.ts'), 'ops/test/**/*.test.ts phải quét sâu nhiều cấp');
+  // KF-019: hình dạng thứ tư, thêm bởi mục `visual/V-002` (PR #42).
+  assert.ok(matchesTestGlob('spike/canvas/test/camera.test.ts'));
+  assert.ok(matchesTestGlob('spike/canvas/test/a/b/nested.test.ts'), 'spike/**/test/**/*.test.ts phải quét sâu nhiều cấp');
 });
 
 test('Z11 · file test đặt sai chỗ — ngoài ba nhánh — không khớp', () => {
@@ -34,6 +37,36 @@ test('Z11 · workshops/<tên>/test/ chỉ khớp đúng MỘT cấp tên xưởn
   // Một xưởng đặt tên có `/` bên trong sẽ không khớp — ghi lại có chủ đích,
   // không phải một lỗ hổng bỏ sót.
   assert.ok(matchesTestGlob('workshops/topic/test/stub.test.ts'));
+});
+
+// KF-019 · `matchesTestGlob` là bản chép tay của `package.json` → `scripts.test`.
+// Mục `visual/V-002` (PR #42) thêm glob thứ tư vào `package.json` mà quên hàm
+// này, và `pnpm check` đỏ trên chính `main`. Bài dưới đây neo hai nguồn vào
+// nhau: đọc `scripts.test` THẬT rồi đòi mỗi glob trong đó có một file mẫu
+// khớp `matchesTestGlob`. Thêm glob thứ năm mà quên luật thì bài này đỏ NGAY
+// trong `node --test`, không đợi ai chạy tới `pnpm check:tests`.
+//
+// GIỚI HẠN, ghi ra để người sau không tưởng bài này mạnh hơn thực tế: nó
+// chứng minh mỗi glob có ÍT NHẤT MỘT mẫu khớp, nên bắt được "thêm glob mà
+// quên luật". Nó KHÔNG bắt được chiều ngược lại — "luật hẹp hơn glob". Ví
+// dụ `workshops/**/test/**` cho phép `workshops/a/b/test/c.test.ts` mà luật
+// cố ý chặn (bài Z11 ngay dưới khẳng định điều đó), và `spike/**/test/**`
+// với `**` khớp 0 cấp sẽ phủ `spike/test/x.test.ts` mà regex từ chối. Đó là
+// thu hẹp CÓ CHỦ ĐÍCH, không phải lỗ hổng.
+test('KF-019 · mọi glob trong package.json scripts.test đều có luật tương ứng ở matchesTestGlob', () => {
+  const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  const globs = [...pkg.scripts.test!.matchAll(/"([^"]+\*\.test\.ts)"/g)].map((m) => m[1]!);
+  assert.ok(globs.length >= 4, `mới đọc được ${globs.length} glob từ scripts.test`);
+
+  // Một đường dẫn mẫu cụ thể cho mỗi glob: thay mỗi `**` bằng một cấp thật và
+  // `*.test.ts` bằng một tên file thật. Mẫu phải khớp — nếu không, glob đó
+  // đang nằm trong `package.json` mà `matchesTestGlob` không biết tới.
+  for (const glob of globs) {
+    const sample = glob.replace(/\*\*/g, 'x').replace(/\*\.test\.ts$/, 'y.test.ts');
+    assert.ok(matchesTestGlob(sample), `glob ${glob} (mẫu ${sample}) không khớp luật nào ở matchesTestGlob`);
+  }
 });
 
 test('testFilesMissedByGlob trả đúng danh sách bị bỏ sót, không chỉ đếm', () => {
@@ -64,13 +97,13 @@ test('findTestFiles bỏ qua node_modules', () => {
 
 // ── Cây hiện tại phải sạch ───────────────────────────────────────────────
 
-test('cả 32 file *.test.ts thật trong repo đều khớp glob của pnpm test', () => {
+test('mọi file *.test.ts thật trong repo đều khớp glob của pnpm test', () => {
   const disk = findTestFiles(process.cwd());
   assert.ok(disk.length > 0, 'không tìm thấy file *.test.ts nào — script quét sai chỗ');
   const missed = testFilesMissedByGlob(disk);
   assert.deepEqual(missed, [], `bị bỏ sót: ${missed.join(', ')}`);
 
-  // So bằng cách ĐỘC LẬP: đếm trực tiếp ba thư mục, không đi qua
+  // So bằng cách ĐỘC LẬP: đếm trực tiếp bốn gốc, không đi qua
   // `matchesTestGlob` — nếu cả hai đường cùng sai theo cùng một cách thì
   // bài kiểm này không bắt được, nhưng nó bắt được lệch giữa HAI cách đếm.
   const countIn = (...segments: string[]): number => {
@@ -86,7 +119,11 @@ test('cả 32 file *.test.ts thật trong repo đều khớp glob của pnpm tes
     walk(dir);
     return n;
   };
-  const expected = countIn('kernel', 'test') + countIn('ops', 'test') + workshopsTestCount();
+  // KF-019: gốc thứ tư `spike/<tên>/test/` đi cùng glob thứ tư trong
+  // `package.json`. Quên nó ở đây thì hai cách đếm lệch nhau và bài này đỏ —
+  // đúng như đã xảy ra khi PR #42 thêm `spike/canvas/test/`.
+  const expected =
+    countIn('kernel', 'test') + countIn('ops', 'test') + workshopsTestCount() + rootTestCount('spike');
   assert.equal(disk.length, expected);
 
   function workshopsTestCount(): number {
@@ -97,6 +134,26 @@ test('cả 32 file *.test.ts thật trong repo đều khớp glob của pnpm tes
         n += statSync(testDir).isDirectory() ? countIn('workshops', workshop, 'test') : 0;
       } catch {
         // xưởng không có thư mục test/ — bỏ qua, không phải lỗi.
+      }
+    }
+    return n;
+  }
+
+  /** Cùng hình dạng `<gốc>/<tên>/test/…` như `workshops/`, dùng cho `spike/`. */
+  function rootTestCount(root: string): number {
+    let n = 0;
+    let entries: string[];
+    try {
+      entries = readdirSync(join(process.cwd(), root));
+    } catch {
+      return 0; // gốc chưa tồn tại — không phải lỗi.
+    }
+    for (const name of entries) {
+      const testDir = join(process.cwd(), root, name, 'test');
+      try {
+        n += statSync(testDir).isDirectory() ? countIn(root, name, 'test') : 0;
+      } catch {
+        // không có thư mục test/ — bỏ qua.
       }
     }
     return n;

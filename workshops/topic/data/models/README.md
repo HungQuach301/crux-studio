@@ -1,6 +1,6 @@
 # 🤖 Tám mô hình định lượng đầu tiên
 
-Mục backlog `topic/T-006`, spec WP-008. Contract: `workshops/topic/contracts/model.v0.schema.json`.
+Mục backlog `topic/T-006`, spec WP-008. Contract: `kernel/contracts/model.schema.json` (chuyển từ `workshops/topic/contracts/model.v0.schema.json` ở mục `kernel/K-002`).
 Công thức và bộ nạp: `workshops/topic/src/models.ts`. Bằng chứng chạy được: `workshops/topic/test/models.test.ts`.
 
 `T-005` xây **công cụ** (`model-runner.ts`, `model-verify.ts`). Thư mục này là **nội dung**.
@@ -37,7 +37,7 @@ Tổng **22 ca kiểm**, tất cả đều chạy thật trong `pnpm test`.
 ## Bố cục
 
 ```
-M-00N.json              mô tả mô hình theo contract model.v0 (đóng, additionalProperties: false)
+M-00N.json              mô tả mô hình theo kernel/contracts/model.schema.json (đóng, additionalProperties: false)
 cases/M-00N.cases.json  ca kiểm cấp 1 — params, expected, và computedBy là trích dẫn nguồn
 ```
 

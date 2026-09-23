@@ -47,6 +47,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readRunLogs, type RunLogLine } from '@crux/kernel';
+import { sliceLedgerSections } from './ledger-sections.ts';
 
 export type Verdict = 'khớp' | 'sai';
 
@@ -81,14 +82,15 @@ export interface CheckReport extends CheckOutcome {
 
 // ───────────────────────────────────────────────────────────── đọc sổ ──
 
-/** Tách sổ giả định thành từng mục. Thuần, không đụng đĩa — để test được. */
+/**
+ * Tách sổ giả định thành từng mục. Thuần, không đụng đĩa — để test được.
+ *
+ * Ranh giới mục do `ledger-sections.ts` sinh ra, KHÔNG cắt tại chỗ: hai
+ * bên đọc sổ từng mang hai bản chép của cùng một phép cắt, và cả hai cùng
+ * cắt mục cuối tới hết file (rà soát **Z12**, `ops/known-failures.md`).
+ */
 export function parseLedger(ledger: string): LedgerEntry[] {
-  const headings = [...ledger.matchAll(/^## (G\d+) · (.+)$/gm)];
-  return headings.map((heading, index) => {
-    const start = heading.index! + heading[0].length;
-    const end = index + 1 < headings.length ? headings[index + 1]!.index! : ledger.length;
-    const body = ledger.slice(start, end);
-
+  return sliceLedgerSections(ledger).map(({ code, body }) => {
     const confidence =
       /\*\*Độ tin cậy:\*\*\s*\*?\*?`?([^`*\n]+)`?/.exec(body)?.[1]?.trim() ?? 'không khai';
 
@@ -103,7 +105,7 @@ export function parseLedger(ledger: string): LedgerEntry[] {
 
     const autoCheck = /\*\*Kiểm tự động:\*\*\s*`([^`]+)`/.exec(body)?.[1]?.trim();
 
-    return { code: heading[1]!, confidence, dependencies, autoCheck };
+    return { code, confidence, dependencies, autoCheck };
   });
 }
 
