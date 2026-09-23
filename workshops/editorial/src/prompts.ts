@@ -8,12 +8,17 @@
  * một xưởng) và không xưởng nào khác import file này.
  *
  * Đợt 0: mọi xưởng `impl: stub` (CHARTER mục 10), nên hàm này chỉ đọc VÀ đọc
- * phiên bản — chưa gọi lời gọi LLM thật với nội dung prompt. Kết quả CHƯA
- * được nối vào `produce()` của `index.ts`: nối vào sẽ đổi payload mà mọi tập
- * đi qua xưởng này sinh ra, tức đổi `ops/golden/ep-0001-stub/snapshots/editorial.json`
- * — và cập nhật snapshot tập vàng phải đi PR riêng, không kèm thay đổi nào
- * khác (CHARTER 6.1, CLAUDE.md mục 1). Nối dây thật là việc của mục kế tiếp
- * chạm `produce()` và đã phải cập nhật snapshot vì lý do khác (ví dụ `E-004`).
+ * phiên bản — chưa gọi lời gọi LLM thật với nội dung prompt.
+ *
+ * Kết quả ĐÃ được nối vào `produce()` của `index.ts`, nhưng chỉ ghi vào
+ * payload khi lượt chạy THẬT SỰ gọi mô hình (xem `generationOf`). Bản ghi
+ * trước đó cho rằng nối vào bắt buộc phải đổi
+ * `ops/golden/ep-0001-stub/snapshots/editorial.json` và vì thế phải hoãn:
+ * điều đó chỉ đúng khi `generation` được ghi ở MỌI lượt chạy. Gác bằng số lời
+ * gọi thật thì stub (không gọi gì) giữ nguyên output, snapshot nguyên vẹn,
+ * không cần `pnpm replay -- --update`, nên không vướng CHARTER 6.1 — và khi
+ * `E-005` nối prompt vào thật thì `generation` tự xuất hiện, không ai phải
+ * nhớ quay lại sửa.
  */
 
 import { readFileSync } from 'node:fs';
@@ -44,6 +49,21 @@ export function parsePromptVersion(fileName: string, content: string): string {
     );
   }
   return `v${match[1]}`;
+}
+
+/**
+ * Chuỗi phiên bản đi vào `payload.generation.promptVersion`: `<id>@<version>`
+ * ghép bằng `+`, trong đó `<id>` là tên file bỏ đuôi `.md`.
+ *
+ * Sắp theo `<id>` chứ không theo thứ tự khai trong `PROMPT_FILES`, để thêm
+ * một nghề vào giữa bảng không âm thầm đổi chuỗi của các nghề đã có — tập
+ * vàng so từng byte (CHARTER 6.1).
+ */
+export function formatPromptVersion(versions: PromptVersions): string {
+  return (Object.entries(PROMPT_FILES) as [keyof PromptVersions, string][])
+    .map(([role, fileName]) => `${fileName.replace(/\.md$/, '')}@${versions[role]}`)
+    .sort()
+    .join('+');
 }
 
 /**
