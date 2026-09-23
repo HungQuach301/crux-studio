@@ -45,16 +45,24 @@ export function findTestFiles(root: string): string[] {
 }
 
 /**
- * Ba glob y hệt `package.json` → `scripts.test`. Viết tay ba luật thay vì
- * kéo một thư viện glob: mặt bằng chỉ có ba hình dạng cố định, và viết tay
+ * Bốn glob y hệt `package.json` → `scripts.test`. Viết tay bốn luật thay vì
+ * kéo một thư viện glob: mặt bằng chỉ có bốn hình dạng cố định, và viết tay
  * giữ luật này khớp glob thật — glob thật đổi mà quên sửa ở đây thì cũng là
  * một chỗ lệch mà không gì đỏ.
+ *
+ * ⚠️ Chỗ lệch đó đã xảy ra thật (`KF-018`, mục `platform/P-031`): mục
+ * `visual/V-002` (PR #42) thêm glob thứ tư `spike/**\/test/**\/*.test.ts` vào
+ * `package.json` mà quên luật tương ứng ở đây, nên `pnpm check` ĐỎ trên chính
+ * `main` — đúng cảnh báo mà khối chú thích này viết ra trước đó. `pnpm test`
+ * **có** chạy `spike/canvas/test/camera.test.ts` (8 bài); chính hàm này mới là
+ * chỗ nói sai.
  */
 export function matchesTestGlob(path: string): boolean {
   return (
     /^kernel\/test\/.*\.test\.ts$/.test(path) ||
     /^workshops\/[^/]+\/test\/.*\.test\.ts$/.test(path) ||
-    /^ops\/test\/.*\.test\.ts$/.test(path)
+    /^ops\/test\/.*\.test\.ts$/.test(path) ||
+    /^spike\/.*\/test\/.*\.test\.ts$/.test(path)
   );
 }
 
