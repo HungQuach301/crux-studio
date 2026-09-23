@@ -8,13 +8,14 @@
  * Thiếu một lời gọi ở đây là một bước im lặng không chạy — và không có gì
  * đỏ để báo (nhóm Z trong `ops/known-failures.md`).
  *
- * Ba workflow nghe `push` vào `main`:
+ * Bốn workflow nghe `push` vào `main`:
  *
  * | Workflow | Quan tâm | Gọi khi nào |
  * |---|---|---|
  * | `main-ci.yml` | mọi thay đổi trên `main` | luôn luôn |
  * | `labels.yml` | `ops/labels.json` | khi file đó đổi |
  * | `.github/workflows/sync-workflows.yml` | `ops/workflows/**` | khi thư mục đó đổi |
+ * | `smoke-workflows.yml` | `ops/workflows/**` | khi thư mục đó đổi, SAU sync |
  *
  * **Dòng thứ ba là cái D-C06 vừa mở ra.** Trước D-C06, `ops/workflows/**`
  * nằm trọn trong vùng `owner-merge`, nên `automerge` không bao giờ merge PR
@@ -56,6 +57,16 @@ export function workflowsToDispatch(changed: readonly string[]): Dispatch[] {
     out.push({
       workflow: 'sync-workflows.yml',
       why: '`ops/workflows/**` đổi — chép sang `.github/workflows/`, nếu không workflow mới không bao giờ có hiệu lực (KF-004, rà soát Z3).',
+    });
+    // Sau `sync-workflows.yml`, và thứ tự đó là bắt buộc: chạy thử một
+    // workflow trước khi bản mới được chép sang `.github/workflows/` là
+    // chạy thử BẢN CŨ, và nó sẽ xanh — đúng loại "xanh sai" tệ nhất.
+    // `smoke-workflows.yml` tự bảo vệ thêm bằng cách đối chiếu nội dung hai
+    // thư mục trước khi gọi gì, nên thứ tự ở đây là lớp thứ nhất, không
+    // phải lớp duy nhất.
+    out.push({
+      workflow: 'smoke-workflows.yml',
+      why: '`ops/workflows/**` đổi — chạy thử workflow vừa đổi. Bản mới chưa bao giờ chạy trước khi merge, vì agent không ghi được `.github/` (KF-003, mục `P-010`).',
     });
   }
 

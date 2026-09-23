@@ -29,16 +29,20 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { externalSideEffects, hasDryRunInput, hasWorkflowDispatch } from './smoke-workflows.ts';
+
 const dir = join(process.cwd(), 'ops', 'workflows');
 const problems: string[] = [];
+/** Luật mềm (CHARTER mục 4): in ra, không làm đỏ. */
+const warnings: string[] = [];
 
-interface RunBlock {
+export interface RunBlock {
   startLine: number;
   indent: number;
   lines: string[];
 }
 
-function runBlocks(source: string, file: string): RunBlock[] {
+export function runBlocks(source: string, file: string): RunBlock[] {
   const lines = source.split('\n');
   const blocks: RunBlock[] = [];
   for (let i = 0; i < lines.length; i += 1) {
@@ -153,6 +157,23 @@ const PERMISSION_RULES: readonly PermissionRule[] = [
     accepts: [{ scope: 'contents', need: 'write' }],
     why: 'merge một pull request ghi vào nhánh đích.',
   },
+  {
+    // Đo được, 2026-09-22: `automerge.yml` gọi endpoint này từ 14:45Z (mục
+    // `P-009`) mà khối `permissions:` không khai `checks`. GitHub trả
+    // **403 `Resource not accessible by integration`**, `set -euo pipefail`
+    // giết cả bước, và vì vòng lặp duyệt CẢ hàng đợi nên MỌI PR đứng lại —
+    // 35 lượt `automerge` đỏ liên tiếp, 0 PR merge trong ~5,9 giờ.
+    //
+    // Đây là nhóm **Z**: `pnpm lint:workflows` xanh, CI xanh, nhãn đúng, mà
+    // nhà máy dừng. Luật cũ chỉ biết các lệnh `gh <lệnh con>`; một endpoint
+    // gọi thẳng qua `gh api` không rơi vào luật nào. Xem `KF-017`.
+    //
+    // `checks` là scope RIÊNG: `contents`, `pull-requests`, `actions` đều
+    // KHÔNG bao nó. `checks: read` là đủ để đọc.
+    match: /\bgh\s+api\s+[^\n]*\/check-(runs|suites)\b/,
+    accepts: [{ scope: 'checks', need: 'read' }],
+    why: 'đọc check run qua Checks API. Scope `checks` KHÔNG nằm trong `contents`, `pull-requests` hay `actions` — thiếu nó cho ra 403 "Resource not accessible by integration".',
+  },
 ];
 
 /** Đọc khối `permissions:` ở mức gốc của workflow. */
@@ -185,6 +206,27 @@ function satisfies(granted: string | undefined, need: 'read' | 'write'): boolean
   return need === 'read' && granted === 'read';
 }
 
+/**
+ * Nối các dòng bị `\` cuối dòng cắt ra thành **một dòng logic**, trước khi
+ * đem khớp `PERMISSION_RULES`.
+ *
+ * Vì sao bắt buộc: mọi luật ở trên khớp trong phạm vi một dòng (`[^\n]*`),
+ * còn bash thì cho viết một lệnh trải nhiều dòng. Vòng soát của `P-029` đo
+ * được 14 ca và tìm ra đúng chỗ này: `gh api \` rồi URL ở dòng sau —
+ * hoặc `gh api \` rồi `-H "Accept: …"` rồi URL — **lọt hết**. Nguy ở chỗ
+ * `automerge.yml` đang dùng đúng dấu `\` đó và chỉ tình cờ để URL ở dòng
+ * đầu: một lần rewrap lệnh cho dễ đọc là luật tắt tiếng, và `KF-017` quay
+ * lại y nguyên mà không gì đỏ.
+ *
+ * Nối ở đây, không nối trong `declaredPermissions`: hàm đó đọc khối
+ * `permissions:` theo **thụt lề**, nên nối dòng sẽ làm nó đọc sai.
+ */
+export function joinContinuations(source: string): string {
+  // `[ \t]*` chứ không phải `\s*` ở đầu: `\s` gồm cả `\n`, nên một dòng chỉ
+  // có mỗi dấu `\` sẽ kéo luôn dòng TRƯỚC vào cùng lệnh.
+  return source.replace(/[ \t]*\\\n\s*/g, ' ');
+}
+
 export function missingPermissions(source: string): string[] {
   const declared = declaredPermissions(source);
   // Không khai `permissions` thì workflow nhận quyền mặc định của repo.
@@ -192,9 +234,10 @@ export function missingPermissions(source: string): string[] {
   if (declared === null) return [];
   if (declared.get('*') === 'write') return [];
 
+  const joined = joinContinuations(source);
   const missing: string[] = [];
   for (const rule of PERMISSION_RULES) {
-    if (!rule.match.test(source)) continue;
+    if (!rule.match.test(joined)) continue;
     const ok = rule.accepts.some((grant) =>
       satisfies(declared.get(grant.scope) ?? declared.get('*'), grant.need),
     );
@@ -304,6 +347,45 @@ export const EXTERNAL_CONSUMERS: ReadonlyMap<string, readonly string[]> = new Ma
   ['push', ['.github/workflows/sync-workflows.yml']],
 ]);
 
+/**
+ * Mục `P-010` — workflow có tác dụng phụ ra ngoài mà không có `inputs.dry_run`.
+ *
+ * Luật **mềm** (CHARTER mục 4): cảnh báo, KHÔNG chặn. Lý do nó không chặn:
+ * `.github/workflows/sync-workflows.yml` nằm ngoài tầm agent (CHARTER 3.2,
+ * giả định G10), nên có ít nhất một workflow trong hệ thống mà luật này
+ * không bao giờ sửa được. Một luật cứng mà biết trước là có ngoại lệ không
+ * sửa được thì hoặc phải khai ngoại lệ, hoặc phải chặn toàn bộ công việc —
+ * cả hai đều tệ hơn một cảnh báo được đọc.
+ *
+ * Hệ quả của việc thiếu `dry_run`: `smoke-workflows.yml` phải chọn giữa gọi
+ * THẬT (gây tác dụng phụ thật mỗi lần workflow đó đổi) hoặc không gọi. Với
+ * workflow merge thì nó từ chối gọi — xem `planSmokeRuns` nhánh `refused` —
+ * nên thiếu `dry_run` ở đó nghĩa là workflow ấy KHÔNG được chạy thử lần nào.
+ */
+export function missingDryRun(file: string, source: string): string | null {
+  if (file === 'sync-workflows.yml') return null;
+  const effects = externalSideEffects(source);
+  if (effects.length === 0) return null;
+  // Miễn trừ phải VIẾT RA LÝ DO, cùng khuôn với `# KF-004 <sự kiện>: …` ở
+  // trên và vì cùng một lẽ: một cờ `true` thì ai cũng bật được mà không
+  // nghĩ, một câu lý do thì không. `[^\S\n]` chứ không phải `\s` — `\s`
+  // nuốt cả xuống dòng, nên một khai báo RỖNG sẽ khớp ký tự đầu của dòng kế
+  // tiếp và coi như đã có lý do.
+  if (/#[^\S\n]*P-010[^\S\n]+dry-run[^\S\n]*:[^\S\n]*\S/.test(source)) return null;
+  if (!hasWorkflowDispatch(source)) {
+    return (
+      `có tác dụng phụ ra ngoài (${effects.join(', ')}) và KHÔNG có \`workflow_dispatch\` — ` +
+      'không cách nào chạy thử được sau khi merge (mục `P-010`). Thêm `workflow_dispatch` kèm `inputs.dry_run`.'
+    );
+  }
+  if (hasDryRunInput(source)) return null;
+  return (
+    `có tác dụng phụ ra ngoài (${effects.join(', ')}) nhưng không khai \`inputs.dry_run\` — ` +
+    '`smoke-workflows.yml` sẽ phải gọi nó ở chế độ THẬT, hoặc từ chối gọi hẳn (mục `P-010`).\n' +
+    '      Xử lý: thêm `inputs.dry_run`, HOẶC khai lý do:  # P-010 dry-run: <vì sao gọi thật vẫn vô hại>'
+  );
+}
+
 export interface BrokenChain {
   event: string;
   what: string;
@@ -335,6 +417,99 @@ export function brokenEventChains(
     found.push({ event: producer.event, what: producer.what, consumers: [...consumers] });
   }
   return found;
+}
+
+/**
+ * Z10 (`ops/known-failures.md` nhóm Z) — thiếu `set -euo pipefail`.
+ *
+ * Không có nó, bash mặc định chạy tiếp sau lệnh hỏng đầu tiên và trả mã
+ * thoát của LỆNH CUỐI trong khối. Một script hỏng giữa chừng vẫn `exit 0`,
+ * và CI báo xanh cho một bước đã thất bại thật. Rẻ, máy kiểm được ngay
+ * (chỉ cần dòng đầu của khối, không cần chạy gì), và bắt được một họ lỗi
+ * rộng — đây là luật nên làm trước trong `P-014`.
+ *
+ * Nhận `RunBlock[]` đã có sẵn (kết quả của `runBlocks`) thay vì tự đọc lại
+ * `source`, vì CLI bên dưới đã phân tách khối cho cả bash -n; tách ra khỏi
+ * đó chỉ để test được độc lập.
+ */
+export function blocksMissingPipefail(blocks: readonly RunBlock[]): number[] {
+  const bad: number[] = [];
+  for (const block of blocks) {
+    const first = block.lines.find((l) => l.trim() !== '');
+    if (first?.trim() !== 'set -euo pipefail') bad.push(block.startLine);
+  }
+  return bad;
+}
+
+/**
+ * Z5 — secret thiếu nói chung: `${{ secrets.X }}` nở thành chuỗi rỗng khi
+ * `X` không được set, lệnh vẫn chạy (có khi vẫn `exit 0`), và không có gì
+ * đỏ để báo điều đó.
+ *
+ * Đây là kiểm CHỮ, không phải kiểm ngữ nghĩa — nó không theo dõi `X` được
+ * gán cho biến `env:` nào rồi dùng gián tiếp qua biến đó. Nó đọc file theo
+ * từng dòng, và với mỗi `secrets.X`: nếu dòng ĐANG XÉT cũng chứa một phép
+ * kiểm rỗng (`-z` hoặc `-n`) thì coi chính dòng đó LÀ phép khẳng định (ca
+ * thường gặp nhất: `[ -n "${{ secrets.X }}" ] || exit 1`, khẳng định và
+ * dùng nằm chung một dòng); nếu không, và chưa có dòng nào TRƯỚC ĐÓ khẳng
+ * định `X`, thì đây là một lần dùng "trần" — đỏ. Giới hạn này chấp nhận
+ * được vì hiện KHÔNG workflow nào trong `ops/workflows/` dùng `secrets.*`
+ * (CLAUDE.md mục 4 chỉ cho hai PAT, cả hai đều ngoài phạm vi thư mục này)
+ * — luật ở đây là hàng rào cho lần đầu tiên một workflow thêm secret,
+ * không phải chữa một ca đã có.
+ */
+export function secretsUsedWithoutEmptyCheck(source: string): string[] {
+  const asserted = new Set<string>();
+  const flagged = new Set<string>();
+  const order: string[] = [];
+  for (const line of source.split('\n')) {
+    const names = new Set<string>();
+    for (const m of line.matchAll(/secrets\.([A-Za-z_][A-Za-z0-9_]*)/g)) names.add(m[1]!);
+    if (names.size === 0) continue;
+    const hasEmptyCheck = line.includes('-z') || line.includes('-n');
+    for (const name of names) {
+      if (hasEmptyCheck) {
+        asserted.add(name);
+        continue;
+      }
+      if (!asserted.has(name) && !flagged.has(name)) {
+        flagged.add(name);
+        order.push(name);
+      }
+    }
+  }
+  return order;
+}
+
+/**
+ * Z9 — `|| true` và `continue-on-error: true` nuốt lỗi ĐÚNG THIẾT KẾ ở
+ * nhiều chỗ (xem `ci.yml`); vấn đề chỉ xảy ra khi chỗ nuốt đó không ai định
+ * trước. Luật: mỗi chỗ như vậy phải có một dòng CHÚ THÍCH giải thích —
+ * ngay trên nó, hoặc ngay trên cùng dòng. Không giải thích là đỏ.
+ *
+ * Không đếm comment nằm xa hơn một dòng: một bình luận ở đầu cả khối không
+ * chứng minh được người viết cố ý ở TỪNG chỗ nuốt lỗi bên trong khối đó —
+ * xem cách `ci.yml` gom nhiều lần gỡ nhãn qua một hàm `rm_label`, đúng một
+ * chỗ để giải thích, thay vì lặp lại comment cho từng dòng gọi.
+ */
+export function undocumentedSwallows(source: string): number[] {
+  const lines = source.split('\n');
+  const bad: number[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    if (!/\|\|\s*true\b/.test(line) && !/continue-on-error:\s*true\b/.test(line)) continue;
+    const hashIndex = line.indexOf('#');
+    const trailingComment = hashIndex !== -1 && line.slice(hashIndex + 1).trim().length > 0;
+    if (trailingComment) continue;
+    // Đi ngược qua các dòng nối bằng `\` cuối dòng: một lệnh trải nhiều dòng
+    // (ví dụ `FOO=$(cmd \` … `|| true)`) chỉ cần MỘT chú thích ở đầu khối,
+    // không phải đúng ngay sát dòng vật lý chứa `|| true`.
+    let start = i;
+    while (start > 0 && /\\\s*$/.test(lines[start - 1]!)) start -= 1;
+    const precedingComment = (lines[start - 1]?.trim() ?? '').startsWith('#');
+    if (!precedingComment) bad.push(i + 1);
+  }
+  return bad;
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────
@@ -390,6 +565,9 @@ if (isMain) {
         problems.push(`${file} — khối \`permissions\` ${missing}`);
       }
 
+      const dryRun = missingDryRun(file, source);
+      if (dryRun !== null) warnings.push(`${file} — ${dryRun}`);
+
       for (const chain of brokenEventChains(source, consumersByEvent)) {
         problems.push(
           `${file} — ${chain.what} bằng GITHUB_TOKEN sinh ra sự kiện \`${chain.event}\`, ` +
@@ -401,7 +579,8 @@ if (isMain) {
         );
       }
 
-      for (const block of runBlocks(source, file)) {
+      const blocks = runBlocks(source, file);
+      for (const block of blocks) {
         blockCount += 1;
         const script = join(scratch, `${file}-${block.startLine}.sh`);
         writeFileSync(script, block.lines.join('\n'), 'utf8');
@@ -412,9 +591,38 @@ if (isMain) {
           );
         }
       }
+
+      for (const line of blocksMissingPipefail(blocks)) {
+        problems.push(
+          `${file}:${line} — khối \`run: |\` thiếu \`set -euo pipefail\` ở dòng đầu (Z10). ` +
+            'Không có nó, một lệnh hỏng giữa chừng vẫn để lại exit 0 của lệnh cuối.',
+        );
+      }
+
+      for (const name of secretsUsedWithoutEmptyCheck(source)) {
+        problems.push(
+          `${file} — dùng \`secrets.${name}\` mà không có dòng nào TRƯỚC đó khẳng định ` +
+            `\`${name}\` không rỗng (Z5). Secret thiếu sẽ nở thành chuỗi rỗng, lệnh vẫn chạy.`,
+        );
+      }
+
+      for (const line of undocumentedSwallows(source)) {
+        problems.push(
+          `${file}:${line} — \`|| true\` hoặc \`continue-on-error: true\` không có chú thích ` +
+            'ngay trên (hoặc cùng dòng) giải thích vì sao nuốt lỗi ở đây là an toàn (Z9).',
+        );
+      }
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
+  }
+
+  // Cảnh báo in TRƯỚC lỗi, và in cả khi có lỗi: một luật mềm bị nuốt mất
+  // vì có luật cứng đỏ cùng lúc là một luật mềm không tồn tại.
+  if (warnings.length > 0) {
+    process.stderr.write(
+      `Cảnh báo (luật mềm, KHÔNG chặn — CHARTER mục 4):\n${warnings.map((w) => `  - ${w}`).join('\n')}\n`,
+    );
   }
 
   if (problems.length > 0) {
@@ -422,5 +630,8 @@ if (isMain) {
     process.exit(1);
   }
 
-  process.stdout.write(`Workflow ok: ${files.length} file, ${blockCount} khối run được kiểm bằng bash -n.\n`);
+  process.stdout.write(
+    `Workflow ok: ${files.length} file, ${blockCount} khối run được kiểm bằng bash -n` +
+      `${warnings.length > 0 ? `, ${warnings.length} cảnh báo` : ''}.\n`,
+  );
 }
