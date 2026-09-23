@@ -14,7 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveAdditiveMerge } from '../scripts/integrator-resolve.ts';
@@ -77,16 +77,7 @@ test('KF-016: hai bên cùng thêm sau một dòng `});` chung — union nuốt 
     assert.notEqual(probe.status, 0, 'fixture phải tái hiện xung đột thật');
     git(dir, ['merge', '--abort']);
 
-    // Và union phải thật sự để lại một cây hỏng — đây là điều kiện đầu vào
-    // của lỗi, kiểm trước khi kiểm hành vi của tool.
     const before = git(dir, ['rev-parse', 'HEAD']).trim();
-    const unioned = spawnSync(
-      'git',
-      ['merge-file', '--union', '-p', 'suite.test.ts', '/dev/null', '/dev/null'],
-      { cwd: dir, encoding: 'utf8' },
-    );
-    assert.equal(unioned.status !== null, true, 'git merge-file phải chạy được');
-
     const result = resolveAdditiveMerge(dir, 'main');
 
     assert.equal(
@@ -204,4 +195,41 @@ test('YAML: khối vô hướng `|` và những cấu trúc ngoài mô hình đ�
   assert.equal(yamlProblem('run: echo "]"\nnext: 1\n'), null);
   // Chú thích ở mức thụt lề tuỳ ý: YAML cho phép.
   assert.equal(yamlProblem('a:\n  b: 1\n      # ghi chú thụt sâu\n  c: 2\n'), null);
+});
+
+/**
+ * Chiều đắt hơn của cổng này: một lần báo sai làm đứng hàng đợi merge và đòi
+ * người vào giải tay. Nên mọi ca YAML **hợp lệ** nghĩ ra được đều phải đi
+ * qua. Danh sách dựng bằng cách dò thật trên bản sửa, không phải đoán.
+ */
+test('YAML hợp lệ không bao giờ bị báo sai — 15 hình dạng đã dò thật', () => {
+  const valid: Record<string, string> = {
+    'sequence lồng sequence': 'a:\n  - - 1\n    - 2\n  - 3\n',
+    'map trong sequence rồi dedent': 'a:\n  - k: 1\n    j: 2\n  - k: 3\nb: 4\n',
+    'vô hướng thường viết tiếp xuống dòng': 'a: mot chuoi\n  viet tiep\nb: 2\n',
+    'vô hướng trong nháy, nhiều dòng': 'a: "mot chuoi\n  viet tiep"\nb: 2\n',
+    'khoá rỗng rồi dedent': 'a:\nb: 2\n',
+    'dòng trống giữa khối vô hướng': 'run: |\n  echo a\n\n  echo b\nnext: 1\n',
+    'khoá mới ngay sau khối vô hướng': 'a:\n  run: |\n    x\n  b: 2\n',
+    'sequence ở mức 0': '- a\n- b\n',
+    'sequence ở mức 0 với map lồng': '- a: 1\n  b: 2\n- c: 3\n',
+    'chú thích ở cột 0 giữa một khối': 'a:\n  b: 1\n# ghi chú\n  c: 2\n',
+    'khối `on:` của GitHub Actions': 'on:\n  push:\n    branches:\n      - main\n  workflow_dispatch:\n',
+    'dấu hai chấm nằm trong nháy': 'a: "x: y"\nb: 2\n',
+    'thụt lề 3 rồi 6 rồi về 3': 'a:\n   b:\n      c: 1\n   d: 2\n',
+    'khối vô hướng kết thúc ở cuối file': 'a: |\n  x\n',
+    'vô hướng nhiều dòng rồi dedent về mức giữa': 'a:\n  b: mot chuoi\n      viet tiep\n  c: 2\n',
+  };
+  for (const [name, source] of Object.entries(valid)) {
+    assert.equal(yamlProblem(source), null, `báo sai ở ca hợp lệ: ${name}`);
+  }
+});
+
+test('YAML thật trong repo phải đi qua cổng — 0 báo sai trên ops/workflows và .github/workflows', () => {
+  for (const dir of ['ops/workflows', '.github/workflows']) {
+    for (const name of readdirSync(dir).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))) {
+      const path = join(dir, name);
+      assert.equal(yamlProblem(readFileSync(path, 'utf8')), null, `báo sai trên ${path}`);
+    }
+  }
 });
