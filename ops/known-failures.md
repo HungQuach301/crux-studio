@@ -6,6 +6,39 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-020 · Bản sửa một `main` đỏ **tự nó** nằm trong vùng bảo vệ, nên `main` không thể xanh lại dưới 12 giờ
+
+> Số **KF-020**: `KF-019` thuộc PR `#167`, `KF-018` thuộc `#166`, `KF-017` thuộc `#162` — cả ba đang mở. Dò `## KF-` trên `main` **và trên mọi nhánh PR đang mở** trước khi viết, đúng cách `KF-018` chỉ (`KF-005`).
+
+- **Lần gặp:** 2 — lượt `crux-worker-1` ~23:38Z (PR `#120`, ghi ở `P-031`/`KF-019` như chuyện của một file) rồi lượt `crux-worker-1` ~00:40Z ngày 2026-09-23, khi **cùng một chữ ký** chặn **cả 6** PR xung đột của bước 0. Lần thứ hai là lúc luật `CHARTER 6.6` đòi sửa **cơ chế**, không vá sản phẩm — nên mục này ghi cái mà `KF-019` không ghi: không phải `spike-canvas.yml` sai, mà **đường về xanh bị khoá sau một cửa 12 giờ**.
+- **Chữ ký:** một worker gỡ xong xung đột của một PR, `tsc --noEmit` sạch và test của chính PR đó xanh, nhưng `pnpm check` vẫn `EXIT=1` ở những cổng mà **cây sạch của `origin/main` cũng đỏ y hệt**. Theo phụ lục P3 bước 0b, worker phải `git merge --abort` và **không push** — đúng luật, và không tiến được bước nào. Lặp lại ở mọi PR, mọi lượt, cho tới khi `main` xanh.
+- **Đo, không suy (2026-09-23 ~00:40Z, `origin/main = ecd0085`):**
+
+  | Cổng | Kết quả trên cây sạch `origin/main` |
+  |---|---|
+  | `pnpm lint:workflows` | **EXIT=1** — `spike-canvas.yml:47/:69/:84` thiếu `set -euo pipefail` (Z10), `:63` nuốt lỗi không chú thích (Z9) |
+  | `pnpm check:tests` | **EXIT=1** — `spike/canvas/test/camera.test.ts` ngoài glob (Z11); 53 file trên đĩa / 52 trong glob |
+  | `pnpm test` | **790 pass / 3 fail** — bài 135, 183, 196 |
+
+  Cả ba do `7dfdfeb` (PR `#42`, mục `visual/V-002`) vào `main` lúc `23:05:06Z`. Hệ quả đo được ở bước 0 cùng lượt: **6 / 16 PR đang mở** xung đột (`#120` `#39` `#84` `#89` `#160` `#112`), `integrator-resolve.ts` trả `aborted-ineligible` cho **cả 6**, **0 giải, 0 push**.
+
+- **Nguyên nhân gốc — và đây mới là phần tái dùng được:** bản sửa duy nhất, PR `#167`, **CI xanh 5/5 từ `00:03Z`**, nhưng cửa merge của nó không phải `open`. Chạy chứ đừng đọc bảng bằng mắt:
+
+  ```
+  $ node ops/invariants.protected-area.ts --changed /tmp/changed167.txt --head .
+  {"gate":"automerge-delayed","owner":[],
+   "delayed":["`ops/workflows/spike-canvas.yml` — workflow không dùng secret, không phát hành"]}
+  ```
+
+  Vùng bảo vệ mức `automerge-delayed` (CHARTER mục 3, `D-C06`) phủ **`ops/workflows/**`**. Mà một `main` đỏ vì một workflow thì **mọi** bản sửa của nó — sửa tại chỗ như `#167`, hay revert `#42` — đều chạm đúng thư mục ấy. Vậy cửa 12 giờ áp cho chính thứ đáng lẽ phải đi nhanh nhất.
+
+- **Vì sao nó đắt hơn vẻ ngoài:** `CLAUDE.md` mục 13 viết *"`main` đỏ thì revert ngay"*, và CHARTER phụ lục P3 bước 1 cũng nói **ngay**. Luật vùng bảo vệ nói **12 giờ**. Hai câu trong cùng một hiến chương, và cho tới `#167` merge (~`12:00Z`, tức ~12 giờ sau khi `main` đỏ lúc `23:05Z`) thì: không PR xung đột nào gỡ được, và **mọi** PR đang mở đỏ ở lượt CI kế tiếp vì CI dựng `refs/pull/N/merge`. 16 PR đứng vì một cửa thiết kế cho chuyện khác. Không gì đỏ **lúc này** ngoài `main` — đúng nhóm **Z**: mỗi luật riêng lẻ đều đúng, chỗ thủng nằm ở chỗ hai luật gặp nhau.
+- **Vì sao lượt này không tự sửa:** nới cửa merge cho một loại PR là **đổi CHARTER mục 3** — `irreversible` nhóm 4 của CHARTER 2.3. Agent không tự làm, kể cả khi khuyến nghị rõ ràng. Đã mở `🤖 [QĐ]`; mục `platform/P-032` nhận việc và đứng `blocked` tới khi có câu trả lời.
+- **Đã sửa ở đâu:** *chưa sửa cơ chế.* `#167` gỡ **lần này** (đúng và cần), nhưng không đụng tới cái làm lần sau lặp lại.
+- **Máy chặn từ nay:** chưa có, và cố ý chưa có — thêm lớp chặn trước khi chốt luật chỉ khoá thêm một cửa nữa. Tới khi `P-032` xong, lớp chặn là dòng này: **một PR mà tiêu chí xong của nó là "đưa `main` từ đỏ về xanh" phải được kiểm cửa merge ngay lúc nhận việc, không phải lúc gắn nhãn.** Ra `automerge-delayed` hay `owner-merge` thì nói ngay trong mô tả PR là `main` sẽ còn đỏ bao lâu, để bản tin sáng đếm được — đừng để nó lộ ra qua sáu lượt worker `aborted-ineligible` liên tiếp.
+
+---
+
 ## KF-001 · Heredoc đóng ở cột 0 làm vỡ khối YAML của workflow
 
 - **Lần gặp:** 2 (`main-ci.yml`, rồi `notify.yml` và `watchdog.yml`)

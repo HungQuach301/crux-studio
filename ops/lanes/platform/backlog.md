@@ -580,3 +580,23 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
   - Luật chung ghi vào `ops/known-failures.md` KF-018: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
+
+---
+
+### P-032 · Đường về xanh của `main` bị khoá sau cửa 12 giờ — hai câu trong CHARTER nói ngược nhau
+`CLAUDE.md` mục 13 và CHARTER phụ lục P3 bước 1 đòi sửa một `main` đỏ **ngay**. Luật vùng bảo vệ (CHARTER mục 3, `D-C06`) phủ `ops/workflows/**` ở mức `automerge-delayed`, tức **12 giờ CI xanh**. Khi `main` đỏ **vì một workflow**, mọi bản sửa — sửa tại chỗ hay revert — chạm đúng thư mục ấy, nên cửa 12 giờ áp cho chính thứ đáng lẽ đi nhanh nhất.
+
+Đo `2026-09-23 ~00:40Z`, `origin/main = ecd0085`, đỏ từ `23:05:06Z` (`7dfdfeb`, PR `#42`): ba cổng đỏ trên cây sạch (`lint:workflows` EXIT=1 bốn dòng `spike-canvas.yml`; `check:tests` EXIT=1; `pnpm test` 790 pass / **3 fail**). Bản sửa `#167` **CI xanh 5/5 từ `00:03Z`**, nhưng `node ops/invariants.protected-area.ts` trên diff của nó ra `{"gate":"automerge-delayed"}` vì `ops/workflows/spike-canvas.yml` — nên `main` còn đỏ tới ~`12:00Z`.
+
+Giá phải trả, đo ở bước 0 cùng lượt: **6 / 16 PR đang mở** xung đột, `integrator-resolve.ts` trả `aborted-ineligible` cho **cả 6**, 0 giải, 0 push. Và vì CI dựng `refs/pull/N/merge`, **mọi** PR đang mở đỏ ở lượt CI kế tiếp. Không gì đỏ ngoài `main` — nhóm Z: mỗi luật đều đúng, chỗ thủng ở chỗ hai luật gặp nhau.
+
+- deps: —
+- risk: **high** — mỗi lần `main` đỏ vì workflow là ~12 giờ toàn bộ hàng đợi merge đứng, không ai phải bấm sai gì cả.
+- status: blocked
+- nguồn: `ops/known-failures.md` **KF-020**; dòng log bước 0 `ops/logs/integration/step0-2026-09-23T004600Z-crux-worker-1.jsonl`; `CLAUDE.md` mục 13; CHARTER mục 3 + phụ lục P3 bước 1; `D-C06`
+- tiêu chí xong:
+  - ⬜ **CHỜ `🤖 [QĐ]`** — nới cửa merge cho một loại PR là đổi **CHARTER mục 3**, tức `irreversible` nhóm 4 (CHARTER 2.3). Mục này **không** được tự chọn phương án. Đọc câu trả lời ở **cả hai** chỗ: issue `[QĐ]` và issue bản tin (dạng `#N A`).
+  - ⬜ Làm theo đường đã chốt, rồi **chứng minh bằng chạy thật**: dựng một PR chỉ sửa một vi phạm `ops/workflows/**` đang làm `main` đỏ, chạy `node ops/invariants.protected-area.ts` trên diff của nó, và cửa phải ra đúng cái đã chốt — không đọc bảng bằng mắt.
+  - ⬜ Bài tái hiện (bất biến I2) trong `node --test`: một diff "chỉ sửa `main` đỏ" phải ra cửa đã chốt, và một diff chạm `ops/workflows/**` **không** thuộc loại đó vẫn phải ra `automerge-delayed`. Nới đúng một ca, không nới cả thư mục.
+  - ⬜ Sửa chỗ lệch giữa hai câu: `CLAUDE.md` mục 13 hoặc CHARTER mục 3 phải nói rõ ca này, để lượt sau không phải đo lại mới biết câu nào thắng.
+- **mã mục nhận lúc 2026-09-23 ~00:4x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — cảnh báo ở đầu `KF-018`): cao nhất là `P-031` (`#167`), nên `P-032` không đụng ai.
