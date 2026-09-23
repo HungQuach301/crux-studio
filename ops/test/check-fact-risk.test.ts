@@ -13,12 +13,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   factRiskProblems,
   episodeFactRiskProblems,
   numericTokens,
   normalizeNumber,
   isStubArtifact,
+  genreCounterClaimsMin,
+  scanGoldenFactRisk,
   type FactRiskClaim,
 } from '../scripts/check-fact-risk.ts';
 
@@ -175,4 +180,77 @@ test('episodeFactRiskProblems đếm counterClaims thật từ topic.payload.cou
     payload: { claims: [], counterClaims: [{ id: 'X1' }, { id: 'X2' }] },
   };
   assert.deepEqual(episodeFactRiskProblems(editorial, topic, 2), []);
+});
+
+// --- Khâu ĐỊNH TUYẾN chặn/ghi-nhận (tiêu chí "chặn, không cảnh báo") ---
+// Bài này canh chính chỗ hiện thực tiêu chí xong, không chỉ phần phát hiện:
+// nếu `isStubArtifact` bị đảo hay bỏ, một artifact v1 có số lạc sẽ rơi vào
+// `notes` thay vì `blocking` và bài này đỏ.
+
+function buildGolden(
+  root: string,
+  editorial: unknown,
+  topic: unknown,
+  counterClaimsMin = 2,
+): void {
+  const snaps = join(root, 'ops', 'golden', 'ep-test', 'snapshots');
+  mkdirSync(snaps, { recursive: true });
+  writeFileSync(join(snaps, 'editorial.json'), JSON.stringify(editorial));
+  writeFileSync(join(snaps, 'topic.json'), JSON.stringify(topic));
+  const genreDir = join(root, 'packs', 'genres', 'data-explainer');
+  mkdirSync(genreDir, { recursive: true });
+  writeFileSync(join(genreDir, 'format-spec.json'), JSON.stringify({ limits: { counterClaimsMin } }));
+}
+
+const editorialWith = (impl: string) => ({
+  genre: 'data-explainer',
+  producer: { impl },
+  payload: { script: { text: 'Fees run $4,300 a year.', claimIds: ['C1'] } },
+});
+const topicNoNumber = {
+  producer: { impl: 'stub' },
+  payload: {
+    claims: [claim('C1', 'the model has one parameter')],
+    counterClaims: [{ id: 'X1' }, { id: 'X2' }],
+  },
+};
+
+test('scanGoldenFactRisk: artifact impl=v1 có số lạc thì CHẶN (blocking), không ghi nhận', () => {
+  const root = mkdtempSync(join(tmpdir(), 'fact-risk-v1-'));
+  try {
+    buildGolden(root, editorialWith('v1'), topicNoNumber);
+    const scan = scanGoldenFactRisk(root);
+    assert.equal(scan.episodes, 1);
+    assert.equal(scan.blocking.length, 1);
+    assert.match(scan.blocking[0]!, /untraceable-number/);
+    assert.match(scan.blocking[0]!, /4300/);
+    assert.deepEqual(scan.notes, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scanGoldenFactRisk: cùng ca đó ở impl=stub thì GHI NHẬN, không chặn', () => {
+  const root = mkdtempSync(join(tmpdir(), 'fact-risk-stub-'));
+  try {
+    buildGolden(root, editorialWith('stub'), topicNoNumber);
+    const scan = scanGoldenFactRisk(root);
+    assert.equal(scan.episodes, 1);
+    assert.deepEqual(scan.blocking, []);
+    assert.ok(scan.notes.some((n) => n.includes('untraceable-number')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('genreCounterClaimsMin đọc ngưỡng từ genre pack, 0 khi không có', () => {
+  const root = mkdtempSync(join(tmpdir(), 'fact-risk-min-'));
+  try {
+    buildGolden(root, editorialWith('stub'), topicNoNumber, 3);
+    assert.equal(genreCounterClaimsMin(root, 'data-explainer'), 3);
+    assert.equal(genreCounterClaimsMin(root, 'no-such-genre'), 0);
+    assert.equal(genreCounterClaimsMin(root, undefined), 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

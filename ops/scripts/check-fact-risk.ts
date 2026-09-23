@@ -30,6 +30,9 @@
  * chặn ngay khi xưởng biên tập lên `v1`, không ai phải nhớ quay lại bật.
  */
 
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 /** Một claim trong vũ trụ claim của tập — trích từ payload của artifact `topic`. */
 export interface FactRiskClaim {
   id: string;
@@ -175,4 +178,62 @@ export function episodeFactRiskProblems(
 /** `true` khi artifact do một lượt chạy `impl: stub` sinh ra (chưa có dữ liệu thật). */
 export function isStubArtifact(artifact: ArtifactLike): boolean {
   return artifact.producer?.impl === 'stub';
+}
+
+/** `limits.counterClaimsMin` của genre pack tại `root`, hoặc 0 nếu không đọc được. */
+export function genreCounterClaimsMin(root: string, genre: string | undefined): number {
+  if (!genre) return 0;
+  const path = join(root, 'packs', 'genres', genre, 'format-spec.json');
+  if (!existsSync(path)) return 0;
+  const spec = JSON.parse(readFileSync(path, 'utf8')) as { limits?: { counterClaimsMin?: number } };
+  const min = spec.limits?.counterClaimsMin;
+  return typeof min === 'number' ? min : 0;
+}
+
+export interface GoldenFactRiskScan {
+  /** Số tập vàng có đủ cả editorial.json và topic.json để chạy Pass. */
+  episodes: number;
+  /** Vấn đề CHẶN — chỉ từ artifact `impl != stub`. Bên gọi đẩy vào `problems`. */
+  blocking: string[];
+  /** Dòng GHI NHẬN — từ artifact `impl: stub`. Bên gọi in ra, không chặn. */
+  notes: string[];
+}
+
+/**
+ * Chạy Fact & Risk Pass trên mọi tập vàng dưới `ops/golden/`, và **định tuyến**
+ * kết quả theo `producer.impl` của artifact biên tập: `impl != stub` → `blocking`
+ * (bên gọi exit 1), `impl: stub` → `notes` (ghi nhận, không chặn). Tách khỏi
+ * `check-contracts.ts` để chính khâu định tuyến — thứ hiện thực "chặn, không cảnh
+ * báo" — có test đứng độc lập, không chỉ test phần phát hiện.
+ */
+export function scanGoldenFactRisk(root: string): GoldenFactRiskScan {
+  const goldenRoot = join(root, 'ops', 'golden');
+  const scan: GoldenFactRiskScan = { episodes: 0, blocking: [], notes: [] };
+  if (!existsSync(goldenRoot)) return scan;
+  for (const episode of readdirSync(goldenRoot)) {
+    const snaps = join(goldenRoot, episode, 'snapshots');
+    const editorialPath = join(snaps, 'editorial.json');
+    const topicPath = join(snaps, 'topic.json');
+    if (!existsSync(editorialPath) || !existsSync(topicPath)) continue;
+    scan.episodes += 1;
+    const editorial = JSON.parse(readFileSync(editorialPath, 'utf8')) as ArtifactLike;
+    const topic = JSON.parse(readFileSync(topicPath, 'utf8')) as ArtifactLike;
+    const found = episodeFactRiskProblems(editorial, topic, genreCounterClaimsMin(root, editorial.genre));
+    if (found.length === 0) continue;
+    const lines = found.map((p) => `${p.code}: ${p.detail}`);
+    if (isStubArtifact(editorial)) {
+      scan.notes.push(
+        `Fact & Risk Pass ghi nhận, không chặn (impl: stub — chặn thật khi lên v1, editorial/E-002):`,
+      );
+      scan.notes.push(`  Snapshot ${episode}/editorial:`);
+      for (const line of lines) scan.notes.push(`    - ${line}`);
+    } else {
+      scan.blocking.push(
+        `Fact & Risk Pass — Snapshot ${episode}/editorial (bất biến I6):\n${lines
+          .map((l) => `    ${l}`)
+          .join('\n')}`,
+      );
+    }
+  }
+  return scan;
 }
