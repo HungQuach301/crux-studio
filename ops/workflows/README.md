@@ -27,6 +27,11 @@ PAT có hạn dùng. Khi nó hết hạn, sync **im lặng** dừng: không có 
 | `watchdog.yml` | cron 6 giờ một lần · dispatch | Canh ba dấu hiệu im lặng, kể cả `sync-workflows` hỏng | — |
 | `labels.yml` | push `ops/labels.json` · dispatch | Đồng bộ nhãn từ `ops/labels.json` | I2, I4 (nhãn là đầu vào của chúng) |
 | `smoke-workflows.yml` | push `ops/workflows/**` · `automerge` gọi | Chạy thử đúng những workflow vừa đổi, **sau** khi sync chép xong | — (lấp khoảng trống của G10) |
+| `workshop-<tên>.yml` × 6 | `workflow_dispatch` (`episode`, `impl`) | Chạy đúng một xưởng qua `pnpm run:workshop`; ghi một dòng `costUsd` vào `ops/logs/<xưởng>/<episode>.jsonl` | I8 |
+
+Sáu file `workshop-*.yml` là mục `platform/P-004`. Chúng nối với nhau bằng **dispatch**, không bằng sự kiện `push` (CHARTER 5.4, quyết định **D-12**): xưởng sau đọc artifact của xưởng trước từ `episodes/`, và người gọi quyết định khi nào chạy xưởng nào. Thiếu artifact đầu vào thì lần chạy dừng và in ra đúng lệnh phải chạy trước.
+
+Dòng log của chúng **không** được commit ngược vào repo — máy và agent không push vào `main` (CLAUDE.md mục 2). Mỗi lần chạy dán dòng đó vào tóm tắt lần chạy để đọc được ngay; cách giữ nó lâu dài là việc của mục `kernel/K-004`.
 
 ## Tên status check để bật ruleset
 

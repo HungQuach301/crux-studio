@@ -21,6 +21,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { sliceLedgerSections } from './ledger-sections.ts';
 import { AUTO_CHECKS, AUTO_CHECK_IDS } from './recheck-assumptions.ts';
 
 const root = process.cwd();
@@ -40,13 +41,12 @@ const verifyBacklog = existsSync(verifyBacklogPath) ? readFileSync(verifyBacklog
 const inTable = new Set<string>();
 for (const match of ledger.matchAll(/^\| (G\d+) \| /gm)) inTable.add(match[1]!);
 
-const sections = new Map<string, string>();
-const headings = [...ledger.matchAll(/^## (G\d+) · (.+)$/gm)];
-headings.forEach((heading, index) => {
-  const start = heading.index! + heading[0].length;
-  const end = index + 1 < headings.length ? headings[index + 1]!.index! : ledger.length;
-  sections.set(heading[1]!, ledger.slice(start, end));
-});
+// Ranh giới mục do `ledger-sections.ts` sinh ra, không cắt tại chỗ: cắt mục
+// cuối tới hết file làm chữ của phần "Cách thêm một giả định" trôi vào thân
+// mục và mang theo chữ khoá của nó (rà soát **Z12**, `ops/known-failures.md`).
+const sections = new Map<string, string>(
+  sliceLedgerSections(ledger).map((section) => [section.code, section.body]),
+);
 
 for (const code of inTable) {
   if (!sections.has(code)) problems.push(`${code} có trong bảng tổng nhưng không có mục chi tiết.`);

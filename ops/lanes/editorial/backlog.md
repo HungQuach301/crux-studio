@@ -33,16 +33,30 @@ Xưởng Biên tập (S04–S08). Đợt 1: **nâng cấp stub, chưa gọi API 
     tầng `loadPromptVersions` (dựng thư mục fixture riêng bằng `mkdtempSync`, không đụng file thật); mỗi
     prompt thật có mục `## Tự kiểm` và không chứa hằng số nội dung (`data-explainer`, `us-personal-finance`)
     — đúng câu "Prompt không được chứa hằng số nội dung" trong chính `prompts/README.md`.
-  - **Chưa nối vào `produce()` của `index.ts`, có chủ đích — đọc kỹ trước khi coi tiêu chí xong đã đủ:**
-    nối `generation.promptVersion` vào payload thật sẽ đổi payload mà **mọi** tập đi qua xưởng này sinh ra,
-    tức đổi `ops/golden/ep-0001-stub/snapshots/editorial.json`. Cập nhật snapshot tập vàng phải đi **PR
-    riêng, không kèm thay đổi nào khác** (CHARTER 6.1, CLAUDE.md mục 1) — không được gộp vào PR đang thêm
-    tính năng. Vế "phiên bản đó xuất hiện trong artifact" của tiêu chí xong vì vậy **chưa đạt bằng artifact
-    thật**, chỉ đạt bằng chạy thẳng `loadPromptVersions()` (có test). Nối dây thật hợp lý nhất đi cùng
-    `E-004` (mục kế tiếp chạm `produce()` của xưởng này, và **đã** phải cập nhật snapshot vì lý do khác —
-    nâng khối lượng script/outline) hoặc `E-005` (`impl: v1`), để một PR chỉ cần một lần `pnpm replay --
-    --update` thay vì hai. Ghi rõ ra đây thay vì âm thầm coi là xong — cùng tinh thần V-001 đã làm với
-    Preflight check `layout-id-known` (mục `visual/V-001`, chưa nối vào pipeline thật vì lý do tương tự).
+  - **Đã nối vào `produce()` của `index.ts` — nhưng vế "xuất hiện trong artifact" VẪN CHƯA ĐẠT bằng
+    artifact thật. Đọc kỹ trước khi coi tiêu chí xong đã đủ.**
+
+    Bản ghi trước cho rằng nối dây *bắt buộc* phải đổi `ops/golden/ep-0001-stub/snapshots/editorial.json`,
+    nên phải hoãn sang `E-004`/`E-005`. Điều đó chỉ đúng nếu `generation` được ghi ở **mọi** lượt chạy.
+    `kernel/contracts/editorial.payload.v0.schema.json` nay khai `generation` (không bắt buộc, bên trong
+    bắt buộc `promptVersion`), và `generationOf` trong `index.ts` ghi nó **khi và chỉ khi** lượt chạy đó
+    thật sự có một lời gọi mô hình đi qua băng — đo bằng `Cassette.calls` (`kernel/src/cassette.ts`), là
+    tín hiệu ngữ nghĩa chứ không phải cờ `impl`.
+
+    Gác bằng cờ `impl` thì **không** trung thực: hôm nay `impl: v1` cũng chưa gọi mô hình nào (`produce`
+    dùng đúng một logic cho cả hai giá trị), nên artifact sẽ khai "bốn prompt này sinh ra payload này"
+    trong khi không prompt nào chạy — vẫn là khai sai, chỉ dời sang giá trị cờ kia. `Cassette.calls` đúng
+    ở mọi `impl`, và `costUsd` không thay thế được nó: một lời gọi đã ghi có thể tốn 0 đồng.
+
+    **Trạng thái thật hôm nay:** Đợt 0 không lượt chạy nào gọi mô hình (CHARTER mục 10), nên **không
+    artifact nào mang `generation`**, kể cả tập vàng — snapshot vì thế không đổi và mục này không chạy
+    `pnpm replay -- --update`, không vướng CHARTER 6.1. Vế "xuất hiện trong artifact" được chứng minh
+    bằng test ở tầng hàm (`generationOf` với một băng có lời gọi thật và một băng replay-hit 0 đồng),
+    **chưa** bằng một artifact trong repo.
+
+    **Việc còn lại của `E-005`** (`impl: v1`) chỉ là gọi prompt thật; `generation.promptVersion` tự xuất
+    hiện, không ai phải nhớ quay lại nối dây. Đó là khác biệt so với bản ghi trước — nhưng mục này vẫn
+    **không** tự chuyển `done`.
 
 ### E-002 · Fact & Risk Pass
 Bất biến I6 được thực thi ở đây: mọi con số hiển thị đều có nguồn hoặc có mô hình.

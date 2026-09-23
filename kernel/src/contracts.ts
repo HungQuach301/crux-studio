@@ -19,6 +19,15 @@ function load(name: string): JsonSchema {
 
 export const envelopeSchema: JsonSchema = load('envelope.schema.json');
 
+/**
+ * Contract của một mô hình định lượng tái dùng (mục `kernel/K-002`, nguồn
+ * `topic/T-005`/`T-006`). Đứng ở `kernel` vì cấu trúc của một "mô hình" —
+ * assumptions/parameters/formula/verification bốn cấp — trung tính với thể
+ * loại; chỉ `modelId` mang tiền tố genre. Không phải payload envelope, nên
+ * không nằm trong `payloadSchemas`/`artifactSchemas` ở dưới.
+ */
+export const modelSchema: JsonSchema = load('model.schema.json');
+
 /** `kind` chuẩn của artifact mà mỗi xưởng sinh ra ở v0. */
 export const ARTIFACT_KIND: Readonly<Record<WorkshopName, string>> = {
   topic: 'topic.brief',

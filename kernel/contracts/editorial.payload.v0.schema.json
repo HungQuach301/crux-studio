@@ -69,6 +69,21 @@
         "declaredWordCount": { "type": "integer", "minimum": 1 },
         "declaredBridgeCount": { "type": "integer", "minimum": 0 }
       }
+    },
+    "generation": {
+      "type": "object",
+      "description": "Lời gọi nào sinh ra payload này (mục editorial/E-001; gợi ý từ script.schema.json của spec). KHÔNG bắt buộc: ở impl stub không prompt nào chạy, và khai một promptVersion khi không có gì chạy là khai sai. Không khoá additionalProperties — payload v0 để lỏng (CHARTER 5.2).",
+      "required": ["promptVersion"],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "promptVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Phiên bản prompt pack đã dùng, dạng `<id>@<version>` ghép bằng `+` và sắp theo id — xem formatPromptVersion trong workshops/editorial/src/prompts.ts."
+        },
+        "temperature": { "type": "number" },
+        "costUsd": { "type": "number", "minimum": 0 }
+      }
     }
   }
 }

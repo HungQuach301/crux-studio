@@ -43,7 +43,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
-| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | `suy luận` | giao làn `verify` | `VF-G5` |
+| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | **`đã kiểm một phần`** | hiệu năng và dung lượng đã đo; phút Actions chưa | `VF-G5`, `V-002` |
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
@@ -138,11 +138,18 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G5 · Quota phút Actions và dung lượng artifact đủ cho việc render
 
 - **Nội dung:** quota phút Actions và dung lượng lưu artifact của gói hiện tại đủ để render một tập ~36.000 khung, cộng proof render.
-- **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md`
+- **Độ tin cậy:** `đã kiểm một phần`
+- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md` · `spike/canvas/RESULT.md` · `ops/workflows/spike-canvas.yml`
 - **Cách kiểm:** spike canvas (`V-002`) và thử nghiệm engine dựng (`A-001`) đều **đo phút Actions thật** cho một đoạn mẫu, rồi ngoại suy. Không tốn tiền API, chỉ tốn phút Actions của chính lần đo.
 - **Dự phòng:** đưa chi phí vào ngân sách học, hoặc chuyển sang runner khác. Nếu sai nặng, chốt 30fps thay vì 60fps ở `A-001`.
-- **Trạng thái:** giao làn `verify`, mục `VF-G5`. **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh.
+- ✅ **Đã kiểm bằng chạy thật, 2026-09-21 (mục `V-002`) — phần hiệu năng và dung lượng.** 27.000 khung, bốn cấu hình, canvas 6000×3400, trên container 4 nhân / 16 GB (trùng cấu hình `ubuntu-latest` hiện hành về nhân và RAM). Bảng đầy đủ ở `spike/canvas/RESULT.md`, sinh từ `measurements.json` chứ không gõ tay.
+  - **Thời gian:** 5.400 khung ở 30fps mất **6,4 phút** một worker, ngưỡng WP-003 là ≤25 phút. 60fps (10.800 khung) mất 12,2 phút. 30fps có mờ chuyển động 4 mẫu mất 8,9 phút.
+  - **Bộ nhớ:** đỉnh RSS cả cây tiến trình trình duyệt **565 MB** trên 16 GB — không gần trần, ở mọi cấu hình.
+  - **Dung lượng artifact:** đoạn 3 phút ở 30fps nặng **46,0 MB** (H.264 CRF 20), tức ~15,3 MB mỗi phút → **~307 MB cho một tập 20 phút**. Đây là con số cho vế "dung lượng artifact" của giả định này. Đối chứng: cùng số khung nhưng máy quay đứng yên chỉ cho 1,6 MB — chênh lệch đó là cái giá có thật của quy tắc "không khung nào đứng yên".
+  - **Chi phí của kiến trúc `D-04` rất nhỏ:** vẽ một khung mất 3,2 ms, tức 4,4% thời gian mỗi khung; 67,8 ms còn lại là lấy khung ra khỏi trình duyệt. Nếu sau này đụng ngưỡng thì chỗ phải tối ưu là đường ống xuất khung, **không** phải ngữ pháp chuyển động.
+- ⬜ **Chưa kiểm — phút Actions tính tiền.** Số trên đo ở container phiên cloud, không phải runner Actions. Workflow đo nó là `ops/workflows/spike-canvas.yml`, và theo CHARTER 3.2 nó chỉ chạy được **sau khi PR của `V-002` merge vào `main`** rồi `sync-workflows` chép sang `.github/workflows/`. Lượt worker sau chạy nó bằng `workflow_dispatch` và điền nốt. Cho tới lúc đó vế "quota phút Actions" của giả định này vẫn là `suy luận`.
+- ⚠️ **Số đo là cận dưới, không phải số của thư viện dựng hình.** Spike đo canvas 2D trần, không thêm phụ thuộc nào: chọn thư viện dựng hình React mà spec WP-003 mục 5 nêu là **chọn nhà cung cấp** kèm điều khoản thương mại (`irreversible` nhóm 3, CHARTER 2.3), và mục 7c đòi ghi điều khoản giấy phép — thứ mà bức tường mạng (issue #36) không cho đọc. Một thư viện có vòng đời React mỗi khung sẽ cộng vào đúng cột đang chiếm 4,4%. Việc chốt thư viện thuộc `A-001`.
+- **Trạng thái:** `đã kiểm một phần` — hiệu năng và dung lượng đã đo bằng chạy thật; phút Actions còn treo. **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh — và phần đắt nhất của nó (kiến trúc canvas liên tục có khả thi không) nay đã có câu trả lời: **có**, còn rất xa ngưỡng.
 
 ## G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
 
