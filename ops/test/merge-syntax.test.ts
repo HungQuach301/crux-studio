@@ -200,9 +200,11 @@ test('YAML: khối vô hướng `|` và những cấu trúc ngoài mô hình đ�
 /**
  * Chiều đắt hơn của cổng này: một lần báo sai làm đứng hàng đợi merge và đòi
  * người vào giải tay. Nên mọi ca YAML **hợp lệ** nghĩ ra được đều phải đi
- * qua. Danh sách dựng bằng cách dò thật trên bản sửa, không phải đoán.
+ * qua. Danh sách dựng bằng cách dò thật trên bản sửa, không phải đoán; tám ca
+ * cuối (`A`–`H`) là báo sai THẬT mà vòng soát ngữ cảnh sạch tìm ra trên bản
+ * nháp đầu, nên chúng ở đây để không tái phát.
  */
-test('YAML hợp lệ không bao giờ bị báo sai — 15 hình dạng đã dò thật', () => {
+test('YAML hợp lệ không bao giờ bị báo sai — 23 hình dạng đã dò thật', () => {
   const valid: Record<string, string> = {
     'sequence lồng sequence': 'a:\n  - - 1\n    - 2\n  - 3\n',
     'map trong sequence rồi dedent': 'a:\n  - k: 1\n    j: 2\n  - k: 3\nb: 4\n',
@@ -219,6 +221,25 @@ test('YAML hợp lệ không bao giờ bị báo sai — 15 hình dạng đã d�
     'thụt lề 3 rồi 6 rồi về 3': 'a:\n   b:\n      c: 1\n   d: 2\n',
     'khối vô hướng kết thúc ở cuối file': 'a: |\n  x\n',
     'vô hướng nhiều dòng rồi dedent về mức giữa': 'a:\n  b: mot chuoi\n      viet tiep\n  c: 2\n',
+    // Sáu ca dưới đây là báo sai THẬT mà vòng soát ngữ cảnh sạch tìm ra trên
+    // bản nháp đầu, đã đối chiếu với một trình nạp YAML thật. Ba ca đầu là
+    // mức thụt lề **ẩn** của `- ` (khoá anh em nằm ở `indent + 2`, không ở
+    // `indent`) — hình dạng rất thường gặp trong GitHub Actions, chỉ không nổ
+    // trên kho hiện tại vì mọi workflow tình cờ viết `- name:`/`- uses:`
+    // trước `with:`. Ba ca sau là vô hướng viết tiếp xuống dòng với thụt lề
+    // GIẢM DẦN, thứ mà "sâu hơn thì luôn hợp lệ" không phủ.
+    'A · `- with:` rồi khoá anh em `uses:`':
+      'jobs:\n  build:\n    steps:\n      - with:\n          fetch-depth: 0\n        uses: actions/checkout@v4\n',
+    'B · `- env:` lồng trong matrix rồi khoá anh em':
+      'jobs:\n  t:\n    strategy:\n      matrix:\n        include:\n          - env:\n              A: 1\n            os: ubuntu-latest\n',
+    'C · `- env:` rồi `run:` ở mức ẩn': 'steps:\n  - env:\n      A: 1\n    run: echo $A\n',
+    'D · vô hướng thường, thụt lề giảm dần': 'a: foo\n     bar\n   baz\nb: 1\n',
+    'E · vô hướng trong nháy, thụt lề giảm dần': 'a: "foo\n     bar\n   baz"\nb: 1\n',
+    'F · `- name:` dài viết tiếp rồi khoá anh em':
+      'steps:\n  - name: ten rat dai\n      tiep tuc\n    run: x\n',
+    // Dấu đóng lẻ trong một vô hướng không phải flow collection mở.
+    'G · dấu `}` là chữ trong giá trị': 'a:\n  b: echo }\n      c: 1\n  d: 2\n',
+    "H · dấu lược trong vô hướng thường": "steps:\n  - name: Don't run\n    run: x\n",
   };
   for (const [name, source] of Object.entries(valid)) {
     assert.equal(yamlProblem(source), null, `báo sai ở ca hợp lệ: ${name}`);
@@ -231,5 +252,22 @@ test('YAML thật trong repo phải đi qua cổng — 0 báo sai trên ops/work
       const path = join(dir, name);
       assert.equal(yamlProblem(readFileSync(path, 'utf8')), null, `báo sai trên ${path}`);
     }
+  }
+});
+
+/**
+ * `tsconfig.json` của repo mang hai dòng chú thích `//`, nên `JSON.parse` một
+ * mình gọi nó là hỏng. Vòng soát ngữ cảnh sạch tìm ra đúng ca này: hai nhánh
+ * cùng thêm dòng vào `tsconfig.json` là chuyện thường ở làn `platform`, và
+ * cổng sẽ chặn một cây **lành**. `CLAUDE.md` mục 9 còn khuyến khích chú thích
+ * tiếng Việt trong file cấu hình, nên số file JSONC chỉ tăng.
+ */
+test('JSON thật trong repo phải đi qua cổng, kể cả file có chú thích (JSONC)', () => {
+  const tracked = spawnSync('git', ['ls-files', '*.json'], { encoding: 'utf8' });
+  assert.equal(tracked.status, 0, 'git ls-files phải chạy được');
+  const files = tracked.stdout.split('\n').filter((line) => line.trim() !== '');
+  assert.ok(files.includes('tsconfig.json'), 'mẫu phải gồm tsconfig.json — chính ca báo sai');
+  for (const file of files) {
+    assert.equal(fileSyntaxProblem(file, readFileSync(file, 'utf8')), null, `báo sai trên ${file}`);
   }
 });

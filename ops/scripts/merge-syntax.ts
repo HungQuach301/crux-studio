@@ -63,8 +63,17 @@ export function syntaxKind(file: string): SyntaxKind | null {
  *
  * Bước 0 chạy ở đầu **mọi** lượt worker (phụ lục P1), nên một `import` ở
  * đỉnh module sẽ trả tiền nạp compiler cho cả những lượt không có PR nào
- * xung đột — tức gần hết các lượt. `createRequire` neo vào `package.json`
- * của gốc repo để phân giải không phụ thuộc thư mục đang chạy.
+ * xung đột — tức gần hết các lượt.
+ *
+ * `createRequire` neo vào `import.meta.url` của **chính module này**
+ * (`ops/scripts/`) rồi đi ngược lên tìm `node_modules`, nên phân giải không
+ * phụ thuộc thư mục đang chạy — quan trọng vì bước 0 gọi tool với `cwd` là
+ * checkout của một PR khác. Đã kiểm bằng chạy thật từ một `cwd` khác.
+ *
+ * Nếu compiler không nạp được (một bản sao không có `node_modules`), ném một
+ * lỗi **nói đúng nguyên nhân** thay vì để `require` ném ra một thông điệp
+ * không ai đọc được trong `reason` của bản tin. `resolveAdditiveMerge` có
+ * lưới bắt, nên ca này ra `aborted-error` chứ không để cây dở dang.
  */
 let compiler: unknown;
 function typescriptCompiler(): {
@@ -72,12 +81,22 @@ function typescriptCompiler(): {
     input: string,
     options: { reportDiagnostics: boolean; fileName?: string },
   ) => { diagnostics?: ReadonlyArray<unknown> };
+  parseConfigFileTextToJson: (
+    fileName: string,
+    text: string,
+  ) => { error?: { messageText: unknown } };
   flattenDiagnosticMessageText: (text: unknown, newLine: string) => string;
-  getLineAndCharacterOfPosition: (file: unknown, pos: number) => { line: number };
 } {
   if (compiler === undefined) {
     const require = createRequire(import.meta.url);
-    compiler = require('typescript');
+    try {
+      compiler = require('typescript');
+    } catch (error) {
+      throw new Error(
+        'cổng cú pháp không nạp được `typescript` — chạy `pnpm install --frozen-lockfile` ' +
+          `trước khi gọi bước 0: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
   return compiler as ReturnType<typeof typescriptCompiler>;
 }
@@ -109,14 +128,40 @@ function scriptProblem(content: string, file: string): string | null {
   return `không parse được — ${where}${message}`;
 }
 
-/** Lỗi nạp JSON, hoặc `null`. `JSON.parse` đã nói đủ, không diễn giải thêm. */
+/**
+ * Lỗi nạp JSON, hoặc `null`.
+ *
+ * Hai phép parse, và chỉ báo lỗi khi **cả hai** đều hỏng. Lý do: repo có
+ * JSON **có chú thích** — `tsconfig.json` mang hai dòng `//` giải thích vì
+ * sao `spike/canvas/camera.js` là JavaScript thuần, và `CLAUDE.md` mục 9 còn
+ * khuyến khích chú thích tiếng Việt trong file cấu hình. `JSON.parse` một
+ * mình gọi file đó là hỏng, tức cổng sẽ chặn một cây **lành** ngay lần đầu
+ * hai nhánh cùng thêm dòng vào `tsconfig.json` — đúng chiều thiên lệch đắt
+ * nhất. `parseConfigFileTextToJson` của `typescript` chịu được chú thích và
+ * dấu phẩy thừa, mà vẫn bắt được hình dạng `KF-016` (đã đo: cùng file union
+ * hỏng ra `',' expected.`).
+ *
+ * Chỗ cố ý bỏ sót, ghi ra để không im lặng: một dấu phẩy thừa do union sinh
+ * ra trong file JSON **nghiêm** sẽ đi qua, vì phép parse thứ hai chấp nhận
+ * nó. Bỏ sót rơi về đúng hành vi trước mục này; báo sai thì làm đứng hàng
+ * đợi merge.
+ */
 function jsonProblem(content: string): string | null {
+  let strict: string | null = null;
   try {
     JSON.parse(content);
     return null;
   } catch (error) {
-    return `không nạp được JSON — ${error instanceof Error ? error.message : String(error)}`;
+    strict = error instanceof Error ? error.message : String(error);
   }
+
+  const ts = typescriptCompiler();
+  const parsed = ts.parseConfigFileTextToJson('merged.json', content);
+  if (parsed.error === undefined) return null;
+  return (
+    `không nạp được JSON — ${ts.flattenDiagnosticMessageText(parsed.error.messageText, ' ')} ` +
+    `(parse nghiêm cũng đỏ: ${strict})`
+  );
 }
 
 /** Dấu mở khối vô hướng nhiều dòng: `|`, `>`, kèm các biến thể `-`, `+`, số. */
@@ -127,6 +172,30 @@ function isSkippableYamlLine(line: string): boolean {
   const trimmed = line.trim();
   return trimmed === '' || trimmed.startsWith('#');
 }
+
+/**
+ * Độ dài chuỗi dấu gạch đầu dòng liên tiếp ở đầu `body` (`- `, `- - `, …),
+ * hoặc `0` nếu không có. Đây là **mức thụt lề ẩn** mà YAML tạo ra: khoá đầu
+ * của một item nằm ở `indent + độ dài này`, không phải ở `indent`.
+ *
+ * Bỏ mức ẩn này là lỗi báo sai đã đo được trên hình dạng rất thường gặp của
+ * GitHub Actions — `- with:` rồi `uses:` ở dòng sau: khoá anh em `uses:` nằm
+ * đúng mức ẩn, và nếu mức đó không có trong ngăn xếp thì nó thành "dedent
+ * lạc mức".
+ */
+function dashPrefixLength(body: string): number {
+  let at = 0;
+  while (body.startsWith('- ', at)) at += 2;
+  if (at === 0 && body === '-') return 1;
+  return at;
+}
+
+/**
+ * `body` có hình dạng một khoá của block mapping (`khoá:` hoặc `khoá: giá
+ * trị`) không. Khoá có thể trong nháy, và giá trị có thể chứa thêm dấu hai
+ * chấm (`run: echo a: b` — khoá là `run`).
+ */
+const MAPPING_KEY = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^:#]+?)\s*:(?:\s|$)/;
 
 /**
  * Lỗi nạp YAML, hoặc `null`.
@@ -143,9 +212,15 @@ function isSkippableYamlLine(line: string): boolean {
  *    một khối của bên kia.
  *
  * **Chỗ cố ý cho qua** (trả `null`, không đoán):
- * - khối vô hướng `|`/`>`: mọi dòng thụt sâu hơn dòng khoá là nội dung, bỏ qua;
- * - vô hướng thường nhiều dòng: một dòng thụt **sâu hơn** mức hiện tại luôn
- *   được coi là hợp lệ, vì YAML cho phép viết tiếp một giá trị xuống dòng;
+ * - khối vô hướng `|`/`>`: mọi dòng thụt sâu hơn **dòng khoá** là nội dung,
+ *   bỏ qua. Mốc là thụt lề của KHOÁ, không của dấu gạch: với `- run: |` thì
+ *   nội dung bắt đầu ở mức khoá, nên lấy mức dấu gạch sẽ nuốt luôn mọi khoá
+ *   anh em của item và bỏ kiểm gần hết phần còn lại;
+ * - **vô hướng viết tiếp xuống dòng**: một dòng không phải khoá và không
+ *   phải gạch đầu dòng là phần tiếp của một giá trị. YAML cho nó thụt bất kỳ
+ *   mức nào sâu hơn khoá, kể cả **giảm dần** giữa các dòng tiếp, nên không
+ *   có cách nào phân biệt nó với một dedent lạc mức mà không parse thật —
+ *   gặp là thoát và cho qua cả file;
  * - flow collection mở mà chưa đóng trong cùng dòng (`[`, `{`), nhiều tài
  *   liệu (`---` sau dòng đầu), anchor/alias, khoá phức `? `: gặp là **thoát
  *   và cho qua** — ngoài mô hình, không phán.
@@ -180,12 +255,20 @@ export function yamlProblem(content: string): string | null {
     // Ngoài mô hình: thoát và cho qua, không phán.
     if (i > 0 && (body === '---' || body.startsWith('--- '))) return null;
     if (body.startsWith('? ') || body.startsWith('&') || body.startsWith('*')) return null;
-    if (countUnclosed(body) !== 0) return null;
+    // Chỉ dấu MỞ còn treo mới là flow collection nhiều dòng. Một dấu đóng lẻ
+    // (`b: echo }`) là chữ trong một vô hướng, không phải cấu trúc — trước
+    // đây nó cũng tắt cổng cho cả file.
+    if (countUnclosed(body) > 0) return null;
+
+    const dashes = dashPrefixLength(body);
+    const afterDashes = body.slice(dashes).trim();
+    // Vô hướng viết tiếp xuống dòng: không phân biệt được với dedent lạc mức
+    // mà không parse thật. Cho qua cả file. Một item vô hướng (`- main`) thì
+    // ngược lại vẫn theo dõi được — nó là cấu trúc, chỉ giá trị là vô hướng.
+    if (dashes === 0 && !MAPPING_KEY.test(body)) return null;
 
     const top = open[open.length - 1]!;
     if (indent > top) {
-      // Sâu hơn: một khối mới mở, hoặc một vô hướng viết tiếp xuống dòng.
-      // Hai ca không phân biệt được mà không parse thật, nên nhận cả hai.
       open.push(indent);
     } else if (indent < top) {
       while (open.length > 1 && open[open.length - 1]! > indent) open.pop();
@@ -197,7 +280,16 @@ export function yamlProblem(content: string): string | null {
       }
     }
 
-    if (BLOCK_SCALAR.test(body)) blockScalarIndent = indent;
+    // Mức thụt lề ẩn của `- `: khoá đầu của item nằm ở đây, và các khoá anh
+    // em của nó cũng vậy. Mỗi dấu gạch trong `- - 1` mở MỘT mức, nên đẩy cả
+    // các mức trung gian: bỏ mức giữa thì một sequence lồng sequence ra
+    // "dedent lạc mức" ở item thứ hai của lớp ngoài.
+    const keyIndent = indent + dashes;
+    for (let level = indent + 2; level <= keyIndent; level += 2) {
+      if (level > open[open.length - 1]!) open.push(level);
+    }
+
+    if (BLOCK_SCALAR.test(afterDashes === '' ? body : afterDashes)) blockScalarIndent = keyIndent;
   }
 
   return null;
