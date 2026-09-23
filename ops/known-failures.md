@@ -12,7 +12,9 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 >
 > ⚠️ Bản đầu của dòng này viết *"`KF-018` thuộc `#166`, `KF-017` thuộc `#162` — cả ba đang mở"*, chép nguyên khung câu của `KF-018` mà **không đo lại**: hai PR ấy đã merge từ trước lúc viết. Đúng chữ ký mà `KF-005` cảnh báo, và lần này nó trúng ngay mục đang cảnh báo về nó. Việc cấp mã `KF-020` không sai, chỉ phần diễn giải sai.
 
-- **Lần gặp:** 2 — lượt `crux-worker-1` ~23:38Z (PR `#120`, ghi ở `P-031`/`KF-019` như chuyện của một file) rồi lượt `crux-worker-1` ~00:40Z ngày 2026-09-23, khi **cùng một chữ ký** chặn **cả 6** PR xung đột của bước 0. Lần thứ hai là lúc luật `CHARTER 6.6` đòi sửa **cơ chế**, không vá sản phẩm — nên mục này ghi cái mà `KF-019` không ghi: không phải `spike-canvas.yml` sai, mà **đường về xanh bị khoá sau một cửa 12 giờ**.
+- **Lần gặp:** 2 — lượt `crux-worker-1` ~23:38Z (PR `#120`) rồi lượt `crux-worker-1` ~00:40Z ngày 2026-09-23, khi **cùng một chữ ký** chặn **cả 6** PR xung đột của bước 0.
+
+  > ⚠️ **Lần gặp thứ nhất là suy lại từ hoàn cảnh, không phải từ một bản ghi.** `KF-019` (trên nhánh của `#167`) ghi một **chữ ký khác** — workflow vào `main` mà `node --test` không soi — và **không một chữ nào** về cửa merge hay vùng bảo vệ. Nói ra để lượt sau không tưởng có hai bản ghi cùng chữ ký này; mục này là bản ghi **đầu tiên** của nó. Điều đó không làm sai hành động: chữ ký đã chặn việc hai lượt liên tiếp, nên CHARTER 6.6 (sửa cơ chế ở lần thứ hai) vẫn áp đúng. Lần thứ hai là lúc luật `CHARTER 6.6` đòi sửa **cơ chế**, không vá sản phẩm — nên mục này ghi cái mà `KF-019` không ghi: không phải `spike-canvas.yml` sai, mà **đường về xanh bị khoá sau một cửa 12 giờ**.
 - **Chữ ký:** một worker gỡ xong xung đột của một PR, `tsc --noEmit` sạch và test của chính PR đó xanh, nhưng `pnpm check` vẫn `EXIT=1` ở những cổng mà **cây sạch của `origin/main` cũng đỏ y hệt**. Theo phụ lục P3 bước 0b, worker phải `git merge --abort` và **không push** — đúng luật, và không tiến được bước nào. Lặp lại ở mọi PR, mọi lượt, cho tới khi `main` xanh.
 - **Đo, không suy (2026-09-23 ~00:40Z, `origin/main = ecd0085`):**
 
