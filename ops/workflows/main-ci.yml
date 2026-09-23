@@ -49,8 +49,23 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # `D-C07` · giữ lại đầu ra của `pnpm check` để job `alert` dựng được
+      # phạm vi sự cố ở dạng máy đọc. `tee` giữ nguyên đầu ra trên log job,
+      # và `pipefail` (đặt ở dòng đầu, Z10) giữ nguyên mã thoát của `pnpm`
+      # chứ không lấy mã thoát của `tee` — không có nó thì job này XANH GIẢ
+      # trên một `main` đỏ, đúng nhóm Z.
       - id: run
-        run: pnpm check
+        run: |
+          set -euo pipefail
+          pnpm check 2>&1 | tee "$RUNNER_TEMP/check-output.txt"
+      - name: Giữ đầu ra pnpm check cho job alert (D-C07)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-ci-check-output
+          path: ${{ runner.temp }}/check-output.txt
+          if-no-files-found: warn
+          retention-days: 7
       # Z3 (ops/known-failures.md nhóm Z): `ops/workflows/` chỉ có hiệu lực
       # SAU KHI sync-workflows.yml chép sang .github/workflows/. Nếu sync
       # ngừng chạy hoặc hỏng vì PAT hết hạn, bản CŨ trong .github/ vẫn chạy
@@ -71,6 +86,45 @@ jobs:
     if: failure()
     runs-on: ubuntu-latest
     steps:
+      # `D-C07` · ba bước dưới đây dựng PHẠM VI SỰ CỐ ở dạng máy đọc. Chúng
+      # đứng trước bước mở issue vì khối phạm vi nằm trong thân issue: mốc
+      # `<!-- crux-hotfix-scope -->` là hợp đồng giữa file này (bên ghi) và
+      # `ops/invariants.hotfix-lane.ts` (bên đọc), và không bên nào đọc văn
+      # xuôi tiếng Việt của cảnh báo.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v5
+        with:
+          name: main-ci-check-output
+          path: ${{ runner.temp }}/check
+        # Z9 · nuốt lỗi ở đây là an toàn và CÓ CHỦ Ý: artifact vắng chỉ làm
+        # phạm vi sự cố rỗng (tức "không có lối nhanh", hướng an toàn của
+        # `D-C07`), còn việc chính của job này — mở cảnh báo `main` đỏ — không
+        # phụ thuộc nó. Để bước này đỏ thì một `main` đỏ sẽ KHÔNG có cảnh báo
+        # nào, đổi một bất tiện lấy một chỗ im lặng.
+        continue-on-error: true
+      - name: Dựng phạm vi sự cố cho lối đi nhanh hotfix (D-C07)
+        id: scope
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Artifact vắng (job `check` chết trước khi ghi, hoặc tải về hỏng)
+          # thì phạm vi RỖNG, không phải lỗi: `parseScope` coi phạm vi rỗng là
+          # "sự cố này không có lối nhanh", nên hướng an toàn tự giữ. Cảnh báo
+          # vẫn phải mở — đó mới là việc chính của job này.
+          OUT="$RUNNER_TEMP/check/check-output.txt"
+          [ -f "$OUT" ] || : > "$OUT"
+          BLOCK=$(node ops/scripts/main-red-scope.ts "$OUT" "$SHA")
+          {
+            echo 'block<<CRUX_SCOPE_EOF'
+            echo "$BLOCK"
+            echo 'CRUX_SCOPE_EOF'
+          } >> "$GITHUB_OUTPUT"
+          echo "$BLOCK"
+
       # Main đỏ được revert ngay; việc sửa làm lại trên nhánh. Issue này là
       # thứ routine crux-integrator đọc ở lần chạy kế tiếp.
       #
@@ -91,6 +145,7 @@ jobs:
           MARKER: '<!-- crux-escalate-main-do -->'
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          SCOPE_BLOCK: ${{ steps.scope.outputs.block }}
         run: |
           set -euo pipefail
           TITLE="[CẢNH BÁO] main đỏ tại ${SHA:0:7}"
@@ -106,10 +161,15 @@ jobs:
             "" \
             "Việc tiếp theo, theo CHARTER 6.5 và phụ lục P3:" \
             "1. Tìm commit gây đỏ trong các lần merge 24 giờ qua." \
-            "2. Mở PR revert trên nhánh \`claude/integration/revert-${SHA:0:7}\`, gắn nhãn \`automerge\`." \
-            "3. Ghi vào \`ops/known-failures.md\`, và thêm một mục \`fix\` vào backlog của làn gây lỗi." \
+            "2. Mở PR revert trên nhánh \`claude/integration/revert-${SHA:0:7}\`. Nhãn cửa merge: CHẠY \`node ops/invariants.protected-area.ts\` trên diff của PR rồi lấy trường \`gate\`, đừng đoán — một bản revert chạm \`ops/workflows/**\` ra \`automerge-delayed\`, không phải \`automerge\`." \
+            "3. Nếu PR đó chỉ chạm đúng các file trong khối \`crux-hotfix-scope\` dưới đây, gắn THÊM nhãn \`hotfix\`: lối đi nhanh của \`D-C07\` bỏ khoảng chờ 12 giờ cho đúng ca này. Chạm tầng luật đang bắt lỗi thì KHÔNG dùng lối nhanh — mở \`🤖 [QĐ]\`." \
+            "4. Ghi vào \`ops/known-failures.md\`, và thêm một mục \`fix\` vào backlog của làn gây lỗi." \
             "" \
-            "Không sửa trực tiếp trên \`main\`. Việc sửa làm lại trên nhánh.")
+            "Không sửa trực tiếp trên \`main\`. Việc sửa làm lại trên nhánh." \
+            "" \
+            "Phạm vi sự cố, do \`ops/scripts/main-red-scope.ts\` dựng — đây là nguồn DUY NHẤT cho điều kiện 2 của \`D-C07\`, và \`ops/invariants.hotfix-lane.ts\` đọc đúng khối này:" \
+            "" \
+            "$SCOPE_BLOCK")
 
           # Chạy thử dừng ở đây: `pnpm check` của job `check` đã chạy thật
           # và đã đỏ (job này chỉ chạy khi `failure()`), nên phép thử đã có

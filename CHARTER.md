@@ -261,7 +261,10 @@ PAT có hạn dùng. Watchdog cảnh báo khi workflow sync thất bại (mục 
   |---|---|---|
   | `owner-merge` | — | máy không bao giờ merge |
   | `automerge-delayed` | `automerge-delayed` | CI xanh trên đầu nhánh, đủ **12 giờ**, không có lời `dừng` |
+  | `automerge-delayed` + lối nhanh | `automerge-delayed` + `hotfix` | như trên nhưng **không chờ**, khi sáu điều kiện của `D-C07` đạt |
   | `open` | `automerge` | CI xanh trên đầu nhánh |
+
+- **Lối đi nhanh `hotfix` (`D-C07`).** Một `main` đỏ vì một workflow thì mọi bản sửa của nó cũng chạm `ops/workflows/**`, nên cửa 12 giờ áp lên đúng thứ phải đi nhanh nhất — đo được ngày 2026-09-23: hàng đợi merge đứng ~8,6 giờ, 9 PR xung đột, 0 push (`KF-020`). Nhãn `hotfix` bỏ **đúng một thứ: khoảng chờ**. Sáu điều kiện, do `ops/invariants.hotfix-lane.ts` kiểm bằng máy, không phải bằng lời: (1) `main-ci` đang đỏ và có cảnh báo khẩn đang mở; (2) PR chỉ chạm đúng file mà cảnh báo nêu tên — so đường dẫn đầy đủ, không nới theo thư mục; (3) không chạm chính tầng luật đang bắt lỗi (chạm thì mở `🤖 [QĐ]`, không dùng lối nhanh); (4) xanh đủ 5 check trên đúng đầu nhánh; (5) không bao giờ áp cho `automerge.yml`, `ops/invariants.*` hay `.github/**`; (6) tối đa **một** PR `hotfix` mỗi sự cố, và chủ dự án được @nhắc ngay lúc merge. Thiếu dữ liệu ở bất cứ chỗ nào thì về cửa thường — hướng an toàn luôn là chờ.
 
 - Điều kiện chung cho cả hai cửa máy merge được: CI xanh **trên đúng commit đầu nhánh**, PR không còn nháp, PR không đang xung đột với `main` (KF-002), và không có comment `dừng` của chủ dự án. Merge bằng squash.
 - **Lời `dừng`** là comment của chủ dự án trên PR, không bắt đầu bằng 🤖, có chứa chữ `dừng` (không phân biệt hoa thường). Quy ước 🤖 ở 2.3 là thứ duy nhất phân biệt lời đó với một comment của chính agent.
