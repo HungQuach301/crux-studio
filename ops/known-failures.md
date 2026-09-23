@@ -8,7 +8,9 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ## KF-020 · Bản sửa một `main` đỏ **tự nó** nằm trong vùng bảo vệ, nên `main` không thể xanh lại dưới 12 giờ
 
-> Số **KF-020**: `KF-019` thuộc PR `#167`, `KF-018` thuộc `#166`, `KF-017` thuộc `#162` — cả ba đang mở. Dò `## KF-` trên `main` **và trên mọi nhánh PR đang mở** trước khi viết, đúng cách `KF-018` chỉ (`KF-005`).
+> Số **KF-020**: dò `## KF-` trên `main` **và trên mọi nhánh PR đang mở** trước khi viết, đúng cách `KF-018` chỉ (`KF-005`). Trên `main` cao nhất là `KF-018` (`#166`, đã merge ở `fc24f75`; `KF-017` của `#162` cũng đã vào `main` ở `d36d424`). Còn mở chỉ có `KF-019`, thuộc PR `#167`.
+>
+> ⚠️ Bản đầu của dòng này viết *"`KF-018` thuộc `#166`, `KF-017` thuộc `#162` — cả ba đang mở"*, chép nguyên khung câu của `KF-018` mà **không đo lại**: hai PR ấy đã merge từ trước lúc viết. Đúng chữ ký mà `KF-005` cảnh báo, và lần này nó trúng ngay mục đang cảnh báo về nó. Việc cấp mã `KF-020` không sai, chỉ phần diễn giải sai.
 
 - **Lần gặp:** 2 — lượt `crux-worker-1` ~23:38Z (PR `#120`, ghi ở `P-031`/`KF-019` như chuyện của một file) rồi lượt `crux-worker-1` ~00:40Z ngày 2026-09-23, khi **cùng một chữ ký** chặn **cả 6** PR xung đột của bước 0. Lần thứ hai là lúc luật `CHARTER 6.6` đòi sửa **cơ chế**, không vá sản phẩm — nên mục này ghi cái mà `KF-019` không ghi: không phải `spike-canvas.yml` sai, mà **đường về xanh bị khoá sau một cửa 12 giờ**.
 - **Chữ ký:** một worker gỡ xong xung đột của một PR, `tsc --noEmit` sạch và test của chính PR đó xanh, nhưng `pnpm check` vẫn `EXIT=1` ở những cổng mà **cây sạch của `origin/main` cũng đỏ y hệt**. Theo phụ lục P3 bước 0b, worker phải `git merge --abort` và **không push** — đúng luật, và không tiến được bước nào. Lặp lại ở mọi PR, mọi lượt, cho tới khi `main` xanh.
@@ -32,7 +34,11 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
   Vùng bảo vệ mức `automerge-delayed` (CHARTER mục 3, `D-C06`) phủ **`ops/workflows/**`**. Mà một `main` đỏ vì một workflow thì **mọi** bản sửa của nó — sửa tại chỗ như `#167`, hay revert `#42` — đều chạm đúng thư mục ấy. Vậy cửa 12 giờ áp cho chính thứ đáng lẽ phải đi nhanh nhất.
 
-- **Vì sao nó đắt hơn vẻ ngoài:** `CLAUDE.md` mục 13 viết *"`main` đỏ thì revert ngay"*, và CHARTER phụ lục P3 bước 1 cũng nói **ngay**. Luật vùng bảo vệ nói **12 giờ**. Hai câu trong cùng một hiến chương, và cho tới `#167` merge (~`12:00Z`, tức ~12 giờ sau khi `main` đỏ lúc `23:05Z`) thì: không PR xung đột nào gỡ được, và **mọi** PR đang mở đỏ ở lượt CI kế tiếp vì CI dựng `refs/pull/N/merge`. 16 PR đứng vì một cửa thiết kế cho chuyện khác. Không gì đỏ **lúc này** ngoài `main` — đúng nhóm **Z**: mỗi luật riêng lẻ đều đúng, chỗ thủng nằm ở chỗ hai luật gặp nhau.
+- **Vì sao nó đắt hơn vẻ ngoài — và chỗ mâu thuẫn cụ thể nhất không phải chữ "ngay":** `CLAUDE.md` mục 13 viết *"`main` đỏ thì revert ngay"*, và CHARTER **6.5** (`CHARTER.md:369`) viết *"Main đỏ được revert ngay"*. Nhưng bằng chứng sắc hơn nằm ở phụ lục **P3 bước 1** (`CHARTER.md:825–827`), chỗ CHARTER **ghi cứng cái nhãn**:
+
+  > *mở PR revert (**nhãn automerge**, nhánh `claude/integration/revert-<sha>`)*
+
+  Tức CHARTER bảo dán `automerge` lên đúng loại PR mà `ops/invariants.protected-area.ts` tính ra `automerge-delayed` — đã đo: chạy tool trên danh sách file của `7dfdfeb` (một bản revert `#42`) cũng ra `automerge-delayed`. Không phải hai cách diễn đạt lệch nhau, mà là **hai luật cho ra hai nhãn khác nhau trên cùng một PR**. Và cho tới khi `#167` merge thì: không PR xung đột nào gỡ được, và **mọi** PR đang mở đỏ ở lượt CI kế tiếp vì CI dựng `refs/pull/N/merge`. 16 PR đứng vì một cửa thiết kế cho chuyện khác. (**Dự kiến, không phải số đo:** đồng hồ 12 giờ chạy từ lúc **CI xanh trên đầu nhánh**, không phải từ lúc `main` đỏ — CHARTER 3.3, `CHARTER.md:263`. `#167` xanh lúc `00:03Z` nên mốc tự merge là ~`12:03Z`, với điều kiện nó giữ CI xanh, không ai comment `dừng`, và không có push mới đặt lại đồng hồ.) Không gì đỏ **lúc này** ngoài `main` — đúng nhóm **Z**: mỗi luật riêng lẻ đều đúng, chỗ thủng nằm ở chỗ hai luật gặp nhau.
 
   **Đo trên chính PR ghi mục này (`#168`), nên phần "mọi PR đang mở sẽ đỏ" không còn là suy luận.** `#168` chỉ thêm tài liệu và hai file log — không chạm một dòng code nào. CI của nó vẫn **đỏ**:
 
