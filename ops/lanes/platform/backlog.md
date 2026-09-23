@@ -603,3 +603,21 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
   - Luật chung ghi vào `ops/known-failures.md` KF-018: **lớp chặn mới quét `origin/main..HEAD` phải được chạy thử trên mọi nhánh PR đang mở trước khi bật.** Đó là phần tái dùng được của mục này; ba đường ở trên chỉ gỡ lần này.
   - ⚠️ Không thêm lớp chặn mới nào cho chính vấn đề này trước khi `#165` có câu trả lời — nhân đôi đúng cái bẫy mà mục này mô tả.
 - **mã mục nhận lúc 2026-09-22 ~22:1x giờ VN** (`ops/logs/README.md`, KF-005): dò `P-` trên `main` **và trên mọi nhánh PR đang mở** (không chỉ vài nhánh nhớ được — xem cảnh báo ở đầu `KF-018`): cao nhất là `P-029` (`#162`), nên `P-030` không đụng ai.
+### P-031 · `main` đỏ: `spike-canvas.yml` vào `main` với 4 vi phạm Z9/Z10 mà `node --test` không soi
+
+`origin/main` tại `cf5c7f9` **đỏ** ở `pnpm lint:workflows` — đo `2026-09-22 23:38Z` trên cây sạch, `EXIT=1`, bốn dòng: `spike-canvas.yml:47/69/84` thiếu `set -euo pipefail` (Z10) và `:63` nuốt lỗi không chú thích (Z9). File vào `main` lúc `23:05:06Z` cùng `7dfdfeb` (mục `visual/V-002`, PR #42).
+
+Hệ quả đo được, không phải suy đoán: **17 PR đang mở, CI xanh cả 17**, vì lần chạy CI gần nhất của mọi PR đều **trước** `23:05:06Z`. PR nào gộp `main` từ giờ cũng kế thừa đúng bốn dòng đó và đỏ mà không ai đụng vào nó — đã gặp ngay trong lượt này ở #120 (bước 2 gỡ xung đột xong, `pnpm check` đỏ đúng bốn dòng ấy, nên **không push**, đúng luật "đỏ sau khi gộp là tín hiệu thật" của phụ lục P3 bước 0b).
+
+**Nguyên nhân gốc không phải luật thiếu.** Z9 và Z10 có trong `ops/scripts/check-workflows.ts` từ mục `P-011`, và `pnpm lint:workflows` bắt đúng cả bốn chỗ. Chỗ thủng là **thời điểm**: `node --test` — thứ chạy trong mọi lần CI — không có bài nào soi cây thật bằng Z9/Z10; hai bài "cây hiện tại phải sạch" chỉ soi quyền và action Node 20. Đây là `KF-013` ở hình dạng mới: bất biến có sẵn, vi phạm mới, không lần chạy nào đặt hai thứ cạnh nhau **trước** lúc merge.
+
+- deps: —
+- risk: **high** — `main` đỏ chặn mọi làn; mọi PR đang mở đỏ ngay khi gộp `main`.
+- status: review
+- nguồn: đo ở lượt `crux-worker-1` 2026-09-22 23:3x–23:5xZ; `ops/known-failures.md` **KF-019** (và KF-013, KF-002); CLAUDE.md mục 13 (`main` đỏ thì sửa ngay), CHARTER phụ lục P3 bước 1
+- tiêu chí xong:
+  - ✅ `ops/workflows/spike-canvas.yml` hết bốn vi phạm: `set -euo pipefail` vào ba khối `run: |`, một chú thích tại chỗ cho `"$found" --version || true`. **Không** nới luật, **không** thêm ngoại lệ — luật đúng, file sai.
+  - ✅ Bài tái hiện lỗi (bất biến I2) ở `ops/test/check-workflows.test.ts`: `blocksMissingPipefail(runBlocks(...))` và `undocumentedSwallows(...)` chạy trên **mọi** `ops/workflows/*.yml` của cây thật, trong `node --test`. Phá thử: bỏ bản sửa ra khỏi cây thì đỏ với đúng bốn chuỗi, khôi phục thì 57/57 xanh.
+  - ✅ Ghi `ops/known-failures.md` **KF-019**.
+  - ⬜ **Câu hỏi còn mở, không thuộc phạm vi PR này:** vì sao CI của #42 xanh trong khi `lint:workflows` bắt được bốn chỗ này? Giả thuyết là `KF-002` (GitHub không dựng lần chạy cho commit cuối của PR, nên nhãn xanh là của một commit cũ hơn). Chưa đo, nên chưa viết vào KF-019 như một khẳng định. Nếu đúng thì lỗ hổng lớn hơn một file: **mọi** PR đều có thể merge với một commit chưa bao giờ chạy CI. Đáng một mục riêng của làn `verify`.
+- **mã mục nhận lúc 2026-09-22 23:4x giờ UTC**: `P-030` là mã cao nhất trên `main` **và** trên cả 17 nhánh PR đang mở tại lúc nhận (đo từng nhánh), nên `P-031` không đụng ai.
