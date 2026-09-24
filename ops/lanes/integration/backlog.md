@@ -695,3 +695,76 @@ nhánh việc.
     `heldByProse` sang `heldByField`, tức nợ đi từ 1 về 0. Phá thử hai chỗ: gỡ bước bỏ dấu nhấn Markdown
     khỏi `normalizeForHold` → 4 bài đỏ; gỡ một dòng khai trường khỏi backlog thật → bài máy canh đỏ kèm
     đúng tên mục. Khôi phục → 30/30 xanh.
+
+---
+
+### I-021 · fix · Ghi `KF-026` và dọn sáu chỗ sót của vòng soát `I-020` — phần luật tách PR riêng
+Vòng soát ngữ cảnh sạch (bước 6) của PR `#222` chạy **sau khi** PR đó đã merge: nhãn `automerge` gắn từ vòng
+soát trước — cho một bản 16 file — sống sót qua một lần push đổi nội dung thực chất, và `automerge.yml` merge
+76 giây sau push. Toàn bộ lần giải xung đột 14 file vào `main` mà **không vòng soát nào nhìn thấy nó**. Chi
+tiết và mốc thời gian ở `ops/known-failures.md` `KF-026`.
+
+Mục này gom hai phần: phần **luật** (nhãn hết hiệu lực khi `head.sha` đổi) và sáu chỗ sót mà vòng soát đó nêu
+nhưng không còn PR nào để sửa vào.
+
+- deps: —
+- risk: medium — phần luật chạm `ops/workflows/automerge.yml`, vùng `owner-merge`, nên nó phải tách PR riêng
+  mà chủ dự án merge. Phần dọn dẹp thì rẻ và đã làm xong trong PR của mục này.
+- status: review
+- hold: phần luật (`automerge.yml` so `head.sha`) chưa làm — nó chạm vùng `owner-merge` nên phải đi bằng một PR riêng
+- nguồn: `KF-026`; vòng soát bước 6 của PR `#222`; CHARTER 6.4 và 3.3; `CLAUDE.md` mục 13
+- tiêu chí xong:
+  - ⬜ `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn tự merge được gắn (đọc từ
+    timeline của label event). Lệch thì **gỡ nhãn** và đòi soát lại, không merge. Áp cho **cả** `automerge`
+    lẫn `automerge-delayed` — cửa `open` là cửa thiếu cơ chế này, nhưng viết một luật cho cả hai thì không
+    có cửa nào tụt lại.
+  - ⬜ Test cho hàm quyết định đó, tách khỏi YAML như `ops/scripts/alert-escalation.ts` đã làm.
+  - ⬜ CHARTER 6.4 nói rõ vòng soát gắn với **một phiên bản**, không với một PR.
+  - ⬜ `ops/workflows/watchdog.yml` dấu hiệu 5 **kẹp sàn `AGE_MIN`**. Hiện nó tính
+    `AGE_MIN=$(( (NOW - LAST_BEAT) / 60 ))` rồi hỏi `-gt 180`, **không kẹp sàn** — nên một mốc bước 0 ở
+    tương lai cho `AGE_MIN` âm, phép so sai, và dấu hiệu 5 của CHARTER 2.4 **im vĩnh viễn**. Cùng hình dạng
+    Z với `S2`, ở nhánh sát bên. Tách khỏi PR này vì `ops/workflows/**` kéo cửa sang `automerge-delayed`,
+    trong khi phần còn lại của mục ở cửa `open`; bài kiểm phía TS đã phủ dữ liệu (xem `S2`), còn đây là
+    phần bash.
+  - ✅ **Máy canh mốc `at` ở tương lai trên log THẬT** (`S2`) — phủ **cả** dòng thường **và** dòng bước 0. Bài `Z7 · trên ops/logs thật: KHÔNG làn nào ra
+    future`. Đo được chỗ thủng: lượt `crux-worker-1` ghi tay `at: 07:05:00.000Z` vào commit tạo lúc `06:51:27Z`,
+    nên trong ~14 phút làn `integration` ra `{"verdict":"future","hoursSinceLastBeat":-0.1}` — số âm nhỏ hơn
+    mọi ngưỡng, tức làn đó **không bao giờ `stale` được**, mà `pnpm check` vẫn xanh (nhóm **Z**). Bài cũ chỉ
+    khoá *hàm* trên log dựng; bài mới khoá *dữ liệu thật*. Phá thử: đặt một mốc tương lai vào log thật →
+    `not ok 22`; khôi phục → 22/22 xanh.
+    **Phạm vi đã sửa sau vòng soát:** bản đầu chỉ khẳng định trên `laneHeartbeats`, mà hàm đó cố ý **loại**
+    dòng bước 0 (luật thiết kế 1) — nên tiêu chí này lúc đầu khai phạm vi **rộng hơn phạm vi thật**, đúng lỗi
+    `S6` mà chính mục này đang sửa ở chỗ khác. Đo được: đặt mốc tương lai vào dòng bước 0 → **22/22 vẫn
+    xanh**. Nay bài có thêm một phép khẳng định chạy thẳng trên các dòng bước 0, dùng
+    `FUTURE_TOLERANCE_HOURS` làm dung sai; phá thử lại → `not ok 22`.
+    **Đường thoát khi một mốc tương lai ĐÃ vào `main`** (khai vì nó cắn `D-C04`): thêm một dòng đính chính
+    **không** chữa được — `laneHeartbeats` lấy `max` theo làn, nên `pnpm check` (cổng cứng) đỏ cho **mọi** PR
+    tới khi thời gian thật vượt qua mốc đó. Cách chữa duy nhất là sửa hoặc xoá dòng, tức phá append-only. Nên
+    luật thật của chỗ này là **ghi `at` bằng đồng hồ thật ngay từ đầu**; dung sai một phút là ngân sách lệch
+    đồng hồ **giữa hai máy** (phiên agent ghi, runner GitHub khẳng định), không phải chỗ để nới.
+  - ✅ **Gỡ mẫu chết** (`S4`): `/không đóng khi pr merge/u` bị `/(?:không|chưa|chỉ) đóng/u` bao trọn
+    (`.test('không đóng khi pr merge')` → `true`), và gỡ nó làm **0** bài đỏ — không bài nào ghim nó. Lưới đi
+    từ 8 mẫu xuống **7**, ca gốc vẫn bắt được. Một mẫu không ai canh là chỗ lần sau có người sửa mà không
+    biết mình sửa gì. Vòng soát đo thêm một bậc và kết quả mạnh hơn mức mục dám khai: gỡ **từng** mẫu một
+    trong tám mẫu cũ thì mẫu bị gỡ ở đây là mẫu **DUY NHẤT** không bài nào ghim (7 mẫu kia đều làm ít nhất
+    một bài đỏ). Sau khi gỡ, **cả 7 mẫu còn lại đều có bài ghim** — tức "không mẫu chết" nay là một tính
+    chất đo được của cả lưới, không chỉ một nhận xét về một mẫu.
+  - ✅ **`KF-023` không còn nói sai hiện trạng** (`S5`): dòng mô tả lưới của `#221` ghi rõ nó là mô tả **đã bị
+    `#222` thay**, thay vì để hai mô tả trái nhau cùng ở thể hiện tại cạnh nhau.
+  - ✅ **Chú thích bài máy canh khai đúng phạm vi của chính nó** (`S6`): nó viết "cùng phạm vi
+    `reviewFindings`", thực ra không — `reviewFindings` lọc `status === 'review' || statusLine === null`, bài
+    test bỏ vế thứ hai. Hiện vô hại (`classify` trả `unknown` cho `statusLine === null` nên mục đó không vào
+    nhóm `held`, và `applyFix` cũng đòi `statusLine !== null`), nhưng trong một mục có luận điểm là "khai ra
+    phạm vi thật" thì câu sai đó đáng một dòng sửa.
+  - ✅ **Hai dòng log đính chính** (`S1`, `S3`), append chứ không sửa dòng cũ (`D-C04`): số file của `#222` là
+    **8** chứ không phải 7 (dòng cũ ghi 7 vì cửa merge được đo **trước khi** hai dòng log của chính lượt đó
+    được ghi; kết luận cửa **không đổi** — chạy lại với đủ 8 đường dẫn vẫn `{"gate":"open"}`), và `costUsd`
+    của hai dòng mới là **ước lượng**, không phải số đo — ba dòng trước trong cùng file ghi `0` kèm lý do
+    "phiên routine không đọc được chi phí thật của chính nó", và hai dòng mới đã đổi ngầm quy ước đó mà không
+    nói ra.
+- **vì sao còn `review`:** ba tiêu chí ⬜ đầu là phần luật, chạm `ops/workflows/automerge.yml` — vùng
+  `owner-merge`. Gộp chúng vào PR này sẽ kéo cả PR sang cửa `owner-merge` và bắt chủ dự án merge tay một PR
+  mà phần lớn nội dung máy tự merge được — ngược thước đo CHARTER 1.3. Tách đúng như `P-034`/`P-037` đã tách.
+- **mã mục nhận lúc 2026-09-24 ~07:1x giờ UTC** (`KF-005`): dò `### I-` trên `main` **và trên đầu cả 8 PR
+  đang mở** (`refs/pull/N/head`), không chỉ vài nhánh nhớ được. Cao nhất trên `main` là `I-020`; `I-019` do PR
+  `#112` giữ — nên `I-021` không đụng ai.
