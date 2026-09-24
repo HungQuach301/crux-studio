@@ -1027,3 +1027,46 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ✅ Ghi `ops/known-failures.md` **KF-027**.
   - ⬜ **Còn lại, tách phạm vi:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở (`CLAUDE.md` mục 11: hai làn cùng sửa một file). Việc của lượt sau `#225` merge.
 - **mã mục nhận lúc 2026-09-24 ~07:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở, cao nhất là `P-041` (`#225`), nên `P-042` không đụng ai. Mã `KF-027` nhận cùng cách, cao nhất là `KF-026` (`#226`).
+
+### P-046 · Bản tin chưa có khối "sẵn sàng duyệt", và chưa máy nào đọc được câu trả lời `Duyệt`
+
+Chỉ dẫn của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193),
+comment `2026-09-23T14:18:09Z`, khối **TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI**, mục (1), mở đầu bằng đúng hai chữ
+**"Làm ngay"**:
+
+> cuối bản tin có bản nháp comment tổng hợp mọi khuyến nghị. Tôi trả lời "Duyệt" = chấp nhận toàn bộ khuyến
+> nghị; "Duyệt, trừ #N B" = chấp nhận trừ mục nêu. Mục reversible đã tự làm chỉ liệt kê, không hỏi lại. Mục
+> irreversible vẫn liệt kê riêng, ghi rõ hệ quả nếu tôi không trả lời.
+
+Chỉ dẫn nằm đó **hơn 22 giờ** và chưa mục backlog nào giữ nó — dò `### ` trên `main` **và** trên đầu cả 13 PR
+đang mở, không chỗ nào nhắc tới `sẵn sàng duyệt`, `bản nháp comment` hay `Duyệt, trừ`. Cùng hình dạng với khối
+`GIỌNG ĐỌC` của chính comment đó, thứ đã đi qua bốn lượt `idle` trước khi lượt `~11:39Z` nhận nó thành `AU-006`.
+
+Hai nửa, và nửa thứ hai mới là chỗ hỏng im lặng:
+
+- **Nửa viết.** Bản tin chưa có khối cuối nào tổng hợp khuyến nghị. Phụ lục P2 hiện kết thúc ở một dòng
+  *"Trả lời tất cả trong MỘT comment ngay dưới đây."* — đúng nhưng bắt chủ dự án tự gõ lại từng mã số.
+- **Nửa đọc.** `Duyệt` là **hình dạng câu trả lời thứ ba**, sau `#19 A, #14 B` và `hoàn tác #N`. Cả ba hình dạng
+  hiện **không có bộ đọc bằng máy nào** — `grep -rn` trên `ops/scripts/` chỉ thấy chúng trong văn xuôi
+  (`recheck-assumptions.ts:157`, `step0-pr-gate.ts:62`), không thấy một hàm nào phân tích chúng. Agent đọc bằng
+  mắt ở mỗi lượt. Thêm một hình dạng nữa vào một chỗ không có máy canh là mời đúng nhóm **Z**: một chữ `Duyệt`
+  bị đọc sót thì không gì đỏ, và chủ dự án tưởng đã trả lời xong.
+
+Ba cách đọc sai mà nửa đọc phải chặn bằng test, không phải bằng lời hứa:
+
+1. `Duyệt` **không** được chấp nhận một mục mà chính bản tin đó không liệt kê.
+2. `Duyệt, trừ #N` (không nêu phương án) **không** được rơi về khuyến nghị của `#N` — chữ "trừ" nói ngược lại.
+   Mục đó phải ra `chưa trả lời`, ồn chứ không im.
+3. Comment mở đầu bằng 🤖 **không bao giờ** là câu trả lời (`CLAUDE.md` mục 5) — kể cả khi nó chứa chữ `Duyệt`.
+   Agent dùng danh tính chủ dự án, nên đây là dấu vết duy nhất phân biệt.
+
+- deps: —
+- risk: medium — không chặn merge, nhưng nó là hộp quyết định **duy nhất** (CHARTER 2.5): đọc sót một câu trả lời ở đây là chặn một nhánh việc mà không chỉ báo nào đỏ.
+- status: ready
+- nguồn: chỉ dẫn chủ dự án trên `#193` comment `2026-09-23T14:18:09Z` khối TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI mục (1); `CLAUDE.md` mục 5 và mục 14; CHARTER 2.5 và phụ lục P2
+- tiêu chí xong:
+  - Một module có test giữ **cả hai** nửa, tách khỏi `ops/scripts/digest-metrics.ts` — file đó đang bị `#223` và `#112` sửa, và CHARTER mục 4 cấm hai việc cùng sửa một file.
+  - Nửa viết: dựng khối "Sẵn sàng duyệt" đặt cuối bản tin. `reversible` đã tự làm **chỉ liệt kê**; `irreversible` liệt kê riêng, **mỗi mục ghi hệ quả nếu không trả lời**.
+  - Nửa đọc: phân tích được cả ba hình dạng (`Duyệt`, `Duyệt, trừ #N B`, `#19 A, #14 B`) cộng `hoàn tác #N`, và ba cách đọc sai ở trên mỗi cách một bài kiểm.
+  - Phụ lục P2 của CHARTER và `CLAUDE.md` mục 5 ghi hình dạng câu trả lời mới.
+- **mã mục nhận lúc 2026-09-24 ~12:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu cả 13 PR đang mở, cao nhất là `P-045` (`#233`), nên `P-046` không đụng ai.
