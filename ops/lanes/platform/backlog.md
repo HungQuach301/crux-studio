@@ -374,8 +374,15 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     đó; gộp vào đây là tự tạo một xung đột cho hàng đợi merge. Cả hai đáng một PR riêng.
   - `status` giữ **`ready`**: Z2, Z6, Z8 và Z14 vẫn đang chờ.
 
-### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
+### P-040 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
+
+> 🤖 **Đổi mã `P-028` → `P-040` (lượt `crux-worker-2`, 2026-09-24).** Mục này trước đây mang mã `P-028`, **trùng**
+> với mục đã merge `### P-028 · fix · Hai khoá env:` (#160). Hai mục cùng mã là một cái bẫy im lặng — mọi công cụ
+> khoá theo `item.id` (`backlog-status.ts` nhóm `stale`, `hasCompletionCommit`, `pickPrToHandle`) đọc mục này thành
+> "đã xong" vì #160 đã vào `main`, nên việc thật này bị **che khỏi hàng đợi** (đúng nhóm **Z**). Vòng soát của PR
+> #222 đã nêu "đáng một mục backlog riêng"; đổi mã sang `P-040` (mã platform trống kế tiếp, không mục nào `deps`
+> vào `P-028`) chính là cho nó mã riêng. Đây là quyết định `reversible` (CHARTER 2.3), ghi lại ở đây.
 
 `ops/workflows/ci.yml` gắn nhãn `cross-lane` bằng `grep -Eo '^(workshops|ops/lanes)/[a-z]+'` trên danh sách file
 đã đổi. Hai tiền tố đó **không phủ `ops/logs/<làn>/`** — mà từ `D-C04` thì mỗi mục có một file log riêng dưới
@@ -387,15 +394,18 @@ phần còn lại của `P-014`.
 
 - deps: —
 - risk: low
-- status: ready
-- nguồn: vòng soát của `P-014` sóng 2; CHARTER mục 4; `D-C04`
+- status: review
+- nguồn: vòng soát của `P-014` sóng 2; CHARTER mục 4; `D-C04`; bẫy mã trùng nêu ở PR #222
 - tiêu chí xong:
-  - Bộ dò đếm cả `ops/logs/<làn>/`, và **không** đếm trùng khi một PR chạm cả `ops/lanes/x/` lẫn `ops/logs/x/`
-    (cùng một làn `x`, không phải hai làn).
-  - Có test âm: một tập file đã đổi chạm `ops/lanes/platform/` và `ops/logs/integration/` phải ra **2** làn;
-    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**.
-  - Luật tách khỏi YAML sang một script có test, cùng lý do đã ghi ở `check-golden-pr.ts`: `ci.yml` chạy theo
-    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test.
+  - ✅ Bộ dò đếm cả `ops/logs/<làn>/`, và **không** đếm trùng khi một PR chạm cả `ops/lanes/x/` lẫn `ops/logs/x/`
+    (cùng một làn `x`, không phải hai làn). — `lanesTouched` suy tên làn rồi bỏ vào `Set<LaneName>`
+    (`ops/scripts/cross-lane.ts`).
+  - ✅ Có test âm: một tập file đã đổi chạm `ops/lanes/platform/` và `ops/logs/integration/` phải ra **2** làn;
+    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**. — hai bài `TIÊU CHÍ` đầu của
+    `ops/test/cross-lane.test.ts`.
+  - ✅ Luật tách khỏi YAML sang một script có test, cùng lý do đã ghi ở `check-golden-pr.ts`: `ci.yml` chạy theo
+    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test. — `ci.yml` nay
+    gọi `node ops/scripts/cross-lane.ts < changed.txt`; luật ở script, 10 bài ở `ops/test/cross-lane.test.ts`.
 
 ### P-002 · `decision-relay.yml` và routine `crux-decision`
 Rút độ trễ trả lời quyết định từ một nhịp worker xuống vài phút.
