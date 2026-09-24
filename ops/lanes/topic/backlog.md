@@ -225,10 +225,16 @@ Mục này ở làn `topic` vì Channel Pack là vùng của `T-002`, không vì
 
 - deps: —
 - risk: medium — một con số ước tính sai **theo một chiều cố định** (cao hơn thật 43%) là loại sai không tự lộ ra: mọi bảng đều nhất quán với nhau, chỉ lệch so với thế giới. Bất biến **I6**: mọi con số hiển thị có nguồn hoặc có mô hình.
-- status: ready
+- status: review
 - nguồn: chỉ dẫn chủ dự án trên `#193`; bất biến **I6**; `packs/channels/us-personal-finance/channel.json` khoá `scoringWeights.rpm` và `revenuePriorityByPhase`
+- **cửa merge:** chạm `packs/channels/**`, `kernel/src/**`, `ops/scripts/**`, `ops/test/**` — không chạm `kernel/contracts/**`, `CHARTER.md` mục 1/3, hay vùng `owner-merge` nào. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
 - tiêu chí xong:
   - Hệ số khấu trừ là **dữ liệu khai trong Channel Pack**, không phải hằng số rải trong code — kênh khác thị trường khác có hệ số khác.
   - Mọi chỗ ước tính doanh thu đọc hệ số đó; ghi rõ con số đang là **trước** hay **sau** khấu trừ, không để người đọc đoán.
   - Một bài kiểm đỏ khi có chỗ ước tính doanh thu nào bỏ qua hệ số.
   - Ghi lý do (chưa có hiệp định thuế Mỹ–Việt Nam có hiệu lực) ngay tại chỗ khai hệ số, kèm ngày và nguồn — để lúc hiệp định có hiệu lực thì tìm ra ngay chỗ phải sửa.
+- ✅ **Xong, 2026-09-24** (lượt `crux-worker-2`, N=2):
+  - **Dữ liệu:** `channel.json` thêm khối `revenueWithholding` — `usSourcedRate: 0.3`, `market: "US"`, và ba chú thích người đọc `$reason` (chưa có hiệp định thuế Mỹ–Việt Nam), `$asOf: 2026-09-24`, `$source` (#193). Hệ số là **dữ liệu**, không phải hằng số trong code; `$reviewWhen` chỉ chỗ sửa khi hiệp định có hiệu lực.
+  - **Đường đọc/áp duy nhất:** `kernel/src/revenue.ts` — `readRevenueWithholding(pack)` (đọc + validate `rate`/`market`) và `applyRevenueWithholding(gross, w)` trả về `{grossUsd, withholdingRate, netUsd, market}`, tức CẢ trước lẫn sau khấu trừ nên không con số nào hiển thị mà giấu mình là trước hay sau. Ở `kernel/` vì bất biến **I3** cấm xưởng import `ops/`.
+  - **Bẫy đỏ:** `ops/scripts/check-revenue-withholding.ts` — `channelWithholdingProblems` (mọi channel pack khai khối đủ/đúng, `$asOf` là ngày ISO) và `scanRevenueSites` (mọi định danh `…revenue…Usd` phải đi qua hệ số). Nối vào `pnpm contracts` (việc số 10). Chứng minh đỏ thật: cắm một file `monthlyRevenueUsd = rpm * views` → `pnpm contracts` EXIT=1 đúng dòng; gỡ ra → xanh lại.
+  - `pnpm check` xanh **1118/1118**, `pnpm replay` khớp tập vàng **6/6**.
