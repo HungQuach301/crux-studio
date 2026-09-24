@@ -99,6 +99,12 @@ jobs:
           # và mốc đổi thì `decideMention` thấy "chưa @nhắc lần nào" → gọi
           # ngay, đúng vế 1.
           MARKER_PREFIX: '<!-- crux-escalate-watchdog:'
+          # P-043 · nhánh giữ BẢN SAO nhịp tim, để dấu hiệu số 5 đọc được mà
+          # không cần một PR nào merge. Phải khớp nguyên văn hằng
+          # `TELEMETRY_BRANCH` của `ops/scripts/telemetry-beat.ts`;
+          # `ops/test/heartbeat-source.test.ts` đọc cả hai chỗ và so, nên hai
+          # bản không lệch nhau im lặng được.
+          TELEMETRY_BRANCH: 'claude/telemetry'
         run: |
           set -euo pipefail
           NOW=$(date -u +%s)
@@ -191,30 +197,75 @@ jobs:
           #     ghi một file riêng, tên do `step0LogPath()` của kernel sinh,
           #     nên một đường dẫn cố định là cách dấu hiệu này hỏng im lặng
           #     ngay lượt đầu tiên tên file đổi (nhóm Z). Thay vào đó quét
-          #     CẢ `ops/logs` — như dấu hiệu số 4 ở trên — rồi lọc theo
-          #     trường `ref`. Ba hình dạng, vì bước 0 đã đổi chỗ ghi hai
-          #     lần và log là append-only nên dòng cũ ở lại nguyên chỗ
-          #     (P-023): `<làn>/step0-…` là hình dạng hiện tại,
-          #     `<làn>/P3-run-…` là hình dạng trước đó, và `platform/P-016`
-          #     là file dùng chung cũ nhất. Bỏ hình dạng nào ra thì nhịp
-          #     tim mất một nguồn mà không gì đỏ — kể cả hình dạng hôm nay
-          #     không bao giờ thắng `max`, vì thứ tự đó chỉ đúng chừng nào
-          #     hình dạng mới còn được ghi.
+          #     CẢ một thư mục rồi lọc theo trường `ref`.
           #
-          #     Biểu thức dưới đây phải khớp NGUYÊN VĂN hằng `STEP0_REF_PATTERN`
-          #     của `ops/scripts/lane-heartbeat.ts`: `ops/test/lane-heartbeat.test.ts`
-          #     đọc chính file này và so, nên hai bản chép không lệch nhau im lặng
-          #     được (mục P-014 sóng 3, Z7). Chính phép so đó tìm ra hai hình dạng
-          #     BỊ THIẾU ở bản trước — `P1-step0-` (chuỗi `step0-` đứng sau `P1-`,
-          #     không sau `/`, nên không khớp; `ops/logs/platform/` có một dòng như
-          #     vậy) và `P3-daily-`, cả hai đều được `P-023` liệt kê là hình dạng cũ.
-          LAST_BEAT=$(find ops/logs -name '*.jsonl' -exec cat {} + 2>/dev/null \
-            | jq -s -r 'map(select((.ref // "") | test("(^|/)(step0|P1-step0|P3-run|P3-daily)-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
+          #     ⚠️ **HAI NGUỒN, mục `P-043`.** Trước mục đó, nguồn duy nhất là
+          #     `ops/logs` của bản đã checkout, tức bản trên `main` — nên nhịp
+          #     tim chỉ đập khi một PR vào `main`, và trong một khoảng yên
+          #     người canh gọi chủ dự án vì một nhà máy đang chạy đúng. Chủ dự
+          #     án chốt trên `🤖 [QĐ] #213` (2026-09-24T06:10:33Z): chuyển
+          #     nguồn nhịp tim ra khỏi `main` TRƯỚC khi bỏ PR log của bước 0,
+          #     và **không có khoảng thời gian nào watchdog mất tín hiệu**.
+          #
+          #     "Không có khoảng nào" là lý do đây là phép `max` trên HAI
+          #     nguồn chứ không phải một phép THAY nguồn: nguồn mới
+          #     (`claude/telemetry`) còn rỗng cho tới lượt routine đầu tiên
+          #     ghi vào nó, và bỏ `main` ra trong khoảng đó là tắt đúng dấu
+          #     hiệu này mà không gì đỏ.
+          #
+          #     Bộ lọc `ref` nay chỉ còn MỘT bản, trong TypeScript
+          #     (`isStep0Ref` của `ops/scripts/lane-heartbeat.ts`, gọi qua
+          #     `ops/scripts/heartbeat-source.ts`). Bản `jq` chép tay ở đây
+          #     đã lệch thật một lần — thiếu hai hình dạng `P1-step0-` và
+          #     `P3-daily-` — nên nó bị bỏ hẳn thay vì được canh bằng một bài
+          #     so chuỗi.
+          TELEMETRY_CHECKOUT="${RUNNER_TEMP:-/tmp}/crux-telemetry"
+          rm -rf "$TELEMETRY_CHECKOUT"
+          # Z9 · `|| true` có chủ ý: nhánh telemetry có thể CHƯA tồn tại (mọi
+          # lượt trước lượt routine đầu tiên ghi vào nó), và một fetch trượt
+          # không được phép giết năm dấu hiệu còn lại. Nguồn thiếu KHÔNG bị
+          # nuốt: thư mục vắng mặt đi vào trường `missing` của
+          # `heartbeat-source.ts` và được in ra trong báo cáo dưới.
+          git fetch --no-tags --depth=1 origin "+refs/heads/$TELEMETRY_BRANCH:refs/crux/telemetry" || true
+          if git rev-parse --verify --quiet refs/crux/telemetry >/dev/null; then
+            mkdir -p "$TELEMETRY_CHECKOUT"
+            git archive refs/crux/telemetry | tar -x -C "$TELEMETRY_CHECKOUT"
+          fi
+
+          # Z9 · `|| true`: `node` thiếu bản đủ mới (bước `setup-node` ở trên
+          # cũng `continue-on-error`) phải thành "không đọc được nhịp tim" —
+          # tức nhánh `-z "$LAST_BEAT"` GỌI `add` — chứ không thành một job đỏ
+          # nuốt năm dấu hiệu kia.
+          BEAT=$(node ops/scripts/heartbeat-source.ts --json \
+            --source "main=ops/logs" \
+            --source "telemetry=$TELEMETRY_CHECKOUT/heartbeat" || true)
+          # Báo cáo theo TỪNG nguồn đi vào log của lượt chạy và vào thân cảnh
+          # báo, cùng cách dấu hiệu số 6 làm: một nguồn chết trong lúc nguồn
+          # kia còn thở là đúng ca mà phép `max` che đi, nên nó phải nhìn thấy
+          # được. Nó KHÔNG tự gọi `add` — chừng nào `main` còn là một nguồn thì
+          # một nguồn chết không làm người canh mù, và gọi chủ dự án cho một
+          # chuyện máy tự lo là ngược thước đo CHARTER 1.3.
+          BEAT_REPORT=$(echo "$BEAT" | jq -r '
+            (if .at == null then "Nhịp tim routine: KHÔNG đọc được từ nguồn nào."
+             else "Nhịp tim routine: \(.at) — nguồn `\(.winner)`." end),
+            (.readings[]? | "  - `\(.name)` (\(.dir)): " +
+              (if .error != null then "lỗi — \(.error)"
+               elif .missing then "KHÔNG TỒN TẠI"
+               elif .step0Lines == 0 then "không có dòng bước 0 (\(.lines) dòng log)"
+               else "\(.at)  (\(.step0Lines)/\(.lines) dòng bước 0)" end))
+          ' 2>/dev/null || echo "⚠ Không đọc được báo cáo nguồn nhịp tim (P-043) — xem log của lượt chạy này.")
+          echo "$BEAT_REPORT"
+
+          # Z9 · `|| true`: `$BEAT` rỗng (node hỏng ở dòng trên) làm `jq` thoát
+          # khác 0, và dưới `set -euo pipefail` thì cả job đỏ — nuốt năm dấu
+          # hiệu kia. Rơi về chuỗi rỗng là hướng an toàn: nhánh `-z` ngay dưới
+          # GỌI `add`, nên "không đọc được" vẫn tới tay chủ dự án.
+          LAST_BEAT=$(echo "$BEAT" | jq -r '.at // empty' 2>/dev/null || true)
           if [ -z "$LAST_BEAT" ]; then
-            add "Không đọc được dòng bước 0 nào trong \`ops/logs\` — không tính được nhịp tim của routine worker/integrator (dấu hiệu số 5, mục P-020). Hoặc chưa lượt nào ghi, hoặc hình dạng \`ref\` đã đổi."
+            add "Không đọc được dòng bước 0 nào từ **nguồn nào** (\`ops/logs\` trên \`main\`, và nhánh \`$TELEMETRY_BRANCH\`) — không tính được nhịp tim của routine worker/integrator (dấu hiệu số 5, mục P-020). Hoặc chưa lượt nào ghi, hoặc hình dạng \`ref\` đã đổi."
           else
             AGE_MIN=$(( (NOW - $(date -u -d "$LAST_BEAT" +%s)) / 60 ))
-            [ "$AGE_MIN" -gt 180 ] && add "Không routine \`crux-worker-*\`/\`crux-integrator\` nào ghi nhịp tim trong $AGE_MIN phút (ngưỡng 180 = 3 giờ, nhịp tim là dòng \`at\` mới nhất trong các dòng bước 0 của \`ops/logs\`). Có thể một routine đã lỗi hoặc đã dừng chạy."
+            [ "$AGE_MIN" -gt 180 ] && add "Không routine \`crux-worker-*\`/\`crux-integrator\` nào ghi nhịp tim trong $AGE_MIN phút (ngưỡng 180 = 3 giờ, nhịp tim là dòng \`at\` mới nhất trong các dòng bước 0, lấy \`max\` trên \`ops/logs\` của \`main\` và nhánh \`$TELEMETRY_BRANCH\`). Có thể một routine đã lỗi hoặc đã dừng chạy."
           fi
 
           # 6 · Nhịp tim THEO TỪNG LÀN (Z7, mục `P-014` sóng 3).
@@ -277,6 +328,7 @@ jobs:
             "🤖 Người canh phát hiện:" \
             "" \
             "$PROBLEMS" \
+            "$BEAT_REPORT" \
             "$LANE_REPORT" \
             "" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
