@@ -9,9 +9,34 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 
 - deps: T-002
 - risk: low
-- status: ready
+- status: review
 - nguồn: spec phần Channel Pack
-- tiêu chí xong: validator đối chiếu được `titles[].formula` với danh sách khuôn tiêu đề thật, thay vì chấp nhận mọi chuỗi.
+- tiêu chí xong: ✅ validator đối chiếu được `titles[].formula` với danh sách khuôn tiêu đề thật, thay vì chấp nhận mọi chuỗi.
+- **Đã làm:**
+  - `packs/channels/us-personal-finance/{title-formulas,thumbnail-spec,monetization,distribution}.md` — chép
+    nguyên văn từ `docs/spec/CRUX-REFERENCE-SPEC.md` (khối `channels/us-personal-finance/…`, không có dấu
+    ⚠️ Crux nên còn hiệu lực), mỗi file thêm header 🤖 xuất xứ cùng khuôn với `persona.md`/`lexicon.md` đã có.
+  - `packs/channels/us-personal-finance/title-formulas.json` (**mới, không có trong spec gốc**) — gán mỗi
+    khuôn trong bảng của `title-formulas.md` một `id` tiếng Anh (`threshold`, `reversal`,
+    `narrow-question`, `hidden-cost`, `numeric-comparison`), ghi rõ trong `$note` rằng đây là phần thêm,
+    cùng cách V-001 đã làm với `$schemaRef` của `visual-tokens.json`.
+  - `kernel/contracts/title-formulas.schema.json` — schema cho file trên (đóng, `additionalProperties:
+    false`, trừ `$note`).
+  - `kernel/src/packs.ts`: `loadChannelTitleFormulas`, `titleFormulaIdsFor`. `kernel/src/contracts.ts`:
+    export `titleFormulasSchema`.
+  - `ops/scripts/check-title-formulas.ts` (mới) — `allTitleFormulasPackProblems` (quét
+    `packs/channels/*/title-formulas.json`, kênh nào cũng soát, không hardcode tên; hợp contract, id không
+    trùng) và `releaseFormulaProblems` (đối chiếu `titles[].formula` của một artifact `release` với danh
+    sách thật của đúng kênh nó khai). Nối vào `ops/scripts/check-contracts.ts`, phần của `pnpm contracts`.
+
+  **Vì sao chưa nối chặt (hard-fail) cho artifact hiện có:** xưởng `release` đang `impl: stub`
+  (`workshops/release/src/index.ts` sinh `formula: 'question' | 'flip-point' | 'method'`, không khớp năm
+  `id` thật) — đúng hình dạng `layout-id-known` mà `visual/V-001` đã gặp với `layoutId`. Nối chặt ngay bây
+  giờ sẽ đổi `ops/golden/ep-0001-stub/snapshots/release.json`, mà cập nhật snapshot tập vàng phải đi **PR
+  riêng, không kèm thay đổi nào khác** (CHARTER 6.1). Nên `releaseFormulaProblems` chỉ **chặn**
+  (`pnpm contracts` đỏ) khi `producer.impl !== 'stub'`; ở `impl: stub` nó chỉ **ghi nhận** ra stdout (xem
+  dòng "Ghi nhận, không chặn" khi chạy `pnpm contracts`). Nối chặt là việc tự nhiên của `release/R-005`
+  (`impl: v1`), đúng cùng lý do V-001 đã ghi cho `V-006`.
 
 ### R-002 · Tải lên YouTube ở chế độ riêng tư
 **Bất biến I5.** Máy tải lên riêng tư; chủ dự án tự bấm công khai trong YouTube Studio.

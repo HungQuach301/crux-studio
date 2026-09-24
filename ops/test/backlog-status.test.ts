@@ -120,6 +120,90 @@ test('hasCompletionCommit: commit chỉ NHẮC mã mục trong ngoặc không t�
   assert.equal(hasCompletionCommit('platform', 'P-014', subjects), false);
 });
 
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`.
+ *
+ * `CLAUDE.md` mục 5 bắt buộc mọi thứ agent viết mở đầu bằng 🤖, nên tiêu đề
+ * PR đi vào `main` qua squash-merge giữ nguyên tiền tố. Trước bản sửa, neo
+ * `^\[` không khớp và mục **không bao giờ** được nhận là đã xong — CI xanh,
+ * backlog hợp lệ, `git log` vẫn có commit, chỉ kết luận là sai (nhóm Z).
+ *
+ * Tiêu đề dưới đây là commit THẬT trên `main` (`#212`, mục `platform/P-038`).
+ */
+test('hasCompletionCommit: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố 🤖 vẫn phải khớp', () => {
+  const subjects = [
+    '🤖 [platform] P-038 — cổng quyết định: lượt bước 0 không gỡ được gì thì không tốn một lần CI (#212)',
+  ];
+  assert.equal(hasCompletionCommit('platform', 'P-038', subjects), true);
+});
+
+test('hasCompletionCommit: bỏ tiền tố KHÔNG nới hai luật chặt cũ', () => {
+  // Mã mục vẫn phải đứng trọn, và vẫn phải sai làn thì không khớp.
+  const subjects = ['🤖 [verify] VF-G11 — Hook và luật deny có hiệu lực trong routine không (#33)'];
+  assert.equal(hasCompletionCommit('verify', 'VF-G11', subjects), true);
+  assert.equal(hasCompletionCommit('verify', 'VF-G1', subjects), false);
+  assert.equal(hasCompletionCommit('topic', 'VF-G11', subjects), false);
+  // Và commit chỉ NHẮC mã mục giữa câu vẫn không tính, dù có tiền tố.
+  assert.equal(
+    hasCompletionCommit('platform', 'P-015', [
+      '🤖 platform: file log dùng chung không còn sinh xung đột mỗi PR (KF-005, P-015) (#13)',
+    ]),
+    false,
+  );
+});
+
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — ca CHẶN mà vòng soát ngữ cảnh sạch của chính
+ * `P-042` bắt được, và là lỗ **nguy hiểm hơn** lỗi gốc.
+ *
+ * Phép tìm mã mục của `hasRevertCommit` dùng `includes` nên miễn nhiễm với
+ * tiền tố — nhưng phép nhận diện chữ `Revert` thì neo ở vị trí 0. Hai hình
+ * dạng revert đều có thật, và trước bản sửa chỉ một trong hai được bắt.
+ *
+ * Vì sao là CHẶN chứ không phải nợ: `hasCompletionCommit` **nay** nhận tiêu
+ * đề có tiền tố, nên bỏ sót ca thứ hai làm một mục đã bị revert khỏi `main`
+ * được lật sang `done` và mở khoá mọi `deps` trỏ vào code không còn tồn tại.
+ */
+test('hasRevertCommit: TÁI HIỆN LỖI — CẢ HAI hình dạng revert đều phải bị bắt', () => {
+  // Hình dạng GitHub bọc tiêu đề gốc — vốn đã khớp trước bản sửa.
+  assert.equal(
+    hasRevertCommit('platform', 'P-038', [
+      'Revert "🤖 [platform] P-038 — cổng quyết định (#212)" (#999)',
+    ]),
+    true,
+  );
+  // Hình dạng agent tự viết tiêu đề PR revert, mà CLAUDE.md mục 5 bắt buộc
+  // mở đầu bằng 🤖 — trước bản sửa trả `false`.
+  assert.equal(
+    hasRevertCommit('platform', 'P-038', [
+      '🤖 Revert "[platform] P-038 — cổng quyết định (#212)" (#999)',
+    ]),
+    true,
+  );
+  // Và KHÔNG nới: chữ `Revert` phải đứng đầu (sau tiền tố), không phải giữa câu.
+  assert.equal(
+    hasRevertCommit('platform', 'P-038', ['🤖 [platform] P-038 — bàn chuyện Revert sau (#212)']),
+    false,
+  );
+});
+
+/**
+ * Mục `P-042` khai "bỏ tiền tố KHÔNG nới luật, phần còn lại vẫn phải khớp
+ * đúng dạng cũ TỪ KÝ TỰ ĐẦU TIÊN". Vòng soát chỉ ra lời khai đó đúng về
+ * code nhưng **không có máy nào canh**: bỏ neo `^` khỏi cả hai bộ đọc mà
+ * toàn bộ bộ test vẫn xanh. Bài này khoá đúng chỗ đó.
+ */
+test('hasCompletionCommit: neo `^` vẫn phải giữ — dạng đúng nằm GIỮA câu không tính', () => {
+  assert.equal(
+    hasCompletionCommit('platform', 'P-015', ['🤖 Revert "[platform] P-015 — x" (#999)']),
+    false,
+  );
+  assert.equal(
+    hasCompletionCommit('platform', 'P-015', ['🤖 nhắc tới [platform] P-015 — x giữa câu']),
+    false,
+  );
+});
+
 test('hasCompletionCommit: sai làn thì không khớp', () => {
   const subjects = ['[topic] T-002 — chuyển Channel Pack từ spec vào packs/channels/ (#38)'];
   assert.equal(hasCompletionCommit('topic', 'T-002', subjects), true);

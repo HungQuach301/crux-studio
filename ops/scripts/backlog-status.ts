@@ -45,6 +45,8 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripAgentPrefix } from './agent-prefix.ts';
+
 /** Ô "còn treo" — quy ước sẵn có của backlog cho phần chưa xong. */
 export const OPEN_BOX = '⬜';
 
@@ -277,16 +279,42 @@ function escapeRegExp(value: string): string {
  *   `VF-G11`, nên sau mã mục bắt buộc có khoảng trắng.
  * - **Phải đúng dạng tiêu đề**, tức `[<lane>] <id>` ở ĐẦU dòng rồi tới dấu
  *   gạch. Commit nhắc mã mục ở giữa câu hay trong ngoặc là PR của mục khác.
+ *
+ * ⚠️ **Tiền tố 🤖 được bỏ trước khi so** (mục `platform/P-042`). `CLAUDE.md`
+ * mục 5 bắt buộc mọi thứ agent viết mở đầu bằng 🤖, nên tiêu đề PR đi vào
+ * `main` qua squash-merge giữ nguyên tiền tố đó — và neo `^\[` không khớp.
+ * Ca thật: `🤖 [platform] P-038 — …` (`#212`), mục không bao giờ được nhận là
+ * đã xong, mà không gì đỏ. Luật bỏ tiền tố nằm ở `stripAgentPrefix`, một
+ * chỗ, để lần sau không phải vá thêm một bộ đọc nữa.
+ *
+ * Hai chỗ chặt trên **không** bị nới theo: sau khi bỏ tiền tố, phần còn lại
+ * vẫn phải khớp đúng dạng cũ từ ký tự đầu tiên.
  */
 export function hasCompletionCommit(lane: string, id: string, subjects: readonly string[]): boolean {
   const pattern = new RegExp(`^\\[${escapeRegExp(lane)}\\]\\s+${escapeRegExp(id)}\\s+[—–-]\\s`);
-  return subjects.some((subject) => pattern.test(subject));
+  return subjects.some((subject) => pattern.test(stripAgentPrefix(subject)));
 }
 
 /**
  * Mục đã merge rồi bị revert vẫn còn tiêu đề commit gốc trong `git log`, nên
  * `hasCompletionCommit` một mình sẽ nói "đã xong". CLAUDE.md mục 13 ("`main`
  * đỏ thì revert ngay") làm ca này có thật, không phải giả định.
+ *
+ * ⚠️ Hàm này **cũng** cần `stripAgentPrefix` (mục `P-042`), và lý do đáng
+ * đọc kỹ vì nó suýt bị bỏ sót: phép tìm **mã mục** dùng `includes` nên đúng
+ * là miễn nhiễm với tiền tố, nhưng phép nhận diện **chữ `Revert`** lại neo ở
+ * vị trí 0. Hai hình dạng revert có thật, và trước bản sửa chỉ một trong hai
+ * được bắt:
+ *
+ * - `Revert "🤖 [platform] P-038 — …"` — GitHub bọc tiêu đề gốc, khớp.
+ * - `🤖 Revert "[platform] P-038 — …"` — agent tự viết tiêu đề PR revert,
+ *   mà `CLAUDE.md` mục 5 bắt buộc mở đầu bằng 🤖, nên **không** khớp.
+ *
+ * Bỏ sót ca thứ hai là fail-open **nguy hiểm hơn** chính lỗi mà `P-042` sửa:
+ * `hasCompletionCommit` nay nhận tiêu đề có tiền tố, nên một mục đã bị revert
+ * khỏi `main` sẽ được lật sang `done` và mở khoá mọi `deps` trỏ vào code
+ * không còn tồn tại. Đúng chỗ hỏng mà khối chú thích trên vừa nói nó sinh ra
+ * để chặn.
  *
  * Luật cố ý thô và lệch về hướng an toàn: thấy **bất cứ** commit `Revert`
  * nào nhắc tới tiêu đề của mục thì coi như chưa xong, không xét thứ tự thời
@@ -296,7 +324,9 @@ export function hasCompletionCommit(lane: string, id: string, subjects: readonly
  */
 export function hasRevertCommit(lane: string, id: string, subjects: readonly string[]): boolean {
   const marker = `[${lane}] ${id} `;
-  return subjects.some((subject) => subject.startsWith('Revert ') && subject.includes(marker));
+  return subjects.some(
+    (subject) => stripAgentPrefix(subject).startsWith('Revert ') && subject.includes(marker),
+  );
 }
 
 /** Vì sao một mục đang được giữ `review`: bằng trường `- hold:` hay chỉ bằng lời văn. */
