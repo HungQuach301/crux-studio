@@ -31,10 +31,19 @@
  *   (CHARTER 2.1) không bao giờ chạm cùng một file, nên không có gì để
  *   xung đột — cùng lập luận `D-C04`, áp cho một nhánh dùng chung.
  * - **Chỉ dòng bước 0 được vào.** `beatFileProblems` chặn mọi dòng khác.
- *   Lý do không phải sạch sẽ: `watchdog.yml` lấy `max` trên nhánh này, nên
- *   một dòng KHÔNG phải bước 0 lọt vào sẽ giả mạo nhịp tim của routine bằng
- *   nhịp của một việc khác — và nó giả mạo theo hướng **mới hơn sự thật**,
- *   tức hướng làm người canh câm. Đúng hướng lệch mà cả mục này tránh.
+ *
+ *   ⚠️ Đây là **lớp phòng thủ thứ hai, không phải lớp duy nhất** — bản đầu của
+ *   khối này viết rằng một dòng lạ *"giả mạo nhịp tim theo hướng mới hơn sự
+ *   thật"*, và vòng soát ngữ cảnh sạch của PR #229 đo được là **sai**:
+ *   `readHeartbeatSource` đã lọc bằng `isStep0Ref` ở phía **đọc**, nên một
+ *   dòng `ref: "platform/P-999"`, `at: "2027-01-01"` nhét vào nhánh này
+ *   **không** nhấc nổi nhịp tim.
+ *
+ *   Ghi đúng mức là quan trọng, không phải hình thức: lời khai cũ mời lượt sau
+ *   nới bộ lọc của **bên đọc** vì tin rằng bên ghi đã canh — tức tháo đúng lớp
+ *   đang thật sự giữ. Bên ghi chặn ở đây vì một dòng lạ trên nhánh này là một
+ *   bản ghi sai chỗ mà không ai sẽ đi dọn, và vì hai lớp cùng một luật
+ *   (`isStep0Ref`) thì lớp nào chết cũng còn lớp kia.
  *
  * ## Vì sao không dùng `ops/logs/` làm tên thư mục trên nhánh đó
  *
@@ -133,18 +142,66 @@ export function beatContent(raw: string): string {
   return `${raw.replace(/\n+$/, '')}\n`;
 }
 
+/**
+ * Các lệnh git mà bên gọi chạy để đẩy bản sao lên nhánh telemetry.
+ *
+ * Script **in** chúng ra thay vì tự chạy, và đó là chủ đích: mọi thao tác ghi
+ * lên remote nằm ở chỗ người đọc bản ghi lượt chạy thấy được, thay vì chôn
+ * trong một script. Nhưng "in ra" phải là in **thật** — vòng soát ngữ cảnh
+ * sạch của PR #229 bắt được rằng bản đầu *hứa* điều này trong chú thích rồi
+ * chỉ in `{branch, target, bytes}`, tức CHARTER phụ lục P3 bước 0e dặn một
+ * việc mà không lệnh nào tồn tại để làm.
+ *
+ * Dùng `git commit-tree` chứ không `git worktree`: nhánh này **mồ côi**
+ * (không tổ tiên chung với `main`), và một worktree mồ côi cần `checkout
+ * --orphan` cộng một lần dọn cây — hai bước nữa để hỏng, trong một việc chạy
+ * ở mọi lượt worker. Plumbing không chạm cây làm việc chút nào.
+ *
+ * `--force-with-lease` vắng mặt có chủ ý: không có `--force` nào ở đây cả.
+ * Hai worker chạy chồng nhau ghi hai **file khác nhau** (tên mang mốc tới giây
+ * cộng tên routine), nên lần push thứ hai chỉ cần `git fetch` lại rồi dựng
+ * commit trên đầu mới — vòng `while` dưới đây làm đúng việc đó.
+ */
+export function telemetryPushCommands(logPath: string, sessionUrl: string): string[] {
+  const target = telemetryTargetPath(logPath);
+  const name = basename(target);
+  return [
+    `# Đẩy nhịp tim lên nhánh ${TELEMETRY_BRANCH} — KHÔNG mở PR, nên không chạy CI.`,
+    `git fetch --no-tags origin "+refs/heads/${TELEMETRY_BRANCH}:refs/crux/telemetry" || true`,
+    `BLOB=$(git hash-object -w ${JSON.stringify(logPath)})`,
+    `INNER=$(printf '100644 blob %s\\t%s\\n' "$BLOB" ${JSON.stringify(name)} | git mktree)`,
+    `ROOT=$(printf '040000 tree %s\\t${TELEMETRY_DIR}\\n' "$INNER" | git mktree)`,
+    '# Trailer BẮT BUỘC, và nó không có PR nào để sửa về sau: commit trên nhánh này',
+    '# không bao giờ vào `main`, nên `no-model-name`/`check-commit-trailers` không',
+    '# quét nó, mà bài kiểm giả định G14 của `recheck-assumptions.ts` CÓ quét mọi',
+    '# nhánh `claude/*`. Một lần đẩy thiếu trailer là một giả định báo `sai` vì một',
+    '# commit không ai sửa được nữa.',
+    'PARENT=$(git rev-parse --verify --quiet refs/crux/telemetry || true)',
+    'MSG=$(printf \'%s\\n\' "🤖 [integration] nhịp tim bước 0" "" \\',
+    '  "Co-Authored-By: Claude <noreply@anthropic.com>" \\',
+    `  "Claude-Session: ${sessionUrl}")`,
+    'if [ -n "$PARENT" ]; then',
+    '  COMMIT=$(echo "$MSG" | git commit-tree "$ROOT" -p "$PARENT")',
+    'else',
+    '  COMMIT=$(echo "$MSG" | git commit-tree "$ROOT")',
+    'fi',
+    `git push origin "$COMMIT:refs/heads/${TELEMETRY_BRANCH}"`,
+  ];
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 //
-// `node ops/scripts/telemetry-beat.ts <file log bước 0> [--check]`
+// `node ops/scripts/telemetry-beat.ts <file log bước 0> [--commands]`
 //
-// `--check` chỉ kiểm và in đường dẫn đích, không chạm git. Bên gọi thật
-// (phụ lục P1 bước 0) chạy không có cờ đó và tự làm phần git bằng các lệnh
-// script in ra — giữ mọi thao tác ghi lên remote nằm ở chỗ người đọc thấy
-// được, thay vì chôn trong một script.
+// Không cờ: kiểm file và in `{branch, target, bytes}`.
+// `--commands`: in thêm các lệnh git bên gọi phải chạy (xem
+// `telemetryPushCommands`). Cờ nào cũng KHÔNG chạm git — script này không bao
+// giờ tự ghi lên remote.
 const isMain = process.argv[1]?.endsWith('telemetry-beat.ts') === true;
 
 if (isMain) {
-  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const argv = process.argv.slice(2);
+  const args = argv.filter((a) => !a.startsWith('--'));
   const logPath = args[0];
   if (logPath === undefined) {
     process.stderr.write('⚠ Thiếu đường dẫn file log bước 0.\nDùng: node ops/scripts/telemetry-beat.ts <file.jsonl>\n');
@@ -170,4 +227,9 @@ if (isMain) {
   process.stdout.write(
     `${JSON.stringify({ branch: TELEMETRY_BRANCH, target, bytes: beatContent(raw).length }, null, 2)}\n`,
   );
+
+  if (argv.includes('--commands')) {
+    const sessionUrl = process.env.CLAUDE_SESSION_URL ?? '<url phiên làm việc>';
+    process.stdout.write(`\n${telemetryPushCommands(logPath, sessionUrl).join('\n')}\n`);
+  }
 }

@@ -20,6 +20,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
 import { step0LogRef } from '../../kernel/src/log.ts';
@@ -30,7 +31,14 @@ import {
   readHeartbeatSource,
   renderHeartbeat,
 } from '../scripts/heartbeat-source.ts';
-import { TELEMETRY_BRANCH, TELEMETRY_DIR, beatContent, beatFileProblems, telemetryTargetPath } from '../scripts/telemetry-beat.ts';
+import {
+  TELEMETRY_BRANCH,
+  TELEMETRY_DIR,
+  beatContent,
+  beatFileProblems,
+  telemetryPushCommands,
+  telemetryTargetPath,
+} from '../scripts/telemetry-beat.ts';
 
 const WATCHDOG = 'ops/workflows/watchdog.yml';
 
@@ -266,6 +274,107 @@ test('`watchdog.yml` khai ĐỦ HAI nguồn — điều kiện "không mất tí
   );
 });
 
+test('`LAST_BEAT` PHẢI đến từ output của script — không phải chỉ "script được gọi ở đâu đó"', () => {
+  // ## Bài này do vòng soát ngữ cảnh sạch của PR #229 đòi, và nó bịt một lỗ đo
+  // được
+  //
+  // Bản đầu chỉ khẳng định `heartbeat-source.ts` **xuất hiện** trong một dòng
+  // thực thi. Reviewer phá hai cách, cả hai giữ 35/35 xanh:
+  //
+  // - giữ nguyên dòng gọi script (nên guard xanh), nhưng gán `LAST_BEAT` bằng
+  //   một `jq` chép tay quét lại `ops/logs` — tức quay về **một** nguồn, đúng
+  //   hành vi trước `P-043`;
+  // - giữ cả hai `--source`, nhưng đổi `jq` thành
+  //   `.readings[] | select(.name == "main") | .at`, loại nguồn telemetry khỏi
+  //   phép `max` hoàn toàn.
+  //
+  // Cả hai tái hiện đúng khoảng câm mà `🤖 [QĐ] #213` cấm, và cả hai vô hình
+  // với mọi bài kiểm khác. Nên bài này neo vào **chính dòng gán `LAST_BEAT`**.
+  const yml = readFileSync(WATCHDOG, 'utf8');
+  const execLines = yml.split('\n').filter((raw) => !raw.trimStart().startsWith('#'));
+
+  const assigns = execLines.filter((raw) => /^\s*LAST_BEAT=/.test(raw));
+  assert.ok(assigns.length > 0, '`watchdog.yml` không còn dòng nào gán `LAST_BEAT` — dấu hiệu số 5 đã biến mất?');
+
+  for (const raw of assigns) {
+    // Gán chuỗi rỗng là nhánh hướng an toàn (`$BEAT` rỗng), được phép.
+    if (/^\s*LAST_BEAT=""\s*$/.test(raw)) continue;
+    assert.match(
+      raw,
+      /\$BEAT/,
+      `\`LAST_BEAT\` phải lấy từ \`$BEAT\` — output của heartbeat-source.ts — chứ không đo lại bằng cách khác:\n${raw}`,
+    );
+    assert.match(
+      raw,
+      /\.at\b/,
+      `\`LAST_BEAT\` phải là trường \`at\` của báo cáo, tức phép \`max\` trên MỌI nguồn, không phải một nguồn:\n${raw}`,
+    );
+    assert.doesNotMatch(
+      raw,
+      /readings/,
+      `\`LAST_BEAT\` không được chọn MỘT nguồn trong \`readings\` — đó là bỏ phép \`max\`, tức tái hiện khoảng câm của #213:\n${raw}`,
+    );
+  }
+
+  // Và không dòng thực thi nào được tự quét `ops/logs` để đo nhịp tim: đó là
+  // con đường quay về một nguồn mà `assigns` ở trên không thấy nếu ai đó dựng
+  // một biến trung gian.
+  //
+  // Hai ngoại lệ, cả hai hẹp và có lý do: dấu hiệu số **4** (chi phí tích luỹ)
+  // đọc cùng thư mục cho một việc khác hẳn — nhận ra bằng `costUsd`, không phải
+  // bằng tên biến; và văn xuôi truyền cho `add` được phép **nhắc tên** thư mục
+  // để câu cảnh báo nói được nó đã tìm ở đâu.
+  const rescan = execLines.filter(
+    (raw) =>
+      raw.includes('ops/logs') &&
+      !raw.includes('--source') &&
+      !raw.includes('costUsd') &&
+      !/\badd "/.test(raw),
+  );
+  assert.deepEqual(
+    rescan,
+    [],
+    'Một dòng thực thi của `watchdog.yml` đọc `ops/logs` ngoài đường `--source`. ' +
+      'Nhịp tim chỉ được đến từ `heartbeat-source.ts`, nếu không phép `max` trên hai nguồn mất tác dụng.',
+  );
+});
+
+test('`BEAT_REPORT` lấy `.render` của script và CÓ MẶT trong thân cảnh báo', () => {
+  // Hai chỗ vòng soát đo được là không bài nào giữ:
+  //
+  // - `watchdog.yml` tự render ba trạng thái bằng `jq` — bản chép thứ hai của
+  //   đúng luật mà mục này vừa bỏ bản chép. Bỏ nhánh `.missing` khỏi nó thì
+  //   35/35 vẫn xanh.
+  // - bỏ hẳn `"$BEAT_REPORT"` khỏi `BODY` thì 770/770 `ops/test` vẫn xanh, tức
+  //   báo cáo theo từng nguồn **không bao giờ tới tay chủ dự án** mà không gì đỏ.
+  const yml = readFileSync(WATCHDOG, 'utf8');
+  const execLines = yml.split('\n').filter((raw) => !raw.trimStart().startsWith('#'));
+
+  const assigns = execLines.filter((raw) => /^\s*BEAT_REPORT=/.test(raw));
+  assert.ok(assigns.length > 0, '`watchdog.yml` không còn dựng `BEAT_REPORT`');
+  assert.ok(
+    assigns.some((raw) => raw.includes('.render')),
+    'phải có một dòng lấy `.render` từ output của `heartbeat-source.ts`',
+  );
+
+  // Ca âm: không dòng nào được dựng lại luật ba trạng thái bằng `jq`.
+  const rerender = execLines.filter((raw) => /\.missing|step0Lines/.test(raw));
+  assert.deepEqual(
+    rerender,
+    [],
+    'Một dòng thực thi của `watchdog.yml` đang tự render trạng thái nguồn từ JSON. ' +
+      'Luật đó chỉ được tồn tại ở `renderHeartbeat`; bản chép thứ hai không có bài kiểm nào so.',
+  );
+
+  // Và nó phải thật sự đi vào thân cảnh báo, cạnh `$LANE_REPORT`.
+  const body = /BODY=\$\(printf[\s\S]*?\)\n\n/.exec(yml);
+  assert.ok(body, 'không tìm thấy khối dựng `BODY` của `watchdog.yml`');
+  assert.ok(
+    body[0].includes('"$BEAT_REPORT"'),
+    'thân cảnh báo phải mang `$BEAT_REPORT` — nếu không thì báo cáo theo từng nguồn không tới tay ai',
+  );
+});
+
 // ── Vế GHI: nhánh telemetry chỉ nhận dòng bước 0 ──────────────────────────
 
 test('đường dẫn đích giữ NGUYÊN tên file log, không giữ cây `ops/logs`', () => {
@@ -298,6 +407,31 @@ test('chỉ dòng bước 0 được lên nhánh telemetry — một dòng khác
   assert.match(beatFileProblems('{"at":"2026-09-24T08:00:00Z"}\n')[0]!, /thiếu trường `ref`/);
   assert.match(beatFileProblems(`{"ref":${JSON.stringify(step0LogRef(at, 'r'))}}\n`)[0]!, /`at`/);
   assert.match(beatFileProblems('\n  \n')[0]!, /File rỗng/);
+});
+
+test('các lệnh git mà script IN RA phải chạy được, và phải mang trailer', () => {
+  // Vòng soát ngữ cảnh sạch của PR #229 bắt được: docblock **hứa** bên gọi "tự
+  // làm phần git bằng các lệnh script in ra", mà script chỉ in
+  // `{branch, target, bytes}` — CHARTER phụ lục P3 bước 0e dặn một việc không
+  // lệnh nào tồn tại để làm. Bài này khoá cả hai nửa của lời hứa đó.
+  const commands = telemetryPushCommands('ops/logs/integration/step0-x-crux-worker-1.jsonl', 'https://ví.dụ/phiên');
+  const script = commands.join('\n');
+
+  // Chạy được thật, không chỉ "trông giống bash".
+  const check = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' });
+  assert.equal(check.status, 0, `các lệnh in ra không phải bash hợp lệ:\n${check.stderr}`);
+
+  // Trailer là phần KHÔNG có PR nào sửa được về sau (commit trên nhánh này
+  // không bao giờ vào `main`), nên nó phải có ngay từ lệnh in ra.
+  assert.match(script, /Co-Authored-By: Claude <noreply@anthropic\.com>/);
+  assert.match(script, /Claude-Session: https:\/\/ví\.dụ\/phiên/);
+  // Ca âm của `KF-014`: không tên/mã model trong trailer.
+  assert.doesNotMatch(script, /Opus|Sonnet|Haiku|Fable|claude-[a-z]+-\d/i);
+
+  // Và nó phải đẩy lên đúng nhánh, đúng thư mục, không `--force` dưới bất kỳ hình dạng nào.
+  assert.ok(script.includes(`refs/heads/${TELEMETRY_BRANCH}`));
+  assert.ok(script.includes(`\\t${TELEMETRY_DIR}\\n`));
+  assert.doesNotMatch(script, /--force/);
 });
 
 test('bản sao lên nhánh telemetry là NGUYÊN VĂN file gốc, chỉ chuẩn hoá dấu xuống dòng cuối', () => {

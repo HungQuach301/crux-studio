@@ -268,7 +268,17 @@ if (isMain) {
 
   const report = heartbeat(sources);
   if (argv.includes('--json')) {
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    // `render` đi KÈM trong JSON chứ không để bên gọi tự dựng lại.
+    //
+    // Vòng soát ngữ cảnh sạch của PR #229 đo được: bản đầu để `watchdog.yml`
+    // lấy `--json` rồi tự render ba trạng thái (`missing` / rỗng / lỗi) bằng
+    // một biểu thức `jq`. Đó là **bản chép thứ hai** của đúng cái luật mà mục
+    // này vừa bỏ bản chép — chỉ cho một luật khác, và lần này không bài kiểm
+    // nào so hai bản. Phá thử: bỏ nhánh `.missing` khỏi `jq` thì 35/35 vẫn
+    // xanh.
+    //
+    // Nên luật render cũng chỉ còn một chỗ: `renderHeartbeat`, đã có test.
+    process.stdout.write(`${JSON.stringify({ ...report, render: renderHeartbeat(report) }, null, 2)}\n`);
   } else {
     process.stdout.write(`${renderHeartbeat(report)}\n`);
     for (const problem of report.problems) process.stdout.write(`- ${problem}\n`);

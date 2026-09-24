@@ -140,8 +140,15 @@ test('Z7 · `watchdog.yml` KHÔNG còn bản chép thứ hai của bộ lọc b�
   // Mục `platform/P-043` bỏ bản chép: dấu hiệu số 5 của `watchdog.yml` nay gọi
   // `ops/scripts/heartbeat-source.ts`, và script đó gọi `isStep0Ref` ngay dưới
   // đây. Một chỗ giữ luật thì không còn hai bản để lệch — nên bài kiểm đổi từ
-  // *"hai bản phải giống nhau"* sang *"chỉ được có một bản"*, tức chặt hơn
-  // chứ không lỏng hơn.
+  // *"hai bản phải giống nhau"* sang *"chỉ được có một bản"*.
+  //
+  // ⚠️ **Không phải "chặt hơn" trên mọi chiều, và bản đầu của chú thích này khai
+  // quá lời.** Vòng soát ngữ cảnh sạch của PR #229 đo được: bài CŨ đòi dòng `jq`
+  // mang **nguyên văn** hằng, nên nó đỏ cả khi dòng đó bị **viết lại** bằng một
+  // biểu thức tương đương; bài này chỉ cấm bản chép nguyên văn, nên một biểu
+  // thức viết lại đi qua tự do. Lỗ đó được bịt ở `ops/test/heartbeat-source.test.ts`
+  // (bài `LAST_BEAT` PHẢI đến từ output của script), không bằng lời khẳng định ở
+  // đây.
   const yml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
   const execLines = yml.split('\n').filter((raw) => !raw.trimStart().startsWith('#'));
 

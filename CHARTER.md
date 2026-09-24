@@ -913,9 +913,18 @@ Làn integration của Crux Studio.
       **không chờ** PR của lượt này merge:
 
       ```bash
-      node ops/scripts/telemetry-beat.ts <file log bước 0 vừa ghi>   # kiểm + in đường dẫn đích
-      # rồi đẩy đúng file đó lên nhánh claude/telemetry, thư mục heartbeat/, KHÔNG mở PR
+      node ops/scripts/telemetry-beat.ts <file log bước 0 vừa ghi> --commands
+      # In {branch, target, bytes} rồi in ĐÚNG các lệnh git phải chạy. Chạy chúng.
+      # Script không bao giờ tự ghi lên remote: thao tác ghi nằm ở chỗ người đọc
+      # bản ghi lượt chạy thấy được, không chôn trong một script.
       ```
+
+      Commit đẩy lên nhánh đó **phải** mang `Co-Authored-By: Claude <noreply@anthropic.com>` và
+      `Claude-Session: <url phiên>` (`CLAUDE.md` mục 6) — các lệnh in ra đã mang sẵn. Đây là chỗ duy nhất
+      trong repo mà trailer **không sửa lại được về sau**: commit trên nhánh này không bao giờ vào `main`,
+      nên `no-model-name` và `check-commit-trailers` của `ci.yml` không quét nó, mà bài kiểm giả định **G14**
+      của `ops/scripts/recheck-assumptions.ts` **có** quét mọi nhánh `claude/*`. Một lần đẩy thiếu trailer là
+      một giả định báo `sai` vì một commit không PR nào chữa được.
 
       `watchdog.yml` dấu hiệu số 5 lấy `max` nhịp tim trên **hai** nguồn: `ops/logs` của bản trên `main`, **và** nhánh
       này. Trước `P-043` chỉ có nguồn thứ nhất, nên nhịp tim chỉ đập khi một PR vào `main` — và trong một khoảng yên
