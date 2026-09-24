@@ -16,7 +16,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -313,13 +313,55 @@ test('reviewFindings: nhóm held tách được "giữ bởi trường" và "ch�
   ]);
 });
 
-test('applyFix: mục khai `- hold:` không bị lật, kể cả khi bên gọi nêu tên nó', () => {
-  // Luật "có trường thì không bao giờ bị lật" chỉ đúng khi nó cũng đúng ở chỗ
+test('applyFix: mục bị giữ không bị lật, kể cả khi bên gọi nêu tên nó', () => {
+  // Luật "mục bị giữ thì không bao giờ bị lật" chỉ đúng khi nó cũng đúng ở chỗ
   // THẬT SỰ ghi file, không chỉ ở `classify`.
-  const backlog = '### D-030 · Khai trường\n- status: review\n- hold: chờ xác nhận\n';
-  const { content, changed } = applyFix(backlog, ['D-030']);
-  assert.deepEqual(changed, []);
-  assert.equal(content, backlog);
+  const byField = '### D-030 · Khai trường\n- status: review\n- hold: chờ xác nhận\n';
+  assert.deepEqual(applyFix(byField, ['D-030']), { content: byField, changed: [] });
+
+  // Ca LỜI VĂN, và đây là ca đáng hơn: `classify` đã loại nó khỏi `stale` nên
+  // `main()` hôm nay không truyền nó vào — nhưng cổng ghi file không được dựa
+  // vào chuyện đó. Vòng soát ngữ cảnh sạch đo được bản đầu vẫn lật mục này.
+  const byProse = '### D-031 · Chỉ có lời văn\n- status: review\n- Mục này chỉ đóng khi có xác nhận.\n';
+  assert.deepEqual(applyFix(byProse, ['D-031']), { content: byProse, changed: [] });
+
+  // Chiều ngược: mục sạch cả hai đường vẫn lật, nếu không thì `--fix` thành
+  // lệnh rỗng và mục `I-010` mất tác dụng.
+  const clean = '### D-032 · Sạch\n- status: review\n';
+  assert.deepEqual(applyFix(clean, ['D-032']).changed, ['D-032']);
+});
+
+test('nợ lời văn của backlog THẬT phải ở 0 — máy canh, không chỉ in ra', () => {
+  // Tiêu chí xong của `I-020` đòi con số `heldByProseOnly` "nhìn thấy được thì
+  // mới trả được". Nhưng chỉ IN ra là chưa đủ: vòng soát ngữ cảnh sạch của PR
+  // này gỡ hai dòng `- hold:` khỏi backlog thật và **0 bài test đỏ** — đúng
+  // nhóm Z (hỏng mà mọi chỉ báo đều xanh) mà chính mục này sinh ra để giết.
+  //
+  // Nên bài này đọc backlog THẬT. Nó cố tình dễ vỡ theo đúng một hướng: thêm
+  // một mục còn treo mà quên `- hold:` thì CI đỏ, kèm tên mục. Cách chữa luôn
+  // là khai trường, không phải nới bài kiểm.
+  //
+  // Chỉ soát mục ở `review` — cùng phạm vi `reviewFindings` — nên mục `ready`
+  // hay `done` không kéo bài này đỏ.
+  const lanesRoot = join(import.meta.dirname, '..', 'lanes');
+  const proseOnly: string[] = [];
+  for (const lane of readdirSync(lanesRoot)) {
+    let content: string;
+    try {
+      content = readFileSync(join(lanesRoot, lane, 'backlog.md'), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const item of parseBacklog(content)) {
+      if (item.status !== 'review') continue;
+      if (heldBy(item) === 'prose') proseOnly.push(`${lane}/${item.id}`);
+    }
+  }
+  assert.deepEqual(
+    proseOnly,
+    [],
+    `mục còn treo mà chưa khai \`- hold:\`: ${proseOnly.join(', ')} — khai trường cho chúng, đừng nới bài kiểm`,
+  );
 });
 
 test('HOLD_MARKERS: "Chưa làm, cố ý" KHÔNG phải dấu treo — đó là loại trừ phạm vi', () => {

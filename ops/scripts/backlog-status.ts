@@ -371,11 +371,17 @@ export function applyFix(
   for (const item of parseBacklog(content)) {
     if (!wanted.has(item.id)) continue;
     if (item.status !== 'review' || item.statusLine === null) continue;
-    // Trường `- hold:` chặn ở ĐÂY nữa, không chỉ ở `classify` (mục `I-020`).
-    // Một bên gọi truyền sai danh sách `ids` là chuyện đã xảy ra — và luật
-    // "có trường thì không bao giờ bị lật" chỉ đúng khi nó cũng đúng ở chỗ
-    // thật sự ghi file.
-    if (item.hold !== null) continue;
+    // Chặn ở ĐÂY nữa, không chỉ ở `classify` (mục `I-020`). Một bên gọi truyền
+    // sai danh sách `ids` là chuyện đã xảy ra — và luật "mục bị giữ thì không
+    // bao giờ bị lật" chỉ đúng khi nó cũng đúng ở chỗ thật sự ghi file.
+    //
+    // Hỏi `heldBy`, KHÔNG chỉ hỏi `item.hold`: lưới lời văn là lớp thứ hai mà
+    // mục này khẳng định "còn sống", và bỏ nó ra khỏi cổng ghi file là để đúng
+    // hình dạng sự cố `KF-023` (`--fix` viết `status: done` lên một mục mà thân
+    // mục cấm) đi lại được qua chỗ nguy hiểm nhất. Vòng soát ngữ cảnh sạch của
+    // PR này đo được: bản đầu chỉ hỏi `item.hold` thì `applyFix` vẫn lật một
+    // mục chỉ được giữ bởi lời văn khi bên gọi nêu tên nó.
+    if (heldBy(item) !== null) continue;
     lines[item.statusLine] = '- status: done';
     changed.push(item.id);
   }

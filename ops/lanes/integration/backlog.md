@@ -650,6 +650,7 @@ nhánh việc.
 - deps: —
 - risk: medium
 - status: review
+- hold: chờ một mục mới của lượt worker khác khai `- hold:` mà không ai phải nhắc — xem "vì sao còn `review`"
 - **Số hiệu I-020:** `I-019` do PR `#112` giữ (nhánh `claude/hopeful-dirac-ekbass`); dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã (`KF-005`).
 - nguồn: `ops/known-failures.md` `KF-023`; mục `integration/I-010`; `ops/lanes/README.md` (định nghĩa `deps`)
 - tiêu chí xong:
@@ -690,11 +691,21 @@ nhánh việc.
     `normalizeForHold`, `heldBy` (trường thắng lời văn), `classify` (trường giữ mục dù thân sạch trơn ·
     lời văn một mình vẫn giữ · sạch cả hai đường vẫn lật), `reviewFindings` (tách `field`/`prose`),
     `applyFix` (mục khai trường không bị lật dù bên gọi nêu tên nó). `pnpm check` EXIT=0, **1025 test /
-    1025 pass / 0 fail / 0 skipped** (1002 → 1025); `pnpm replay` khớp snapshot 6/6 xưởng.
+    1026 pass / 0 fail / 0 skipped** (1018 → 1026, **+8**); `pnpm replay` khớp snapshot 6/6 xưởng.
   - `KF-023`: dòng *Máy chặn từ nay* viết lại theo cơ chế mới, phần "còn thiếu" gỡ.
   - `ops/lanes/README.md` khai `hold` cùng bảng với `status`/`deps`, cộng một dòng luật.
-- hold: giới hạn của **lưới lời văn** vẫn còn — câu thứ tư viết bằng chữ khác nữa vẫn lọt, và mẫu chỉ đẩy
-  mốc đó ra xa chứ không xoá nó. Đó là lý do trường tồn tại, không phải chỗ để vá tiếp: gặp một ca lọt thì
-  khai `- hold:` cho mục đó. Mục này giữ `review` cho tới khi một lượt worker **khác** viết một mục mới có
-  phần chưa xong và khai trường **mà không ai phải nhắc** — đó là phép đo duy nhất nói được rằng luật đã
-  vào nếp, và nó không đo được trong chính lượt sinh ra luật.
+  - **Vòng soát ngữ cảnh sạch (bước 6): 0 CHẶN, 4 NÊN SỬA, sửa cả bốn trong PR này.** (a) nền test ghi
+    `1002` là sai — đo lại bằng cách thay đúng ba file `.ts` của PR bằng bản `origin/main`: nền thật
+    **1018**; (b) `- hold:` của chính mục này trải 5 dòng nên `parseHoldField` trả một câu **đứt giữa mệnh
+    đề** — mục vừa đặt luật "một dòng" lại là mục đầu tiên phá nó, nay thu về một dòng ngay sau `- status:`;
+    (c) `applyFix` chỉ hỏi `item.hold` nên **vẫn lật** một mục chỉ được giữ bởi lời văn khi bên gọi nêu tên
+    nó (đo thật: `changed=['D-040']`) — nay hỏi `heldBy(item) !== null`, tức cổng ghi file bảo vệ cả hai
+    lớp; (d) "35 mục đã khai trường" **không có máy canh** — gỡ một dòng `- hold:` khỏi backlog thật thì 0
+    bài đỏ, đúng nhóm **Z** mà mục này sinh ra để giết. Nay bài `nợ lời văn của backlog THẬT phải ở 0` đọc
+    `ops/lanes/**/backlog.md` thật (chỉ mục ở `review`) và in tên mục thiếu trường. Phá thử: xoá dòng
+    `- hold:` của `kernel/K-002` → `not ok 22` kèm đúng chữ `kernel/K-002`; khôi phục → 31/31 xanh.
+- **vì sao còn `review`:** lưới lời văn vẫn **không hội tụ** — câu thứ tư viết bằng chữ khác nữa vẫn lọt,
+  và mẫu chỉ đẩy mốc đó ra xa chứ không xoá nó. Đó là lý do trường tồn tại, không phải chỗ để vá tiếp: gặp
+  một ca lọt thì khai `- hold:` cho mục đó. Mục này chỉ hết treo khi một lượt worker **khác** viết một mục
+  mới có phần chưa xong và khai trường **mà không ai phải nhắc** — đó là phép đo duy nhất nói được rằng
+  luật đã vào nếp, và nó không đo được trong chính lượt sinh ra luật.
