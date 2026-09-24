@@ -827,3 +827,20 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 - **Máy chặn từ nay:** ba bài **tái hiện lỗi** (bất biến I2) dựng trên tiêu đề PR **thật** đã merge — `ops/test/backlog-status.test.ts` (`#212`), `ops/test/digest-metrics.test.ts` (`#212`, `#227`, cộng một phép đếm đầu-cuối) — và `ops/test/agent-prefix.test.ts` khoá chiều ngược lại: bỏ tiền tố **quá tay** cũng phải đỏ. Phá thử, mỗi phép đỏ đúng chỗ rồi khôi phục: gỡ `stripAgentPrefix` khỏi hai bộ đọc → 4 bài đỏ; bỏ 🤖 ở mọi chỗ trong chuỗi → 3 bài đỏ; bỏ lặp lại nhiều lần → 1 bài đỏ; thêm `trim()` hộ bên gọi → 1 bài đỏ.
 - **Bài học về cách soát, không chỉ về cách sửa:** bản đầu của `#228` tự khai "hai chỗ, đã quét hết" và khai `hasRevertCommit` miễn nhiễm. Cả hai lời khai đều sai, và **không lời khai nào đỏ** — chỉ phá thử mới bắt được. Bốn phép phá mà vòng soát dựng ra đều cho **0 bài đỏ** trên bản đầu: gỡ bản sửa `hasRevertCommit`, gỡ bản sửa `isToolCommit`, bỏ neo `^` ở cả hai bộ đọc, và cho `computeProgress` tự neo `^` lại. Nay cả bốn đều có bài khoá. Đây là lý do CHARTER 6.4 đòi vòng soát **ngữ cảnh sạch** chứ không phải một lượt đọc lại của chính người viết.
 - **Còn hở, ghi rõ:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở — đã khai thành tiêu chí còn lại `⬜` của mục `P-042`.
+
+## KF-028 · Cảnh báo khẩn không có điều kiện kết thúc thì nhịp @nhắc của nó nối sang sự cố sau
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh. Đo `2026-09-24T09:38Z` trên `main` `2329988`.
+
+`#131` (`[CẢNH BÁO] main đỏ tại a44d265`, mở `2026-09-22T10:14Z`) vẫn **mở** trong khi `main-ci` xanh ba lượt liên tiếp từ `04:41Z` cùng ngày. Không workflow nào trong repo đóng một issue nhãn `alert`.
+
+Chỗ đau không phải issue thừa. Hai cơ chế đúng riêng lẻ cộng lại thành một chỗ im lặng:
+
+1. `main-ci.yml` **dùng lại** issue cảnh báo — `gh issue list --label alert --state open --search "main đỏ in:title"` lấy issue đầu tiên, **không so `sha`**.
+2. `decideMention` (`ops/scripts/alert-escalation.ts`, `P-034`) đọc `createdAt` của mục mang mốc **mới nhất** trên cả thân lẫn comment.
+
+Nên `main` đỏ 10:00 → @nhắc → xanh 10:30 → **đỏ lại vì commit khác** 11:00 → rơi vào issue cũ → mốc mới nhất mới 1 giờ → `quiet`. Sự cố mới không gọi ai cho tới hết 4 giờ của sự cố **cũ**, và suốt khoảng đó `pnpm check` xanh, CI xanh, `watchdog` xanh.
+
+**Chữ ký chung, đáng nhớ hơn ca cụ thể:** mọi trạng thái "đang có sự cố" mà **chỉ có đường vào, không có đường ra** sẽ rò sang lần sau. Ở đây trạng thái là "issue `alert` đang mở", và nhịp chống spam 4 giờ chính là thứ biến sự rò đó thành im lặng. Thêm một cảnh báo mới thì hỏi luôn: ai đóng nó, và hỏng thế nào nếu không ai đóng.
+
+**Đã chặn:** `platform/P-044` — job `resolve-alert` của `ops/workflows/main-ci.yml` đóng cảnh báo `main` đỏ khi `check` xanh; phần quyết định ở `ops/scripts/alert-resolution.ts` (hướng an toàn luôn là **giữ**), bài kiểm ở `ops/test/alert-resolution.test.ts` và `ops/test/alert-resolution-workflow.test.ts`. **Chưa** phủ ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) — điều kiện kết thúc của chúng khác nhau và `main-ci.yml` không đo được; khai ra ở đây chứ không để nó trông như đã xong.
