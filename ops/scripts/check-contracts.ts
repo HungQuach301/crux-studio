@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Mười việc:
+ * Mười hai việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -26,6 +26,8 @@
  *    xưởng `topic` canh, không có cổng dùng chung nào ở tầng `pnpm contracts`.
  * 9. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
  * 10. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
+ * 11. Fact & Risk Pass trên tập vàng (mục `editorial/E-002`, bất biến I6).
+ * 12. Channel Pack khai đủ `revenueWithholding` (mục `topic/T-013`, bất biến I6).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
