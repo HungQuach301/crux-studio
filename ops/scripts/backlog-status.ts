@@ -646,7 +646,18 @@ const itemKey = (item: IndexedItem): string => `${item.lane}/${item.id}`;
  * với hai vòng chồng nhau (chung cạnh) nó chỉ in ra vòng đi qua cạnh lùi
  * nó gặp, không liệt kê đủ mọi vòng con. Đủ cho việc mục này cần — chỉ ra
  * chỗ phải cắt — và cắt một vòng rồi chạy lại sẽ lộ vòng còn lại. Liệt kê
- * đủ mọi vòng là bài toán khác hẳn về giá, chưa ca nào đòi.
+ * đủ mọi vòng là bài toán khác hẳn về giá, chưa ca nào đòi. Hai vòng **rời
+ * nhau** thì ra đủ cả hai, và có bài khoá.
+ *
+ * Chỗ thứ hai, mạnh hơn luật 2 ở trên nên phải nói riêng: khi hai mục dùng
+ * chung một mã, `indexItems` chỉ giữ mục **gặp trước** và đánh dấu nó
+ * `duplicate`; mục **thứ hai không bao giờ vào chỉ mục**, nên `deps` của
+ * chính nó không sinh cạnh nào cả — một vòng đi qua mục thứ hai sẽ im
+ * lặng. Repo đang có đúng ca này (`platform/P-028`, hai mục khác nhau cùng
+ * mã, có sẵn trên `main`). Chỗ chặn đúng là dẹp mã trùng — nó đã hiện ra ở
+ * nhóm `duplicateIds` chứ không im lặng — chứ không phải nới luật ở đây:
+ * đoán `deps: <mã>` trỏ mục nào là đoán, và một vòng báo sai làm người đọc
+ * cắt nhầm.
  */
 export function dependencyCycles(backlogs: readonly LaneBacklog[]): string[] {
   // `subjects` không ảnh hưởng tới cạnh của đồ thị (một `deps` đã xong vẫn

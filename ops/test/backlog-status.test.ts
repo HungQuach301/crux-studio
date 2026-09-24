@@ -16,7 +16,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -1002,4 +1002,78 @@ test('I-019 · backlog THẬT của repo không còn vòng và không còn `stat
     reviewFindings(name, content, []).filter((f) => f.verdict === 'invalid-status').map((f) => `${f.lane}/${f.id}`),
   );
   assert.deepEqual(invalid, []);
+});
+
+test('I-019 · N3 · vòng gồm TOÀN mục `done` vẫn phải ra — mọi mục là đỉnh, không chỉ mục chưa xong', () => {
+  // Vòng soát ngữ cảnh sạch phá thử: thêm `if (item.satisfied) continue` vào
+  // vòng chọn gốc DFS thì KHÔNG bài nào đỏ. Bài `vòng đi qua mục parked`
+  // không khoá được luật 1, vì DFS vẫn tới mục `parked` từ đỉnh kia. Ca mất
+  // thật là một vòng mà MỌI mục đều đã `done` — vòng đó vẫn là một vòng, và
+  // nó sẽ chặn đúng lúc một mục trên vòng được mở lại.
+  const cycles = dependencyCycles([
+    { lane: 'demo', content: lane([['D-001', 'done', 'D-002'], ['D-002', 'done', 'D-001']]) },
+  ]);
+  assert.deepEqual(cycles, ['demo/D-001 → demo/D-002 → demo/D-001']);
+});
+
+test('I-019 · N2 · HAI vòng RỜI nhau ra đủ hai, không dừng ở vòng đầu', () => {
+  // Phá thử: cho `dependencyCycles` trả về ngay sau vòng đầu tiên → 0 bài
+  // đỏ. Phần "Giới hạn đã khai" chỉ miễn trừ hai vòng CHỒNG nhau (chung
+  // cạnh); hai vòng rời nhau là lỗ thật, không phải giới hạn đã khai.
+  const cycles = dependencyCycles([
+    {
+      lane: 'demo',
+      content: lane([
+        ['D-001', 'ready', 'D-002'],
+        ['D-002', 'ready', 'D-001'],
+        ['D-003', 'ready', 'D-004'],
+        ['D-004', 'ready', 'D-003'],
+      ]),
+    },
+  ]);
+  assert.equal(cycles.length, 2);
+  assert.deepEqual(cycles, [
+    'demo/D-001 → demo/D-002 → demo/D-001',
+    'demo/D-003 → demo/D-004 → demo/D-003',
+  ]);
+});
+
+test('I-019 · C2 · CLI in `invalidStatus` và `cycles` KỂ CẢ KHI RỖNG', () => {
+  // Đây là luật "cấm im lặng" mà cả mục `I-019` tồn tại để giữ, và là phần
+  // DUY NHẤT không bài nào khoá trước vòng soát: phá thử "chỉ in hai khoá
+  // khi mảng khác rỗng" cho 0 bài đỏ, vì 70 bài kia đều gọi hàm export chứ
+  // không chạy CLI. Một mảng rỗng là "đã quét, không thấy gì"; một khoá
+  // VẮNG MẶT là "không biết" — bên đọc phải phân biệt được hai thứ đó.
+  const dir = mkdtempSync(join(tmpdir(), 'backlog-cli-'));
+  const git = (...args: string[]) => {
+    const r = spawnSync('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+  };
+  try {
+    git('init', '--quiet', '--initial-branch', 'main');
+    git('commit', '--quiet', '--allow-empty', '-m', '[demo] D-001 — xong');
+    mkdirSync(join(dir, 'ops', 'lanes', 'demo'), { recursive: true });
+    // Backlog SẠCH: không vòng, không `status` sai. Đúng ca mà phép phá lọt.
+    writeFileSync(
+      join(dir, 'ops', 'lanes', 'demo', 'backlog.md'),
+      lane([['D-001', 'review', '—'], ['D-002', 'ready', 'D-001']]),
+      'utf8',
+    );
+    const run = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', join(import.meta.dirname, '..', 'scripts', 'backlog-status.ts')],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    const out = JSON.parse(run.stdout) as Record<string, unknown>;
+    assert.ok('invalidStatus' in out, 'khoá `invalidStatus` VẮNG MẶT khi rỗng — đúng chỗ im lặng mục này cấm');
+    assert.ok('cycles' in out, 'khoá `cycles` VẮNG MẶT khi rỗng — đúng chỗ im lặng mục này cấm');
+    assert.deepEqual(out.invalidStatus, []);
+    assert.deepEqual(out.cycles, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

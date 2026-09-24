@@ -929,14 +929,21 @@ Mục 3, dòng về `main` đỏ, vẫn viết: *"Chủ dự án chỉ được 
 
 Tách khỏi `P-034` vì **cửa merge khác**, không phải vì phạm vi khác: đo bằng `node ops/invariants.protected-area.ts --base-charter` thì `P-034` (mục 2 và 14) ra `automerge-delayed`, còn sửa thêm dòng này kéo cả PR sang `owner-merge` vì luật cắt CHARTER **theo mục** và đây là mục 3. Gộp vào sẽ bắt chủ dự án merge tay một PR vốn máy tự merge được — ngược thước đo mục 1.3.
 
-- deps: `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau
+- deps: P-034
 - risk: low — một câu tài liệu, không chạm code
 - status: ready
+- ghi chú: `P-034` (PR `#198`) phải vào `main` trước, để hai bản CHARTER không đá nhau.
 - **vì sao `ready`, không phải `blocked`** (mục `I-019`): `blocked` ngoài tập hợp lệ nên mục này biến mất
-  khỏi mọi báo cáo. Chỗ chặn ở đây là một **`deps`**, và dòng `deps` ngay trên đã ghi đúng nó — nên
-  `readyQueue` tự giữ mục lại ở nhóm `blocked` kèm lý do `platform/P-034` chừng nào `P-034` chưa vào
-  `main`, và tự thả ra đúng lúc nó vào. Một trạng thái viết tay ở đây chỉ nhân đôi cùng một sự thật, và
-  bản viết tay là bản không ai nhớ cập nhật.
+  khỏi mọi báo cáo. Chỗ chặn ở đây là một **`deps`**, nên để `readyQueue` giữ và thả: nó xếp mục vào
+  `blocked` kèm lý do `platform/P-034` chừng nào `P-034` chưa vào `main`, và tự thả ra đúng lúc nó vào.
+  Một trạng thái viết tay chỉ nhân đôi cùng một sự thật, và bản viết tay là bản không ai nhớ cập nhật.
+- **vì sao lý do chuyển xuống dòng `ghi chú`** (vòng soát ngữ cảnh sạch của `I-019`): dòng `deps` cũ viết
+  `` `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau ``. `parseDeps` cắt theo **dấu
+  phẩy** (luật của `I-015`), nên vế hai thành một phần phụ thuộc **không tra được** và mục kẹt ở `blocked`
+  **vĩnh viễn** — kể cả sau khi `P-034` merge. Đo bằng chạy thật với `P-034` đặt `done`: `readyNow` rỗng,
+  `waitingOn: ["để hai bản CHARTER không đá nhau (không tra được)"]`. Đúng nhóm **Z** mà `I-019` sinh ra
+  để diệt, chỉ đổi chỗ từ "biến mất khỏi mọi nhóm" sang "nằm mãi ở `blocked`". Lời giải thích thuộc về một
+  dòng khác; dòng `deps` chỉ chứa mã mục.
 - nguồn: vòng soát ngữ cảnh sạch của PR `#198`; CHARTER 2.4 nhật ký **C9**
 - tiêu chí xong:
   - ⬜ CHARTER mục 3 sửa câu đó thành "@nhắc ngay từ lần đỏ đầu, nhắc lại mỗi 4 giờ (2.4)".

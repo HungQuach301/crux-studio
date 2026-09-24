@@ -49,6 +49,14 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
   ghi: thân `VF-G6` nói rõ *"kiểm: lần tải lên đầu tiên ở mục `R-002`"*, tức giả định G6 được kiểm **bằng**
   mục này, không phải là nền móng của nó. Nên cắt ở đây. Quan hệ vẫn còn nguyên ở dòng `nguồn` ngay dưới,
   chỗ nó thuộc về.
+- **mục này nay nằm trong `readyNow`, và lượt nhận nó phải biết trước** (vòng soát ngữ cảnh sạch của
+  `I-019`): cắt vòng làm `R-002` thôi bị khoá oan — `R-001` đã vào `main` thật — nhưng nó vẫn cần một
+  đường xác thực YouTube mà **repo chưa ghi ở đâu cả**: không `docs/assumptions.md`, không backlog, không
+  workflow nào nhắc tới một secret hay app OAuth cho việc tải lên. Nên đây **không** phải ca `parked` như
+  `topic/T-011` (mục đó nêu đích danh secret còn thiếu); chỗ thiếu ở đây là chính **mảnh tài liệu** đó.
+  Việc đầu tiên của lượt nhận `R-002` là chốt đường xác thực rồi ghi nó vào sổ giả định — chọn nhà cung
+  cấp và ký điều khoản là nhóm `irreversible` số 3 của CHARTER 2.3, nên nếu nó cần một tài khoản hay một
+  điều khoản mới thì mở `🤖 [QĐ]` trước, đừng tự chọn.
 - nguồn: CHARTER bất biến I5; giả định G6
 - tiêu chí xong:
   - Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng.
