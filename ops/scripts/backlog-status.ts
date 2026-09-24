@@ -152,6 +152,37 @@ export const HOLD_MARKERS: readonly RegExp[] = [
  */
 const HOLD_FIELD = /^\s*-\s*hold:\s*(\S.*?)\s*$/i;
 
+/**
+ * Tập `status` hợp lệ của một mục backlog — `ops/lanes/README.md`, CHARTER
+ * 2.1. Nguồn duy nhất, để phép kiểm ở đây không lệch khỏi tài liệu.
+ *
+ * Vì sao cần một tập **đóng** chứ không chỉ đọc chuỗi: `status` viết sai
+ * không làm gì đỏ cả. `readyQueue` chỉ nhìn `status === 'ready'`, còn
+ * `reviewFindings` chỉ nhìn `status === 'review'`, nên một mục ghi
+ * `status: blocked` rơi qua **cả hai** phép lọc và biến mất khỏi mọi báo
+ * cáo — không ở hàng đợi, không ở nhóm nào. Đo được trên `main` lúc nhận
+ * mục `I-019`: **5** mục như vậy (`platform` 4, `topic` 1), im lặng từ lúc
+ * chúng được viết. Đúng nhóm **Z**: mọi chỉ báo xanh, chỉ hàng đợi việc là
+ * sai.
+ *
+ * Cùng một bài học với nhóm `unknown` của `I-010` ("mục thụt lề sai biến
+ * mất khỏi báo cáo"), chỉ khác chỗ hỏng: ở đó dòng `status` không đọc
+ * được, ở đây nó đọc được nhưng **giá trị** nằm ngoài tập hợp lệ.
+ */
+export const VALID_STATUSES: readonly string[] = ['ready', 'claimed', 'review', 'done', 'parked'];
+
+/**
+ * Chuỗi này có phải một `status` hợp lệ không.
+ *
+ * Chuỗi rỗng — mục không khai `status` — trả `false`, nhưng ca đó đã có
+ * nhóm riêng (`unknown`, qua `statusLine === null`) nên `classify` xét nó
+ * TRƯỚC. Hai nhóm tách nhau có chủ đích: "không khai" và "khai sai" cần hai
+ * cách sửa khác nhau.
+ */
+export function isValidStatus(status: string): boolean {
+  return VALID_STATUSES.includes(status);
+}
+
 export type ItemVerdict =
   /** Có commit hoàn thành trên `main`, thân mục không còn dấu treo → nên chuyển `done`. */
   | 'stale'
@@ -160,7 +191,12 @@ export type ItemVerdict =
   /** Chưa thấy commit hoàn thành, hoặc đã bị revert → `review` là đúng. */
   | 'unmerged'
   /** Mục không đọc được `status` — in ra chứ không bỏ qua im lặng. */
-  | 'unknown';
+  | 'unknown'
+  /**
+   * Mục đọc được `status` nhưng giá trị nằm NGOÀI `VALID_STATUSES` — cũng
+   * in ra, cùng luật cấm im lặng với `unknown` (mục `I-019`).
+   */
+  | 'invalid-status';
 
 export interface BacklogItem {
   id: string;
@@ -428,6 +464,10 @@ export function heldReason(item: Pick<BacklogItem, 'holdField' | 'hasHoldMarker'
 
 export function classify(item: BacklogItem, merged: boolean): ItemVerdict {
   if (item.statusLine === null) return 'unknown';
+  // Trước MỌI phép suy khác: một `status` ngoài tập hợp lệ thì ba nhóm
+  // `stale`/`held`/`unmerged` đều không có nghĩa cho mục đó, và im lặng xếp
+  // nó vào một trong ba sẽ giấu luôn chỗ viết sai (mục `I-019`).
+  if (!isValidStatus(item.status)) return 'invalid-status';
   if (!merged) return 'unmerged';
   return heldReason(item) !== null ? 'held' : 'stale';
 }
@@ -443,9 +483,15 @@ export interface StatusFinding {
 /**
  * Soát một làn.
  *
- * Mục đang ở `review` là mục có gì để nói. Cộng thêm mục **không đọc được
- * `status`** — nó ra nhóm `unknown` chứ không bị lọc đi im lặng, vì một mục
- * thụt lề sai biến mất khỏi báo cáo là đúng nhóm lỗi Z mà tool này chữa.
+ * Mục đang ở `review` là mục có gì để nói. Cộng thêm **hai** ca im lặng,
+ * cả hai đều là nhóm Z:
+ *
+ * - mục **không đọc được `status`** → nhóm `unknown` (`I-010`): một mục
+ *   thụt lề sai biến mất khỏi báo cáo;
+ * - mục có `status` **ngoài `VALID_STATUSES`** → nhóm `invalid-status`
+ *   (`I-019`): `readyQueue` lọc theo `'ready'` và hàm này lọc theo
+ *   `'review'`, nên `status: blocked` rơi qua cả hai và không nhóm nào
+ *   nhận. Không lọc nó đi ở đây nữa.
  */
 export function reviewFindings(
   lane: string,
@@ -453,7 +499,9 @@ export function reviewFindings(
   subjects: readonly string[],
 ): StatusFinding[] {
   return parseBacklog(content)
-    .filter((item) => item.status === 'review' || item.statusLine === null)
+    .filter(
+      (item) => item.status === 'review' || item.statusLine === null || !isValidStatus(item.status),
+    )
     .map((item) => {
       const verdict = classify(
         item,
@@ -504,36 +552,32 @@ function isSatisfied(item: BacklogItem, lane: string, subjects: readonly string[
   return classify(item, merged) === 'stale';
 }
 
-/**
- * Trả lời đúng câu hỏi bước 3 của phụ lục P1 hỏi: **mục nào nhận được ngay**.
- *
- * Vì sao cần một lệnh cho việc này, chứ không để worker đọc tay: `I-010`
- * dựng được phép đo "mục nào nên chuyển `done`" nhưng dừng ở đó, nên worker
- * vẫn phải tự đối chiếu từng dòng `deps` bằng mắt. Lượt `crux-worker-1`
- * ngày 2026-09-22 suýt in `idle` trong khi `topic/T-003` và `editorial/E-003`
- * đều đã nhận được — `deps` của chúng (`T-001`, `E-001`) đã vào `main` mà
- * backlog còn đọc là `review`. Hàng đợi **cạn giả**, và mọi chỉ báo vẫn xanh.
- *
- * Kết quả KHÔNG xếp theo `ops/lanes/priority.md`: thứ tự giữa các làn là
- * việc chủ dự án chỉnh bằng tay trong file đó, và đọc nó ở đây sẽ biến một
- * bảng người-sửa thành một phép phân tích cú pháp dễ vỡ. Lệnh này trả lời
- * phần máy trả lời được (`deps` đã xong chưa); worker vẫn duyệt theo thứ tự
- * của `priority.md` và vẫn tự kiểm "đã có nhánh hay PR mở chưa" — câu đó
- * cần mạng, không nằm trong kho.
- */
-export function readyQueue(
-  backlogs: readonly LaneBacklog[],
-  subjects: readonly string[],
-): { readyNow: QueueEntry[]; blocked: QueueEntry[]; duplicateIds: string[] } {
-  const parsed = backlogs.map((backlog) => ({
-    lane: backlog.lane,
-    items: parseBacklog(backlog.content),
-  }));
+/** Một mục trong đồ thị phụ thuộc — dựng chung cho `dependencyCycles` và `readyQueue`. */
+interface IndexedItem {
+  lane: string;
+  id: string;
+  satisfied: boolean;
+  duplicate: boolean;
+  /** Mã mục của từng phần phụ thuộc đọc được. `null` (đoạn không tra được) đã bị loại. */
+  depIds: string[];
+}
 
-  const index = new Map<string, { lane: string; id: string; satisfied: boolean; duplicate: boolean }>();
+/**
+ * Chỉ mục mã mục → mục, dùng chung cho mọi phép đọc `deps`.
+ *
+ * Tách ra khỏi `readyQueue` để `dependencyCycles` không phải dựng lại một
+ * bản thứ hai: hai chỉ mục lệch nhau một luật (quy ước `VF-`, luật mã trùng)
+ * là đúng cách hai câu trả lời cho cùng một backlog bắt đầu đá nhau.
+ */
+function indexItems(backlogs: readonly LaneBacklog[], subjects: readonly string[]): {
+  index: Map<string, IndexedItem>;
+  duplicateIds: string[];
+} {
+  const index = new Map<string, IndexedItem>();
   const duplicateIds: string[] = [];
-  for (const { lane, items } of parsed) {
-    for (const item of items) {
+
+  for (const { lane, content } of backlogs) {
+    for (const item of parseBacklog(content)) {
       const seen = index.get(item.id);
       if (seen !== undefined) {
         // `deps` không phân giải theo làn, nên hai làn dùng chung một mã là
@@ -556,18 +600,131 @@ export function readyQueue(
         id: item.id,
         satisfied: isSatisfied(item, lane, subjects),
         duplicate: false,
+        depIds: (item.deps ?? []).flatMap((dep) => (dep.id === null ? [] : [dep.id])),
       });
     }
   }
 
-  /** `deps: G7` trỏ tới mục `verify/VF-G7` — quy ước đang dùng thật trong backlog. */
-  const lookup = (id: string) => index.get(id) ?? index.get(`VF-${id}`);
+  return { index, duplicateIds };
+}
+
+/** `deps: G7` trỏ tới mục `verify/VF-G7` — quy ước đang dùng thật trong backlog. */
+const resolve = (index: Map<string, IndexedItem>, id: string): IndexedItem | undefined =>
+  index.get(id) ?? index.get(`VF-${id}`);
+
+/** `lane/id` — mã mục THẬT, dạng người đọc tìm được mục mà không cần biết quy ước rút gọn. */
+const itemKey = (item: IndexedItem): string => `${item.lane}/${item.id}`;
+
+/**
+ * Vòng phụ thuộc trong backlog — mục `I-019`.
+ *
+ * Vì sao cần: một vòng làm mọi mục trên vòng chờ nhau **vĩnh viễn**, và
+ * `readyQueue` một mình không nói ra được. Nó xếp cả hai mục vào `blocked`
+ * kèm đúng một dòng "đang chờ mục kia", giống hệt một mục đang chờ một
+ * nền móng thật sắp xong — nên đọc báo cáo không phân biệt được "chờ một
+ * nhịp" với "chờ mãi mãi". Ca thật nằm trên `main` lúc nhận mục này:
+ * `release/R-002` ghi `deps: R-001, G6` còn `verify/VF-G6` ghi
+ * `deps: R-002`. Nhóm **Z**.
+ *
+ * Trả về mỗi vòng một chuỗi đã đóng, dạng
+ * `release/R-002 → verify/VF-G6 → release/R-002`: lặp lại mục đầu ở cuối để
+ * đọc một dòng là thấy nó khép kín, không phải tự nối.
+ *
+ * Ba luật, cùng hướng thận trọng với phần còn lại của file:
+ *
+ * 1. **Mọi mục đều là đỉnh**, không chỉ mục `ready`. Một vòng đi qua một
+ *    mục `parked` vẫn là một vòng, và nó sẽ chặn đúng lúc mục đó mở lại.
+ * 2. **Mã trùng giữa hai làn bị loại khỏi cạnh.** `deps: <mã>` lúc đó không
+ *    xác định trỏ mục nào, nên vẽ một cạnh là đoán — và một vòng báo sai là
+ *    một phép kiểm bị tắt. Mã trùng đã có nhóm `duplicateIds` riêng.
+ * 3. **Đoạn `deps` không tra được không sinh cạnh.** Nó đã hiện ra ở
+ *    `blocked` kèm lý do; đoán một mục từ lời văn là đoán.
+ *
+ * ## Giới hạn đã khai, không giấu
+ *
+ * Phép duyệt là DFS ba màu, nên nó bắt **mọi mục nằm trên một vòng** nhưng
+ * với hai vòng chồng nhau (chung cạnh) nó chỉ in ra vòng đi qua cạnh lùi
+ * nó gặp, không liệt kê đủ mọi vòng con. Đủ cho việc mục này cần — chỉ ra
+ * chỗ phải cắt — và cắt một vòng rồi chạy lại sẽ lộ vòng còn lại. Liệt kê
+ * đủ mọi vòng là bài toán khác hẳn về giá, chưa ca nào đòi.
+ */
+export function dependencyCycles(backlogs: readonly LaneBacklog[]): string[] {
+  // `subjects` không ảnh hưởng tới cạnh của đồ thị (một `deps` đã xong vẫn
+  // là một cạnh), nên truyền rỗng thay vì bắt bên gọi đọc lịch sử `main`.
+  const { index } = indexItems(backlogs, []);
+
+  const GREY = 1;
+  const BLACK = 2;
+  const state = new Map<string, number>();
+  const stack: string[] = [];
+  const seen = new Set<string>();
+  const cycles: string[] = [];
+
+  /** Xoay vòng cho mục nhỏ nhất đứng đầu, để cùng một vòng luôn ra cùng một chuỗi. */
+  const record = (path: readonly string[]): void => {
+    const keys = path.map((id) => itemKey(index.get(id)!));
+    let pivot = 0;
+    for (let i = 1; i < keys.length; i++) if (keys[i]! < keys[pivot]!) pivot = i;
+    const rotated = [...keys.slice(pivot), ...keys.slice(0, pivot)];
+    const rendered = [...rotated, rotated[0]!].join(' → ');
+    if (seen.has(rendered)) return;
+    seen.add(rendered);
+    cycles.push(rendered);
+  };
+
+  const visit = (id: string): void => {
+    state.set(id, GREY);
+    stack.push(id);
+    for (const depId of index.get(id)!.depIds) {
+      const target = resolve(index, depId);
+      if (target === undefined || target.duplicate) continue;
+      const color = state.get(target.id);
+      if (color === GREY) {
+        record(stack.slice(stack.indexOf(target.id)));
+      } else if (color !== BLACK) {
+        visit(target.id);
+      }
+    }
+    stack.pop();
+    state.set(id, BLACK);
+  };
+
+  for (const [id, item] of index) {
+    if (item.duplicate) continue;
+    if (state.get(id) === undefined) visit(id);
+  }
+
+  return cycles;
+}
+
+/**
+ * Trả lời đúng câu hỏi bước 3 của phụ lục P1 hỏi: **mục nào nhận được ngay**.
+ *
+ * Vì sao cần một lệnh cho việc này, chứ không để worker đọc tay: `I-010`
+ * dựng được phép đo "mục nào nên chuyển `done`" nhưng dừng ở đó, nên worker
+ * vẫn phải tự đối chiếu từng dòng `deps` bằng mắt. Lượt `crux-worker-1`
+ * ngày 2026-09-22 suýt in `idle` trong khi `topic/T-003` và `editorial/E-003`
+ * đều đã nhận được — `deps` của chúng (`T-001`, `E-001`) đã vào `main` mà
+ * backlog còn đọc là `review`. Hàng đợi **cạn giả**, và mọi chỉ báo vẫn xanh.
+ *
+ * Kết quả KHÔNG xếp theo `ops/lanes/priority.md`: thứ tự giữa các làn là
+ * việc chủ dự án chỉnh bằng tay trong file đó, và đọc nó ở đây sẽ biến một
+ * bảng người-sửa thành một phép phân tích cú pháp dễ vỡ. Lệnh này trả lời
+ * phần máy trả lời được (`deps` đã xong chưa); worker vẫn duyệt theo thứ tự
+ * của `priority.md` và vẫn tự kiểm "đã có nhánh hay PR mở chưa" — câu đó
+ * cần mạng, không nằm trong kho.
+ */
+export function readyQueue(
+  backlogs: readonly LaneBacklog[],
+  subjects: readonly string[],
+): { readyNow: QueueEntry[]; blocked: QueueEntry[]; duplicateIds: string[]; cycles: string[] } {
+  const { index, duplicateIds } = indexItems(backlogs, subjects);
 
   const readyNow: QueueEntry[] = [];
   const blocked: QueueEntry[] = [];
 
-  for (const { lane, items } of parsed) {
-    for (const item of items) {
+  for (const { lane, content } of backlogs) {
+    for (const item of parseBacklog(content)) {
       if (item.status !== 'ready') continue;
 
       const waitingOn: string[] = [];
@@ -577,7 +734,7 @@ export function readyQueue(
           waitingOn.push(`${dep.raw} (không tra được)`);
           continue;
         }
-        const target = lookup(dep.id);
+        const target = resolve(index, dep.id);
         if (target === undefined) {
           waitingOn.push(`${dep.id} (không có mục này)`);
           continue;
@@ -589,7 +746,7 @@ export function readyQueue(
         // In mã mục THẬT (`verify/VF-G7`), không in mã như `deps` viết
         // (`G7`): người đọc phải tìm được mục đang chặn mà không cần biết
         // quy ước rút gọn.
-        if (!target.satisfied) waitingOn.push(`${target.lane}/${target.id}`);
+        if (!target.satisfied) waitingOn.push(itemKey(target));
       }
 
       const entry: QueueEntry = { lane, id: item.id, title: item.title, waitingOn };
@@ -597,7 +754,10 @@ export function readyQueue(
     }
   }
 
-  return { readyNow, blocked, duplicateIds };
+  // Vòng phụ thuộc đi cùng hàng đợi chứ không đứng riêng: mục trên một vòng
+  // luôn nằm trong `blocked`, và bên đọc phải thấy ngay dòng `blocked` nào
+  // là "chờ một nhịp" còn dòng nào là "chờ mãi mãi" (mục `I-019`).
+  return { readyNow, blocked, duplicateIds, cycles: dependencyCycles(backlogs) };
 }
 
 /**
@@ -703,7 +863,7 @@ function main(): void {
   // Đọc hàng đợi trên nội dung TRƯỚC `--fix`: `readyQueue` đã tự coi mục
   // `stale` là xong, nên hai đường cho cùng một câu trả lời — và báo cáo
   // không phụ thuộc vào việc lượt này có chạy `--fix` hay không.
-  const { readyNow, blocked, duplicateIds } = readyQueue(backlogs, subjects);
+  const { readyNow, blocked, duplicateIds, cycles } = readyQueue(backlogs, subjects);
 
   const by = (verdict: ItemVerdict) =>
     findings.filter((f) => f.verdict === verdict).map((f) => `${f.lane}/${f.id}`);
@@ -723,6 +883,12 @@ function main(): void {
         heldByProse: heldByOutput('prose'),
         unmerged: by('unmerged'),
         unknown: by('unknown'),
+        // `invalidStatus` và `cycles` là hai nhóm của mục `I-019`. Cả hai
+        // in ra KỂ CẢ khi rỗng — một mảng rỗng là "đã quét, không thấy gì",
+        // khác hẳn một khoá vắng mặt, và cấm im lặng là chính luật mà hai
+        // nhóm này sinh ra để giữ.
+        invalidStatus: by('invalid-status'),
+        cycles,
         fixed: fix ? by('stale') : [],
         backlogUpdated: written,
         // Kèm tên mục: phụ lục P1 bước 3 đòi dán `readyNow` vào báo cáo khi

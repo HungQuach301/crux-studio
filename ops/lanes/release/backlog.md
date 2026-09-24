@@ -41,9 +41,14 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 ### R-002 · Tải lên YouTube ở chế độ riêng tư
 **Bất biến I5.** Máy tải lên riêng tư; chủ dự án tự bấm công khai trong YouTube Studio.
 
-- deps: R-001, G6
+- deps: R-001
 - risk: high
 - status: ready
+- **vì sao `deps` KHÔNG còn `G6`** (mục `I-019`): `G6` trỏ tới `verify/VF-G6`, mà `VF-G6` ghi `deps: R-002`
+  — hai mục chờ nhau vĩnh viễn, một vòng phụ thuộc thật nằm trên `main`. Chiều đúng là chiều `VF-G6` đang
+  ghi: thân `VF-G6` nói rõ *"kiểm: lần tải lên đầu tiên ở mục `R-002`"*, tức giả định G6 được kiểm **bằng**
+  mục này, không phải là nền móng của nó. Nên cắt ở đây. Quan hệ vẫn còn nguyên ở dòng `nguồn` ngay dưới,
+  chỗ nó thuộc về.
 - nguồn: CHARTER bất biến I5; giả định G6
 - tiêu chí xong:
   - Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng.
