@@ -864,6 +864,7 @@ Luật hiện hành đi ngược lại có chủ đích: `main-ci.yml` cố ý *
 - deps: —
 - risk: medium — @nhắc quá dày làm loãng chính cảnh báo; quá thưa thì lặp lại đúng chỗ `#131` đã trượt. Chủ dự án đã chốt con số, nên rủi ro còn lại chỉ là chỗ thực thi.
 - status: review
+- hold: nhịp @nhắc 4 giờ chưa quan sát được bằng chạy thật — chỉ chạy khi `main` đỏ hoặc người canh có dấu hiệu
 - nguồn: comment của chủ dự án trên `🤖 [QĐ] #169` (`2026-09-23T01:19:54Z`); CHARTER 2.4; `D-C06`; `docs/decisions/D-C07.md` mục "Việc còn lại"
 - tiêu chí xong:
   - ✅ `main-ci.yml`: @nhắc nằm trong thân issue **ngay lần đỏ đầu**, và một comment nhắc lại khi lần @nhắc gần nhất đã quá **4 giờ**. Mốc `<!-- crux-escalate-main-do -->` không còn là "đã nhắc thì thôi" mà là "đã nhắc lúc nào" — đọc `createdAt` của comment mang mốc đó, đừng đếm số comment.

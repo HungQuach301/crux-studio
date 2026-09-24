@@ -16,13 +16,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   OPEN_BOX,
   HOLD_MARKERS,
   hasHoldMarker,
+  normalizeForHold,
   hasRevertCommit,
   parseBacklog,
   hasCompletionCommit,
@@ -296,6 +297,50 @@ test('HOLD_MARKERS: ba biến thể lần ba nay đã vào lưới dự phòng (
   assert.equal(hasHoldMarker('trước khi coi mục này là `done`'), true);
   assert.equal(hasHoldMarker('mục này chỉ done khi có xác nhận'), true); // `done` viết trần
   assert.equal(hasHoldMarker('mục này chưa đóng, dù PR đã merge'), true);
+});
+
+test('normalizeForHold: dấu nhấn Markdown và ngắt dòng không còn che được câu treo', () => {
+  // Ca `P-007` lọt lưới lần hai CHỈ vì hai dấu nháy ngược quanh `done`. Sau
+  // chuẩn hoá, `` `done` `` và `done` là một chữ, nên cả một lớp biến thể tan
+  // đi thay vì được vá từng chuỗi một.
+  assert.equal(normalizeForHold('chỉ `done` khi'), 'chỉ done khi');
+  assert.equal(normalizeForHold('**Còn   treo**'), 'còn treo');
+  // Câu treo bị ngắt dòng giữa hai chữ — thân mục thật xuống dòng ở cột 100,
+  // nên đây là ca thật, không phải ca dựng.
+  assert.equal(hasHoldMarker('mục này chỉ đóng\nkhi có xác nhận'), true);
+});
+
+test('nợ lời văn của backlog THẬT phải ở 0 — máy canh, không chỉ in ra', () => {
+  // Tiêu chí xong của `I-020` đòi con số `heldByProse` "nhìn thấy được thì mới
+  // trả được". Chỉ IN ra là chưa đủ: gỡ hai dòng `- hold:` khỏi backlog thật
+  // thì **0 bài test đỏ** — đúng nhóm Z (hỏng mà mọi chỉ báo đều xanh) mà
+  // chính mục này sinh ra để giết.
+  //
+  // Nên bài này đọc backlog THẬT. Nó cố tình dễ vỡ theo đúng một hướng: thêm
+  // một mục còn treo mà quên `- hold:` thì CI đỏ, KÈM TÊN MỤC. Cách chữa luôn
+  // là khai trường, không phải nới bài kiểm.
+  //
+  // Chỉ soát mục ở `review` — cùng phạm vi `reviewFindings` — nên mục `ready`
+  // hay `done` không kéo bài này đỏ.
+  const lanesRoot = join(import.meta.dirname, '..', 'lanes');
+  const proseOnly: string[] = [];
+  for (const lane of readdirSync(lanesRoot)) {
+    let content: string;
+    try {
+      content = readFileSync(join(lanesRoot, lane, 'backlog.md'), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const item of parseBacklog(content)) {
+      if (item.status !== 'review') continue;
+      if (heldReason(item) === 'prose') proseOnly.push(`${lane}/${item.id}`);
+    }
+  }
+  assert.deepEqual(
+    proseOnly,
+    [],
+    `mục còn treo mà chưa khai \`- hold:\`: ${proseOnly.join(', ')} — khai trường cho chúng, đừng nới bài kiểm`,
+  );
 });
 
 test('HOLD_MARKERS: "Chưa làm, cố ý" KHÔNG phải dấu treo — đó là loại trừ phạm vi', () => {

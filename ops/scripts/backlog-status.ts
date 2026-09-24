@@ -84,40 +84,45 @@ export const OPEN_BOX = '⬜';
  * dòng `status`. Ba ca thật ở trên là ba bài kiểm, nằm ở
  * `ops/test/backlog-status.test.ts`.
  *
+ * **Lần thứ ba, và lần này đổi cơ chế chứ không thêm chuỗi.** Hai lần trên
+ * đều chữa bằng cách **thêm chuỗi con**, và chuỗi con bắt cách viết: chèn đúng
+ * một chữ vào giữa là trượt, một cặp dấu nháy ngược quanh `done` cũng trượt.
+ * Ba biến thể đo được —
+ *
+ * | Câu | Chuỗi con trượt vì |
+ * |---|---|
+ * | "trước khi coi mục này **là** `done`" | `coi mục này done` đòi hai chữ liền nhau |
+ * | "mục này chỉ done khi…" (`done` viết trần) | `chỉ \`done\` khi` đòi đúng hai dấu nháy ngược |
+ * | "mục này **chưa đóng**, dù PR đã merge" | không chuỗi nào phủ |
+ *
+ * — nên lưới nay là **mẫu RegExp trên văn bản đã chuẩn hoá**
+ * (`normalizeForHold`), có khe cho vài chữ chèn vào giữa. Ca thứ hai tan ngay
+ * ở bước chuẩn hoá; hai ca còn lại cần khe chữ.
+ *
+ * **Vẫn khai thẳng: lưới này KHÔNG hội tụ.** Mẫu rộng hơn chuỗi con, nhưng nó
+ * vẫn đoán ý qua cách viết, nên câu thứ tư viết bằng chữ khác nữa vẫn lọt. Đó
+ * **không** phải chỗ để vá tiếp — đó là lý do trường `- hold:` tồn tại. Thấy
+ * một ca lọt thì khai trường cho mục đó, đừng thêm mẫu.
+ *
  * Cố ý KHÔNG nằm trong danh sách: "Chưa làm, cố ý" (`I-003`) — đó là loại
  * trừ phạm vi có chủ ý, không phải phần còn treo.
  */
-export const HOLD_MARKERS: readonly string[] = [
-  OPEN_BOX,
-  'không đóng khi pr merge',
-  'chỉ chuyển `done`',
-  'chỉ đóng khi',
-  'chưa kiểm bằng chạy thật',
-  'còn treo',
-  // Ba chuỗi dưới đây đo từ ba ca thật `E-001`, `P-010`, `P-007` — xem bảng
-  // trong khối chú thích ngay trên. Chuỗi thứ ba cố ý BỎ hai chữ "trước khi"
-  // của câu gốc: phần mang nghĩa nằm ở đoạn sau, và giữ nguyên cả câu là vá
-  // đúng MỘT ca — nó trượt ngay ở "đừng coi mục này `done`". Nới về hướng
-  // giữ lại là hướng an toàn (xem khối chú thích trên).
-  'tự chuyển `done`',
-  'chỉ `done` khi',
-  // Ba chuỗi dưới đây đo từ ba biến thể LẦN THỨ BA mà bài
-  // `HOLD_MARKERS: giới hạn còn lại` từng ghim ở hướng âm (mục `I-020`,
-  // `KF-023`). Chúng được thêm vào **lưới dự phòng** vì `HOLD_MARKERS` từ nay
-  // KHÔNG còn là nguồn quyết định — trường `- hold:` là nguồn (xem `HOLD_FIELD`
-  // và `heldReason` bên dưới). Một lưới dự phòng được phép nới rộng về hướng
-  // an toàn (giữ lại nhầm), vì chỗ nào cần chắc chắn thì khai trường; đó là
-  // khác biệt so với hai lần vá trước, khi danh sách này là nguồn DUY NHẤT và
-  // phải hội tụ mà không bao giờ hội tụ được.
-  //
-  // - `'coi mục này'` bao trọn `coi mục này `done`` cũ lẫn biến thể chèn chữ
-  //   ("coi mục này **là** `done`", "coi mục này **là** done"), nên thay cho
-  //   chuỗi cũ hẹp hơn.
-  // - `'chỉ done khi'` bắt biến thể `done` viết trần (không backtick).
-  // - `'chưa đóng'` bắt câu "mục này chưa đóng, dù PR đã merge".
-  'coi mục này',
-  'chỉ done khi',
-  'chưa đóng',
+export const HOLD_MARKERS: readonly RegExp[] = [
+  // Ô "còn treo" — quy ước sẵn có của backlog.
+  new RegExp(OPEN_BOX, 'u'),
+  /còn treo/u,
+  /chưa kiểm bằng chạy thật/u,
+  /không đóng khi pr merge/u,
+  // "chỉ đóng khi…" · "chưa đóng, dù PR đã merge" · "không đóng". Ca thứ hai
+  // là biến thể lọt lưới mà `I-020` ghim: chỉ hai chữ, không có `done` nào để
+  // neo vào.
+  /(?:không|chưa|chỉ) đóng/u,
+  // "chỉ chuyển `done`" · "vẫn không tự chuyển `done`" · "chỉ chuyển sang done".
+  /(?:tự|chỉ|không) chuyển (?:\p{L}+ ){0,2}done/u,
+  // "chỉ `done` khi…" · "chỉ done khi…" · "chỉ là done khi…".
+  /chỉ (?:\p{L}+ ){0,2}done khi/u,
+  // "coi mục này `done`" · "trước khi coi mục này là `done`" · "xem mục này như done".
+  /(?:coi|xem) mục này (?:\p{L}+ ){0,2}done/u,
 ];
 
 /**
@@ -179,10 +184,31 @@ export interface BacklogItem {
 const HEADING = /^###\s+(\S+)([^\n]*)$/;
 const STATUS = /^-\s*status:\s*(\S+)\s*$/;
 
-/** Thân mục có dấu treo nào không. So không phân biệt hoa thường. */
+/**
+ * Chuẩn hoá thân mục trước khi dò lưới dự phòng.
+ *
+ * Ba phép chuẩn hoá, mỗi phép trả lời một ca thật đã lọt:
+ *
+ * - **bỏ dấu nhấn Markdown** (`` ` ``, `*`, `_`): `` `done` ``, `**done**` và
+ *   `done` là **một chữ**. Ca `P-007` lọt lưới chỉ vì hai dấu nháy ngược.
+ * - **gộp khoảng trắng**: một câu treo bị ngắt dòng giữa hai chữ vẫn bắt được
+ *   — thân mục thật xuống dòng ở cột 100.
+ * - **hạ hoa thường**: đã có từ trước, giữ nguyên.
+ */
+export function normalizeForHold(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[`*_]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Thân mục có dấu treo nào không — **lưới dự phòng**, không phải nguồn quyết
+ * định. Nguồn quyết định là trường `- hold:` (xem `HOLD_FIELD`, `heldReason`).
+ */
 export function hasHoldMarker(body: string): boolean {
-  const lowered = body.toLowerCase();
-  return HOLD_MARKERS.some((marker) => lowered.includes(marker));
+  const normalized = normalizeForHold(body);
+  return HOLD_MARKERS.some((pattern) => pattern.test(normalized));
 }
 
 /**

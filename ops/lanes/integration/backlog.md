@@ -673,3 +673,25 @@ nhánh việc.
   `assert` âm lật thành dương); `ops/lanes/README.md` (bảng trường thêm `hold`); `KF-023` cập nhật; 35 mục
   `held` khai `- hold:`. Chính tiêu đề mục này đổi sang dùng "dấu treo" để mục — vốn nói VỀ khái niệm đó —
   không tự sa vào lưới lời văn mà nó vừa hạ xuống hàng dự phòng.
+- **Bổ sung sau `#221`, lượt `crux-worker-1` 2026-09-24 (PR `#222`).** Hai worker nhận cùng mục này cách
+  nhau 89 giây (`KF-025`): `#221` merge trước, `#222` kẹt xung đột. Bước 2 của phụ lục P1 nhận `#222` ở ca
+  `aborted-ineligible`, gộp `main` vào và giải theo phán đoán — bản của `#221` là bản chính danh cho phần
+  trùng, còn hai thứ `#222` có thêm thì giữ lại, vì cả hai đều là thứ `main` chưa có:
+  - **Lưới dự phòng đổi hình dạng, không thêm chuỗi.** `HOLD_MARKERS` nay là **mẫu RegExp trên văn bản đã
+    chuẩn hoá** (`normalizeForHold`: bỏ dấu nhấn Markdown, gộp khoảng trắng, hạ hoa thường) thay vì danh
+    sách chuỗi con. `#221` chữa lần thứ ba bằng cách **thêm ba chuỗi** — đúng cách vá mà `CLAUDE.md` mục 13
+    cấm ở lần gặp thứ hai. Chuẩn hoá làm tan cả một LỚP biến thể: `done` viết trần và `done` bọc dấu nháy
+    ngược là một chữ (ca `P-007` lọt lưới chỉ vì hai dấu nháy ngược), và một câu treo bị ngắt dòng giữa hai
+    chữ vẫn bắt được.
+  - **Máy canh phần nợ, không chỉ in ra.** Bài `nợ lời văn của backlog THẬT phải ở 0` đọc
+    `ops/lanes/**/backlog.md` thật (chỉ mục ở `review`) và đỏ **kèm tên mục** khi có mục đang bị giữ mà
+    chưa khai trường. Trước bài này, gỡ một dòng khai trường khỏi backlog thật thì **0 bài đỏ** — đúng nhóm **Z** mà
+    chính mục này sinh ra để giết.
+  - **Bài đó bắt được một ca thật ngay lần chạy đầu:** `platform/P-034` (merge `#198`, SAU `#221`) ở `review`
+    và chỉ được giữ bởi lời văn. Chữa theo đúng luật của mục này — **khai trường cho nó**, không nới bài
+    kiểm — nên `heldByProse` về **0**.
+  - **Phép đo hồi quy:** lưới rộng hơn **không lật thêm gì** trên dữ liệu thật. So với `main`: `held` 36/36
+    giống hệt, `stale` 6/6 giống hệt, `unmerged` 2/2, `unknown` 0/0; đổi duy nhất là `P-034` chuyển từ
+    `heldByProse` sang `heldByField`, tức nợ đi từ 1 về 0. Phá thử hai chỗ: gỡ bước bỏ dấu nhấn Markdown
+    khỏi `normalizeForHold` → 4 bài đỏ; gỡ một dòng khai trường khỏi backlog thật → bài máy canh đỏ kèm
+    đúng tên mục. Khôi phục → 30/30 xanh.
