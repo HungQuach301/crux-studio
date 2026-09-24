@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { concurrencyProblems } from './ci-concurrency.ts';
 import { externalSideEffects, hasDryRunInput, hasWorkflowDispatch } from './smoke-workflows.ts';
 
 const dir = join(process.cwd(), 'ops', 'workflows');
@@ -657,6 +658,13 @@ if (isMain) {
       }
 
       problems.push(...duplicateMappingKeys(source, file));
+
+      // KF-031 / mục `P-047`: workflow sinh ra check BẮT BUỘC không được
+      // `cancel-in-progress: true`. Luật nằm ở `ops/scripts/ci-concurrency.ts`,
+      // tách khỏi YAML để có bài kiểm — cùng lối `alert-escalation.ts` đã đi.
+      for (const problem of concurrencyProblems(source)) {
+        problems.push(`${file} — ${problem}`);
+      }
 
       const dryRun = missingDryRun(file, source);
       if (dryRun !== null) warnings.push(`${file} — ${dryRun}`);

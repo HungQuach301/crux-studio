@@ -50,9 +50,28 @@ permissions:
   # `issues` nào. Vì vậy KHÔNG thêm `issues: write` vào đây. Xem KF-003.
   pull-requests: write
 
+# KF-031 / mục `P-047` — ĐỌC TRƯỚC KHI ĐỔI HAI DÒNG DƯỚI.
+#
+# `cancel-in-progress` phải là `false`. Các job dưới đây sinh ra ĐÚNG năm tên
+# check mà ruleset `protect-main` đòi (`ops/scripts/required-checks.ts`), nên
+# một lượt bị huỷ để lại check run `conclusion: cancelled` mang đúng những tên
+# ấy trên `head.sha` đang sống. Ruleset đọc chúng thành "chưa báo cáo", PR đứng
+# `mergeable_state: blocked` VĨNH VIỄN — GitHub không sinh lượt mới cho một
+# `sha` đã có lượt — và `automerge.yml` trả `HTTP 405`. Đo được trên `#224`
+# (kẹt 15 giờ với 8/8 job xanh) và `#226` (8 lượt `automerge` đỏ liên tiếp).
+# `ops/scripts/ci-concurrency.ts` giữ luật này, `pnpm lint:workflows` chặn.
+#
+# Đường đi thường gặp nhất KHÔNG phải hai lần push: worker mở PR (`opened`,
+# lượt #1) rồi gắn nhãn cửa merge vài chục giây sau (`labeled` — mục `P-009`
+# đăng ký sự kiện này có chủ đích, lượt #2) trên ĐÚNG CÙNG một commit.
+#
+# `head.sha` trong `group` là chuyện CHI PHÍ, không phải chuyện đúng/sai: nó
+# giữ cho hai commit khác nhau chạy song song thay vì xếp hàng. Cho `sha` vào
+# nhóm rồi bật lại `cancel-in-progress: true` KHÔNG chữa gì — hai lượt trên
+# cùng một commit vẫn chung nhóm, nên vẫn huỷ đúng lượt ấy.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   check:

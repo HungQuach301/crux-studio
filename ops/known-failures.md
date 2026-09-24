@@ -6,6 +6,35 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-031 · Lượt `ci.yml` bị `concurrency` huỷ để lại check run `cancelled` **mang tên check bắt buộc**, và PR kẹt `blocked` vĩnh viễn trong khi mọi chỉ báo xanh
+
+> Số **KF-031**: dò `## KF-` trên `main` **và** trên `refs/pull/N/head` của cả 8 PR đang mở (`KF-005`). Cao nhất là `KF-030` (`#231`, `#225`), nên `KF-031` không đụng ai.
+
+- **Lần gặp:** 2 — `#226` (`2026-09-24` `09:31Z`→`10:26Z`, 8 lượt `automerge` đỏ liên tiếp, `HTTP 405`) và `#224` (kẹt `blocked` **≥ 15 giờ**, từ `05:42Z` tới lúc viết dòng này `20:4xZ`, với 8/8 job của lượt CI mới nhất **xanh**).
+- **Chữ ký:** `mergeable_state: "blocked"` trên một PR mà lượt CI mới nhất xanh đủ mọi job; `automerge.yml` trả `HTTP 405` với thông điệp *"5 of 5 required status checks are expected"* dù cả năm check ĐỀU có một lượt `success` trên đúng `head.sha`. `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Nhóm **Z**.
+- **Nguyên nhân gốc:** `ops/workflows/ci.yml` khai `concurrency.group` theo **số PR** cộng `cancel-in-progress: true`. Hai lượt của **cùng một `head.sha`** vì thế nằm chung nhóm, và lượt sau huỷ lượt trước — để lại trên `head.sha` đang sống một loạt check run `conclusion: cancelled` **mang đúng tên năm check mà ruleset `protect-main` đòi**. Ruleset đọc chúng thành "chưa báo cáo". GitHub không sinh lượt mới cho một `sha` đã có lượt, nên PR kẹt cho tới khi có commit mới.
+
+  Đường đi thường gặp nhất **không** phải hai lần push, mà là chính nhịp làm việc của worker (CHARTER phụ lục P1 bước 4 và bước 7):
+
+  | Mốc (`#224`) | Việc |
+  |---|---|
+  | `05:41:17Z` | worker mở PR → sự kiện `opened` → lượt CI `35961048518` |
+  | `05:42:34Z` | worker gắn nhãn cửa merge bằng **danh tính riêng** (không phải `GITHUB_TOKEN`, nên GitHub CÓ kích hoạt lại) → `ci.yml` đăng ký `labeled` trong `types` (mục `P-009`) → lượt CI `35961061644` trên **đúng cùng một commit** `871e1db` |
+  | `05:42:31Z` | `cancel-in-progress` huỷ lượt đầu → 5 check run `cancelled`, trong đó **4** mang tên check bắt buộc (`check`, `secret-scan`, `protected-area`, `trailer-warn`) |
+  | `05:43:50Z` | lượt sau xong, **7/7 job `success`** — và PR vẫn `blocked` |
+
+  Nên nó **không ngẫu nhiên**: mọi PR bị gắn nhãn trong lúc CI còn chạy đều rơi vào đây. `#242`, `#238`, `#231`, `#229`, `#225`, `#223`, `#39` thoát vì lượt đầu kịp xong trước khi nhãn được gắn — đo được: bảy PR ấy chỉ có check run của **một** lượt và cả bảy đều không `blocked`.
+
+- **Một vế của giả thuyết ban đầu đo được là SAI, ghi lại thay vì lặng lẽ bỏ:** chỉ dẫn của chủ dự án trên issue bản tin `#241` hỏi *"kiểm xem CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không"*. **Không.** `ci.yml` khai `on: pull_request:` với đúng `branches` và `types`, **không có `paths:` hay `paths-ignore:` nào** — đo bằng `grep -n "paths" ops/workflows/*.yml`: chỉ `labels.yml` và `smoke-workflows.yml` có lọc đường dẫn, và cả hai đều không sinh check bắt buộc. Mọi PR đều nhận đủ năm job. `#226` cũng không phải PR "chỉ chạm `ops/logs/`": nó chạm `ops/known-failures.md`, `ops/lanes/`, `ops/scripts/`, `ops/test/` và `ops/logs/`. Vế còn lại của chỉ dẫn — 405 là do check bắt buộc không được ruleset đọc thấy — thì **đúng**, chỉ khác nguyên nhân.
+- **Đã sửa ở đâu:** `ops/workflows/ci.yml` — `cancel-in-progress: false`, và `group` mang `head.sha` để hai commit khác nhau vẫn chạy song song thay vì xếp hàng.
+  - **Hai vế đó KHÔNG cùng loại, và trộn chúng là cách lỗi này quay lại.** `cancel-in-progress: false` là vế **đúng/sai**: không huỷ lượt nào thì không có check run `cancelled` nào để ruleset đọc nhầm, bất kể nhóm khoá theo gì. `head.sha` trong `group` là vế **chi phí**. Bản sửa nửa vời dễ nghĩ ra nhất — cho `sha` vào nhóm rồi giữ `cancel-in-progress: true` — **không chữa gì**: hai lượt trên cùng một commit vẫn chung nhóm. Có bài kiểm riêng khoá đúng cái bẫy đó.
+  - **Giá phải trả, khai thẳng:** một lượt bị vượt qua bởi commit mới nay chạy hết thay vì bị huỷ. Ước lượng ~45 giây runner cho mỗi PR bị gắn nhãn trong lúc CI chạy — đổi lấy việc bỏ hẳn một lớp lỗi đã tốn của chủ dự án một lần merge tay và hơn một giờ hàng đợi tắc. Đây là **ước lượng**, không phải số đo (bất biến I6): lượt này không chạy được `ci.yml` thật, xem ô treo dưới đây.
+- **Máy chặn từ nay:** `ops/scripts/ci-concurrency.ts` (`concurrencyProblems`), chạy trong `pnpm lint:workflows` — một workflow sinh ra ít nhất một tên trong `REQUIRED_CHECKS` thì **không được** `cancel-in-progress: true`. Luật tách khỏi YAML để có bài kiểm, cùng lối `ops/scripts/alert-escalation.ts` đã đi. `ops/test/ci-concurrency.test.ts` giữ ba tầng: hàm thuần · `ops/workflows/**` thật trên đĩa · và hợp đồng "`check-workflows.ts` phải THẬT SỰ gọi luật này" — thiếu tầng ba thì gỡ một dòng khỏi CLI làm **0** bài đỏ, đúng nhóm Z mà mục này sinh ra để giết.
+- **Luật chặn lần sau, KHÔNG gỡ được PR đã dính.** Check run `cancelled` nằm sẵn trên `head.sha` ấy và GitHub không sinh lượt mới cho nó; chỉ một **commit mới** mới gỡ được (một lần gộp `main` vào nhánh ở bước 0 của phụ lục P3 là đủ). Nên mục này còn một bộ dò: `blockedRequiredChecks` trong cùng file, đọc danh sách check run của một `head.sha` và trả về các check bắt buộc đang bị giữ, kèm cờ `silent` cho ca "có cả lượt `success` cùng tên" — tức PR trông xanh mà vẫn kẹt. Gọi bằng `node ops/scripts/ci-concurrency.ts <file.json>`.
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "`concurrency` nguy hiểm". Đọc thành: *một lượt bị huỷ vẫn để lại dấu vết mang tên của lượt thành công, nên huỷ một lượt sinh ra check **bắt buộc** là huỷ luôn lời khẳng định mà cổng vào `main` đang chờ.*
+
+---
+
 ## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
 
 > Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.

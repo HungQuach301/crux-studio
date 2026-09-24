@@ -1105,9 +1105,32 @@ Chỉ dẫn của chủ dự án trên issue bản tin [#241](https://github.com
 - hold: bản sửa `ci.yml` chỉ có hiệu lực sau khi PR vào `main` và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4) — chưa chạy thật lần nào
 - nguồn: chỉ dẫn chủ dự án trên `#241`; `ops/known-failures.md` `KF-029` và **`KF-031`**; `D-C08`; `ops/scripts/required-checks.ts`
 - tiêu chí xong:
-  - ⬜ Nguyên nhân gốc được **xác minh bằng đo**, và cả hai vế của chỉ dẫn được trả lời — kể cả vế đo được là **sai**.
-  - ⬜ Sửa gốc: nhóm `concurrency` của mọi workflow sinh ra check bắt buộc phải **mang `head.sha`** và **không** `cancel-in-progress`.
-  - ⬜ Máy chặn luật đó, tách khỏi YAML, chạy trong `pnpm lint:workflows`.
-  - ⬜ Bộ dò PR đang kẹt theo đúng chữ ký này, để chỗ kẹt nổi lên thay vì im.
-  - ⬜ Ghi `ops/known-failures.md` `KF-031`.
+  - ✅ **Nguyên nhân gốc xác minh bằng đo, và cả hai vế của chỉ dẫn được trả lời — kể cả vế đo được là SAI.**
+    Vế *"CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không"*: **không**. `ci.yml` không có `paths:`
+    hay `paths-ignore:` nào (`grep -n "paths" ops/workflows/*.yml` → chỉ `labels.yml` và `smoke-workflows.yml`,
+    cả hai không sinh check bắt buộc); và `#226` cũng không phải PR chỉ chạm `ops/logs/` — nó chạm
+    `ops/known-failures.md`, `ops/lanes/`, `ops/scripts/`, `ops/test/`. Vế *"405 vì check bắt buộc không được
+    ruleset đọc thấy"*: **đúng**, nhưng nguyên nhân khác — xem `KF-031`. Bằng chứng là một phép thử tự nhiên
+    trên **cả 8 PR đang mở**: đúng **một** PR mang check run `cancelled` tên check bắt buộc (`#224`), và đó
+    cũng là đúng **một** PR ở `mergeable_state: "blocked"`; bảy PR còn lại chỉ có check run của một lượt và
+    không PR nào `blocked`.
+  - ✅ **Sửa gốc:** `ops/workflows/ci.yml` → `cancel-in-progress: false`, `group` mang `head.sha`. Hai vế
+    **không cùng loại** và `KF-031` ghi rõ vì sao: `cancel-in-progress: false` là vế đúng/sai, `head.sha`
+    là vế chi phí. Bản sửa nửa vời (`sha` vào nhóm + giữ `cancel-in-progress: true`) **không chữa gì** và
+    có bài kiểm riêng khoá đúng cái bẫy đó.
+  - ✅ **Máy chặn, tách khỏi YAML:** `ops/scripts/ci-concurrency.ts` → `concurrencyProblems`, nối vào
+    `pnpm lint:workflows`. Đọc cả khối `concurrency` mức **job**, không chỉ mức workflow. Chỉ soát workflow
+    sinh ra check bắt buộc — `gpt-review.yml` vẫn được `cancel-in-progress: true` vì ruleset không đòi tên đó.
+  - ✅ **Bộ dò PR đang kẹt:** `blockedRequiredChecks` trong cùng file, cộng CLI
+    `node ops/scripts/ci-concurrency.ts <file.json>`. Cờ `silent` tách ca "có cả lượt `success` cùng tên" —
+    PR trông xanh mà vẫn kẹt. Bài kiểm chạy trên **dữ liệu đo thật của `#224`**, không phải dữ liệu dựng.
+  - ✅ Ghi `ops/known-failures.md` **`KF-031`**, gồm cả vế giả thuyết đo được là sai.
+  - ✅ **19 bài mới, ba tầng** (`ops/test/ci-concurrency.test.ts`): hàm thuần · `ops/workflows/**` thật trên
+    đĩa · hợp đồng "`check-workflows.ts` phải THẬT SỰ gọi luật này". Tầng ba có vì hai tầng đầu **không đủ**:
+    gỡ lời gọi khỏi CLI làm **0** bài đỏ, đúng nhóm Z mà mục này sinh ra để giết.
+  - ✅ **Phá thử 8 phép, mỗi phép đỏ đúng chỗ rồi khôi phục:** `ci.yml` về `cancel-in-progress: true` → 2 đỏ ·
+    bỏ `head.sha` khỏi `group` (giữ `cancel: false`) → 1 đỏ · gỡ lời gọi khỏi `check-workflows.ts` → 1 đỏ ·
+    `concurrencyProblems` luôn trả rỗng → 4 đỏ · thêm `failure` vào `NON_VERDICT_CONCLUSIONS` → 1 đỏ · bộ dò
+    đếm mọi tên thay vì chỉ check bắt buộc → 1 đỏ · `silent` luôn `true` → 1 đỏ · bỏ qua khối `concurrency`
+    mức job → 2 đỏ. Khôi phục → **19/19 xanh**.
 - **mã mục nhận lúc 2026-09-24 ~20:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 8 PR đang mở (242, 238, 231, 229, 225, 224, 223, 39), cao nhất là `P-046` (`#238`), nên `P-047` không đụng ai. Mã `KF-031` nhận cùng cách, cao nhất là `KF-030` (`#231`, `#225`).
