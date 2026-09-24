@@ -799,3 +799,31 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 - **Nguyên nhân gốc:** `routineRuns24h` lọc dòng bước 0 bằng `isStep0Line`, mà hàm đó so `ref === 'platform/P-016'` — hình dạng file phẳng **trước** `P-023`. Mục `platform/P-023` chuyển dòng bước 0 sang một file mỗi lượt, `ref` do `step0LogRef` sinh (`integration/step0-<mốc>-<routine>`), nên không dòng mới nào khớp. Comment doc của chính `isStep0Line` đã **khai trước** đúng lỗ này ("khi P-023 vào `main`, mở rộng cho khớp — nếu không số lượt tụt về 0 một cách im lặng") nhưng việc mở rộng chưa ai làm. Cùng hình dạng nhóm **Z**: một luật đã biết trước, một thay đổi làm nó sai, không lần chạy nào đặt hai thứ cạnh nhau.
 - **Đã sửa ở đâu:** `ops/scripts/digest-metrics.ts` — `isStep0Line` nay nhận cả hai hình dạng `ref`: file phẳng cũ (`platform/P-016`) và hình dạng P-023 (`isStep0LogId(logIdFromRef(ref))`). Lọc theo **phần mã** `step0-…`, không neo vào một `ref` cứng — cùng lẽ với `readRunLogs` quét cả thư mục.
 - **Máy chặn từ nay:** `ops/test/digest-metrics.test.ts` — bài `P-036` dựng dòng bước 0 bằng chính `step0LogRef` và đòi `routineRuns24h` đếm cả chúng (bất biến I2). Phá thử: khôi phục `isStep0Line` cũ → bài đỏ (đếm 1 thay vì 3). Còn hở, ghi rõ: bài này khoá phép **đếm**; nó không khoá được việc một hình dạng `ref` bước 0 **thứ ba** trong tương lai lại rơi khỏi phép lọc — nhưng nay phép lọc dựa trên `isStep0LogId` của kernel (một chỗ sinh mã), nên một hình dạng mới chỉ cần đi qua `step0LogId` là tự khớp.
+
+## KF-027 · Tiền tố 🤖 mà `CLAUDE.md` mục 5 bắt buộc làm mù mọi bộ đọc tiêu đề neo `^` — hai luật đúng riêng lẻ, cắn nhau khi gặp
+
+> Số **KF-027**: dò `## KF-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở (KF-005), cao nhất là `KF-026` (`#226`), nên `KF-027` không đụng ai.
+
+- **Lần gặp:** 5 — và mọi lần trước đều đã được nhìn thấy mà chưa ai chữa gốc. Hai lần cuối do **vòng soát ngữ cảnh sạch của chính PR sửa lỗi này** tìm ra, sau khi bản đầu của nó khai nhầm là "chỉ hai chỗ".
+
+  | # | Chỗ | Ai thấy | Kết cục |
+  |---|---|---|---|
+  | 1 | `claimKeyFromTitle` (`ops/scripts/claim-collision.ts`) | vòng soát ngữ cảnh sạch của `#225`, điểm **C2** | vá **tại chỗ** trong chính PR đó |
+  | 2 | `hasCompletionCommit` (`ops/scripts/backlog-status.ts`) | cùng vòng soát `#225` | khai "đáng một mục backlog riêng", **không ai nhận** |
+  | 3 | `laneFromTitle` (`ops/scripts/digest-metrics.ts`) | lượt `crux-worker-1` ~07:4xZ 2026-09-24, khi nhận mục `P-042` | chữa cùng lần này |
+| 4 | `hasRevertCommit` (`ops/scripts/backlog-status.ts`) — phép nhận diện chữ `Revert` neo vị trí 0, dù phép tìm mã mục thì không | vòng soát ngữ cảnh sạch của `#228`, mức **CHẶN** | chữa cùng lần này |
+| 5 | `isToolCommit` (`ops/scripts/recheck-assumptions.ts`) — cả bốn luật danh sách trắng đều neo `^` | cùng vòng soát `#228` | chữa cùng lần này |
+
+  **Lần 4 là lần đáng sợ nhất, và nó do chính bản sửa mở ra.** Trước `P-042`, `hasCompletionCommit` trả `false` cho tiêu đề có tiền tố, nên một mục bị revert không bao giờ tới được phép kiểm `hasRevertCommit`. Sau `P-042`, nó tới — và nếu `hasRevertCommit` còn mù thì mục **đã bị revert khỏi `main`** được lật sang `done`, mở khoá mọi `deps` trỏ vào code không còn tồn tại. Một bản sửa nhóm Z mở ra một lỗ nhóm Z sâu hơn là hình dạng đáng ghi riêng; nó chỉ lộ ra vì vòng soát tự phá thử thay vì đọc lời khai của PR (bản đầu khai ở **ba** chỗ rằng `hasRevertCommit` miễn nhiễm — cả ba đều sai).
+
+- **Chữ ký:** một bộ đọc tiêu đề trả `false`/`null` cho một tiêu đề đúng quy ước. Không gì đỏ — `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog vẫn hợp lệ; chỉ **kết luận** là sai. Nhóm **Z**.
+- **Nguyên nhân gốc:** hai luật của repo đều đúng, và chúng cắn nhau ở đúng ký tự đầu tiên.
+  - `CLAUDE.md` mục 5: mọi thứ agent viết **bắt đầu bằng 🤖**, không ngoại lệ — đó là dấu vết duy nhất phân biệt người với máy khi agent dùng danh tính chủ dự án (CHARTER 3.1, mặc định M6).
+  - Phụ lục P1 bước 4: tiêu đề PR dạng `[<lane>] <id> — …`, và mọi bộ đọc neo `^\[`.
+
+  Squash-merge giữ nguyên tiêu đề PR, nên tiền tố đi thẳng vào commit subject trên `main`. Đo được (`e4a5931`, 2026-09-24): **30 / 213** commit subject mang tiền tố 🤖. Ca thật: `🤖 [platform] P-038 — … (#212)` — `hasCompletionCommit('platform','P-038',…)` trả `false`, mục không bao giờ được nhận là đã xong.
+- **Cái giá, đo được chứ không suy:** vế `laneFromTitle` gửi một **con số sai tới chủ dự án**. PR không được tính vào "số mục done 24 giờ" thì mục **Tiến độ** của bản tin (`platform/P-019`) báo thông lượng thấp hơn thật và ngày dự kiến xong muộn hơn thật — đúng thứ bất biến **I6** ("mọi con số hiển thị có nguồn") tồn tại để chặn.
+- **Đã sửa ở đâu:** `ops/scripts/agent-prefix.ts` (mới) — `stripAgentPrefix` là **một** chỗ giữ luật, và **bốn** bộ đọc gọi nó: `hasCompletionCommit`, `hasRevertCommit`, `laneFromTitle`, `isToolCommit`. Vá tại chỗ lần thứ ba là mời lần thứ tư (`CLAUDE.md` mục 13: lỗi cùng loại lần thứ hai thì sửa cơ chế, không vá sản phẩm).
+- **Máy chặn từ nay:** ba bài **tái hiện lỗi** (bất biến I2) dựng trên tiêu đề PR **thật** đã merge — `ops/test/backlog-status.test.ts` (`#212`), `ops/test/digest-metrics.test.ts` (`#212`, `#227`, cộng một phép đếm đầu-cuối) — và `ops/test/agent-prefix.test.ts` khoá chiều ngược lại: bỏ tiền tố **quá tay** cũng phải đỏ. Phá thử, mỗi phép đỏ đúng chỗ rồi khôi phục: gỡ `stripAgentPrefix` khỏi hai bộ đọc → 4 bài đỏ; bỏ 🤖 ở mọi chỗ trong chuỗi → 3 bài đỏ; bỏ lặp lại nhiều lần → 1 bài đỏ; thêm `trim()` hộ bên gọi → 1 bài đỏ.
+- **Bài học về cách soát, không chỉ về cách sửa:** bản đầu của `#228` tự khai "hai chỗ, đã quét hết" và khai `hasRevertCommit` miễn nhiễm. Cả hai lời khai đều sai, và **không lời khai nào đỏ** — chỉ phá thử mới bắt được. Bốn phép phá mà vòng soát dựng ra đều cho **0 bài đỏ** trên bản đầu: gỡ bản sửa `hasRevertCommit`, gỡ bản sửa `isToolCommit`, bỏ neo `^` ở cả hai bộ đọc, và cho `computeProgress` tự neo `^` lại. Nay cả bốn đều có bài khoá. Đây là lý do CHARTER 6.4 đòi vòng soát **ngữ cảnh sạch** chứ không phải một lượt đọc lại của chính người viết.
+- **Còn hở, ghi rõ:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở — đã khai thành tiêu chí còn lại `⬜` của mục `P-042`.
