@@ -6,6 +6,37 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
+
+> Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: CI xanh, nhãn đúng luật, cửa merge đúng, và vẫn có nội dung chưa qua vòng soát nào vào `main`.
+
+> Ba con số đếm file dưới đây đo **ba thứ khác nhau**, đừng đọc lẫn: **16** và **8** là số file *đã đổi* của hai phiên bản PR, **14** là số file *xung đột* khi gộp `main` vào.
+
+**Quan sát được, PR `#222`, 2026-09-24** (lượt `crux-worker-1`; chính vòng soát bước 6 của lượt đó tìm ra, sau khi PR đã merge):
+
+| Mốc | Việc |
+|---|---|
+| `04:07:46Z` | `e9bc573` — vòng soát #1 xong cho bản **16 file đã đổi** |
+| `04:09:07Z` | nhãn `automerge` gắn (mốc `labeled` của timeline, 81 giây sau commit — **không** phải mốc commit; bản sửa đề xuất dưới đây đọc đúng mốc này, nên đừng lẫn hai thứ) |
+| `06:51:27Z` | `9c7486e` — push bản giải **14 file xung đột**, nội dung khác hẳn bản đã soát |
+| `06:51:52Z` | CI khởi động trên `9c7486e` |
+| `06:52:21Z` | 8 job đều `success` |
+| `06:52:43Z` | `automerge.yml` squash-merge — **76 giây sau push**; PR vào `main` với **8 file đã đổi** |
+| `~06:57Z` | vòng soát #2 (bước 6 của lượt) mới bắt đầu chạy `pnpm check` |
+
+Máy **không** làm sai luật của nó: cửa `open` chỉ đòi "CI xanh trên đầu nhánh" (CHARTER 3.3), và CI đã xanh trên đúng `9c7486e`. Không có lời `dừng` nào (cả hai comment trên PR đều mở đầu 🤖).
+
+**Chỗ thủng là ở luật, không ở máy.** CHARTER 6.4 đòi mỗi PR có subagent ngữ cảnh sạch soát **trước khi gắn** nhãn tự merge — luật viết cho thời điểm *gắn nhãn*, không cho thời điểm *merge*. Với `automerge-delayed`, CHARTER 3.3 có sẵn cơ chế bù: *"Một lần push mới đặt lại đồng hồ, nên khoảng chờ luôn áp lên đúng nội dung sắp vào `main`"*. Cửa `open` **không có gì tương đương**, nên một PR `automerge` chỉ cần được soát **một lần, ở bất kỳ phiên bản nào**, rồi mọi lần push sau đó đi thẳng vào `main` không qua soát.
+
+Đây là **lần thứ hai trong một ngày** cùng một họ sự cố quanh mục `I-020` (lần một: `KF-025`, hai worker cùng nhận một mục). `CLAUDE.md` mục 13 đòi sửa **luật** ở lần thứ hai, không vá sản phẩm.
+
+- **Máy chặn từ nay:** *chưa có* — và đây là chỗ khai thẳng thay vì để trống im lặng. Bản sửa đề xuất nằm ở mục backlog `integration/I-021`: `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn được gắn (đọc từ timeline của label event), lệch thì **gỡ nhãn** và đòi soát lại thay vì merge. Việc đó chạm `ops/workflows/automerge.yml` — vùng **`owner-merge`** (CHARTER mục 3), nên nó phải đi bằng một PR riêng mà chủ dự án merge; ghi ở đây để nó không rơi mất trong lúc chờ.
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "automerge nguy hiểm". Đọc thành: *một nhãn tự merge là lời khẳng định về MỘT phiên bản cụ thể, nên nó phải hết hiệu lực khi phiên bản đó đổi.*
+
+---
+
 ## KF-029 · Một PR không merge được **giết cả hàng đợi merge** — lần thứ hai của đúng hình dạng `KF-017`
 
 > Số **KF-029**: dò `## KF-` trên `main` **và** trên `refs/pull/N/head` của cả 11 PR đang mở (`KF-005`). Cao nhất là `KF-028` (`#231`), nên `KF-029` không đụng ai.
@@ -803,7 +834,7 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 - **Đã sửa ở đâu:** `ops/scripts/backlog-status.ts` — ba chuỗi đo từ ba ca thật được thêm vào `HOLD_MARKERS`: `tự chuyển \`done\``, `chỉ \`done\` khi`, `coi mục này \`done\``. Chuỗi thứ ba cố ý **bỏ hai chữ "trước khi"** của câu gốc — phần mang nghĩa nằm ở đoạn sau, và giữ nguyên cả câu là vá đúng một ca (vòng soát ngữ cảnh sạch nêu đúng chỗ này). Sửa ở tầng luật, **không** sửa tay ba dòng `status` của ba mục: vá sản phẩm ở lần gặp thứ hai là đúng thứ `CLAUDE.md` mục 13 cấm. Sau khi sửa, `--fix` trên cùng một nền lật **16** mục thay vì 19, và ba mục kia nằm đúng nhóm `held`.
 - **Máy chặn từ nay:** hai tầng, cả hai ở `ops/scripts/backlog-status.ts` với test ở `ops/test/backlog-status.test.ts` (chạy trong `pnpm test`):
   - **Tầng nguồn (mục `I-020`):** trường `- hold: <lý do>` mà tool đọc như `- status:`/`- deps:` (`HOLD_FIELD`, `holdField`, `heldReason`). Có trường thì mục KHÔNG bao giờ bị lật — `classify` và `applyFix` đều chặn. Đây là **nguồn quyết định**; nó bắt *ý* (mục tự khai) chứ không đoán lời văn, nên không còn lỗ để câu-thứ-N chui qua. Test: `classify … trường`, `heldReason`, `parseBacklog … - hold:`, `applyFix … không bao giờ bị lật`.
-  - **Tầng lưới dự phòng:** `HOLD_MARKERS` giữ nguyên cho mục chưa kịp khai trường; ba biến thể lần ba (`coi mục này`, `chỉ done khi`, `chưa đóng`) nay nằm trong lưới — bài `HOLD_MARKERS: ba biến thể lần ba nay đã vào lưới dự phòng` đổi ba `assert` từ `false` sang `true`. `pnpm backlog:status` in `heldByProse` = số mục còn dựa vào lưới, tức **nợ nhìn thấy được**; sau `I-020` con số đó = 0 (đã khai trường cho 35 mục nhóm `held`).
+  - **Tầng lưới dự phòng** *(mô tả của `#221`, nay đã bị `#222` thay — đọc tiếp dòng dưới)*: `HOLD_MARKERS` giữ nguyên cho mục chưa kịp khai trường; ba biến thể lần ba từng được thêm vào lưới dưới dạng **chuỗi con** (`coi mục này`, `chỉ done khi`, `chưa đóng`) — bài `HOLD_MARKERS: ba biến thể lần ba nay đã vào lưới dự phòng` đổi ba `assert` từ `false` sang `true`. `pnpm backlog:status` in `heldByProse` = số mục còn dựa vào lưới, tức **nợ nhìn thấy được**; sau `I-020` con số đó = 0 (đã khai trường cho 35 mục nhóm `held`).
   - **Lưới đó nay là MẪU, không phải chuỗi con** (PR `#222`, bổ sung sau `#221`): `HOLD_MARKERS` là mẫu RegExp chạy trên văn bản đã chuẩn hoá bằng `normalizeForHold` (bỏ dấu nhấn Markdown, gộp khoảng trắng, hạ hoa thường). Lý do đổi cơ chế thay vì thêm chuỗi lần thứ ba: `CLAUDE.md` mục 13 cấm vá sản phẩm ở lần gặp thứ hai, và chuẩn hoá làm tan cả một **lớp** biến thể thay vì đúng một câu — `done` viết trần và `done` bọc dấu nháy ngược thành một chữ (ca `P-007` lọt lưới chỉ vì hai dấu nháy ngược), một câu bị ngắt dòng giữa hai chữ vẫn bắt được. Đo được: lưới rộng hơn lật thêm **0** mục trên dữ liệu thật (`held` 36/36 và `stale` 6/6 giống hệt `main`). Phá thử: gỡ bước bỏ dấu nhấn Markdown → 4 bài đỏ.
   - **Phần nợ nay CÓ MÁY CANH, không chỉ được in ra** (PR `#222`): bài `nợ lời văn của backlog THẬT phải ở 0` đọc `ops/lanes/**/backlog.md` thật (chỉ mục ở `review`) và đỏ **kèm tên mục**. Trước nó, gỡ một dòng khai trường khỏi backlog thật thì **0 bài đỏ** — `heldByProse` chỉ là một con số in ra, tức đúng nhóm **Z**. Bài này bắt được một ca thật ngay lần chạy đầu: `platform/P-034` (merge `#198`, SAU `#221`) ở `review` và chỉ được giữ bởi lời văn; chữa bằng cách khai trường cho nó, nên `heldByProse` về 0 lần nữa.
 - **Đã thoát (mục `I-020`), không còn "còn thiếu":** trước `I-020`, danh sách chuỗi con là nguồn DUY NHẤT và không bao giờ hội tụ — câu thứ N viết khác chữ vẫn lọt. Nay nguồn là **trường**, lưới chuỗi chỉ là dự phòng, nên được phép nới rộng về hướng an toàn mà không phải gánh trọng trách hội tụ. Lớp chặn thành một câu: **một mục không muốn bị lật phải nói ra bằng một trường `- hold:`, không bằng một câu văn** — và `heldByProse` canh phần nợ chưa khai trường.
@@ -823,6 +854,7 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 ## Cách thêm một mục
 
 ```markdown
+
 ## KF-00N · <chữ ký lỗi, một dòng>
 
 - **Lần gặp:** N
