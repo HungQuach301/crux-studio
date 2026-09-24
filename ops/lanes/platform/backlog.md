@@ -744,6 +744,32 @@ Vì sao tách khỏi `P-032`: nó chạm `ops/scripts/digest-metrics.ts`, mà PR
   - ⬜ Nguồn của mục đó là dữ liệu máy đọc, không phải văn xuôi: nhãn `hotfix` trên PR đã merge trong 24 giờ qua, cộng khối `crux-hotfix-scope` của cảnh báo tương ứng.
   - ⬜ Test cho hàm dựng mục đó, gồm ca rỗng.
 - **mã mục nhận lúc 2026-09-23 ~04:0x giờ UTC** (`ops/logs/README.md`, `KF-005`): cùng phép dò như `P-034` — cao nhất lúc nhận là `P-034` của chính lượt này.
+
+### P-038 · Lượt bước 0 không gỡ được gì vẫn tốn một lần CI đầy đủ
+Khi hàng đợi xung đột trống **và** mọi mục `ready` đã có PR mở, một lượt worker không có việc gì để làm ngoài ghi dòng log bước 0 của chính nó — nhưng nó vẫn mở một PR, và PR đó vẫn chạy **6 job `ci.yml`** cộng một lượt `main-ci` sau khi merge.
+
+Đo được ngày 2026-09-23: bốn lượt liên tiếp (`22:43Z` `#209`, `23:25Z` `#210`, `23:42Z` `#211`, cộng lượt `20:38Z`) đều là PR log thuần một dòng. Nhịp worker thật là 2–3 lượt mỗi giờ (`VF-G1`), nên ở trạng thái yên thì đây là chi phí thường trực, không phải ngoại lệ.
+
+**Chỗ hai luật cắn nhau, và là lý do mục này cần chủ dự án duyệt chứ không tự làm:** bỏ hẳn PR log thì trong một khoảng yên **không gì vào `main` cả**, mà `watchdog.yml` đọc nhịp tim routine bằng cách quét `ops/logs` của bản trên **`main`** (CHARTER 2.4 dấu hiệu số 5, ngưỡng 3 giờ). Hệ quả: watchdog `@nhắc` chủ dự án vì một nhà máy đang chạy đúng — tiết kiệm tiền CI bằng cách tiêu thời gian của anh, ngược thước đo CHARTER 1.3.
+
+- deps: —
+- risk: medium — hai vế ngược nhau. Nghiêng về tiết kiệm CI quá tay thì watchdog gọi người sai; nghiêng về nhịp tim quá tay thì mục này không đổi gì.
+- status: blocked
+- nguồn: comment của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193) (`2026-09-23T14:18:09Z`, khối `CHI PHÍ GITHUB ACTIONS`); `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213); CHARTER 2.4 dấu hiệu số 5; `ops/workflows/watchdog.yml` biến `LAST_BEAT`; `ops/workflows/ci.yml` (chỉ kích bằng `pull_request`, nên push vào nhánh không có PR **không** chạy CI)
+- **chặn ở:** quyết định của chủ dự án trên `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213). Phần cơ chế đã có sẵn và có test (xem dưới), nhưng nó chỉ có hiệu lực khi phụ lục P1/P3 của CHARTER gọi tới — mà đó là sửa luật vận hành, nên không tự làm. Lớp chặn tự động của phiên chặn thao tác đó, phân loại `Instruction Poisoning`: ghi luật vào vùng bảo vệ dựa trên nội dung một comment issue đúng là hình dạng `CLAUDE.md` mục 5 và bất biến **I7** tồn tại để bắt. Không lách.
+- tiêu chí xong:
+  - ✅ Cơ chế quyết định tách khỏi văn xuôi: `ops/scripts/step0-pr-gate.ts` hàm `step0PrGate` trả `openPr` cộng một lý do đọc được. PR bỏ lại vì `aborted-ineligible` **không** tính là việc thật (bỏ lại không tạo commit nào).
+  - ✅ Test `ops/test/step0-pr-gate.test.ts` khoá **cả hai** chiều hỏng: lượt log-only vẫn mở PR (chiều tốn tiền), và lượt log-only không mở PR trong lúc nhịp tim sắp quá hạn (chiều gọi người — nhóm **Z**, không gì đỏ). 18 bài; đã **phá thật** sáu chỗ, cả sáu đỏ đúng bài, khôi phục thì xanh lại.
+  - ⬜ Phụ lục P1 bước 0 và P3 bước 0d của CHARTER gọi tới `step0PrGate` và nói rõ lượt `openPr: false` làm gì. **Chờ quyết định.**
+  - ⬜ Dòng log của lượt `openPr: false` không bị mất (bất biến **I8**): commit và `git push` lên nhánh chờ `claude/integration/step0-pending/<mã log>`, không mở PR. Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp.
+  - ⬜ Chỗ gọi phải lấy `lastHeartbeatOnMainAt` bằng **đúng bộ lọc** mà `watchdog.yml` dùng (`ref` khớp `(^|/)(step0|P3-run)-` hoặc `== "platform/P-016"`), và bộ lọc đó phải là **một** chỗ dùng chung — tốt nhất export từ `kernel/src/log.ts`, nơi đã giữ `STEP0_LOG_PREFIX`. Hai bộ lọc khác nhau thì cổng và watchdog nói hai chuyện mà không gì đỏ.
+  - ⬜ Một phép đo sau khi áp: số PR log mỗi 24 giờ trước và sau, để biết mục này có thật sự cắt được chi phí hay chỉ dịch nó đi.
+- **vòng soát ngữ cảnh sạch của PR #212 — 0 phát hiện chặn**, và hai phát hiện đã sửa ngay trong PR đó:
+  - Kẹp `Math.max(0, …)` cho mốc `at` ở tương lai **không** chữa được chỗ hỏng nó tự nhận là đã chặn: `0 >= 150` cũng `false`, nên cổng vẫn nói "nhịp tim còn mới" và vẫn không mở PR, mà `watchdog.yml` cũng không nổ (`AGE_MIN` âm, `-gt 180` false). Không lớp nào bắt được — nhóm **Z** thuần. Nay tương lai quá `HEARTBEAT_FUTURE_TOLERANCE_MINUTES` (5 phút) trả `null` → nhánh `heartbeat-unreadable` → **mở PR**.
+  - Bài khoá ngưỡng 180 là một phép so **hằng-với-hằng**, vẫn xanh nếu ai đổi `watchdog.yml` thành `-gt 240`. Nay bài đọc chính `ops/workflows/watchdog.yml` và bắt lấy ngưỡng thật; đã phá thật **cả hai chiều** (đổi hằng số TS, và đổi ngưỡng YAML), cả hai đỏ.
+  - Còn để ngỏ có chủ đích: hai worker chồng nhau có thể cùng mở một PR log (mất một phần khoản tiết kiệm, không sai đúng-sai) — đã khai trong tài liệu hàm, không dựng khoá chống đua vì khoá đó cần trạng thái dùng chung, đúng thứ `D-C04` tránh.
+- **mã mục nhận lúc 2026-09-23 ~23:5x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên `refs/pull/N/head` của cả 12 PR đang mở** — cao nhất là `P-036` (`#194`) và `P-037` (`#198`), nên `P-038` không đụng ai.
+
 ### P-033 · Chuỗi kẹt của bước 0 đếm bằng mắt từ văn xuôi, nên ngưỡng cảnh báo im lặng
 Phụ lục P3 bước 0b đòi ba số cho mỗi PR bị bỏ lại — giờ kẹt · làn sở hữu · **số lượt liên tiếp cùng chữ ký** — và nói thẳng lý do: *"thiếu chúng thì `pickPrToHandle` ở phụ lục P1 bước 2 không có nguồn để đếm"*. Nhưng nó không nói **ghi vào đâu**, nên mọi lượt ghi cả ba vào `note`, tức văn xuôi. Nguồn để đếm vì thế chưa bao giờ tồn tại ở dạng máy đọc được.
 
