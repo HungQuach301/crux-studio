@@ -10,7 +10,7 @@ Quyết định này ràng buộc cả làn `visual` lẫn ngân sách phút Act
 - deps: —
 - risk: high
 - status: review
-- hold: chờ phút Actions thật đo trên runner GitHub, và chỉ số 4–6 của WP-003 chờ mắt chủ dự án (`visual/V-002`)
+- hold: chưa đo được phút Actions thật; ba chỉ số 30/60fps chờ mắt chủ dự án (WP-003 mục 5) và visual/V-002
 - nguồn: CHARTER mục 10 (Đợt 1); giả định G5
 - tiêu chí xong:
   - ✅ **Đo thật cả hai cấu hình, 2026-09-21** — một tập **đầy đủ** 21 phút (`targetDurationMs` của genre

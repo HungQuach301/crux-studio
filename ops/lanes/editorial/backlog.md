@@ -10,7 +10,7 @@ Xưởng Biên tập (S04–S08). Đợt 1: **nâng cấp stub, chưa gọi API 
 - deps: —
 - risk: low
 - status: review
-- hold: vế "`generation` xuất hiện trong artifact" chưa có artifact thật trong repo — chờ `E-005` gọi prompt thật
+- hold: vế 'promptVersion xuất hiện trong artifact' chỉ đạt khi có lượt gọi mô hình thật đi qua băng (Cassette.calls); stub chưa quan sát được
 - nguồn: spec `engine/library/prompts/`
 - tiêu chí xong:
   - Mỗi prompt có phiên bản, và phiên bản đó xuất hiện trong artifact (`generation.promptVersion`).
