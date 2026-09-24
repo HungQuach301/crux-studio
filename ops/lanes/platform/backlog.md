@@ -4,6 +4,37 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-045 · fix · Một PR không merge được **giết cả hàng đợi**, nên mọi PR xếp sau không bao giờ được xét
+
+`ops/workflows/automerge.yml` duyệt cả hàng đợi trong một vòng `for` dưới `set -euo pipefail`, và lời gọi merge nằm **trần**. Một PR mà GitHub từ chối merge làm `gh` thoát khác 0, `set -e` giết cả bước, và mọi PR xếp sau **không có một dòng log nào**.
+
+Đo bằng chạy thật, lượt `automerge` `737` (`2026-09-24T10:26Z`): hàng đợi `232 231 229 226 225 224 214 112 84 39` · `#232` merge · `#231`/`#229` chờ · `#226` trả `HTTP 405` · rồi hết. `#225 #224 #214 #112 #84 #39` không được xét — trong đó `#84` (tới hạn ~`09:19Z`) và `#39` (tới hạn ~`08:41Z`) đã quá khoảng chờ 12 giờ. Tám lượt liên tiếp (`730`→`737`) chết ở đúng chỗ ấy.
+
+Hậu quả thứ hai: hai dòng `$GITHUB_OUTPUT` nằm **sau** vòng lặp, nên `steps.merge.outputs.merged` rỗng và bước "Gọi tay các workflow lẽ ra chạy theo sự kiện push" bị bỏ. Merge bằng `GITHUB_TOKEN` không tự sinh sự kiện (**G2**, `KF-004`), nên đo được: `main` = `a92df04` (merge `#232` lúc `10:26:29Z`) tới `10:39Z` **không có lần chạy `main-ci` nào**.
+
+Nhóm **Z**: `pnpm check` xanh, CI xanh trên mọi PR, `main` xanh, không cảnh báo nào mở. Và là **lần thứ hai** của đúng hình dạng `KF-017` (lần đó `403`), nên `CLAUDE.md` mục 13 đòi sửa cơ chế chứ không vá nguyên nhân.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/automerge.yml`, tức chính workflow tự merge. Bản sửa **không** nới cổng nào: `invariants.merge-gate.ts` và `invariants.protected-area.ts` giữ nguyên, chỉ đổi cách xử lý một lời gọi merge **thất bại**. Chiều nguy hiểm (nuốt lỗi thành xanh) có bài khoá riêng.
+- status: review
+- hold: chờ chủ dự án merge — `ops/workflows/automerge.yml` thuộc vùng `owner-merge`; và một phép đo sau khi sync: lượt `automerge` kế tiếp có xét tới `#84`/`#39` không
+- nguồn: log lượt [`35987203354`](https://github.com/HungQuach301/crux-studio/actions/runs/35987203354) và [`35981770847`](https://github.com/HungQuach301/crux-studio/actions/runs/35981770847); `actions/workflows/main-ci.yml/runs`; `ops/known-failures.md` `KF-029`, `KF-017`, `KF-024`
+- tiêu chí xong:
+  - ✅ Phần xét tách khỏi YAML: `ops/scripts/merge-queue.ts`, hàm thuần `summarizeQueue(report)`. Bash chỉ **ghi sổ**.
+  - ✅ Lời gọi merge bọc trong `if MERGE_OUT=$( … )`; lỗi được ghi, in ra, rồi `continue`. Không `|| true`.
+  - ✅ **So hai con số, không tin lời khai:** sổ giữ cả đầu vào (`queue`) lẫn đầu ra (`attempts` + `skipped`); PR không có kết luận nào rơi vào `uncovered` và lượt chạy ĐỎ với dòng `ĐÓI HÀNG ĐỢI`.
+  - ✅ Bước "Kết luận hàng đợi merge" là bước **cuối**, đứng **sau** bước dispatch, `if: !cancelled()`. Sổ thiếu cũng đỏ (`⚠ KHÔNG TRẢ LỜI ĐƯỢC`, thoát 2 ở CLI).
+  - ✅ **Bài tái hiện lỗi** (bất biến **I2**, nhãn `fix`): `ops/test/merge-queue.test.ts` bài đầu dựng lại nguyên hàng đợi và kết cục lượt `737`.
+  - ✅ Tầng hợp đồng bash↔TS: chạy thật hai khối `bash` dưới `set -euo pipefail` chứng minh dạng cũ giết vòng lặp còn dạng mới thì không. Hai tầng đầu **không** phủ được chỗ này — ngữ nghĩa `set -e` chính là chỗ hỏng.
+  - ✅ Phá thử **thật** năm chỗ, số đỏ là số đo: tháo bọc lời gọi merge → 1 · xoá bước kết luận → 1 · nhánh `skip` thôi ghi sổ → 1 · `uncovered` luôn rỗng → 2 · lỗi merge thôi làm đỏ → 1. Khôi phục → 11/11 xanh.
+  - ⬜ **Chờ chủ dự án merge:** vùng `owner-merge` (CHARTER mục 3), nên cơ chế chỉ có hiệu lực sau khi anh merge và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4). Tới lúc đó hàng đợi **vẫn** đói ở mỗi lượt.
+  - ⬜ Một phép đo sau khi áp: lượt `automerge` kế tiếp có in dòng kết luận cho **cả 10** PR của hàng đợi không, và `#84`/`#39` có được xét không.
+- **ngoài phạm vi, tách mục — không tự nống PR:**
+  - Nguyên nhân của `405` ở `#226` nằm phía GitHub. Giả thuyết có số đỡ (`KF-029`): một lượt `ci.yml` bị `concurrency` huỷ để lại **check run `cancelled`** mang đúng tên các check bắt buộc, và ruleset `protect-main` đọc chúng thành "chưa báo cáo" — khớp con số *"5 of 5"* trong thông điệp lỗi; đối chứng `#229` (chỉ `success`) là `clean`, `#226` là `blocked`. Cùng gốc với `KF-024` nhưng nhìn từ phía GitHub, nên `P-039` không chữa được. **Chưa** xác nhận bằng cấu hình ruleset (agent không đọc được).
+  - Không ai canh khi `automerge` đỏ (rủi ro **B7**). Mục này làm nó đỏ **đúng lúc phải đỏ**, nhưng chưa nối vào một trong bốn loại cảnh báo khẩn của CHARTER 2.4. Đáng một mục riêng, và nó chạm `watchdog.yml` đang bị `#229` sửa.
+
+---
+
 ### P-039 · Cổng merge đọc lần chạy `ci.yml` **đã bị huỷ** thành phán quyết, nên PR xanh kẹt vĩnh viễn — **ưu tiên CAO NHẤT**
 `ops/workflows/automerge.yml` hỏi `actions/workflows/ci.yml/runs?head_sha=$HEAD&status=completed&per_page=1` rồi lấy `.workflow_runs[0]`. Danh sách ấy xếp theo `created_at` giảm dần — không theo "lần chạy nào có thẩm quyền". `ci.yml` có `concurrency` huỷ lần chạy cũ, nên một SHA có nhiều lần chạy `completed`, và hai lần chạy có thể **trùng `created_at` tới từng giây**; khi đó phần tử đầu có thể là lần `cancelled`.
 

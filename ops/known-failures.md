@@ -6,6 +6,45 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-029 · Một PR không merge được **giết cả hàng đợi merge** — lần thứ hai của đúng hình dạng `KF-017`
+
+> Số **KF-029**: dò `## KF-` trên `main` **và** trên `refs/pull/N/head` của cả 11 PR đang mở (`KF-005`). Cao nhất là `KF-028` (`#231`), nên `KF-029` không đụng ai.
+
+- **Lần gặp:** 2 — cùng hình dạng, hai nguyên nhân khác nhau.
+
+  | # | Nguyên nhân | Đo được | Kết cục |
+  |---|---|---|---|
+  | 1 | `KF-017` · thiếu scope `checks: read` → `403` ở PR đầu hàng đợi | 35 lượt đỏ liên tiếp, `14:45Z`→`20:38Z` 2026-09-22 | chữa **nguyên nhân** (thêm một dòng quyền), để nguyên **hình dạng** |
+  | 2 | GitHub từ chối merge `#226` → `405` | 8 lượt liên tiếp `730`→`737`, `09:31Z`→`10:26Z` 2026-09-24 | mục này — chữa **hình dạng** |
+
+- **Chữ ký:** lượt `automerge` đỏ ở một PR nào đó rồi dừng; mọi PR xếp sau trong hàng đợi **không có một dòng log nào**. Không gì đỏ ở chỗ ai nhìn: `pnpm check` xanh, CI xanh trên **mọi** PR, `main` xanh, không cảnh báo nào mở. Nhóm **Z** — và là ca nhóm Z khoá hàng đợi, không chỉ làm chậm.
+- **Nguyên nhân gốc:** bước "Xét từng PR rồi merge cái nào tới lượt" duyệt cả hàng đợi trong một vòng `for` dưới `set -euo pipefail`, và lời gọi merge nằm **trần**:
+
+  ```bash
+  gh api -X PUT "repos/$REPO/pulls/$NUM/merge" -f merge_method=squash -f sha="$HEAD"
+  ```
+
+  `gh` thoát khác 0 → `set -e` giết cả bước. Đo được ở lượt `737`:
+
+  ```
+  hàng đợi: 232 231 229 226 225 224 214 112 84 39
+  #232 merge · #231 wait · #229 wait · #226 → 405 → BƯỚC CHẾT
+  #225 #224 #214 #112 #84 #39 — KHÔNG lượt nào xét tới
+  ```
+
+  Ở đúng lượt đó, `#84` (tới hạn ~`09:19Z`) và `#39` (tới hạn ~`08:41Z`) đã **quá** khoảng chờ 12 giờ mà nằm im.
+- **Hậu quả thứ hai, nặng hơn và ít ai ngờ:** hai dòng `$GITHUB_OUTPUT` nằm **sau** vòng lặp, nên bước chết nuốt luôn chúng. `steps.merge.outputs.merged` rỗng → bước "Gọi tay các workflow lẽ ra chạy theo sự kiện push" bị bỏ. Merge bằng `GITHUB_TOKEN` **không** tự sinh sự kiện (giả định **G2**, `KF-004`), nên lời gọi tay là đường **duy nhất**. Đo được: lượt `737` merge `#232` thành `main` = `a92df04`, và tới `10:39Z` **không lần chạy `main-ci` nào tồn tại cho sha đó** — lần gần nhất vẫn ở `2329988`. Một commit vào `main` mà cổng chính của `main` chưa hề chạy trên nó, cộng `sync-workflows` không được gọi.
+- **Đã sửa ở đâu:** `ops/scripts/merge-queue.ts` (mới) giữ phần xét, `ops/workflows/automerge.yml` chỉ ghi sổ.
+  - Lời gọi merge bọc trong `if MERGE_OUT=$( … ); then … else ghi lỗi; continue; fi`. **Không** `|| true`: lỗi được ghi, in ra, và vẫn làm lượt chạy đỏ.
+  - Mọi nhánh thoát của vòng lặp ghi một dòng — cổng cho qua, chạy thử, merge xong, merge lỗi. Sổ để cạnh **đầu vào** (`queue`), nên bước cuối **so hai con số** thay vì tin một lời khai; PR nào không có kết luận thì `uncovered` gọi tên nó ra (`ĐÓI HÀNG ĐỢI`).
+  - Bước "Kết luận hàng đợi merge" là bước **cuối cùng**, đứng **sau** bước gọi workflow hậu merge, và mang `if: !cancelled()`. Đó là chỗ duy nhất được phép làm lượt chạy đỏ — đặt nó sớm hơn là dựng lại đúng hậu quả thứ hai ở trên. Sổ thiếu cũng đỏ, kèm `⚠ KHÔNG TRẢ LỜI ĐƯỢC`.
+- **Máy chặn từ nay:** `ops/test/merge-queue.test.ts`, 11 bài, ba tầng. Bài đầu là **tái hiện lỗi** (bất biến **I2**) dựng lại nguyên hàng đợi và kết cục của lượt `737`. Tầng hai đọc chính `ops/workflows/automerge.yml` (bản đã bỏ chú thích, vì một luật khớp nhầm chữ trong chú thích là một luật chết) và đòi: lời gọi merge không để trần · mọi nhánh thoát ghi sổ · bước kết luận tồn tại, gọi `merge-queue.ts`, và đứng **sau** bước dispatch. Tầng ba chạy thật hai khối `bash` dưới `set -euo pipefail` để chứng minh dạng cũ giết vòng lặp còn dạng mới thì không — ngữ nghĩa `set -e` là chỗ không bài TypeScript nào chạm tới, và nó chính là chỗ hỏng.
+
+  Phá thử, mỗi phép đỏ đúng chỗ rồi khôi phục: tháo bọc lời gọi merge → 1 đỏ · xoá bước kết luận → 1 đỏ · nhánh `skip` thôi ghi sổ → 1 đỏ · `uncovered` luôn rỗng → 2 đỏ · lỗi merge thôi làm đỏ → 1 đỏ.
+- **CHƯA sửa, và phải nói thẳng:** mục này làm hàng đợi **không còn bị đói**; nó **không** làm `#226` merge được. Nguyên nhân của `405` nằm phía GitHub, và giả thuyết tốt nhất đo được là: `ci.yml` có `concurrency` huỷ lần chạy cũ, nên trên đúng `head_sha` `cde1752` của `#226` có một lần chạy để lại **7 check run `cancelled`**, trong đó đủ **cả 5** tên check mà ruleset `protect-main` đòi — khớp đúng con số trong thông điệp lỗi *"5 of 5 required status checks are expected"*. Đối chứng: `#229` chỉ có check run `success` và `mergeable_state` là `clean`, còn `#226` là `blocked`. Đây là **cùng nguyên nhân gốc** với `KF-024` nhìn từ phía GitHub thay vì phía bên đọc — `P-039` chữa được bên đọc, không chữa được ruleset. Chưa xác nhận bằng cách đọc cấu hình ruleset (agent không đọc được), nên khai là **giả thuyết có số đỡ**, không phải kết luận. Tách thành mục backlog riêng: một lượt `ci.yml` bị huỷ không được để lại check run `cancelled` mang tên check bắt buộc.
+
+---
+
 ## KF-024 · Cổng merge đọc một lần chạy `ci.yml` **đã bị huỷ** thành phán quyết của cây mã, nên PR xanh nằm im vĩnh viễn
 
 > Số **KF-024**: dò `## KF-` trên `main` **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-023`, nên `KF-024` không đụng ai.
