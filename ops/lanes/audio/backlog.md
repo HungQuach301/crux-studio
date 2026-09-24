@@ -49,3 +49,59 @@ Cung cấp dữ liệu cho kiểm số 6 của Preflight.
 - status: ready
 - nguồn: CHARTER 5.4
 - tiêu chí xong: tập vàng chạy lại xanh với `impl: v1`, băng ghi chứa phản hồi TTS thật.
+
+---
+
+### AU-006 · Lưu spec giọng đọc của chủ dự án vào Channel Pack
+Chỉ dẫn của chủ dự án, khối **GIỌNG ĐỌC** trong comment `2026-09-23T14:18:09Z` trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193): *"Thay cho bảng 3 nhà cung cấp: lưu spec sau vào Channel Pack us-personal-finance."* Comment không mở đầu bằng 🤖 trên issue nhãn `digest` → chỉ dẫn thật (`CLAUDE.md` mục 5).
+
+Chỉ dẫn nằm đó **21 giờ** mà không mục backlog nào giữ, nên bốn lượt worker liên tiếp đọc xong rồi đi tới `idle`. Đó là hình dạng nhóm **Z** của chính hàng đợi việc: việc có thật, đã được giao, và mọi chỉ báo xanh.
+
+- deps: —
+- risk: low — lưu spec không tốn tiền, không khoá dự án vào nhà cung cấp nào, và revert được bằng git.
+- status: review
+- nguồn: chỉ dẫn chủ dự án trên `#193`; `packs/channels/us-personal-finance/persona.md` ("Giọng đọc | Một giọng duy nhất, không đổi. Xem `channel.json`"); giả định **G7**
+- tiêu chí xong:
+  - ✅ Giá trị máy đọc: khoá `voiceSpec` trong `packs/channels/us-personal-finance/channel.json` — nhân vật, ba điều cấm, giọng vùng, tuổi cảm nhận, hai giới tính ứng viên, hai dải tốc độ, ba luật ngữ điệu, ưu tiên nguồn giọng, cờ `changeIsIrreversible`.
+  - ✅ Bản người đọc kèm xuất xứ: `packs/channels/us-personal-finance/voice-spec.md`, dẫn đúng comment nguồn theo dấu thời gian.
+  - ✅ Bài kiểm khoá spec: `ops/test/channel-voice-spec.test.ts`, 6 bài. **Phá thử thật bốn chỗ, số đỏ là số đo:** đổi dải tốc độ → 2 bài đỏ · bớt một điều cấm → 1 · điền `ttsVoiceId` → 1 · bỏ một mục giữ khỏi `voice-spec.md` → 1.
+  - ✅ Khoá chiều ngược: `ttsVoiceId` và `providers.tts` vẫn `null`. Lưu spec **không** phải chọn giọng — chọn là `irreversible` (CHARTER 2.3 nhóm 3), phụ thuộc **G7**.
+  - ✅ Phần còn lại của chỉ dẫn có người giữ: `AU-007`, `AU-008`, `topic/T-013`. Không phần nào rơi mất.
+- **Vì sao `review` chứ không `done`:** phần lưu spec đã xong và có máy canh, nhưng chỉ dẫn gốc còn bốn việc nữa ở ba mục khác. Chuyển `done` khi PR merge — mục này không chờ chủ dự án việc gì.
+- **cửa merge:** chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+- **mã mục:** dò `### AU-` trên `main` **và** trên đầu cả 12 PR đang mở — cao nhất là `AU-005`.
+
+---
+
+### AU-007 · Bước chuẩn hoá văn bản trước TTS, độc lập nhà cung cấp
+Việc **(1)** của khối GIỌNG ĐỌC (`#193`). Chủ dự án nêu nguyên văn các ca phải đọc đúng: số, tiền, `%`, năm, khoảng, viết tắt — `401(k)` = *four-oh-one-K* · `S&P 500` = *S and P five hundred* · `APR`/`ETF`/`HSA`/`IRA` đọc từng chữ · `FICO` = *FYE-koh*.
+
+Cộng phần **(a)** của khối kiến trúc: công đoạn mỗi tập của xưởng giọng = chuẩn hoá văn bản → TTS bằng giọng khoá trong Channel Pack → kiểm ASR/độ to/độ dài → làm lại tối đa theo tham số `R7d` → xuất timestamp từng từ; chạy **trước** cổng hình storyboard/Preflight.
+
+- deps: AU-006
+- risk: medium — bảng đọc là dữ liệu của **kênh** (`packs/channels/`), bộ chuẩn hoá là mã của **xưởng**; trộn hai thứ là cách hằng số nội dung lọt vào `kernel` (`CLAUDE.md` mục 11).
+- status: ready
+- nguồn: chỉ dẫn chủ dự án trên `#193`, việc (1) và kiến trúc (a)
+- tiêu chí xong:
+  - Bảng đọc nằm trong Channel Pack, máy đọc được, mỗi dòng có ca kiểm.
+  - Bộ chuẩn hoá **không** gọi nhà cung cấp nào và chạy được khi `providers.tts` còn `null`.
+  - Bài kiểm đi từ văn bản thật của tập vàng, không từ ví dụ tự bịa.
+  - Thứ tự công đoạn (a) ghi vào contract của xưởng `audio`, không chỉ ghi trong tài liệu.
+
+---
+
+### AU-008 · Vòng thử 5 nhà cung cấp giọng và gói nghe mù
+Các việc **(2) (3) (4)** của khối GIỌNG ĐỌC (`#193`), cộng phần **(b)** của khối kiến trúc: việc chọn giọng là **module kiểm định năng lực tái sử dụng**, không nằm trong quy trình từng tập.
+
+Chủ dự án khai sẵn trần chi phí: **tối đa 30 USD**. R1 tracer dùng `gpt-4o-mini-tts` làm `v0-real`. Lựa chọn cuối là `🤖 [QĐ]` **irreversible**.
+
+- deps: AU-007
+- risk: high — đây là mục **đầu tiên của dự án tiêu tiền API thật**. CHARTER mục 8 và `CLAUDE.md` mục 15: điều tiết ở cửa vào.
+- status: ready
+- hold: chưa mở — trần 30 USD là chi tiền, tức CHARTER 2.3 nhóm 1 (`irreversible`). Chủ dự án đã khai trần trong cùng chỉ dẫn, nhưng **chưa** có `🤖 [QĐ]` nào đóng lại việc bật vòng thử; lượt nào nhận mục này phải mở `[QĐ]` trước, không tự chi.
+- nguồn: chỉ dẫn chủ dự án trên `#193`, các việc (2) (3) (4) và kiến trúc (b)
+- tiêu chí xong:
+  - 5 nhà cung cấp × 2 giọng gần spec `voiceSpec` nhất: ElevenLabs v3 và Multilingual v2, Gemini 3.1 Flash TTS, Cartesia Sonic 3.6, Inworld TTS-2, OpenAI `gpt-4o-mini-tts`.
+  - Kiểm tự động: ASR nghe lại đúng **100%** số và viết tắt · có timestamp từng từ · đọc liền **12 phút** không trôi âm sắc · điều khoản thương mại và B2B có dòng trong `ops/license-ledger.md`.
+  - Gói nghe mù cho chủ dự án: tên file ngẫu nhiên, nghe được trên GitHub điện thoại, kèm phiếu chấm 5 tiêu chí.
+  - Chi phí thật của vòng thử ghi vào `ops/logs/audio/AU-008.jsonl` (`costUsd`, bất biến **I8**) và không vượt 30 USD.
