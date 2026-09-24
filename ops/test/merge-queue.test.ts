@@ -122,6 +122,17 @@ test('đầu vào hỏng thì NÉM — "không đọc được" khác "không c�
     () => summarizeQueue({ queue: [232], attempts: [{ number: 232 }], skipped: [] } as unknown as QueueReport),
     QueueReportError,
   );
+  // `reason` thiếu cũng phải ném, không phải in ra `undefined`: sổ sinh ra để
+  // lượt sau khỏi mở log Actions, nên một dòng không nói được lý do là một
+  // dòng hỏng — không phải một dòng hợp lệ có chỗ trống.
+  assert.throws(
+    () => summarizeQueue({ queue: [232], attempts: [{ number: 232, ok: false }], skipped: [] } as unknown as QueueReport),
+    QueueReportError,
+  );
+  assert.throws(
+    () => summarizeQueue({ queue: [232], attempts: [], skipped: [{ number: 232, outcome: 'wait' }] } as unknown as QueueReport),
+    QueueReportError,
+  );
 });
 
 // ── Tầng 2 · hình dạng YAML ──────────────────────────────────────────────
@@ -139,15 +150,45 @@ test('KF-029 · lời gọi merge trong `automerge.yml` KHÔNG được để tr
 });
 
 test('KF-029 · mọi nhánh thoát của vòng lặp đều ghi sổ', () => {
+  // Mỗi mẫu phải neo vào thứ RIÊNG của nhánh đó. Vòng soát ngữ cảnh sạch đo
+  // được: mẫu `>> "$SKIPPED"` trần cũng khớp nhánh `dry-run`, nên khẳng định
+  // cho nhánh "cổng merge cho qua" KHÔNG BAO GIỜ đỏ riêng — bỏ hẳn dòng ghi
+  // sổ của nhánh đó mà 1105/1105 vẫn xanh. Một mẫu chết đúng nghĩa.
   for (const [what, pattern] of [
-    ['cổng merge cho qua', />> "\$SKIPPED"/],
-    ['chạy thử', /"outcome": "dry-run"|outcome: "dry-run"/],
-    ['merge xong', /ok: true[\s\S]*?>> "\$ATTEMPTS"/],
-    ['merge lỗi', /ok: false[\s\S]*?>> "\$ATTEMPTS"/],
+    ['cổng merge cho qua', /--arg outcome "\$OUTCOME"[\s\S]{0,200}?>> "\$SKIPPED"/],
+    ['chạy thử', /outcome: "dry-run"[\s\S]{0,200}?>> "\$SKIPPED"/],
+    ['merge xong', /ok: true[\s\S]{0,200}?>> "\$ATTEMPTS"/],
+    ['merge lỗi', /ok: false[\s\S]{0,200}?>> "\$ATTEMPTS"/],
     ['hàng đợi rỗng', /\{"queue":\[\],"attempts":\[\],"skipped":\[\]\}' > "\$WORK\/report\.json"/],
   ] as const) {
     assert.match(WORKFLOW_CODE, pattern, `nhánh "${what}" không ghi sổ — PR đó thành chỗ trống`);
   }
+});
+
+test('KF-029 · sổ phải mang ĐẦU VÀO thật của hàng đợi, không phải một chuỗi rỗng', () => {
+  // Hai phép phá mà vòng soát đo được là 0 bài đỏ, nay cả hai có bài khoá:
+  // `--arg queue ""` làm `uncovered` vĩnh viễn rỗng (bộ dò đói hàng đợi thành
+  // vô hình), và xoá hẳn dòng ghi `report.json` làm bước cuối không có sổ.
+  assert.match(
+    WORKFLOW_CODE,
+    /jq -cn --arg queue "\$NUMS"[\s\S]{0,400}?> "\$WORK\/report\.json"/,
+    'dòng dựng sổ sau vòng lặp phải lấy `queue` từ chính `$NUMS` — một chuỗi rỗng làm `uncovered` không bao giờ bật',
+  );
+  assert.match(
+    WORKFLOW_CODE,
+    /--slurpfile attempts "\$ATTEMPTS"[\s\S]{0,200}?--slurpfile skipped "\$SKIPPED"/,
+    'sổ phải gom cả hai phía đầu ra',
+  );
+});
+
+test('KF-029 · lời gọi merge phải giữ lại THÔNG ĐIỆP lỗi của API', () => {
+  // Bỏ `2>&1` thì `MERGE_OUT` rỗng và sổ chỉ còn "có lỗi" mà không nói lỗi gì
+  // — lượt sau phải mở log Actions mới biết, tức mất đúng thứ sổ sinh ra để giữ.
+  assert.match(
+    WORKFLOW_CODE,
+    /if MERGE_OUT=\$\(gh api -X PUT[\s\S]{0,200}?2>&1\)/,
+    'lời gọi merge phải gộp stderr vào `$MERGE_OUT`',
+  );
 });
 
 test('KF-029 · bước kết luận tồn tại, gọi `merge-queue.ts`, và đứng SAU bước gọi workflow hậu merge', () => {

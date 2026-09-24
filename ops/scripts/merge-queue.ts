@@ -115,12 +115,20 @@ function assertReport(value: unknown): asserts value is QueueReport {
     throw new QueueReportError('Thiếu `attempts` hoặc `skipped`.');
   }
   for (const attempt of report.attempts) {
-    if (!Number.isInteger(attempt?.number) || typeof attempt?.ok !== 'boolean') {
+    if (
+      !Number.isInteger(attempt?.number) ||
+      typeof attempt?.ok !== 'boolean' ||
+      typeof attempt?.reason !== 'string'
+    ) {
       throw new QueueReportError(`Dòng \`attempts\` hỏng: ${JSON.stringify(attempt)}`);
     }
   }
   for (const skip of report.skipped) {
-    if (!Number.isInteger(skip?.number) || typeof skip?.outcome !== 'string') {
+    if (
+      !Number.isInteger(skip?.number) ||
+      typeof skip?.outcome !== 'string' ||
+      typeof skip?.reason !== 'string'
+    ) {
       throw new QueueReportError(`Dòng \`skipped\` hỏng: ${JSON.stringify(skip)}`);
     }
   }
