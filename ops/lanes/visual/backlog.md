@@ -86,4 +86,5 @@ Chỉ được dùng làm **cổng** khi nó trùng lựa chọn của chủ d�
 - nguồn: CHARTER 5.4
 - tiêu chí xong:
   - Tập vàng chạy lại xanh với `impl: v1`.
+  - Nối check `layout-id-known` vào pipeline thật (`ops/scripts/pipeline.ts` → `workshops/assembly/src/index.ts` truyền `validLayoutIds`), **và xoá trường `- hold:` của `V-001`**. Trường đó là nguồn quyết định giữ `V-001` ở `review`; quên xoá thì `V-001` không bao giờ lật được sang `done` mà không gì đỏ — đúng nhóm **Z**.
   - Cổng gu hình: 5 layout đạt 8/8 tiêu chí (CHARTER mục 10, Đợt 2).
