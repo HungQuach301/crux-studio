@@ -131,15 +131,21 @@ jobs:
       # Main đỏ được revert ngay; việc sửa làm lại trên nhánh. Issue này là
       # thứ routine crux-integrator đọc ở lần chạy kế tiếp.
       #
-      # D-C06 · @NHẮC CÓ ĐỘ TRỄ. Lần đỏ đầu tiên KHÔNG @nhắc chủ dự án: nhà
-      # máy có một cơ chế tự sửa (integrator revert, CHARTER 6.5 và phụ lục
-      # P3) và nó chạy mỗi giờ. Gọi người ngay ở phút đầu là gọi người cho
-      # một việc mà máy sắp tự làm xong.
+      # P-034 · @NHẮC NGAY Ở COMMENT ĐẦU TIÊN, NHẮC LẠI MỖI 4 GIỜ. Luật cũ
+      # của `D-C06` làm ngược lại có chủ đích — không @nhắc ở lần đỏ đầu, rồi
+      # @nhắc ĐÚNG MỘT LẦN sau 2 giờ — vì "gọi người ở phút đầu là gọi người
+      # cho một việc mà máy sắp tự làm xong". Chủ dự án bác vế đó kèm câu trả
+      # lời `#169`, bằng một số đo: cảnh báo `#131` mở lúc 2026-09-22T10:14Z
+      # và 13 GIỜ sau mới @nhắc. "Đã nhắc thì thôi" cộng với một lượt chạy
+      # trượt là một cảnh báo khẩn im lặng cả nửa ngày.
       #
-      # Chỉ khi `main` còn đỏ sau 2 GIỜ — tức là cơ chế tự sửa đã có ít nhất
-      # một lượt và không xong — thì đây mới thành một trong bốn cảnh báo
-      # khẩn của CHARTER 2.4, và lúc đó mới @nhắc, đúng một lần.
-      - name: Mở issue main đỏ, @nhắc khi quá 2 giờ
+      # Nên hai vế đổi cùng lúc: thân issue của lần đỏ đầu MANG SẴN @nhắc, và
+      # mốc `<!-- crux-escalate-main-do -->` thôi là "đã nhắc thì thôi" mà
+      # thành "đã nhắc LÚC NÀO" — `ops/scripts/alert-escalation.ts` đọc
+      # `createdAt` của mục mang mốc mới nhất và trả `mention`/`quiet`. Phần
+      # quyết định nằm ở đó chứ không ở đây, vì một phép so ngày tháng trong
+      # khối `run:` chỉ kiểm được bằng cách để `main` đỏ thật.
+      - name: Mở issue main đỏ, @nhắc ngay và nhắc lại mỗi 4 giờ
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -174,39 +180,83 @@ jobs:
             "" \
             "$SCOPE_BLOCK")
 
+          # P-034 · thân issue của lần đỏ ĐẦU TIÊN mang sẵn @nhắc VÀ mốc.
+          # Mốc nằm trong thân chứ không chỉ trong comment, vì từ mục này
+          # thân issue CHÍNH LÀ lần @nhắc đầu tiên, và nhịp 4 giờ đếm từ đó.
+          CREATE_BODY=$(printf '%s\n' \
+            "$BODY" \
+            "" \
+            "$MARKER" \
+            "🤖 @$OWNER \`main\` vừa đỏ." \
+            "" \
+            "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng. Máy vẫn đang tự chữa (integrator revert, CHARTER 6.5), nên anh chưa cần làm gì; nếu nó không xong, cảnh báo này nhắc lại mỗi 4 giờ.")
+
           # Chạy thử dừng ở đây: `pnpm check` của job `check` đã chạy thật
           # và đã đỏ (job này chỉ chạy khi `failure()`), nên phép thử đã có
           # kết quả. Chỉ thao tác ghi ra ngoài là bị chặn.
+          #
+          # In ĐÚNG thân sẽ đăng, không phải một bản gần giống: từ P-034 hai
+          # nhánh dùng hai thân khác nhau (thân tạo issue mang @nhắc, comment
+          # cập nhật thì không), và một chế độ chạy thử in nhầm thân là một
+          # chế độ chạy thử không kiểm được gì.
           if [ "$DRY_RUN" = "true" ]; then
             printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n────────\n%s\n' \
               "$([ -n "$EXISTING" ] && echo "bình luận vào issue #$(echo "$EXISTING" | cut -f1)" || echo "mở issue \"$TITLE\"")" \
-              "$BODY"
+              "$([ -n "$EXISTING" ] && echo "$BODY" || echo "$CREATE_BODY")"
             exit 0
           fi
 
           if [ -z "$EXISTING" ]; then
-            gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
-            echo "Mở issue main đỏ. CHƯA @nhắc: máy còn 2 giờ để tự revert (D-C06)."
+            gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$CREATE_BODY"
+            echo "Mở issue main đỏ, @nhắc NGAY trong thân issue (P-034)."
             exit 0
           fi
 
           NUM=$(echo "$EXISTING" | cut -f1)
           CREATED=$(echo "$EXISTING" | cut -f2)
+          # Comment cập nhật này KHÔNG mang mốc và KHÔNG @nhắc: nó chạy mỗi
+          # lượt (lịch mỗi giờ), nên mang mốc vào đây sẽ đẩy "lần @nhắc gần
+          # nhất" về hiện tại ở mọi lượt và nhịp 4 giờ không bao giờ tới hạn
+          # — @nhắc chết hẳn mà không gì đỏ.
+          # `ops/test/alert-escalation-workflows.test.ts` canh đúng luật này.
           gh issue comment "$NUM" --repo "$REPO" --body "$BODY"
 
           AGE=$(( ( $(date -u +%s) - $(date -u -d "$CREATED" +%s) ) / 3600 ))
-          echo "main đã đỏ $AGE giờ (ngưỡng @nhắc: 2)."
-          if [ "$AGE" -lt 2 ]; then
-            echo "Chưa tới ngưỡng. Không @nhắc."
-            exit 0
+
+          # Thân issue ĐỨNG ĐẦU danh sách, rồi tới các comment: lần @nhắc đầu
+          # tiên nằm ở thân, bỏ nó ra thì lượt nào cũng thấy "chưa nhắc lần
+          # nào" và gọi chủ dự án mỗi giờ.
+          #
+          # I7 · CHỈ đọc thân và comment của `github-actions[bot]`, y như
+          # `automerge.yml` làm với khối phạm vi sự cố. Không lọc thì bất kỳ
+          # ai cũng đặt lại được đồng hồ 4 giờ chỉ bằng một comment mang
+          # chuỗi mốc — và không cần ác ý: nút "Quote reply" của GitHub chép
+          # nguyên markdown thô, HTML comment kể cả.
+          #
+          # Z9 · `if ! DECISION=…`: `gh` lỗi vặt hay JSON lạ dưới `set -euo
+          # pipefail` sẽ giết cả bước, mà comment tình trạng thì đã đăng rồi
+          # — tức là @nhắc mất trong im lặng, đúng chữ ký hỏng mục này sinh
+          # ra để chữa. Rơi về `mention`: gọi thừa một lần là phiền, một
+          # cảnh báo khẩn câm là chỗ hỏng.
+          if ! DECISION=$(gh issue view "$NUM" --repo "$REPO" --json author,body,createdAt,comments \
+            --jq '[select(.author.login == "github-actions[bot]") | {body, createdAt}] + [.comments[] | select(.author.login == "github-actions[bot]") | {body, createdAt}]' \
+            | node ops/scripts/alert-escalation.ts "$MARKER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"); then
+            DECISION='{"verdict":"mention","lastMentionAt":null,"hoursSinceLastMention":null,"unreadableMarkerComments":0}'
+            echo "Không đọc được lịch sử @nhắc (gh hoặc alert-escalation.ts lỗi) — rơi về mention."
           fi
-          if gh issue view "$NUM" --repo "$REPO" --json comments --jq '.comments[].body' \
-              | grep -qF "$MARKER"; then
-            echo "Đã @nhắc rồi. Không nhắc lại."
+          echo "main đã đỏ $AGE giờ. Quyết định @nhắc: $DECISION"
+
+          UNREADABLE=$(echo "$DECISION" | jq -r '.unreadableMarkerComments')
+          if [ "$UNREADABLE" != "0" ]; then
+            echo "$UNREADABLE mục mang mốc có createdAt không đọc được — số giờ ở trên là CẬN DƯỚI."
+          fi
+
+          if [ "$(echo "$DECISION" | jq -r '.verdict')" != "mention" ]; then
+            echo "Lần @nhắc gần nhất chưa quá 4 giờ. Không nhắc lại."
             exit 0
           fi
           gh issue comment "$NUM" --repo "$REPO" --body "$(printf '%s\n' \
             "$MARKER" \
-            "@$OWNER \`main\` đã đỏ $AGE giờ mà máy chưa tự sửa được." \
+            "🤖 @$OWNER \`main\` đã đỏ $AGE giờ mà máy chưa tự sửa được." \
             "" \
-            "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng.")"
+            "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng. Nhắc lại mỗi 4 giờ tới khi \`main\` xanh lại (mục \`platform/P-034\`).")"

@@ -45,6 +45,8 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripAgentPrefix } from './agent-prefix.ts';
+
 /** Ô "còn treo" — quy ước sẵn có của backlog cho phần chưa xong. */
 export const OPEN_BOX = '⬜';
 
@@ -64,17 +66,89 @@ export const OPEN_BOX = '⬜';
  * (tốn một nhịp, và `held` được in ra để người đọc thấy) còn hơn mở khoá
  * nhầm một mục chưa xong.
  *
+ * **Lần thứ hai, cùng một chữ ký lỗi.** Lượt `crux-worker-1` ~21:48Z
+ * 2026-09-23 chạy `--fix` trên `main` ở `402444b` và lật ba mục nữa mà thân
+ * mục cấm đúng việc đó — `E-001`, `P-010`, `P-007`. Cả ba nói cùng một ý như
+ * bốn ca trên, chỉ khác chữ:
+ *
+ * | Mục | Câu trong thân mục | Vì sao lọt |
+ * |---|---|---|
+ * | `E-001` | "mục này vẫn **không** tự chuyển `done`" | có `chỉ chuyển \`done\``, không có `tự chuyển \`done\`` |
+ * | `P-010` | "phải đọc đúng lần chạy thật đó **trước khi coi mục này `done`**" | không chuỗi nào phủ |
+ * | `P-007` | "mục này **chỉ `done` khi** bản tin thật in ra…" | có `chỉ đóng khi`, không có `chỉ \`done\` khi` |
+ *
+ * `E-001` là ca đắt nhất: nó là `deps` của `E-003`, `E-004`, rồi `E-005`, nên
+ * lật nhầm nó mở khoá cả một nhánh việc chưa được phép chạy — đúng hướng sai
+ * mà khối trên đã cảnh báo, lặp lại nguyên si.
+ *
+ * CLAUDE.md mục 13 ("lỗi cùng loại lần thứ hai → sửa cơ chế, không vá sản
+ * phẩm") nên ba chuỗi dưới đây được thêm vào danh sách, chứ không sửa tay ba
+ * dòng `status`. Ba ca thật ở trên là ba bài kiểm, nằm ở
+ * `ops/test/backlog-status.test.ts`.
+ *
+ * **Lần thứ ba, và lần này đổi cơ chế chứ không thêm chuỗi.** Hai lần trên
+ * đều chữa bằng cách **thêm chuỗi con**, và chuỗi con bắt cách viết: chèn đúng
+ * một chữ vào giữa là trượt, một cặp dấu nháy ngược quanh `done` cũng trượt.
+ * Ba biến thể đo được —
+ *
+ * | Câu | Chuỗi con trượt vì |
+ * |---|---|
+ * | "trước khi coi mục này **là** `done`" | `coi mục này done` đòi hai chữ liền nhau |
+ * | "mục này chỉ done khi…" (`done` viết trần) | `chỉ \`done\` khi` đòi đúng hai dấu nháy ngược |
+ * | "mục này **chưa đóng**, dù PR đã merge" | không chuỗi nào phủ |
+ *
+ * — nên lưới nay là **mẫu RegExp trên văn bản đã chuẩn hoá**
+ * (`normalizeForHold`), có khe cho vài chữ chèn vào giữa. Ca thứ hai tan ngay
+ * ở bước chuẩn hoá; hai ca còn lại cần khe chữ.
+ *
+ * **Vẫn khai thẳng: lưới này KHÔNG hội tụ.** Mẫu rộng hơn chuỗi con, nhưng nó
+ * vẫn đoán ý qua cách viết, nên câu thứ tư viết bằng chữ khác nữa vẫn lọt. Đó
+ * **không** phải chỗ để vá tiếp — đó là lý do trường `- hold:` tồn tại. Thấy
+ * một ca lọt thì khai trường cho mục đó, đừng thêm mẫu.
+ *
  * Cố ý KHÔNG nằm trong danh sách: "Chưa làm, cố ý" (`I-003`) — đó là loại
  * trừ phạm vi có chủ ý, không phải phần còn treo.
  */
-export const HOLD_MARKERS: readonly string[] = [
-  OPEN_BOX,
-  'không đóng khi pr merge',
-  'chỉ chuyển `done`',
-  'chỉ đóng khi',
-  'chưa kiểm bằng chạy thật',
-  'còn treo',
+export const HOLD_MARKERS: readonly RegExp[] = [
+  // Ô "còn treo" — quy ước sẵn có của backlog.
+  new RegExp(OPEN_BOX, 'u'),
+  /còn treo/u,
+  /chưa kiểm bằng chạy thật/u,
+  /không đóng khi pr merge/u,
+  // "chỉ đóng khi…" · "chưa đóng, dù PR đã merge" · "không đóng". Ca thứ hai
+  // là biến thể lọt lưới mà `I-020` ghim: chỉ hai chữ, không có `done` nào để
+  // neo vào.
+  /(?:không|chưa|chỉ) đóng/u,
+  // "chỉ chuyển `done`" · "vẫn không tự chuyển `done`" · "chỉ chuyển sang done".
+  /(?:tự|chỉ|không) chuyển (?:\p{L}+ ){0,2}done/u,
+  // "chỉ `done` khi…" · "chỉ done khi…" · "chỉ là done khi…".
+  /chỉ (?:\p{L}+ ){0,2}done khi/u,
+  // "coi mục này `done`" · "trước khi coi mục này là `done`" · "xem mục này như done".
+  /(?:coi|xem) mục này (?:\p{L}+ ){0,2}done/u,
 ];
+
+/**
+ * Trường `- hold: <lý do>` — khai "còn treo" bằng một **trường** mà tool đọc
+ * như đọc `- status:` và `- deps:`, thay vì bằng lời văn. Cơ chế của mục
+ * `integration/I-020`.
+ *
+ * Vì sao cần: `HOLD_MARKERS` dò **chuỗi con** trong thân mục, nên nó bắt
+ * *cách viết* chứ không bắt *ý*. Nó đã thủng **hai lần** (`I-010` bốn mục;
+ * `KF-023` ba mục), và mỗi lần chỉ vá đúng câu vừa gặp — danh sách chuỗi con
+ * KHÔNG hội tụ, câu thứ N viết bằng chữ khác nữa vẫn lọt, và vẫn **không gì
+ * đỏ** (nhóm Z). Một mục lật nhầm sang `done` mở khoá một `deps` chưa thật sự
+ * xong; `E-001` là ca đắt nhất vì nó là `deps` của cả một nhánh việc.
+ *
+ * Trường này là **nguồn quyết định** từ nay: có `- hold:` thì mục không bao
+ * giờ bị lật, bất kể thân mục viết gì. `HOLD_MARKERS` tụt xuống thành **lưới
+ * dự phòng** cho các mục chưa kịp khai trường (`heldReason` trả `'prose'`),
+ * và `pnpm backlog:status` in riêng con số đó ra như **nợ phải trả dần**.
+ *
+ * Khoan dung như `- status:`: cho phép thụt lề, không phân biệt hoa thường,
+ * ăn khoảng trắng thừa hai đầu lý do. Lý do **phải không rỗng** — một dòng
+ * `- hold:` trống là khai thiếu, không tính là một lời giữ hợp lệ.
+ */
+const HOLD_FIELD = /^\s*-\s*hold:\s*(\S.*?)\s*$/i;
 
 export type ItemVerdict =
   /** Có commit hoàn thành trên `main`, thân mục không còn dấu treo → nên chuyển `done`. */
@@ -98,8 +172,13 @@ export interface BacklogItem {
    * định nghĩa "mục backlog" cho cả repo.
    */
   title: string;
-  /** Thân mục còn ít nhất một dấu treo — xem `HOLD_MARKERS`. */
+  /** Thân mục còn ít nhất một dấu treo bằng LỜI VĂN — xem `HOLD_MARKERS`. Lưới dự phòng, không phải nguồn quyết định. */
   hasHoldMarker: boolean;
+  /**
+   * Lý do của trường `- hold:` nếu mục có khai, `null` nếu không. Đây là
+   * **nguồn quyết định** cho việc giữ `review` (xem `HOLD_FIELD`, `heldReason`).
+   */
+  holdField: string | null;
   /** Dòng `- status: …`, hoặc `null` nếu mục không khai `status`. */
   statusLine: number | null;
 }
@@ -107,10 +186,31 @@ export interface BacklogItem {
 const HEADING = /^###\s+(\S+)([^\n]*)$/;
 const STATUS = /^-\s*status:\s*(\S+)\s*$/;
 
-/** Thân mục có dấu treo nào không. So không phân biệt hoa thường. */
+/**
+ * Chuẩn hoá thân mục trước khi dò lưới dự phòng.
+ *
+ * Ba phép chuẩn hoá, mỗi phép trả lời một ca thật đã lọt:
+ *
+ * - **bỏ dấu nhấn Markdown** (`` ` ``, `*`, `_`): `` `done` ``, `**done**` và
+ *   `done` là **một chữ**. Ca `P-007` lọt lưới chỉ vì hai dấu nháy ngược.
+ * - **gộp khoảng trắng**: một câu treo bị ngắt dòng giữa hai chữ vẫn bắt được
+ *   — thân mục thật xuống dòng ở cột 100.
+ * - **hạ hoa thường**: đã có từ trước, giữ nguyên.
+ */
+export function normalizeForHold(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[`*_]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Thân mục có dấu treo nào không — **lưới dự phòng**, không phải nguồn quyết
+ * định. Nguồn quyết định là trường `- hold:` (xem `HOLD_FIELD`, `heldReason`).
+ */
 export function hasHoldMarker(body: string): boolean {
-  const lowered = body.toLowerCase();
-  return HOLD_MARKERS.some((marker) => lowered.includes(marker));
+  const normalized = normalizeForHold(body);
+  return HOLD_MARKERS.some((pattern) => pattern.test(normalized));
 }
 
 /**
@@ -143,11 +243,23 @@ export function parseBacklog(content: string): BacklogItem[] {
       }
     }
 
+    // Trường `- hold:` — dòng đầu tiên khớp thắng, cùng cách `- status:` lấy
+    // dòng đầu. Lý do đã được `HOLD_FIELD` cắt khoảng trắng hai đầu.
+    let holdField: string | null = null;
+    for (let i = 0; i < body.length; i++) {
+      const m = HOLD_FIELD.exec(body[i]!);
+      if (m) {
+        holdField = m[1]!;
+        break;
+      }
+    }
+
     return {
       id: start.id,
       title: start.title,
       status,
       hasHoldMarker: hasHoldMarker(body.join('\n')),
+      holdField,
       statusLine,
     };
   });
@@ -165,16 +277,42 @@ function escapeRegExp(value: string): string {
  *   `VF-G11`, nên sau mã mục bắt buộc có khoảng trắng.
  * - **Phải đúng dạng tiêu đề**, tức `[<lane>] <id>` ở ĐẦU dòng rồi tới dấu
  *   gạch. Commit nhắc mã mục ở giữa câu hay trong ngoặc là PR của mục khác.
+ *
+ * ⚠️ **Tiền tố 🤖 được bỏ trước khi so** (mục `platform/P-042`). `CLAUDE.md`
+ * mục 5 bắt buộc mọi thứ agent viết mở đầu bằng 🤖, nên tiêu đề PR đi vào
+ * `main` qua squash-merge giữ nguyên tiền tố đó — và neo `^\[` không khớp.
+ * Ca thật: `🤖 [platform] P-038 — …` (`#212`), mục không bao giờ được nhận là
+ * đã xong, mà không gì đỏ. Luật bỏ tiền tố nằm ở `stripAgentPrefix`, một
+ * chỗ, để lần sau không phải vá thêm một bộ đọc nữa.
+ *
+ * Hai chỗ chặt trên **không** bị nới theo: sau khi bỏ tiền tố, phần còn lại
+ * vẫn phải khớp đúng dạng cũ từ ký tự đầu tiên.
  */
 export function hasCompletionCommit(lane: string, id: string, subjects: readonly string[]): boolean {
   const pattern = new RegExp(`^\\[${escapeRegExp(lane)}\\]\\s+${escapeRegExp(id)}\\s+[—–-]\\s`);
-  return subjects.some((subject) => pattern.test(subject));
+  return subjects.some((subject) => pattern.test(stripAgentPrefix(subject)));
 }
 
 /**
  * Mục đã merge rồi bị revert vẫn còn tiêu đề commit gốc trong `git log`, nên
  * `hasCompletionCommit` một mình sẽ nói "đã xong". CLAUDE.md mục 13 ("`main`
  * đỏ thì revert ngay") làm ca này có thật, không phải giả định.
+ *
+ * ⚠️ Hàm này **cũng** cần `stripAgentPrefix` (mục `P-042`), và lý do đáng
+ * đọc kỹ vì nó suýt bị bỏ sót: phép tìm **mã mục** dùng `includes` nên đúng
+ * là miễn nhiễm với tiền tố, nhưng phép nhận diện **chữ `Revert`** lại neo ở
+ * vị trí 0. Hai hình dạng revert có thật, và trước bản sửa chỉ một trong hai
+ * được bắt:
+ *
+ * - `Revert "🤖 [platform] P-038 — …"` — GitHub bọc tiêu đề gốc, khớp.
+ * - `🤖 Revert "[platform] P-038 — …"` — agent tự viết tiêu đề PR revert,
+ *   mà `CLAUDE.md` mục 5 bắt buộc mở đầu bằng 🤖, nên **không** khớp.
+ *
+ * Bỏ sót ca thứ hai là fail-open **nguy hiểm hơn** chính lỗi mà `P-042` sửa:
+ * `hasCompletionCommit` nay nhận tiêu đề có tiền tố, nên một mục đã bị revert
+ * khỏi `main` sẽ được lật sang `done` và mở khoá mọi `deps` trỏ vào code
+ * không còn tồn tại. Đúng chỗ hỏng mà khối chú thích trên vừa nói nó sinh ra
+ * để chặn.
  *
  * Luật cố ý thô và lệch về hướng an toàn: thấy **bất cứ** commit `Revert`
  * nào nhắc tới tiêu đề của mục thì coi như chưa xong, không xét thứ tự thời
@@ -184,19 +322,43 @@ export function hasCompletionCommit(lane: string, id: string, subjects: readonly
  */
 export function hasRevertCommit(lane: string, id: string, subjects: readonly string[]): boolean {
   const marker = `[${lane}] ${id} `;
-  return subjects.some((subject) => subject.startsWith('Revert ') && subject.includes(marker));
+  return subjects.some(
+    (subject) => stripAgentPrefix(subject).startsWith('Revert ') && subject.includes(marker),
+  );
+}
+
+/** Vì sao một mục đang được giữ `review`: bằng trường `- hold:` hay chỉ bằng lời văn. */
+export type HeldBy =
+  /** Có trường `- hold:` — nguồn quyết định, mục không bao giờ bị lật. */
+  | 'field'
+  /** Không có trường, chỉ dính `HOLD_MARKERS` — lưới dự phòng, và là **nợ** cần khai trường. */
+  | 'prose';
+
+/**
+ * Mục có đang được giữ không, và nếu có thì bằng cách nào. Trường `- hold:`
+ * (nguồn quyết định) thắng lời văn; không có cả hai thì trả `null`.
+ *
+ * Nhận `Pick` để test dựng object gọn được, và để `undefined`/`''` của trường
+ * (mục cũ chưa khai) đều rơi về lưới lời văn thay vì kích hoạt nhầm.
+ */
+export function heldReason(item: Pick<BacklogItem, 'holdField' | 'hasHoldMarker'>): HeldBy | null {
+  if (item.holdField != null && item.holdField !== '') return 'field';
+  if (item.hasHoldMarker) return 'prose';
+  return null;
 }
 
 export function classify(item: BacklogItem, merged: boolean): ItemVerdict {
   if (item.statusLine === null) return 'unknown';
   if (!merged) return 'unmerged';
-  return item.hasHoldMarker ? 'held' : 'stale';
+  return heldReason(item) !== null ? 'held' : 'stale';
 }
 
 export interface StatusFinding {
   lane: string;
   id: string;
   verdict: ItemVerdict;
+  /** Chỉ đặt khi `verdict === 'held'`: mục được giữ bằng trường hay bằng lời văn. */
+  heldBy?: HeldBy;
 }
 
 /**
@@ -213,14 +375,15 @@ export function reviewFindings(
 ): StatusFinding[] {
   return parseBacklog(content)
     .filter((item) => item.status === 'review' || item.statusLine === null)
-    .map((item) => ({
-      lane,
-      id: item.id,
-      verdict: classify(
+    .map((item) => {
+      const verdict = classify(
         item,
         hasCompletionCommit(lane, item.id, subjects) && !hasRevertCommit(lane, item.id, subjects),
-      ),
-    }));
+      );
+      const finding: StatusFinding = { lane, id: item.id, verdict };
+      if (verdict === 'held') finding.heldBy = heldReason(item) ?? undefined;
+      return finding;
+    });
 }
 
 /**
@@ -240,6 +403,10 @@ export function applyFix(
   for (const item of parseBacklog(content)) {
     if (!wanted.has(item.id)) continue;
     if (item.status !== 'review' || item.statusLine === null) continue;
+    // Phòng thủ theo tầng (mục `I-020`): dù bên gọi có lỡ truyền vào một mục
+    // đang được giữ, applyFix vẫn KHÔNG lật. Trường `- hold:` (nguồn quyết
+    // định) và lưới lời văn đều chặn ở đây, không chỉ ở `classify`.
+    if (heldReason(item) !== null) continue;
     lines[item.statusLine] = '- status: done';
     changed.push(item.id);
   }
@@ -296,12 +463,20 @@ function main(): void {
 
   const by = (verdict: ItemVerdict) =>
     findings.filter((f) => f.verdict === verdict).map((f) => `${f.lane}/${f.id}`);
+  const heldByOutput = (heldBy: HeldBy) =>
+    findings.filter((f) => f.verdict === 'held' && f.heldBy === heldBy).map((f) => `${f.lane}/${f.id}`);
 
+  // `heldByField` là mục đã khai trường `- hold:`; `heldByProse` là mục còn
+  // dựa vào lưới lời văn — con số thứ hai là **nợ**: mỗi mục ở đó là một chỗ
+  // `HOLD_MARKERS` có thể thủng ở lần viết khác đi (mục `I-020`). Trả về 0 là
+  // đã khai trường hết. `held` giữ lại làm tổng hai nhóm cho bên đọc cũ.
   process.stdout.write(
     `${JSON.stringify(
       {
         stale: by('stale'),
         held: by('held'),
+        heldByField: heldByOutput('field'),
+        heldByProse: heldByOutput('prose'),
         unmerged: by('unmerged'),
         unknown: by('unknown'),
         fixed: fix ? by('stale') : [],

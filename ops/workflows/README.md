@@ -33,20 +33,23 @@ Sáu file `workshop-*.yml` là mục `platform/P-004`. Chúng nối với nhau b
 
 Dòng log của chúng **không** được commit ngược vào repo — máy và agent không push vào `main` (CLAUDE.md mục 2). Mỗi lần chạy dán dòng đó vào tóm tắt lần chạy để đọc được ngay; cách giữ nó lâu dài là việc của mục `kernel/K-004`.
 
-## Tên status check để bật ruleset
+## Tên status check mà ruleset `protect-main` đòi
 
-Tên **job**, không phải tên file:
+**Đã bật thật ngày 2026-09-21** (giả định **G12**, mục `VF-G12`) — đây không còn là danh sách đề xuất. Tên **job**, không phải tên file:
 
 ```
 check
 secret-scan
 fix-has-test
 protected-area
+trailer-warn
 ```
 
-Nếu GitHub đòi gói trả phí mới bật được ruleset trên repo private (**giả định G12**): không bật, và ghi lại điều đó. `automerge.yml` cộng hook đã là lớp chặn chính; ruleset là lớp thứ hai.
+Bản có thẩm quyền của danh sách này nằm ở `ops/scripts/required-checks.ts`, và `ops/test/required-checks.test.ts` đối chiếu nó với tên job thật trong `ci.yml`. **Đổi tên, gộp hay xoá một trong năm job đó là quyết định `irreversible`** (CHARTER 2.3 nhóm 8): ruleset nằm ở Settings của GitHub, ngoài repo, chỉ chủ dự án sửa được — và ruleset chờ một tên không còn ai sinh ra thì mọi PR kẹt ở `blocked`, kể cả PR revert.
 
-`trailer-warn` cố ý **không** vào danh sách: nó là luật mềm (CHARTER mục 4). Nếu nền tảng đổi cách ghi trailer `Claude-Session` thì một luật cứng ở đó sẽ chặn toàn bộ công việc.
+`trailer-warn` **có** trong danh sách, và điều đó **không** biến luật mềm thành luật cứng: bước chạy của job khai `continue-on-error: true` nên job luôn kết luận `success` dù có bao nhiêu commit thiếu trailer. Cái ruleset đòi là *job có chạy và có kết luận*, không phải *không có cảnh báo nào*. Luật mềm của CHARTER mục 4 vì vậy giữ nguyên — nhưng tên job thì nay chịu tải.
+
+Ruleset là **lớp thứ hai** của I2, không phải lớp duy nhất: `automerge.yml` cộng hook vẫn là lớp chặn chính, và đã đo được rằng ruleset không cản `automerge.yml` merge bằng `GITHUB_TOKEN`.
 
 ## Hai chỗ workflow chạy theo định nghĩa trên `main`, không theo nhánh PR
 

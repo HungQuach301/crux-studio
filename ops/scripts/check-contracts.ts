@@ -49,6 +49,7 @@ import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 import { scanSchemaScope } from './check-schema-scope.ts';
 import { modelDataFiles, modelDataProblems } from './check-models.ts';
 import { scanGoldenFactRisk } from './check-fact-risk.ts';
+import { revenueWithholdingProblems, channelPackFiles } from './check-revenue-withholding.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -192,6 +193,11 @@ const factRisk = scanGoldenFactRisk(root);
 problems.push(...factRisk.blocking);
 notes.push(...factRisk.notes);
 
+// 12 · Khấu trừ doanh thu (topic/T-013, bất biến I6): mỗi Channel Pack khai
+// `revenueWithholding` đủ và đúng, và không chỗ code nào ước tính doanh thu mà
+// bỏ qua hệ số. Logic thuần ở check-revenue-withholding.ts để có test độc lập.
+problems.push(...revenueWithholdingProblems(root));
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
@@ -204,7 +210,8 @@ process.stdout.write(
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng, ` +
     `${modelFiles.length} file mô hình định lượng hợp model.schema.json, ` +
     `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json, ` +
-    `Fact & Risk Pass qua ${factRisk.episodes} tập vàng.\n`,
+    `Fact & Risk Pass qua ${factRisk.episodes} tập vàng, ` +
+    `khấu trừ doanh thu khai đủ trên ${channelPackFiles(root).length} channel pack (topic/T-013).\n`,
 );
 
 if (notes.length > 0) {

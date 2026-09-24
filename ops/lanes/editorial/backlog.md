@@ -10,6 +10,7 @@ Xưởng Biên tập (S04–S08). Đợt 1: **nâng cấp stub, chưa gọi API 
 - deps: —
 - risk: low
 - status: review
+- hold: vế 'promptVersion xuất hiện trong artifact' chỉ đạt khi có lượt gọi mô hình thật đi qua băng (Cassette.calls); stub chưa quan sát được
 - nguồn: spec `engine/library/prompts/`
 - tiêu chí xong:
   - Mỗi prompt có phiên bản, và phiên bản đó xuất hiện trong artifact (`generation.promptVersion`).
@@ -63,7 +64,7 @@ Bất biến I6 được thực thi ở đây: mọi con số hiển thị đề
 
 - deps: E-001, T-003
 - risk: high
-- status: review
+- status: done
 - nguồn: CHARTER bất biến I6; spec KHỐI B
 - tiêu chí xong:
   - ✅ Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo — `factRiskProblems` (`ops/scripts/check-fact-risk.ts`) so mọi token số của `script.text` với các token số trong `statement` của claim mà kịch bản trích (`script.claimIds`); số lạc ra mã `untraceable-number`. `check-contracts.ts` (việc số 9, phần của `pnpm contracts`) **chặn** khi `producer.impl !== 'stub'`, **ghi nhận** ở stub — cùng khuôn stub-aware để tập vàng không đổi (CHARTER 6.1). Nghiệm thu S05 "gieo 3 con số sai bắt cả 3" có test.

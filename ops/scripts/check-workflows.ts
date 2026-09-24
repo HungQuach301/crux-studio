@@ -78,6 +78,97 @@ export function runBlocks(source: string, file: string): RunBlock[] {
 }
 
 /**
+ * Bắt khoá trùng trong CÙNG một mapping YAML (KF-016).
+ *
+ * Vì sao cần: hai khoá `env:` trong cùng một step làm cả workflow thành YAML
+ * không hợp lệ. GitHub từ chối file đó ở mức khởi động — lần chạy ra
+ * `failure` với 0 job (startup_failure), đỏ ở MỌI lần push, và nó chỉ hiện
+ * ra SAU khi merge vì agent không ghi được `.github/`. `pnpm lint:workflows`
+ * cũ không bắt được: nó không dựng cây YAML nên không thấy khoá trùng —
+ * đúng loại "xanh ở chỗ rẻ, đỏ ở chỗ đắt" mà mục này đi gỡ.
+ *
+ * Không có thư viện YAML trong repo (thêm phụ thuộc là việc riêng), nên đây
+ * là một bộ dò theo thụt lề, đủ chặt cho hình dạng workflow: bỏ qua thân
+ * khối scalar (`|`, `>`), coi mỗi phần tử `- ` của một sequence là một
+ * mapping RIÊNG (nên hai `- name:` liền nhau không phải khoá trùng), và chỉ
+ * báo khi cùng một khoá xuất hiện hai lần trong đúng một mapping.
+ */
+interface MappingFrame {
+  keyIndent: number;
+  keys: Map<string, number>;
+}
+
+const KEY_LINE = /^("(?:[^"\\]|\\.)*"|'[^']*'|[\w.-]+)\s*:(\s|$)/;
+const BLOCK_SCALAR_VALUE = /:\s*[|>][+-]?\d*\s*(#.*)?$/;
+
+export function duplicateMappingKeys(source: string, file: string): string[] {
+  const lines = source.split('\n');
+  const problems: string[] = [];
+  const stack: MappingFrame[] = [];
+  // Thân khối scalar (`run: |`): mọi dòng thụt sâu hơn khoá của nó không
+  // phải YAML, bỏ qua tới khi gặp một dòng thụt bằng hoặc nông hơn.
+  let scalarKeyIndent = -1;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i]!;
+    if (raw.trim() === '') continue;
+    const indent = raw.length - raw.trimStart().length;
+
+    if (scalarKeyIndent >= 0) {
+      if (indent > scalarKeyIndent) continue;
+      scalarKeyIndent = -1;
+    }
+
+    let content = raw.slice(indent);
+    if (content.startsWith('#')) continue;
+
+    // Một hoặc nhiều dấu `- `: mỗi phần tử sequence là một mapping mới.
+    let keyIndent = indent;
+    let sawDash = false;
+    while (content === '-' || content.startsWith('- ')) {
+      sawDash = true;
+      keyIndent += content === '-' ? 1 : 2;
+      content = content === '-' ? '' : content.slice(2).replace(/^\s+/, '');
+    }
+
+    if (sawDash) {
+      // Phần tử mới: bỏ mọi frame của phần tử trước (khoá của chúng nằm sâu
+      // hơn hoặc bằng chỗ khoá của phần tử này), rồi mở một mapping trống.
+      while (stack.length > 0 && stack[stack.length - 1]!.keyIndent >= keyIndent) stack.pop();
+      stack.push({ keyIndent, keys: new Map() });
+      if (content === '' || content.startsWith('#')) continue;
+    }
+
+    const match = KEY_LINE.exec(content);
+    if (!match) continue;
+    const key = match[1]!;
+
+    if (!sawDash) {
+      while (stack.length > 0 && stack[stack.length - 1]!.keyIndent > keyIndent) stack.pop();
+      if (stack.length === 0 || stack[stack.length - 1]!.keyIndent < keyIndent) {
+        stack.push({ keyIndent, keys: new Map() });
+      }
+    }
+
+    const frame = stack[stack.length - 1]!;
+    const seen = frame.keys.get(key);
+    if (seen !== undefined) {
+      problems.push(
+        `${file}:${i + 1} — khoá \`${key}\` xuất hiện hai lần trong cùng một mapping ` +
+          `(lần đầu ở dòng ${seen}). YAML không hợp lệ: GitHub từ chối cả workflow ` +
+          'ở mức khởi động (startup_failure, 0 job), đỏ ở mọi lần push (KF-016).',
+      );
+    } else {
+      frame.keys.set(key, i + 1);
+    }
+
+    if (BLOCK_SCALAR_VALUE.test(content)) scalarKeyIndent = keyIndent;
+  }
+
+  return problems;
+}
+
+/**
  * Quyền tối thiểu cho từng thao tác (KF-003).
  *
  * Nguyên tắc: **mỗi workflow chỉ khai đúng quyền nó cần**. Bảng này là mặt
@@ -564,6 +655,8 @@ if (isMain) {
       for (const missing of missingPermissions(source)) {
         problems.push(`${file} — khối \`permissions\` ${missing}`);
       }
+
+      problems.push(...duplicateMappingKeys(source, file));
 
       const dryRun = missingDryRun(file, source);
       if (dryRun !== null) warnings.push(`${file} — ${dryRun}`);

@@ -12,6 +12,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: low
 - status: review
+- hold: không tự kiểm được — vế 'tài khoản có Projects' ở trang cấu hình, agent không thấy; chờ chủ dự án trả lời issue #5
 - kiểm: mở `claude.ai/code`, xem có tạo được Project không.
 - dự phòng nếu sai: Plan B — chỉ dùng routines.
 - tiêu chí xong: trạng thái G1 trong sổ chuyển sang `đã kiểm`, kèm ngày và kết quả. Nếu không có Projects thì phụ lục P1 chuyển sang cấu hình 2 worker chạy mỗi giờ.
@@ -24,6 +25,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: low
 - status: review
+- hold: còn treo ngoài DoD Đợt 0 — chuỗi automerge→labels/sync-workflows chưa quan sát được bằng một PR automerge thật
 - kiểm: **DoD Đợt 0** — để `automerge` merge thật một PR low-risk mà không cần người, rồi xem `main-ci` có chạy ngay sau đó không.
 - dự phòng: đã viết sẵn — `main-ci.yml` chạy thêm theo lịch mỗi giờ.
 - tiêu chí xong: một PR low-risk đã được merge tự động, và lần chạy `main-ci` tương ứng có trong tab Actions. Ghi kết quả vào sổ.
@@ -51,6 +53,11 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - risk: high
 - status: ready
 - kiểm: đo phút Actions của một lần render thử (dùng kết quả V-002 và A-001).
+- **việc cụ thể còn lại, làm được ngay sau khi PR của `A-001` merge:** chạy `ops/workflows/render-trial.yml`
+  (`workflow_dispatch`, `config: all`) rồi dán **phút Actions tính tiền** từ step summary vào `docs/assumptions.md` G5.
+  Đây là mảnh mà `A-001` để ⬜: giây tường đã đo trên container phiên cloud, nhưng con số hoá đơn chỉ runner
+  thật trả lời được, và workflow chỉ có hiệu lực sau khi `sync-workflows` chép sang `.github/` (**G10**).
+  Ghi ở đây để nó có chỗ đậu — `A-001` sẽ `done`, `A-003` thì `deps: A-001`, nên không mục nào khác ôm mảnh này.
 - dự phòng nếu sai: đưa vào ngân sách, hoặc dùng runner khác.
 
 ### VF-G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
@@ -81,6 +88,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: review
+- hold: còn treo, chặn ở Mốc 8 — chưa đọc toàn văn NĐ 68/141, chưa chạy thật đầu cuối, chưa kiểm khấu trừ 30% thuế Mỹ giữ
 - kiểm: tra điều kiện AdSense và nghĩa vụ thuế hiện hành.
 - dự phòng nếu sai: mở `🤖 [QĐ]`.
 - ✅ **Đọc nguồn chính thức 2026-09-21** (lượt `crux-worker-1`), G8 chuyển `suy luận` → **`tài liệu nói vậy`**. Không khai cao hơn: theo thang độ tin cậy ở đầu `docs/assumptions.md`, `đã kiểm một phần` đòi **chạy thật trong một ngữ cảnh**, mà chưa ngữ cảnh nào của đường tiền được chạy. Kết quả đầy đủ kèm URL nguồn và ngày truy cập ở `docs/assumptions.md` mục `G8`; ba điểm chính:
@@ -94,6 +102,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: review
+- hold: còn treo — chưa đăng tin thuê người (irreversible, cam kết trả tiền); nhiều nền tảng trả 403 với egress sandbox
 - kiểm: tìm ít nhất hai kênh tuyển thực tế và một cách giao việc không cần tài khoản.
 - dự phòng nếu sai: mở `🤖 [QĐ]`. Rủi ro A4: vai "người ngoài" nhận việc qua link, có thời hạn phản hồi. Lượt kiểm 2026-09-21 **không** làm G9 sai, nên chưa phải mở.
 - nguồn: `docs/assumptions.md` mục `G9`; `ops/network-domains.md`; rủi ro A4; CHARTER mục 8 (ngân sách)
@@ -129,6 +138,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: review
+- hold: còn treo — phát hiện phụ đáng mục riêng; guard.mjs chặn cả đọc .github/ (thuộc owner-merge nên không đụng)
 - kiểm: trong một lần chạy routine, cho agent thử một lệnh nằm trong danh sách chặn của `.claude/hooks/guard.mjs` và xem nó có bị chặn không.
 - dự phòng nếu sai: bổ sung kiểm tra phía CI. Xem bảng hai lớp trong `.claude/README.md`. G11 ra **đúng**, nên dự phòng này chưa phải dùng tới — nhưng **lớp thứ hai vẫn giữ nguyên, không gỡ**: G11 nói về hành vi của nền tảng, mà nền tảng đổi thì không ai báo trước.
 - ✅ **Kiểm bằng chạy thật TRONG routine, 2026-09-21** (lượt `crux-worker-2`): **cả hai lớp đều có hiệu lực**. 5 phép thử, mỗi phép chọn sao cho vô hại nếu không bị chặn. 2 phép bị `guard.mjs` chặn (trả về đúng câu tiếng Việt của hook, kèm đường dẫn file hook); 3 phép bị `permissions.deny` chặn (câu của lớp quyền, không nhắc hook). Phép tách hai lớp: `git push --force origin <nhánh của chính lượt chạy>` — nằm trong `permissions.deny` mà **không** có trong `guard.mjs`, và nhánh trùng khít `origin` nên chạy được thì cũng là lệnh rỗng. Đối chứng ngược: công cụ `Read` trên `.gitattributes` trong cùng lượt đọc được bình thường. Bảng đủ 5 phép, kèm lời báo lỗi của từng phép, ở `docs/assumptions.md` mục `G11`.
@@ -141,9 +151,18 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G12 · Ruleset bảo vệ nhánh trên repo private cần gói nào
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - kiểm: thử bật ruleset trên repo này và xem GitHub đòi gì.
 - dự phòng nếu sai: không bật ruleset; dựa vào `automerge.yml` và hook.
+- tiêu chí xong: trạng thái G12 trong sổ chuyển sang `đã kiểm`, kèm ngày và kết quả thật.
+- ✅ **Chủ dự án đã bật, 2026-09-21 14:01Z** (issue bản tin `#50`): ruleset `protect-main`, năm check bắt buộc `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn`.
+- ✅ **Đo lại từ phía agent, 2026-09-21 20:16Z:** `main` trả `protected: true` (mọi nhánh `claude/*` đều `false`, 52 nhánh tại thời điểm đo); mọi PR đang mở có đúng 5 check run mang đúng năm tên đó; và `automerge.yml` **vẫn merge được** bằng `GITHUB_TOKEN` sau khi ruleset bật — PR `#52` merge `14:44:01Z` với `merged_by: github-actions[bot]`, và từ mốc bật tới `20:15Z` có **17** PR vào `main`, không lần nào chủ dự án phải bấm.
+- ✅ **Tách nguồn, không trộn (bất biến I6):** ba dòng trên là **phép đo**. Còn *tên* ruleset (`protect-main`) và *danh sách năm check* thì agent **không xác minh lại được** — trang Settings nằm ngoài tầm nhìn, và cờ `protected` bật cả với branch protection cổ điển. Hai điều đó là **lời chủ dự án, nguồn `#50`**. Đủ để hành động theo, nhưng ghi đúng là lời. Bảng đầy đủ ở `docs/assumptions.md` mục `G12`.
+- ✅ **Nói đúng phạm vi:** vế "cần gói GitHub Pro" không đo được từ phía agent và **không còn chịu tải** — nó chỉ dùng để quyết định có dựa vào ruleset hay không, mà câu đó nay đã trả lời bằng chạy thật. Dự phòng giữ nguyên, không gỡ.
+- ✅ **Máy canh cho thứ mới chịu tải:** năm *tên* check nay là hợp đồng giữa Settings của GitHub (ngoài repo) và `ops/workflows/ci.yml` (trong repo). `ops/scripts/required-checks.ts` giữ danh sách, `ops/test/required-checks.test.ts` đối chiếu. Đo bằng phá thật: đổi `name: protected-area` thành `name: protected` → **đúng một bài đỏ**; khôi phục → xanh. Kèm ba ca âm cho đổi tên, xoá job và gộp hai job.
+- ✅ **Luật:** đổi danh sách đó là `irreversible` — CHARTER 2.3 **nhóm 8**, theo chỉ dẫn của chủ dự án. Ghi vào CHARTER (2.3, 11.2, mục 10, nhật ký C6) và `CLAUDE.md` mục 14.
+- ✅ **Một mâu thuẫn đã sửa, không để lặng lẽ:** `ops/workflows/README.md` trước đó viết `trailer-warn` "cố ý **không** vào danh sách", trong khi chủ dự án đã bật nó. Đã sửa, kèm lý do vì sao việc đó không biến luật mềm thành luật cứng: bước chạy của job khai `continue-on-error: true` nên job luôn kết luận `success`.
+- ghi chú: mục này mở khoá `platform/P-006` (deps `VF-G12`) — ghi danh sách check bắt buộc vào `docs/decisions/`. **Không** làm ở đây: một mục = một PR.
 
 ### VF-G13 · Actions gọi được API trigger `/fire` của routine không
 - deps: VF-G1
@@ -177,7 +196,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - **cửa merge: `open`** — mục này chỉ chạm tài liệu, sổ giả định, backlog và log. Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
 - kiểm: cần hai PR song song mà **cả hai đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04` log tách tới mức mục, nên ca kiểm là hai lần chạy của cùng một mục (`ops/logs/<lane>/<id>.jsonl`) hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc **hai** thứ: trạng thái `mergeable` của PR kia trên GitHub, và kết quả `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau — ghi cả hai.
 - vì sao mục này treo lâu: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Phải chờ tới khi có một cặp PR mà **cả hai** đã mang sẵn luật. Xem G17.

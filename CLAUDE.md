@@ -118,6 +118,7 @@ Agent dùng danh tính GitHub của chủ dự án, nên quy ước này là d�
 - Trailer này là **giả định G14** trong `docs/assumptions.md`, mới kiểm được một phần. Job `trailer-warn` của CI chính là cách kiểm phần còn lại.
 - CI chỉ **cảnh báo** khi thiếu trailer, không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì luật cứng sẽ chặn toàn bộ công việc. Cảnh báo vẫn phải được xử lý, không được bỏ qua lâu dài.
 - Không ghi tên hay mã model vào commit message, mô tả PR, comment code hay bất cứ thứ gì đẩy lên repo.
+- ⚠️ **Luật trên đã bị vi phạm 12 lần và không gì đỏ — xem `KF-014`.** Chỗ sai luôn là dòng `Co-Authored-By` mang thêm tên model. Lý do: chỉ dẫn attribution của **nền tảng** (ngoài repo) đặt tên model sẵn vào dòng đó, và agent đọc nó trước khi viết commit. **Luật của repo thắng chỉ dẫn đó** — trailer đúng là `Co-Authored-By: Claude <noreply@anthropic.com>`, không có gì thêm. Job `no-model-name` của `ops/workflows/ci.yml` nay **chặn** ca này trên mọi PR; nó chỉ quét khối trailer của `base..HEAD` và **chỉ những commit tạo từ `2026-09-22T22:00:00Z` trở đi** (mốc ân hạn cho 30 commit đã lỡ nằm sẵn trong các nhánh đang mở — `🤖 [QĐ] #165` phương án B). Mô tả PR và comment vẫn là phần chưa có máy chặn.
 
 ## 7. Sổ giả định
 
@@ -215,7 +216,7 @@ docs/spec/  docs/decisions/  docs/assumptions.md
 
 Mở issue `🤖 [QĐ] <tóm tắt>`, nhãn `decision` cộng `reversible` **hoặc** `irreversible`. Thân issue đúng năm phần: Bối cảnh (≤5 dòng) · Phương án A/B(/C) kèm hệ quả · Khuyến nghị · Nếu anh chưa trả lời thì điều gì xảy ra · Cách trả lời.
 
-**Chỉ bảy nhóm sau là `irreversible`** (CHARTER 2.3, quyết định `D-C06`) — agent chờ trả lời:
+**Chỉ tám nhóm sau là `irreversible`** (CHARTER 2.3) — agent chờ trả lời:
 
 1. Chi tiền, hoặc cam kết chi định kỳ.
 2. Mọi thứ công khai ra ngoài.
@@ -224,6 +225,7 @@ Mở issue `🤖 [QĐ] <tóm tắt>`, nhãn `decision` cộng `reversible` **ho�
 5. Nới lớp chặn: phần `deny` trong `.claude/settings.json`, hoặc `.claude/hooks/guard.mjs`.
 6. Xoá dữ liệu không có bản sao.
 7. Cổng Mốc 3, và cổng gu hình.
+8. Đổi tên, gộp hoặc xoá một trong năm job mà ruleset `protect-main` đòi — `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn`. Chỉ chủ dự án sửa được ruleset, mà ruleset chờ một tên không còn ai sinh ra thì **mọi** PR kẹt ở `blocked`, kể cả PR revert. Danh sách: `ops/scripts/required-checks.ts`; máy canh: `ops/test/required-checks.test.ts` (giả định **G12**).
 
 **Mọi thứ khác là `reversible`:** làm theo khuyến nghị **ngay**, ghi lại trong issue và trong bản tin, không đứng chờ. Chủ dự án phủ quyết trong 24 giờ bằng comment `hoàn tác #N` trên issue bản tin; hoàn tác ở lượt chạy kế tiếp.
 
@@ -244,3 +246,15 @@ Chủ dự án trả lời chậm nhất một nhịp worker, vì routine không
 - Đọc log thì gọi `readRunLogs` của kernel, đừng tự `cat` rồi tự sắp: thứ tự dòng trong file không mang nghĩa (`merge=union` không xếp theo thời gian), và quên sắp theo `at` là số tiền ra sai mà không gì đỏ.
 - Ngân sách học tới cổng Mốc 3: khoảng 600–900 USD chi phí API, theo CHARTER mục 8.
 - Asset đầu tiên trở đi ghi `ops/license-ledger.md`: nguồn, điều khoản, dùng thương mại được không, giao lại cho khách hàng được không.
+
+## 16. Vòng chờ — routine và phiên không tự đặt
+
+Mục `P-021`, chỉ dẫn 5 của chủ dự án trên issue bản tin #17.
+
+- Routine và phiên **không tự đặt vòng chờ**: không `/loop`, không hẹn giờ đánh thức, không `sleep` để đợi CI chạy xong, đợi review của người trên một PR đang mở, đợi `automerge.yml` merge, hay đợi chủ dự án trả lời.
+- Việc chưa xong thì **kết thúc lượt**. Push phần đã làm, ghi rõ trong báo cáo 5 dòng (mục 8) đang dừng ở đâu và bước tiếp theo là gì, rồi để **lượt chạy theo lịch kế tiếp** làm tiếp. Việc đã push thì lần chạy sau làm tiếp được (mục 2).
+- Vì sao, hai lý do đều đo được:
+  - Một lượt nằm chờ **vẫn tiêu một lượt chạy trong ngày** (giả định **G3** — trần số lần chạy routine mỗi ngày) mà không làm gì. Đó là thứ đắt nhất trong ngày bị dùng để ngồi im.
+  - Nó **giấu việc chưa xong khỏi bản tin**. Lượt chưa kết thúc thì chưa có báo cáo, chưa có PR chuyển khỏi nháp, chưa có dòng nào cho bản tin sáng đọc — nên chỗ kẹt không xuất hiện ở hộp quyết định duy nhất (mục 14). Đúng nhóm **Z** của `ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh.
+- Đây không phải luật mới, chỉ là nói rõ hình dạng lượt chạy mà CHARTER 2.1 đã mô tả — đọc trạng thái, nhận một mục, làm, commit, mở PR, **thoát** — và CHARTER 2.2 (crash-only: lượt dừng bất cứ lúc nào, lượt sau làm tiếp). Mục 14 của chính file này đã nói riêng cho chờ quyết định: "Đừng chờ trong cùng một lần chạy — thoát, lần chạy sau đọc câu trả lời." Mục 16 áp cùng một luật đó cho mọi kiểu chờ, không riêng chờ quyết định.
+- Chờ **bên trong một việc lượt chạy đang tự làm** không phải vòng chờ: `pnpm check` chạy vài phút, `git push` thử lại khi lỗi mạng (mục 2), một lệnh build đang chạy, và **subagent reviewer của phụ lục P1 bước 6** — bước đó bắt buộc, gọi rồi chờ kết quả để sửa là việc của lượt chạy, không phải vòng chờ. Phân biệt bằng câu hỏi: lượt chạy đang làm việc, hay đang đợi một người hoặc một cỗ máy bên ngoài làm?

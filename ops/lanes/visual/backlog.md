@@ -10,6 +10,7 @@ Chuyển `layouts.json`, hệ thống thị giác và visual tokens từ spec v�
 - deps: —
 - risk: low
 - status: review
+- hold: còn treo có chủ đích — check `layout-id-known` chưa nối vào pipeline thật, vì nối bây giờ đổi `ops/golden/ep-0001-stub/snapshots/assembly.json` mà cập nhật snapshot phải đi PR riêng (CHARTER 6.1); việc nối thuộc `V-006`
 - nguồn: spec phần Genre Pack; CHARTER 5.1
 - tiêu chí xong:
   - ✅ `packs/genres/data-explainer/layouts.json` và `packs/channels/us-personal-finance/visual-tokens.json` tồn tại và validate được — `kernel/contracts/layouts.schema.json` + `visual-tokens.schema.json`, nạp qua `loadGenreLayouts`/`loadChannelVisualTokens` (`kernel/src/packs.ts`), kiểm trong `pnpm contracts`.
@@ -23,6 +24,7 @@ Trả lời **bằng số đo thật**: canvas liên tục với máy quay di ch
 - deps: —
 - risk: high
 - status: review
+- hold: chi phí phút Actions chưa lấy được (workflow chỉ chạy sau khi merge + sync); chỉ số 4–6 chờ mắt chủ dự án (WP-003 mục 5)
 - nguồn: spec WP-003, quyết định D-04; giả định G5
 - tiêu chí xong:
   - ✅ **Số đo thật, 2026-09-21** — thời gian mỗi khung và bộ nhớ đỉnh đo bằng chạy thật trên bốn cấu hình (30fps không mờ · đối chứng máy quay đứng yên · 30fps có mờ · 60fps không mờ), 27.000 khung. Bảng sáu chỉ số ở `spike/canvas/RESULT.md`, sinh từ `measurements.json` chứ không gõ tay.

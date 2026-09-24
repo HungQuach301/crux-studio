@@ -49,14 +49,56 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # P-034 · phần quyết định @nhắc nằm ở `ops/scripts/alert-escalation.ts`
+      # (chạy thẳng file `.ts`, cần Node ≥ 22.18). Không `pnpm install`: script
+      # đó chỉ dùng thư viện chuẩn, và một `install` ở đây là thêm một chỗ để
+      # người canh chết đúng lúc nó phải lên tiếng.
+      #
+      # `continue-on-error` vì chính lý do đó áp cho cả bước này: nó đứng
+      # TRƯỚC cả năm phép soát, nên nó hỏng (tool cache trượt, nodejs.org
+      # không với tới được) là cả người canh câm — mất luôn bốn dấu hiệu
+      # không dính gì tới Node. Runner đã có sẵn Node; thiếu bản đủ mới thì
+      # `alert-escalation.ts` không chạy được, và bước quyết định dưới đã có
+      # sẵn hướng an toàn cho ca đó: rơi về `mention`.
+      - uses: actions/setup-node@v7
+        # Z9 · nuốt lỗi ở đây là an toàn và CÓ CHỦ Ý: bước này đứng TRƯỚC cả
+        # năm phép soát, nên để nó đỏ là để cả người canh câm — mất luôn bốn
+        # dấu hiệu không dính gì tới Node. Runner đã có sẵn Node; thiếu bản
+        # đủ mới thì `alert-escalation.ts` không chạy được, và bước quyết
+        # định dưới đã có hướng an toàn cho đúng ca đó: rơi về `mention`.
+        continue-on-error: true
+        with:
+          node-version: '22'
 
-      - name: Soát năm dấu hiệu im lặng
+      # Dấu hiệu số 6 chạy `ops/scripts/lane-heartbeat.ts` — TypeScript chạy
+      # thẳng bằng node ≥ 22.18, không cần `pnpm install`: script chỉ nhập
+      # `kernel/src/*.ts`, không phụ thuộc gói nào.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Soát sáu dấu hiệu im lặng
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           OWNER: HungQuach301
           TEST: ${{ inputs.test_alert }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          # P-034 · TIỀN TỐ của mốc "đã @nhắc lúc nào". Khác mốc của
+          # `main-ci.yml` để hai cảnh báo không đếm nhầm nhịp của nhau.
+          #
+          # Chỉ là tiền tố, vì mốc đầy đủ còn mang vân tay của TẬP DẤU HIỆU
+          # (xem chỗ dựng `MARKER` dưới). Workflow này gộp năm dấu hiệu vào
+          # MỘT issue, mà CHARTER 2.4 đếm chúng là những loại cảnh báo khẩn
+          # KHÁC nhau — "nhà máy im lặng" và "chi phí vượt 80% ngân sách" là
+          # hai loại riêng. Một mốc dùng chung cho cả issue thì một dấu hiệu
+          # MỚI xuất hiện lúc issue đang trong khoảng lặng 4 giờ sẽ chỉ đi
+          # vào comment tình trạng và không gọi ai — tức là nó được đối xử
+          # như một lần nhắc lại, trong khi nó là comment ĐẦU TIÊN của một
+          # cảnh báo khẩn khác. Vân tay làm tập dấu hiệu đổi thành mốc đổi,
+          # và mốc đổi thì `decideMention` thấy "chưa @nhắc lần nào" → gọi
+          # ngay, đúng vế 1.
+          MARKER_PREFIX: '<!-- crux-escalate-watchdog:'
         run: |
           set -euo pipefail
           NOW=$(date -u +%s)
@@ -158,14 +200,53 @@ jobs:
           #     tim mất một nguồn mà không gì đỏ — kể cả hình dạng hôm nay
           #     không bao giờ thắng `max`, vì thứ tự đó chỉ đúng chừng nào
           #     hình dạng mới còn được ghi.
+          #
+          #     Biểu thức dưới đây phải khớp NGUYÊN VĂN hằng `STEP0_REF_PATTERN`
+          #     của `ops/scripts/lane-heartbeat.ts`: `ops/test/lane-heartbeat.test.ts`
+          #     đọc chính file này và so, nên hai bản chép không lệch nhau im lặng
+          #     được (mục P-014 sóng 3, Z7). Chính phép so đó tìm ra hai hình dạng
+          #     BỊ THIẾU ở bản trước — `P1-step0-` (chuỗi `step0-` đứng sau `P1-`,
+          #     không sau `/`, nên không khớp; `ops/logs/platform/` có một dòng như
+          #     vậy) và `P3-daily-`, cả hai đều được `P-023` liệt kê là hình dạng cũ.
           LAST_BEAT=$(find ops/logs -name '*.jsonl' -exec cat {} + 2>/dev/null \
-            | jq -s -r 'map(select((.ref // "") | test("(^|/)(step0|P3-run)-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
+            | jq -s -r 'map(select((.ref // "") | test("(^|/)(step0|P1-step0|P3-run|P3-daily)-") or . == "platform/P-016") | .at) | max // empty' 2>/dev/null || true)
           if [ -z "$LAST_BEAT" ]; then
             add "Không đọc được dòng bước 0 nào trong \`ops/logs\` — không tính được nhịp tim của routine worker/integrator (dấu hiệu số 5, mục P-020). Hoặc chưa lượt nào ghi, hoặc hình dạng \`ref\` đã đổi."
           else
             AGE_MIN=$(( (NOW - $(date -u -d "$LAST_BEAT" +%s)) / 60 ))
             [ "$AGE_MIN" -gt 180 ] && add "Không routine \`crux-worker-*\`/\`crux-integrator\` nào ghi nhịp tim trong $AGE_MIN phút (ngưỡng 180 = 3 giờ, nhịp tim là dòng \`at\` mới nhất trong các dòng bước 0 của \`ops/logs\`). Có thể một routine đã lỗi hoặc đã dừng chạy."
           fi
+
+          # 6 · Nhịp tim THEO TỪNG LÀN (Z7, mục `P-014` sóng 3).
+          #     Dấu hiệu số 5 ở trên lấy `max` trên MỌI dòng bước 0, nên nó
+          #     trả lời đúng câu "routine còn chạy không" và sai câu "làn nào
+          #     đang đứng im": bước 0 ghi một dòng ở MỌI lượt worker (phụ lục
+          #     P3 bước 0d), nên chừng nào còn một worker thở thì `max` còn
+          #     mới, bất kể chín làn kia đã im mấy ngày. Đo được lúc thêm dấu
+          #     hiệu này: làn `integration` có nhịp tim 2,2 giờ khi TÍNH cả
+          #     dòng bước 0 và 23,4 giờ khi TRỪ chúng ra.
+          #
+          #     ⚠️ Dấu hiệu này KHÔNG tự mở/bình luận issue — nó chỉ in ra log
+          #     của lượt chạy và nối vào thân cảnh báo khi đã có dấu hiệu khác
+          #     nổ. Lý do khai thẳng, không giấu: một làn im là chỗ nghẽn của
+          #     MÁY, không phải việc chủ dự án bấm được (CHARTER 1.3), và
+          #     workflow này bình luận LẠI mỗi giờ chừng nào dấu hiệu còn —
+          #     một dấu hiệu kéo dài nhiều ngày sẽ thành nhiều chục lần @nhắc.
+          #     Nhịp cảnh báo là phạm vi của mục `P-034`. Đường phát hiện
+          #     độc lập của Z7 đi qua bản tin ngày (phụ lục P2 gọi
+          #     `pnpm lanes:heartbeat`), tốn 0 lần thao tác thêm của chủ dự án.
+          #
+          #     Dùng `if !` chứ KHÔNG dùng `|| LANE_REPORT=…`: script thoát
+          #     khác 0 khi không quét được `ops/logs`, và bắt lỗi đó là có
+          #     chủ đích (đây là MỘT trong sáu dấu hiệu, không được phép giết
+          #     năm dấu hiệu kia). Nhưng `|| VAR=…` là một hình dạng nuốt lỗi
+          #     mà luật Z9 (`undocumentedSwallows`) KHÔNG nhìn thấy — nó chỉ
+          #     bắt `|| true` và `continue-on-error`. Đưa một hình dạng vô
+          #     hình vào cây là tự mở một chỗ nhóm Z mới, nên viết tường minh.
+          if ! LANE_REPORT=$(node ops/scripts/lane-heartbeat.ts); then
+            LANE_REPORT="⚠ Không đo được nhịp tim theo làn (Z7) — xem log của lượt chạy này."
+          fi
+          echo "$LANE_REPORT"
 
           if [ "$TEST" = "true" ]; then
             add "Đây là cảnh báo THỬ, do chủ dự án bấm tay. Nếu anh đọc được dòng này trên điện thoại thì đường thông báo đã thông (DoD Đợt 0)."
@@ -179,28 +260,93 @@ jobs:
           TITLE="[CẢNH BÁO] Nhà máy im lặng"
           EXISTING=$(gh issue list --repo "$REPO" --label alert --state open \
             --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+
+          # P-034 · thân cập nhật KHÔNG @nhắc và KHÔNG mang mốc.
+          #
+          # Trước mục này, mọi comment của workflow đều mở đầu bằng `@$OWNER`,
+          # và workflow chạy MỖI GIỜ: một dấu hiệu kéo dài một ngày là 24 lần
+          # gọi chủ dự án, ngược thước đo CHARTER 1.3. Nay @nhắc tách hẳn ra
+          # khối dưới và đi theo nhịp 4 giờ mà chủ dự án chốt kèm `#169`, còn
+          # comment này chỉ còn việc kể dấu hiệu đang thấy.
+          #
+          # Mốc KHÔNG được lọt vào khối này: nó chạy mỗi giờ, nên mang mốc
+          # vào đây sẽ đẩy "lần @nhắc gần nhất" về hiện tại ở mọi lượt và
+          # nhịp 4 giờ không bao giờ tới hạn — @nhắc chết hẳn mà không gì đỏ.
+          # `ops/test/alert-escalation-workflows.test.ts` canh đúng luật này.
           BODY=$(printf '%s\n' \
-            "@$OWNER người canh có việc cần anh xem." \
-            "" \
-            "Người canh phát hiện:" \
+            "🤖 Người canh phát hiện:" \
             "" \
             "$PROBLEMS" \
+            "$LANE_REPORT" \
+            "" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
             "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")
 
-          # Chạy thử dừng ở ĐÂY, không sớm hơn: bốn phép soát trên đã gọi
+          # Vân tay của TẬP DẤU HIỆU — xem chú thích ở `MARKER_PREFIX`. Tập
+          # đổi thì mốc đổi, và mốc đổi thì cảnh báo khẩn mới được gọi NGAY
+          # thay vì phải chờ hết khoảng lặng 4 giờ của tập cũ.
+          FINGERPRINT=$(printf '%s' "$PROBLEMS" | sha256sum | cut -c1-12)
+          MARKER="${MARKER_PREFIX}${FINGERPRINT} -->"
+
+          MENTION=$(printf '%s\n' \
+            "$MARKER" \
+            "🤖 @$OWNER người canh có việc cần anh xem — các dấu hiệu ở ngay trên." \
+            "" \
+            "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4. Nhắc lại mỗi 4 giờ chừng nào tập dấu hiệu này còn nguyên; một dấu hiệu MỚI xuất hiện thì gọi ngay, không chờ hết 4 giờ (mục \`platform/P-034\`).")
+
+          # Chạy thử dừng ở ĐÂY, không sớm hơn: năm phép soát trên đã gọi
           # `gh issue list`, `gh pr list`, `gh run list` thật và đọc
           # `ops/logs/**` thật, nên lỗi quyền hay lệnh `gh` sai vẫn lộ ra.
           # Chỉ đúng thao tác ghi ra ngoài là bị chặn.
           if [ "$DRY_RUN" = "true" ]; then
-            printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n%s\n%s\n' \
+            printf 'CHẠY THỬ — KHÔNG mở và KHÔNG bình luận issue nào.\nĐỊNH %s:\n%s\n%s\n%s\n' \
               "$([ -n "$EXISTING" ] && echo "bình luận vào issue #$EXISTING" || echo "mở issue mới \"$TITLE\" nhãn alert")" \
-              "────────" "$BODY"
+              "────────" "$BODY" \
+              "$([ -n "$EXISTING" ] && echo "(@nhắc hay không do ops/scripts/alert-escalation.ts quyết, nhịp 4 giờ)" || echo "$MENTION")"
             exit 0
           fi
 
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
-          else
-            gh issue create --repo "$REPO" --title "$TITLE" --label alert --body "$BODY"
+          if [ -z "$EXISTING" ]; then
+            # Issue MỚI mang @nhắc ngay trong thân — vế 1 của câu trả lời
+            # kèm `#169`. Mốc đi cùng để lượt sau biết đã nhắc lúc nào.
+            gh issue create --repo "$REPO" --title "$TITLE" --label alert \
+              --body "$(printf '%s\n\n%s\n' "$BODY" "$MENTION")"
+            echo "Mở issue người canh, @nhắc NGAY trong thân issue (P-034)."
+            exit 0
           fi
+
+          gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+
+          # Thân issue ĐỨNG ĐẦU danh sách: lần @nhắc đầu tiên nằm ở thân, bỏ
+          # nó ra thì lượt nào cũng thấy "chưa nhắc lần nào" và gọi chủ dự án
+          # mỗi giờ — đúng thứ mục P-034 vừa gỡ.
+          #
+          # I7 · CHỈ đọc thân và comment của `github-actions[bot]`, y như
+          # `automerge.yml` làm với khối phạm vi sự cố. Không lọc thì bất kỳ
+          # ai cũng đặt lại được đồng hồ 4 giờ chỉ bằng một comment mang
+          # chuỗi mốc — và không cần ác ý: nút "Quote reply" của GitHub chép
+          # nguyên markdown thô, HTML comment kể cả.
+          #
+          # Z9 · `|| DECISION=…`: `gh` lỗi vặt hay JSON lạ dưới `set -euo
+          # pipefail` sẽ giết cả bước, mà comment tình trạng thì đã đăng rồi
+          # — tức là @nhắc mất trong im lặng, đúng chữ ký hỏng mục này sinh
+          # ra để chữa. Rơi về `mention`: gọi thừa một lần là phiền, một
+          # cảnh báo khẩn câm là chỗ hỏng.
+          if ! DECISION=$(gh issue view "$EXISTING" --repo "$REPO" --json author,body,createdAt,comments \
+            --jq '[select(.author.login == "github-actions[bot]") | {body, createdAt}] + [.comments[] | select(.author.login == "github-actions[bot]") | {body, createdAt}]' \
+            | node ops/scripts/alert-escalation.ts "$MARKER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"); then
+            DECISION='{"verdict":"mention","lastMentionAt":null,"hoursSinceLastMention":null,"unreadableMarkerComments":0}'
+            echo "Không đọc được lịch sử @nhắc (gh hoặc alert-escalation.ts lỗi) — rơi về mention."
+          fi
+          echo "Quyết định @nhắc: $DECISION"
+
+          UNREADABLE=$(echo "$DECISION" | jq -r '.unreadableMarkerComments')
+          if [ "$UNREADABLE" != "0" ]; then
+            echo "$UNREADABLE mục mang mốc có createdAt không đọc được — số giờ ở trên là CẬN DƯỚI."
+          fi
+
+          if [ "$(echo "$DECISION" | jq -r '.verdict')" != "mention" ]; then
+            echo "Lần @nhắc gần nhất chưa quá 4 giờ. Không nhắc lại."
+            exit 0
+          fi
+          gh issue comment "$EXISTING" --repo "$REPO" --body "$MENTION"
