@@ -45,7 +45,14 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { readRunLogs, LANES, type LaneName, type RunLogLine } from '@crux/kernel';
+import {
+  readRunLogs,
+  LANES,
+  isStep0LogId,
+  logIdFromRef,
+  type LaneName,
+  type RunLogLine,
+} from '@crux/kernel';
 import { parseBacklog, type BacklogItem } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
@@ -317,15 +324,25 @@ export const BATCH_ORDER: readonly Batch[] = ['Đợt 0', 'Đợt 1'];
  * định `G3`. Lượt `crux-digest` không chạy bước 0 nên không tính ở đây;
  * đó là một lượt mỗi ngày, chủ dự án cộng tay nếu cần trần tuyệt đối.
  *
- * ⚠️ Mục `platform/P-023` chuyển dòng bước 0 sang file-mỗi-lượt
- * (`ops/logs/integration/step0-…`, `ref` mang lane `integration`). Khi
- * P-023 vào `main`, mở rộng `isStep0Line` cho khớp — nếu không số lượt tụt
- * về 0 một cách im lặng (đúng nhóm lỗi Z).
+ * Mục `platform/P-023` đã chuyển dòng bước 0 sang file-mỗi-lượt
+ * (`ops/logs/integration/step0-…`, `ref` do `step0LogRef` sinh, dạng
+ * `integration/step0-<mốc>-<routine>`). `STEP0_LOG_REF` chỉ khớp **file
+ * phẳng cũ** (`platform/P-016`), nên khi P-023 vào `main` mọi dòng bước 0
+ * mới rơi khỏi phép đếm và số lượt tụt về 0 một cách im lặng — đúng nhóm
+ * lỗi Z, quan sát được trên bản tin `#193` (`platform/P-036`, `KF-022`).
+ * Nên `isStep0Line` nhận **cả hai** hình dạng: `ref` cũ dùng chung, và
+ * `ref` mới mà phần mã là một `step0LogId` (`isStep0LogId`).
  */
 export const STEP0_LOG_REF = 'platform/P-016';
 
 function isStep0Line(line: Pick<RunLogLine, 'kind' | 'ref'>): boolean {
-  return line.kind === 'lane' && line.ref === STEP0_LOG_REF;
+  if (line.kind !== 'lane') return false;
+  // Hình dạng cũ: mọi lượt bước 0 dồn vào một file phẳng `platform/P-016`.
+  if (line.ref === STEP0_LOG_REF) return true;
+  // Hình dạng P-023: một file mỗi lượt, `ref = integration/step0-<mốc>-<routine>`.
+  // Lọc theo phần mã (`step0-…`) chứ không theo tên file, để không neo vào
+  // một hình dạng ref cứng — cùng lý do `readRunLogs` quét cả thư mục.
+  return isStep0LogId(logIdFromRef(line.ref));
 }
 
 /**
