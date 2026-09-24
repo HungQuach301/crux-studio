@@ -55,7 +55,7 @@ Cung cấp dữ liệu cho kiểm số 6 của Preflight.
 ### AU-006 · Lưu spec giọng đọc của chủ dự án vào Channel Pack
 Chỉ dẫn của chủ dự án, khối **GIỌNG ĐỌC** trong comment `2026-09-23T14:18:09Z` trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193): *"Thay cho bảng 3 nhà cung cấp: lưu spec sau vào Channel Pack us-personal-finance."* Comment không mở đầu bằng 🤖 trên issue nhãn `digest` → chỉ dẫn thật (`CLAUDE.md` mục 5).
 
-Chỉ dẫn nằm đó **21 giờ** mà không mục backlog nào giữ, nên bốn lượt worker liên tiếp đọc xong rồi đi tới `idle`. Đó là hình dạng nhóm **Z** của chính hàng đợi việc: việc có thật, đã được giao, và mọi chỉ báo xanh.
+Chỉ dẫn nằm đó **~21,6 giờ** mà không mục backlog nào giữ. Đo trên `ops/logs/integration/step0-*.jsonl`: bốn lượt worker đi tới `idle` trong khoảng đó (`07:23Z`, `09:27Z`, `10:21Z`, `11:22Z` — lượt `07:42Z` xen giữa KHÔNG idle, nó nhận `P-042`), và dòng log lượt `09:27Z` ghi thẳng ra rằng khối GIỌNG ĐỌC bị xếp vào "deferred". Đó là hình dạng nhóm **Z** của chính hàng đợi việc: việc có thật, đã được giao, và mọi chỉ báo xanh.
 
 - deps: —
 - risk: low — lưu spec không tốn tiền, không khoá dự án vào nhà cung cấp nào, và revert được bằng git.
