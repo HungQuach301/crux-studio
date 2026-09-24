@@ -18,5 +18,6 @@ export * from './log.ts';
 export * from './workshop.ts';
 export * from './artifact-store.ts';
 export * from './packs.ts';
+export * from './revenue.ts';
 export * from './input.ts';
 export * from './cli.ts';

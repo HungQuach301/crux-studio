@@ -645,7 +645,11 @@ test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, khô
 // --- Tiến độ (mục `platform/P-019`) ---
 
 function item(id: string, status: string): BacklogItem {
-  return { id, status, title: id, hasHoldMarker: status === 'parked', holdField: null, statusLine: 1 };
+  // `deps: null` = mục không khai dòng `- deps:`, đúng hình dạng của fixture
+  // tối giản ở đây. `computeProgress` không đọc trường này; nó có mặt vì
+  // `BacklogItem` (mục `integration/I-015`) đòi khai đủ, không mặc định.
+  // `holdField: null` cùng lý do, từ mục `integration/I-020`.
+  return { id, status, title: id, hasHoldMarker: status === 'parked', holdField: null, statusLine: 1, deps: null };
 }
 
 function step0Line(at: string): RunLogLine {
