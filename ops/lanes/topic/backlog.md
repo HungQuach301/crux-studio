@@ -11,7 +11,7 @@ Trước khi xây kho dữ liệu, chứng minh **bằng bảng** rằng mỗi �
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: spec WP-009
 - tiêu chí xong:
   - ✅ `packs/channels/us-personal-finance/topic-source-map.md` liệt kê mọi tham số của mỗi đề tài khởi đầu, kèm nguồn cụ thể (nhà công bố, mã chuỗi/tài liệu, tần suất, độ trễ công bố) — mọi chuỗi/tài liệu đã xác nhận tồn tại thật bằng `WebSearch`/`WebFetch`, không viết từ trí nhớ.
@@ -39,7 +39,7 @@ Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập
 
 - deps: T-001
 - risk: high
-- status: review
+- status: done
 - nguồn: spec WP-010, mục Lõi định lượng 1
 - tiêu chí xong:
   - ✅ Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung (`workshops/topic/contracts/snapshot.v0.schema.json`, `workshops/topic/src/snapshot.ts` — `normalizeFred/Bls/Census` cùng trả `{period, value}` ISO date).
@@ -53,6 +53,7 @@ Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh s
 - deps: T-003
 - risk: low
 - status: review
+- hold: còn treo ngoài phạm vi — workflow detect-changes.yml (.github/, cấm) và mở issue thật là việc runtime; kiểm hạn annual-reset chưa làm
 - nguồn: spec WP-011, sổ rủi ro R6 và R7
 - tiêu chí xong:
   - ✅ So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi (`diffSnapshots` tách `revised`/`added`/`removed`; đổi từ/đến ô thiếu `null` tính là `revised`).
@@ -65,7 +66,7 @@ Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bố
 
 - deps: T-003
 - risk: high
-- status: review
+- status: done
 - nguồn: spec WP-012, mục Lõi định lượng 2
 - tiêu chí xong:
   - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy. ✅ `workshops/topic/src/model-runner.ts` (`runModel`) — không đọc đồng hồ hệ thống, không random; test chạy lặp lại và xen kẽ hai bộ tham số cho ra cùng kết quả từng chữ số.
@@ -78,6 +79,7 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
 - deps: T-005
 - risk: high
 - status: review
+- hold: chưa done — cấp kiểm 4 (mô hình khác họ tính lại) chờ platform/P-003 (secret OPENAI_API_KEY, PR #66); tám issue tóm tắt chờ tiêu chí 2
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
   - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
@@ -93,7 +95,7 @@ Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng gi�
 
 - deps: T-006
 - risk: high
-- status: review
+- status: done
 - nguồn: spec WP-013, mục Lõi định lượng 3
 - tiêu chí xong:
   - ✅ Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số. — `runSensitivityPass(model, registry, options)` nhận thẳng `ModelDefinition` đã nạp (cùng hình dạng với `runModel`); bên gọi tự `loadModel(modelId)` trước. Quét từng tham số một (giữ các tham số khác ở giá trị nền), tìm điểm đảo chiều bằng cách theo dõi dấu của một "biến kết luận" (`conclusionOutput`) đổi từ dương sang âm hay ngược lại, nhị phân tinh chỉnh giá trị đảo chiều.
@@ -115,6 +117,7 @@ Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **
 - deps: T-002
 - risk: high
 - status: review
+- hold: còn treo, cần người — G19 (VF-G19) và secret nền tảng (T-011); corpus/quota chờ đo thật trong hạn mức
 - nguồn: spec WP-014
 - tiêu chí xong:
   - ⬜ **Corpus xây trong hạn mức quota, và hạn mức được đo, không được đoán.** Nửa "trong hạn mức" đã
@@ -158,7 +161,11 @@ nên nó không chặn, chỉ làm số tiêu cần đối chiếu lại sau l�
 
 - deps: T-008, G19
 - risk: high
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): `blocked` không thuộc tập hợp lệ
+  `ready · claimed · review · done · parked` (`ops/lanes/README.md`), nên mục này rơi qua cả hai phép lọc
+  của `pnpm backlog:status` và không nhóm nào nhận. Chỗ chặn thật là **secret chưa có**, thứ chỉ chủ dự án
+  cấp được — đúng hình dạng `parked` của `CLAUDE.md` mục 13, và khác hẳn một `deps` mà máy tự thả ra được.
 - nguồn: spec WP-014 mục 2b, 3, 5b; `docs/assumptions.md` G19; CHARTER 2.3 nhóm 1 và 3
 - tiêu chí xong:
   - Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003`).
@@ -202,6 +209,7 @@ Nhân đây, một lệch luật có trước mục này: `additionalProperties:
 - deps: —
 - risk: low
 - status: review
+- hold: còn treo — hai số Console thật chờ #101 (VF-G19 parked); phần cơ chế contract/quota đã xong
 - nguồn: vòng soát ngữ cảnh sạch của PR `#100`; issue `#101`; giả định **G19** (`docs/assumptions.md`); mục `verify/VF-G19`; `CLAUDE.md` mục 12 (contract-first, contract v0 để lỏng) và mục 13 (sửa ở chỗ sinh ra lỗi, không vá sản phẩm)
 - **cửa merge:** chạm `workshops/topic/contracts/**`, không chạm `kernel/contracts/**` — chạy `node ops/invariants.protected-area.ts`, đừng đoán
 - tiêu chí xong:
@@ -211,3 +219,26 @@ Nhân đây, một lệch luật có trước mục này: `additionalProperties:
   - Nới `additionalProperties` ở `quota` và `quota.limits` cho đúng `CLAUDE.md` mục 12, hoặc ghi rõ tại chỗ vì sao ca này cố ý siết.
   - Lớp dự phòng 429 của G19: hoặc có code đọc hạn mức thật ra từ `quota.spent.searchCalls` khi nhà cung cấp trả 429, hoặc sổ giả định sửa lại cho đúng là lớp hai **chưa tồn tại**. Không để câu khai đứng một mình.
 - ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, PR đang mở): (a) `corpus.v0.schema.json` thêm `unitsPerCall`/`unitsPerDay` vào `quota.limits`; `deriveSearchCallsPerDay` (làm tròn xuống, có test kèm ca không chia hết) là chỗ duy nhất quy đổi; `corpusProblems` đỏ khi `searchCallsPerDay` lệch phép dẫn xuất. (b) `parseQuotaBudget` + `corpusProblems(corpus, budget)` buộc hai dòng hạn mức của `quota-budget.md` khớp `quota.limits` — cùng hình dạng phép soát của `spent`, test đỏ thật khi gỡ; corpus mẫu thêm `unitsPerCall: 1` khớp bảng. (c) `additionalProperties` ở `quota` và `quota.limits` nới thành `true` (CLAUDE.md mục 12). (d) G19 khai rõ lớp dự phòng 429 **chưa có code** (đo `grep 429` = 0), thuộc `T-011` đang chặn vì chưa có secret. `pnpm check` xanh 489/489, `pnpm replay` khớp tập vàng 6/6. Còn treo: hai số Console thật vẫn chờ #101 (`VF-G19` `parked`); khi có, agent điền `unitsPerDay`/`unitsPerCall` và đổi `source` sang `console-measured`.
+
+---
+
+### T-013 · Mọi ước tính doanh thu trong Channel Pack tính theo số **sau** khấu trừ 30%
+Chỉ dẫn của chủ dự án, cuối khối GIỌNG ĐỌC trong comment `2026-09-23T14:18:09Z` trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193): *"Kênh nhắm người xem Mỹ chịu khấu trừ 30% trên doanh thu từ Mỹ vì Mỹ–Việt Nam chưa có hiệp định thuế có hiệu lực. Mọi ước tính doanh thu trong Channel Pack tính theo số sau khấu trừ."*
+
+Mục này ở làn `topic` vì Channel Pack là vùng của `T-002`, không vì nó là việc về đề tài.
+
+- deps: —
+- risk: medium — một con số ước tính sai **theo một chiều cố định** (cao hơn thật 43%) là loại sai không tự lộ ra: mọi bảng đều nhất quán với nhau, chỉ lệch so với thế giới. Bất biến **I6**: mọi con số hiển thị có nguồn hoặc có mô hình.
+- status: review
+- nguồn: chỉ dẫn chủ dự án trên `#193`; bất biến **I6**; `packs/channels/us-personal-finance/channel.json` khoá `scoringWeights.rpm` và `revenuePriorityByPhase`
+- **cửa merge:** chạm `packs/channels/**`, `kernel/src/**`, `ops/scripts/**`, `ops/test/**` — không chạm `kernel/contracts/**`, `CHARTER.md` mục 1/3, hay vùng `owner-merge` nào. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+- tiêu chí xong:
+  - Hệ số khấu trừ là **dữ liệu khai trong Channel Pack**, không phải hằng số rải trong code — kênh khác thị trường khác có hệ số khác.
+  - Mọi chỗ ước tính doanh thu đọc hệ số đó; ghi rõ con số đang là **trước** hay **sau** khấu trừ, không để người đọc đoán.
+  - Một bài kiểm đỏ khi có chỗ ước tính doanh thu nào bỏ qua hệ số.
+  - Ghi lý do (chưa có hiệp định thuế Mỹ–Việt Nam có hiệu lực) ngay tại chỗ khai hệ số, kèm ngày và nguồn — để lúc hiệp định có hiệu lực thì tìm ra ngay chỗ phải sửa.
+- ✅ **Xong, 2026-09-24** (lượt `crux-worker-2`, N=2):
+  - **Dữ liệu:** `channel.json` thêm khối `revenueWithholding` — `usSourcedRate: 0.3`, `market: "US"`, và ba chú thích người đọc `$reason` (chưa có hiệp định thuế Mỹ–Việt Nam), `$asOf: 2026-09-24`, `$source` (#193). Hệ số là **dữ liệu**, không phải hằng số trong code; `$reviewWhen` chỉ chỗ sửa khi hiệp định có hiệu lực.
+  - **Đường đọc/áp duy nhất:** `kernel/src/revenue.ts` — `readRevenueWithholding(pack)` (đọc + validate `rate`/`market`) và `applyRevenueWithholding(gross, w)` trả về `{grossUsd, withholdingRate, netUsd, market}`, tức CẢ trước lẫn sau khấu trừ nên không con số nào hiển thị mà giấu mình là trước hay sau. Ở `kernel/` vì bất biến **I3** cấm xưởng import `ops/`.
+  - **Bẫy đỏ:** `ops/scripts/check-revenue-withholding.ts` — `channelWithholdingProblems` (mọi channel pack khai khối đủ/đúng, `$asOf` là ngày ISO) và `scanRevenueSites` (mọi định danh `…revenue…Usd` phải đi qua hệ số). Nối vào `pnpm contracts` (việc số 10). Chứng minh đỏ thật: cắm một file `monthlyRevenueUsd = rpm * views` → `pnpm contracts` EXIT=1 đúng dòng; gỡ ra → xanh lại.
+  - `pnpm check` xanh **1118/1118**, `pnpm replay` khớp tập vàng **6/6**.

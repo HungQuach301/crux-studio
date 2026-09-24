@@ -21,6 +21,7 @@ Tín hiệu của rủi ro R12 (độ phức tạp tự phình to): số file co
 - deps: —
 - risk: low
 - status: review
+- hold: chưa kiểm bằng chạy thật — routine crux-integrator (P3 bước 3) chưa gọi update-metrics lần nào
 - nguồn: CHARTER 6.7; phụ lục P3 bước 3
 - tiêu chí xong:
   - ✅ Một lệnh tính: số file code / số mục `done`, số lần revert, tỷ lệ `main` xanh — `ops/scripts/update-metrics.ts`.
@@ -123,6 +124,7 @@ Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ 
 - deps: I-004
 - risk: low
 - status: review
+- hold: còn treo có chủ đích — dạng lệch importers thứ hai chưa đo được hệ quả thật (Z17); kiểm trước rồi mới dựng cổng
 - nguồn: phát hiện khi làm `I-004`; CHARTER mục 7; KF-005
 - tiêu chí xong:
   - ✅ **Kiểm trước, dựa vào sau (CHARTER 11.1):** ca hỏng **tái hiện được**, dựng bằng git thật và `pnpm` thật trước khi viết một dòng cơ chế nào. Hình dạng: một bên bỏ phụ thuộc cuối cùng còn dùng một gói (khối `packages:` biến mất), bên kia thêm phụ thuộc vào đúng gói đó ở một gói khác trong workspace (chỉ `importers` đổi). Hai vùng cách nhau xa hơn ba dòng ngữ cảnh của git ⇒ **gộp sạch**, không một dấu xung đột, mà `pnpm install --frozen-lockfile` đỏ với `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`.
@@ -150,7 +152,7 @@ là một cảnh báo không ai đọc.
 
 - deps: `I-005`
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-005`; `ops/known-failures.md` nhóm Z (cách 3 — cấm im lặng)
 - tiêu chí xong:
   - `git ls-remote --heads origin 'refs/heads/claude/*'` rỗng → `◦ chưa quan sát được` (quan sát hợp lệ);
@@ -234,6 +236,7 @@ trước khi viết máy kiểm.
 - deps: `I-008`
 - risk: low
 - status: review
+- hold: còn treo — luật máy Z13 chưa dựng; upstreamFrom.workshops khai tay chưa suy từ consumes (thành I-011)
 - nguồn: vòng soát `I-008` (PR `#40`); `ops/known-failures.md` hàng Z16; CHARTER 6.1
 - tiêu chí xong:
   - Chọn và ghi lý do một trong ba: (a) fixture **đọc** snapshot tập vàng lúc chạy, (b) fixture giữ bản
@@ -313,6 +316,7 @@ là làn chết đói nặng nhất.
 - deps: —
 - risk: low
 - status: review
+- hold: còn treo — nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (đang ở PR #112) và vài mục con ⬜ khác chưa vào main
 - nguồn: `ops/lanes/README.md` (định nghĩa `deps`); CHARTER phụ lục P1 bước 7, P3 bước 2; `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - `ops/scripts/backlog-status.ts`: đối chiếu mọi mục `status: review` trong `ops/lanes/*/backlog.md`
@@ -355,8 +359,9 @@ là làn chết đói nặng nhất.
     xếp nó vào `unmerged` và **không** đụng tới. Đây là lựa chọn có chủ ý: nới luật khớp để vớt ca này
     sẽ vớt luôn `P-014` (commit `platform: rà soát … (P-014)`), mà `P-014` **chưa** xong — nó vẫn
     `ready`. Chuyển `P-015` sang `done` là việc đọc tay một lần, không phải việc của máy.
-  - ⬜ Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (xem trên). Tới khi đó, tool phải được
-    gọi tay — nên mục này giữ `review`, không `done`, cho tới khi lượt sau nối xong.
+  - ✅ **Đã nối ở mục `I-015`** (lượt `crux-worker-1`, 2026-09-22): `pnpm backlog:status --fix` nay nằm
+    trong phụ lục P3 bước 2, và phụ lục P1 bước 3 đọc `readyNow` thay vì đối chiếu `deps` bằng mắt. Mục
+    này vẫn `review` vì hai ô `⬜` còn lại bên dưới chưa xong.
   - ⬜ `I-001` ghi ngưỡng bỏ PR nháp là **72 giờ**, trong khi CHARTER phụ lục P1 bước 3 và CLAUDE.md
     mục 2 ghi **24 giờ**. Lệch này có từ trước mục `I-010`, không sửa ở đây để không trộn phạm vi.
 
@@ -378,7 +383,7 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
 
 - deps: `I-009`
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
 - tiêu chí xong:
   - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
@@ -484,7 +489,7 @@ còn tệ hơn là không viết").
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - ✅ `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/` —
@@ -511,7 +516,7 @@ kiểm biến mất mà mọi chỉ báo vẫn xanh.
 
 - deps: `I-013`
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
 - PR: `#99`
 - tiêu chí xong:
@@ -526,6 +531,60 @@ kiểm biến mất mà mọi chỉ báo vẫn xanh.
     `check-contracts.ts` thì bài đó **đỏ** (`not ok`). Cùng bài đối chứng với schema sạch. Thêm bài cho
     `packs/`, symlink trá hình, quét đệ quy, và ca "đã trong contracts/ thì không kiểm hai lần".
 
+### I-015 · `deps` bị chặn bởi mục đã merge, và không lệnh nào trả lời "mục nào nhận được ngay"
+
+Tìm ra ở lượt `crux-worker-1` ngày 2026-09-22, khi duyệt cả mười làn theo `ops/lanes/priority.md` và
+**không** nhận được mục nào — đúng hình dạng mà `I-010` đã mô tả, một tầng nữa.
+
+`I-010` đã dựng `ops/scripts/backlog-status.ts` để phân biệt mục "đã vào `main` mà còn `review`" (`stale`)
+với mục cố ý giữ `review` (`held`). Nhưng nó để hở hai đầu, và chính `I-010` khai trước cả hai:
+
+1. **Không ai gọi `--fix`.** Mục đó ghi rõ "Nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 là việc
+   của lượt sau". Tới lượt này vẫn chưa nối, nên tám mục (`editorial/E-001`, `integration/I-007`, `I-011`,
+   `I-013`, `I-014`, `platform/P-007`, `topic/T-001`, `verify/VF-G17`) nằm `stale` mà không gì chuyển chúng.
+2. **Worker vẫn phải đọc tay từng `deps`.** Báo cáo của tool trả lời "mục nào nên chuyển `done`", không
+   trả lời câu hỏi bước 3 của phụ lục P1 thật sự hỏi: *mục nào nhận được ngay*. Worker vì thế đối chiếu
+   `deps` bằng mắt, đúng cái mà `I-010` gọi là "tỉ lệ tự phát hiện: 0".
+
+Hệ quả đo được ở lượt này: `topic/T-003` (`deps: T-001`) đáng lẽ nhận được — `T-001` đã merge vào `main` —
+nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu tiên 3) trông như cạn việc. Cùng dạng với
+`editorial/E-003` (`deps: E-001`). Lượt chạy suýt in `idle` trong khi hàng đợi **không** cạn.
+
+Đây vẫn là nhóm lỗi **Z** (`ops/known-failures.md`): mọi chỉ báo xanh, chỉ hàng đợi việc là cạn giả.
+
+- deps: —
+- risk: low
+- nguồn: `I-010` (hai phần chưa đánh dấu xong của nó); CHARTER phụ lục P1 bước 3, P3 bước 2; `ops/known-failures.md` nhóm Z
+- status: review
+- **cửa merge: `automerge-delayed`** — chạm `CHARTER.md` (mục phụ lục) và `CLAUDE.md`, không chạm mục 1 hay mục 3.
+  Đo bằng `node ops/invariants.protected-area.ts --changed … --base-charter …`, đừng đoán.
+- tiêu chí xong:
+  - `ops/scripts/backlog-status.ts` đọc được `deps` của mỗi mục và trả thêm hai nhóm: `readyNow`
+    (mục `status: ready` mà **mọi** `deps` đã xong) và `blocked` (mục `ready` còn chờ, kèm danh sách
+    đang chờ ai). "Đã xong" tính cả mục `review` đang ở nhóm `stale` — nó đã vào `main` thật.
+  - Thận trọng theo đúng hướng của `I-010`: một `deps` **không tra được** thì mục bị coi là còn chờ và
+    hiện ra ở `blocked` kèm tên đoạn không tra được, **không** bị bỏ qua im lặng. Đoán sai theo hướng này
+    chỉ tốn một nhịp; đoán sai theo hướng kia nhận một mục mà nền móng của nó chưa có.
+  - Mã giả định dạng `G<số>` trong `deps` (ví dụ `audio/AU-001` ghi `deps: G7`) tra về mục `VF-G<số>` của
+    làn `verify` — đó là quy ước đang dùng thật trong backlog, viết ra thay vì để mỗi lượt tự suy.
+  - Test, gồm test âm: `deps` chưa xong thì mục **không** vào `readyNow`; `deps` là mục `stale` thì
+    **có**; `deps` là mục `held` thì **không**; `deps` không tra được thì **không**; mục `parked` hay
+    `review` không bao giờ vào `readyNow`.
+  - CHARTER phụ lục **P3 bước 2** gọi `pnpm backlog:status --fix` — chỗ `I-010` đã chỉ định.
+  - CHARTER phụ lục **P1 bước 3** đọc `readyNow` của lệnh đó thay vì đối chiếu `deps` bằng mắt, và
+    **không được in `idle`** khi `readyNow` còn mục chưa có nhánh, chưa có PR.
+  - **Không** đưa vào `pnpm check`: cùng lý do `I-010` đã viết — mục vừa merge còn `review` đúng một nhịp.
+  - `readMainSubjects` **ném** khi kho đang ở dạng nông thay vì trả một danh sách cụt: cùng bài học
+    "cấm im lặng" của `I-005`/`I-007`. Đo được ngày nhận mục — phiên cloud clone nông, `git log` đọc
+    được 50 trên 86 tiêu đề, 6 mục đã `done` không thấy commit hoàn thành của mình. Hôm đó vô hại vì
+    cả 6 đều `done`; một mục còn `review` rơi ngoài biên nông sẽ kéo cả nhánh phụ thuộc của nó ra khỏi
+    `readyNow` mà không gì đỏ.
+  - **Cùng phạm vi, khai ra chứ không để lẫn:** lệnh đo cửa merge chép trong `CLAUDE.md` mục 1 và
+    CHARTER phụ lục P1 bước 7 thiếu `--base-charter`, nên nó trả `owner-merge` cho **mọi** thay đổi
+    `CHARTER.md`. Cùng một hình dạng lỗi với phần trên — một chỉ dẫn "đừng đoán, chạy lệnh" mà lệnh
+    được chép lại cho câu trả lời sai — nên sửa ở đây thay vì mở mục riêng. `ci.yml` và `automerge.yml`
+    đều truyền tham số này.
+
 ### I-016 · `main` đỏ: hai PR xanh riêng lẻ, gộp vào nhau thì bất biến mới gặp vi phạm cũ (KF-013)
 
 `fix`. Tìm ra ở bước 0/bước 2 của một lượt worker (`crux-worker-2`, 2026-09-22 ~10:20Z): `main` đỏ ngay
@@ -537,6 +596,7 @@ mang **một** trong hai file nên CI từng PR xanh; chỉ khi cả hai vào `m
 
 - risk: low
 - status: review
+- hold: chặn thật lỗ hổng gốc (bất biến ở nhánh A, vi phạm ở nhánh B) còn để ngỏ — cần chạy pnpm check trên gộp thử từng cặp PR
 - nguồn: lượt `crux-worker-2` 2026-09-22; `ops/known-failures.md` `KF-013`
 - PR: nhánh `claude/dreamy-ride-kvztso`
 - **Số hiệu I-016, không phải I-015:** `I-015` đã bị PR `#112` (`integration/readyNow`) nhận và PR đó còn mở.
@@ -572,7 +632,7 @@ muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bư
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~13:40Z; `ops/known-failures.md` `KF-015`; comment `09:46:12Z` trên PR `#42` (đã nêu đúng phần còn thiếu nhưng chưa ai nhận)
 - **Số hiệu I-017:** `I-015` đã bị PR `#112` nhận, `I-016` đã có mục riêng.
 - tiêu chí xong:
@@ -610,7 +670,7 @@ quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~16:45Z; `ops/known-failures.md` `KF-016`; `ops/logs/platform/P-010.jsonl`
 - **Số hiệu I-018:** `I-015` do PR `#112` giữ, `I-016` đã merge, `I-017` do PR `#150` giữ.
 - tiêu chí xong:
@@ -627,3 +687,204 @@ quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
     `aborted-ineligible`, không phải "PR đỏ" — hai ca này đi hai đường khác nhau ở lượt sau (phụ lục P1
     bước 2). Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, đừng đoán.
   - `ops/known-failures.md` `KF-016` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
+
+### I-019 · Backlog có lỗi **dữ liệu** mà không phép kiểm nào đỏ: vòng phụ thuộc, và `status` ngoài tập hợp lệ
+
+Tìm ra trong vòng soát chéo của `I-015` (reviewer ngữ cảnh sạch, PR `#112`). `I-015` chữa chỗ worker đọc
+`deps` **sai**; hai chỗ dưới đây là `deps` và `status` **viết sai trong chính backlog**, và cả hai im lặng:
+
+1. **Vòng phụ thuộc có thật đang nằm trên `main`:** `release/R-002` ghi `deps: R-001, G6`, còn
+   `verify/VF-G6` ghi `deps: R-002`. Hai mục chờ nhau vĩnh viễn. `readyQueue` xếp cả hai vào `blocked`
+   và không nói gì thêm — đọc báo cáo không thấy đó là một vòng.
+2. **`status` ngoài tập hợp lệ:** làn `topic` có mục ghi `status: blocked`, không thuộc
+   `ready · claimed · review · done · parked` (`ops/lanes/README.md`, CHARTER 2.1). `readyQueue` xử lý
+   an toàn (coi là chưa xong) nhưng `reviewFindings` cũng không in nó ra, nên mục đó biến mất khỏi mọi
+   báo cáo.
+
+Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi việc là sai.
+
+- deps: I-015
+- risk: low
+- status: review
+- nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z, nay là `KF-030`
+- **Số hiệu I-019:** mục này mở ra trong PR `#112` với số `I-016`, rồi lùi sang `I-017` (lúc `11:32Z`,
+  khi `I-016` vào `main` qua PR `#132`) và sang `I-018` (lúc `14:45Z`, khi `I-017` vào `main` qua PR
+  `#145`). Lần gộp `main` này mang thêm một mục `I-018` **khác** vào `main` (KF-016, cổng cú pháp của
+  `integrator-resolve.ts`) — mục trên `main` đã chính danh nên giữ nguyên, mục này lùi tiếp sang
+  `I-019`. Giữ nguyên nội dung và `deps`.
+- tiêu chí xong:
+  - ✅ `readyQueue` (hoặc một phép kiểm cạnh nó) phát hiện vòng phụ thuộc và in ra thành một nhóm riêng,
+    kèm đường đi của vòng. Test dựng một vòng hai mục và một vòng ba mục.
+    → `dependencyCycles` (DFS ba màu) cạnh `readyQueue`, và `readyQueue` trả `cycles` để bên gọi không
+    phải tự dò. Đường đi in khép kín: `release/R-002 → verify/VF-G6 → release/R-002`. Test: vòng **hai**
+    mục (dựng đúng cặp thật), vòng **ba** mục, vòng tự-trỏ, vòng đi qua mục `parked`, cộng ba bài khoá
+    chiều **báo giả** (chuỗi dài, hình thoi, mã trùng giữa hai làn) — một phép kiểm kêu sai là một phép
+    kiểm sắp bị tắt.
+  - ✅ Mục có `status` ngoài tập hợp lệ ra một nhóm riêng trong báo cáo, **không** bị lọc đi im lặng —
+    cùng luật với nhóm `unknown` của `I-010`. Test âm: `status: blocked` phải hiện ra.
+    → `VALID_STATUSES` + verdict `invalid-status`, đi qua chính `classify`/`reviewFindings` đã có; nhóm
+    `invalidStatus` in ra **kể cả khi rỗng**. `unknown` và `invalid-status` là hai nhóm tách nhau: "không
+    khai" và "khai sai" cần hai cách sửa khác nhau. `--fix` không chạm mục `status` sai, và mục `status`
+    sai không bao giờ mở khoá một `deps` — cùng hướng lệch an toàn với phần còn lại của file.
+  - ✅ Hai ca dữ liệu thật ở trên được sửa trong chính PR của mục này, hoặc khai rõ vì sao giữ nguyên.
+    → `release/R-002` bỏ `G6` khỏi `deps` (cắt vòng ở chiều sai; lý do ghi ngay trong thân mục đó).
+    `status: blocked` **5** mục, không phải 1 như thân mục này viết lúc mở — số đã trôi: `platform/P-030`
+    và `P-038` → `parked` (chặn ở quyết định của chủ dự án, đúng hình dạng `CLAUDE.md` mục 13);
+    `platform/P-035` và `P-037` → `ready` (chặn ở một `deps` đã ghi đúng ở dòng trên, để `readyQueue` tự
+    giữ và tự thả); `topic/T-011` → `parked` (chặn ở secret chưa có, chỉ chủ dự án cấp được).
+  - Hệ quả đo được của việc cắt vòng: `release/R-002` từ `blocked` sang **`readyNow`** — `R-001` đã vào
+    `main` thật (`[release] R-001 — … (#84)`), nên mục đó bị khoá oan bởi chính cái vòng. Thân `R-002` nay
+    khai luôn chỗ chặn thật còn lại (đường xác thực YouTube chưa ghi ở đâu cả) để lượt nhận nó không dừng
+    tại chỗ.
+- vòng soát ngữ cảnh sạch (CHARTER 6.4) — **2 CHẶN, 4 nên sửa, xử lý cả sáu**:
+  - **C1** `platform/P-037` chuyển sang `ready` với dòng `deps` có vế hai sau dấu phẩy, mà `parseDeps` cắt
+    theo dấu phẩy → một phần phụ thuộc **không tra được**, mục kẹt `blocked` **vĩnh viễn** kể cả sau khi
+    `P-034` merge. Đúng nhóm Z đang chữa, chỉ đổi chỗ. Đã tách lời giải thích xuống dòng `- ghi chú:`; đo
+    lại: `waitingOn: ["platform/P-034"]`.
+  - **C2** lời khai "in `invalidStatus` và `cycles` kể cả khi rỗng" **không có máy canh** — phá thử cho 0
+    bài đỏ, vì mọi bài đều gọi hàm export chứ không chạy CLI. Đã thêm một bài `spawnSync` chạy CLI thật.
+  - **N2/N3** hai lỗ phá thử nữa (dừng ở vòng đầu tiên; chỉ lấy mục chưa `satisfied` làm gốc DFS) — mỗi lỗ
+    một bài mới. Cả ba phép phá nay cho **1 bài đỏ**, khôi phục thì xanh.
+  - **N4** khai thêm giới hạn mã trùng (mục **thứ hai** không vào chỉ mục nên `deps` của nó không sinh
+    cạnh) vào chú thích `dependencyCycles` và vào `KF-030`.
+  - **N1** `R-002` — xem dòng trên. Reviewer đề nghị `parked`; không làm, vì chỗ chặn nó nêu (secret
+    YouTube) **không có trong repo** ở bất kỳ đâu, nên viết một lý do `parked` là bịa. Ghi chỗ thiếu ra
+    thay vì đoán.
+  - **N5** luật mềm: diff vượt ~400 dòng và chạm backlog của ba làn khác — không tách được, vì tiêu chí
+    xong thứ ba **bắt buộc** sửa dữ liệu thật trong chính PR này. Nhãn `cross-lane`.
+
+### I-020 · Dấu treo phải là một **trường**, không phải một câu văn — `HOLD_MARKERS` đã thủng hai lần
+
+Nối tiếp `I-010`. `ops/scripts/backlog-status.ts` quyết định một mục có được lật sang `done` hay không
+bằng cách dò **chuỗi con** trong thân mục (`HOLD_MARKERS`). Cách đó bắt *cách viết*, không bắt *ý*, nên
+nó thủng ở đúng câu chưa ai nghĩ tới — và đã thủng **hai lần**:
+
+- lần một, vòng soát của `I-010`: bốn mục `P-011`, `P-013`, `P-016`, `I-002`;
+- lần hai, lượt `crux-worker-1` ~21:48Z 2026-09-23 (`KF-023`): ba mục `E-001`, `P-010`, `P-007`.
+
+Cả hai lần đều chữa bằng cách **thêm chuỗi**, và cả hai lần đều chỉ vá lỗ vừa gặp. Danh sách chuỗi con
+không hội tụ: câu thứ tư, viết bằng chữ khác nữa, vẫn lọt, và vẫn **không gì đỏ** — nhóm **Z**. Lần hai
+đắt hơn lần một vì `E-001` là `deps` của `E-003`, `E-004`, `E-005`, nên một lần lật nhầm mở khoá cả một
+nhánh việc.
+
+- deps: —
+- risk: medium
+- status: review
+- **Số hiệu I-020:** `I-019` do PR `#112` giữ (nhánh `claude/hopeful-dirac-ekbass`); dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã (`KF-005`).
+- nguồn: `ops/known-failures.md` `KF-023`; mục `integration/I-010`; `ops/lanes/README.md` (định nghĩa `deps`)
+- tiêu chí xong:
+  - ✅ Thân mục khai dấu treo bằng một **trường** mà tool đọc như đọc `- status:` và `- deps:` —
+    `- hold: <lý do, một dòng>` (`HOLD_FIELD`, `holdField`). Có trường đó thì mục không bao giờ bị lật,
+    bất kể thân mục viết gì — `classify` và `applyFix` (phòng thủ theo tầng) đều chặn.
+  - ✅ `HOLD_MARKERS` **giữ lại** làm lớp thứ hai cho các mục chưa kịp khai trường, không gỡ. Từ nay nó là
+    lưới **dự phòng**, không phải nguồn quyết định (`heldReason`: trường thắng lời văn).
+  - ✅ `pnpm backlog:status` in `heldByField` và `heldByProse` — con số thứ hai là nợ phải trả dần, nay
+    nhìn thấy được. Sau mục này `heldByProse` = 0 (đã khai trường cho cả nhóm).
+  - ✅ Chuyển nhóm `held` sang khai bằng trường, mỗi mục một dòng `- hold:` lấy nguyên lý do đã viết trong
+    thân — **35** mục (số trôi từ 33 ở `402444b`), đọc tay một lần.
+  - ✅ Bài `HOLD_MARKERS: giới hạn còn lại` (nay đổi tên `… ba biến thể lần ba nay đã vào lưới dự phòng`)
+    có ba `assert` **âm** đã đổi thành `true` — tiêu chí xong đo được.
+  - ✅ Test, gồm test âm: mục có `- hold:` không bị lật dù thân mục sạch trơn; mục chỉ giữ bằng lời văn
+    vẫn không bị lật (lớp thứ hai còn sống); mục sạch cả hai đường vẫn lật bình thường; `- hold:` viết
+    hoa/thường/thụt lề lệch vẫn nhận.
+  - ✅ `ops/known-failures.md` `KF-023` điền dòng *Máy chặn từ nay* bằng cơ chế mới, và gỡ phần "còn thiếu".
+- **Đã làm:** `ops/scripts/backlog-status.ts` (`HOLD_FIELD`, `holdField`, `heldReason`, `classify`/`applyFix`
+  phòng thủ theo tầng, output `heldByField`/`heldByProse`); `ops/test/backlog-status.test.ts` (+7 bài, ba
+  `assert` âm lật thành dương); `ops/lanes/README.md` (bảng trường thêm `hold`); `KF-023` cập nhật; 35 mục
+  `held` khai `- hold:`. Chính tiêu đề mục này đổi sang dùng "dấu treo" để mục — vốn nói VỀ khái niệm đó —
+  không tự sa vào lưới lời văn mà nó vừa hạ xuống hàng dự phòng.
+- **Bổ sung sau `#221`, lượt `crux-worker-1` 2026-09-24 (PR `#222`).** Hai worker nhận cùng mục này cách
+  nhau 89 giây (`KF-025`): `#221` merge trước, `#222` kẹt xung đột. Bước 2 của phụ lục P1 nhận `#222` ở ca
+  `aborted-ineligible`, gộp `main` vào và giải theo phán đoán — bản của `#221` là bản chính danh cho phần
+  trùng, còn hai thứ `#222` có thêm thì giữ lại, vì cả hai đều là thứ `main` chưa có:
+  - **Lưới dự phòng đổi hình dạng, không thêm chuỗi.** `HOLD_MARKERS` nay là **mẫu RegExp trên văn bản đã
+    chuẩn hoá** (`normalizeForHold`: bỏ dấu nhấn Markdown, gộp khoảng trắng, hạ hoa thường) thay vì danh
+    sách chuỗi con. `#221` chữa lần thứ ba bằng cách **thêm ba chuỗi** — đúng cách vá mà `CLAUDE.md` mục 13
+    cấm ở lần gặp thứ hai. Chuẩn hoá làm tan cả một LỚP biến thể: `done` viết trần và `done` bọc dấu nháy
+    ngược là một chữ (ca `P-007` lọt lưới chỉ vì hai dấu nháy ngược), và một câu treo bị ngắt dòng giữa hai
+    chữ vẫn bắt được.
+  - **Máy canh phần nợ, không chỉ in ra.** Bài `nợ lời văn của backlog THẬT phải ở 0` đọc
+    `ops/lanes/**/backlog.md` thật (chỉ mục ở `review`) và đỏ **kèm tên mục** khi có mục đang bị giữ mà
+    chưa khai trường. Trước bài này, gỡ một dòng khai trường khỏi backlog thật thì **0 bài đỏ** — đúng nhóm **Z** mà
+    chính mục này sinh ra để giết.
+  - **Bài đó bắt được một ca thật ngay lần chạy đầu:** `platform/P-034` (merge `#198`, SAU `#221`) ở `review`
+    và chỉ được giữ bởi lời văn. Chữa theo đúng luật của mục này — **khai trường cho nó**, không nới bài
+    kiểm — nên `heldByProse` về **0**.
+  - **Phép đo hồi quy:** lưới rộng hơn **không lật thêm gì** trên dữ liệu thật. So với `main`: `held` 36/36
+    giống hệt, `stale` 6/6 giống hệt, `unmerged` 2/2, `unknown` 0/0; đổi duy nhất là `P-034` chuyển từ
+    `heldByProse` sang `heldByField`, tức nợ đi từ 1 về 0. Phá thử hai chỗ: gỡ bước bỏ dấu nhấn Markdown
+    khỏi `normalizeForHold` → 4 bài đỏ; gỡ một dòng khai trường khỏi backlog thật → bài máy canh đỏ kèm
+    đúng tên mục. Khôi phục → 30/30 xanh.
+
+---
+
+### I-021 · fix · Ghi `KF-026` và dọn sáu chỗ sót của vòng soát `I-020` — phần luật tách PR riêng
+Vòng soát ngữ cảnh sạch (bước 6) của PR `#222` chạy **sau khi** PR đó đã merge: nhãn `automerge` gắn từ vòng
+soát trước — cho một bản 16 file — sống sót qua một lần push đổi nội dung thực chất, và `automerge.yml` merge
+76 giây sau push. Toàn bộ lần giải xung đột 14 file vào `main` mà **không vòng soát nào nhìn thấy nó**. Chi
+tiết và mốc thời gian ở `ops/known-failures.md` `KF-026`.
+
+Mục này gom hai phần: phần **luật** (nhãn hết hiệu lực khi `head.sha` đổi) và sáu chỗ sót mà vòng soát đó nêu
+nhưng không còn PR nào để sửa vào.
+
+- deps: —
+- risk: medium — phần luật chạm `ops/workflows/automerge.yml`, vùng `owner-merge`, nên nó phải tách PR riêng
+  mà chủ dự án merge. Phần dọn dẹp thì rẻ và đã làm xong trong PR của mục này.
+- status: review
+- hold: phần luật (`automerge.yml` so `head.sha`) chưa làm — nó chạm vùng `owner-merge` nên phải đi bằng một PR riêng
+- nguồn: `KF-026`; vòng soát bước 6 của PR `#222`; CHARTER 6.4 và 3.3; `CLAUDE.md` mục 13
+- tiêu chí xong:
+  - ⬜ `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn tự merge được gắn (đọc từ
+    timeline của label event). Lệch thì **gỡ nhãn** và đòi soát lại, không merge. Áp cho **cả** `automerge`
+    lẫn `automerge-delayed` — cửa `open` là cửa thiếu cơ chế này, nhưng viết một luật cho cả hai thì không
+    có cửa nào tụt lại.
+  - ⬜ Test cho hàm quyết định đó, tách khỏi YAML như `ops/scripts/alert-escalation.ts` đã làm.
+  - ⬜ CHARTER 6.4 nói rõ vòng soát gắn với **một phiên bản**, không với một PR.
+  - ⬜ `ops/workflows/watchdog.yml` dấu hiệu 5 **kẹp sàn `AGE_MIN`**. Hiện nó tính
+    `AGE_MIN=$(( (NOW - LAST_BEAT) / 60 ))` rồi hỏi `-gt 180`, **không kẹp sàn** — nên một mốc bước 0 ở
+    tương lai cho `AGE_MIN` âm, phép so sai, và dấu hiệu 5 của CHARTER 2.4 **im vĩnh viễn**. Cùng hình dạng
+    Z với `S2`, ở nhánh sát bên. Tách khỏi PR này vì `ops/workflows/**` kéo cửa sang `automerge-delayed`,
+    trong khi phần còn lại của mục ở cửa `open`; bài kiểm phía TS đã phủ dữ liệu (xem `S2`), còn đây là
+    phần bash.
+  - ✅ **Máy canh mốc `at` ở tương lai trên log THẬT** (`S2`) — phủ **cả** dòng thường **và** dòng bước 0. Bài `Z7 · trên ops/logs thật: KHÔNG làn nào ra
+    future`. Đo được chỗ thủng: lượt `crux-worker-1` ghi tay `at: 07:05:00.000Z` vào commit tạo lúc `06:51:27Z`,
+    nên trong ~14 phút làn `integration` ra `{"verdict":"future","hoursSinceLastBeat":-0.1}` — số âm nhỏ hơn
+    mọi ngưỡng, tức làn đó **không bao giờ `stale` được**, mà `pnpm check` vẫn xanh (nhóm **Z**). Bài cũ chỉ
+    khoá *hàm* trên log dựng; bài mới khoá *dữ liệu thật*. Phá thử: đặt một mốc tương lai vào log thật →
+    `not ok 22`; khôi phục → 22/22 xanh.
+    **Phạm vi đã sửa sau vòng soát:** bản đầu chỉ khẳng định trên `laneHeartbeats`, mà hàm đó cố ý **loại**
+    dòng bước 0 (luật thiết kế 1) — nên tiêu chí này lúc đầu khai phạm vi **rộng hơn phạm vi thật**, đúng lỗi
+    `S6` mà chính mục này đang sửa ở chỗ khác. Đo được: đặt mốc tương lai vào dòng bước 0 → **22/22 vẫn
+    xanh**. Nay bài có thêm một phép khẳng định chạy thẳng trên các dòng bước 0, dùng
+    `FUTURE_TOLERANCE_HOURS` làm dung sai; phá thử lại → `not ok 22`.
+    **Đường thoát khi một mốc tương lai ĐÃ vào `main`** (khai vì nó cắn `D-C04`): thêm một dòng đính chính
+    **không** chữa được — `laneHeartbeats` lấy `max` theo làn, nên `pnpm check` (cổng cứng) đỏ cho **mọi** PR
+    tới khi thời gian thật vượt qua mốc đó. Cách chữa duy nhất là sửa hoặc xoá dòng, tức phá append-only. Nên
+    luật thật của chỗ này là **ghi `at` bằng đồng hồ thật ngay từ đầu**; dung sai một phút là ngân sách lệch
+    đồng hồ **giữa hai máy** (phiên agent ghi, runner GitHub khẳng định), không phải chỗ để nới.
+  - ✅ **Gỡ mẫu chết** (`S4`): `/không đóng khi pr merge/u` bị `/(?:không|chưa|chỉ) đóng/u` bao trọn
+    (`.test('không đóng khi pr merge')` → `true`), và gỡ nó làm **0** bài đỏ — không bài nào ghim nó. Lưới đi
+    từ 8 mẫu xuống **7**, ca gốc vẫn bắt được. Một mẫu không ai canh là chỗ lần sau có người sửa mà không
+    biết mình sửa gì. Vòng soát đo thêm một bậc và kết quả mạnh hơn mức mục dám khai: gỡ **từng** mẫu một
+    trong tám mẫu cũ thì mẫu bị gỡ ở đây là mẫu **DUY NHẤT** không bài nào ghim (7 mẫu kia đều làm ít nhất
+    một bài đỏ). Sau khi gỡ, **cả 7 mẫu còn lại đều có bài ghim** — tức "không mẫu chết" nay là một tính
+    chất đo được của cả lưới, không chỉ một nhận xét về một mẫu.
+  - ✅ **`KF-023` không còn nói sai hiện trạng** (`S5`): dòng mô tả lưới của `#221` ghi rõ nó là mô tả **đã bị
+    `#222` thay**, thay vì để hai mô tả trái nhau cùng ở thể hiện tại cạnh nhau.
+  - ✅ **Chú thích bài máy canh khai đúng phạm vi của chính nó** (`S6`): nó viết "cùng phạm vi
+    `reviewFindings`", thực ra không — `reviewFindings` lọc `status === 'review' || statusLine === null`, bài
+    test bỏ vế thứ hai. Hiện vô hại (`classify` trả `unknown` cho `statusLine === null` nên mục đó không vào
+    nhóm `held`, và `applyFix` cũng đòi `statusLine !== null`), nhưng trong một mục có luận điểm là "khai ra
+    phạm vi thật" thì câu sai đó đáng một dòng sửa.
+  - ✅ **Hai dòng log đính chính** (`S1`, `S3`), append chứ không sửa dòng cũ (`D-C04`): số file của `#222` là
+    **8** chứ không phải 7 (dòng cũ ghi 7 vì cửa merge được đo **trước khi** hai dòng log của chính lượt đó
+    được ghi; kết luận cửa **không đổi** — chạy lại với đủ 8 đường dẫn vẫn `{"gate":"open"}`), và `costUsd`
+    của hai dòng mới là **ước lượng**, không phải số đo — ba dòng trước trong cùng file ghi `0` kèm lý do
+    "phiên routine không đọc được chi phí thật của chính nó", và hai dòng mới đã đổi ngầm quy ước đó mà không
+    nói ra.
+- **vì sao còn `review`:** ba tiêu chí ⬜ đầu là phần luật, chạm `ops/workflows/automerge.yml` — vùng
+  `owner-merge`. Gộp chúng vào PR này sẽ kéo cả PR sang cửa `owner-merge` và bắt chủ dự án merge tay một PR
+  mà phần lớn nội dung máy tự merge được — ngược thước đo CHARTER 1.3. Tách đúng như `P-034`/`P-037` đã tách.
+- **mã mục nhận lúc 2026-09-24 ~07:1x giờ UTC** (`KF-005`): dò `### I-` trên `main` **và trên đầu cả 8 PR
+  đang mở** (`refs/pull/N/head`), không chỉ vài nhánh nhớ được. Cao nhất trên `main` là `I-020`; `I-019` do PR
+  `#112` giữ — nên `I-021` không đụng ai.

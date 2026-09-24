@@ -157,7 +157,7 @@ GitHub không gửi thông báo cho chính người thực hiện hành động.
 
 1. **Bản tin ngày** (nhãn `digest`) — hộp quyết định duy nhất, mục 2.5.
 2. **Cảnh báo khẩn** (nhãn `alert`), đúng **bốn** loại:
-   - `main` đỏ **quá 2 giờ** mà máy không tự sửa được;
+   - `main` đỏ — @nhắc **ngay từ lần đỏ đầu**, nhắc lại mỗi 4 giờ (mục `platform/P-034`; ngưỡng cũ "quá 2 giờ" đã bị thay, xem khối dưới);
    - watchdog báo nhà máy im lặng;
    - chi phí vượt **80%** ngân sách học (mục 8);
    - sự cố bảo mật.
@@ -165,9 +165,18 @@ GitHub không gửi thông báo cho chính người thực hiện hành động.
 
 Nhãn `decision` **không** còn trong danh sách này. Một ngày có bốn quyết định không còn là một ngày bị gọi bốn lần; cả bốn nằm trong bản tin sáng.
 
+**Nhịp @nhắc của cảnh báo khẩn (mục `platform/P-034`, chỉ dẫn của chủ dự án kèm câu trả lời `#169`).** Mọi cảnh báo khẩn ở nhóm 2 theo đúng hai luật này, không có ngoại lệ:
+
+1. **@nhắc nằm ngay trong comment đầu tiên** — tức trong thân issue khi workflow tự mở issue. Không có độ trễ nào.
+2. **Nhắc lại mỗi 4 giờ** chừng nào chưa có phản hồi.
+
+> ⚠️ Luật này **thay** câu của `D-C06` rằng `main-ci.yml` không @nhắc ở lần đỏ đầu và chỉ @nhắc **đúng một lần** sau 2 giờ. Lý do `D-C06` viết vậy — "gọi người ở phút đầu là gọi người cho một việc mà máy sắp tự làm xong" — vẫn đúng về ý, nhưng số đo bác nó: cảnh báo `#131` mở lúc `2026-09-22T10:14Z` và **13 giờ** sau mới @nhắc, vì "đã nhắc thì thôi" cộng một lượt chạy trượt là một cảnh báo khẩn im lặng cả nửa ngày. Phần "máy đang tự chữa, anh chưa cần làm gì" nay nằm trong **lời** của @nhắc đầu tiên, không còn nằm trong **độ trễ** của nó.
+
+Cơ chế: mốc `<!-- crux-escalate-* -->` thôi mang nghĩa "đã nhắc thì thôi" và mang nghĩa **"đã nhắc lúc nào"** — `ops/scripts/alert-escalation.ts` đọc `createdAt` của mục mang mốc mới nhất (thân issue tính là một mục) rồi trả `mention` hay `quiet`. Phần quyết định nằm ở đó chứ không trong khối `run:`, để `pnpm test` kiểm được hai mốc 3,9 giờ và 4,1 giờ mà không cần để `main` đỏ thật.
+
 - **`notify.yml`:** comment `@HungQuach301` trên issue mới có nhãn `digest` hoặc `alert`. Nhờ đó GitHub Mobile đẩy thông báo về điện thoại. Nó **chỉ** phủ issue do người hoặc agent mở — issue do workflow khác mở không kích hoạt nó (KF-004), nên các workflow đó tự đặt `@nhắc` trong thân issue.
-- **`main-ci.yml`:** mở issue `alert` ngay khi `main` đỏ, nhưng **không** @nhắc ở lần đầu. Nó chỉ @nhắc khi issue đã mở **≥ 2 giờ** — tức là routine integrator đã có ít nhất một lượt để tự revert và không xong. Gọi người ở phút đầu là gọi người cho một việc mà máy sắp tự làm xong.
-- **`watchdog.yml`:** chạy theo lịch cron trong Actions (mỗi giờ), độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` khi xảy ra một trong các trường hợp:
+- **`main-ci.yml`:** mở issue `alert` ngay khi `main` đỏ, **kèm @nhắc ngay trong thân issue**, rồi nhắc lại mỗi **4 giờ** tới khi `main` xanh lại. Các lượt ở giữa vẫn comment tình trạng nhưng **không** @nhắc và **không** mang mốc — mang mốc vào comment chạy mỗi giờ sẽ đẩy "lần nhắc gần nhất" về hiện tại ở mọi lượt và nhịp 4 giờ không bao giờ tới hạn.
+- **`watchdog.yml`:** chạy theo lịch cron trong Actions (mỗi giờ), độc lập với Claude. Nó mở issue `[CẢNH BÁO] Nhà máy im lặng` kèm `@HungQuach301` **ngay trong thân issue**, rồi nhắc lại theo cùng nhịp 4 giờ ở trên — trước mục `P-034` mọi comment của nó đều @nhắc, tức một dấu hiệu kéo dài một ngày là 24 lần gọi chủ dự án, ngược thước đo mục 1.3. Các trường hợp nó lên tiếng:
   - quá 26 giờ không có bản tin mới;
   - quá 6 giờ không có PR nào được merge trong khi backlog vẫn còn mục `ready` (mục `P-020`, chỉ dẫn 4 trên issue bản tin #17 — ngưỡng cũ là 48 giờ);
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn;
@@ -599,6 +608,12 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 
 ## 14. Nhật ký thay đổi
 
+**C9 · 2026-09-23 · chỉ dẫn của chủ dự án kèm câu trả lời `#169`.** Cảnh báo khẩn (mục 2.4 nhóm 2) `@nhắc` **ngay ở comment đầu tiên** và nhắc lại **mỗi 4 giờ** khi chưa có phản hồi. Mục `platform/P-034`.
+- **Mục 2.4 · câu của `D-C06` bị THAY, và nói rõ là bị thay.** `D-C06` dặn `main-ci.yml` không @nhắc ở lần đỏ đầu và @nhắc **đúng một lần** sau 2 giờ. Số đo bác nó: cảnh báo `#131` mở `2026-09-22T10:14Z`, 13 giờ sau mới @nhắc. Ý đúng của `D-C06` — "máy đang tự chữa, chưa cần gọi người" — nay nằm trong **lời** của @nhắc đầu tiên, không nằm trong **độ trễ** của nó.
+- **Mốc `<!-- crux-escalate-* -->` đổi nghĩa:** từ "đã nhắc thì thôi" sang **"đã nhắc lúc nào"**. Đọc `createdAt` của mục mang mốc mới nhất, không đếm số comment — đếm comment là cách luật này hỏng ngay lần đầu ai sửa thân comment. Thân issue tính là một mục, vì lần @nhắc đầu tiên nằm ở đó.
+- **Phần quyết định rời khỏi bash:** `ops/scripts/alert-escalation.ts`, 14 bài kiểm, gồm đúng hai mốc 3,9 giờ (im) và 4,1 giờ (nhắc) mà tiêu chí xong của mục đòi. Một phép so ngày tháng nằm trong khối `run:` chỉ kiểm được bằng cách để `main` đỏ thật.
+- **`watchdog.yml` hết @nhắc mỗi giờ.** Trước mục này mọi comment của nó đều mở đầu `@HungQuach301`, mà nó chạy mỗi giờ: một dấu hiệu kéo dài một ngày là 24 lần gọi chủ dự án, ngược thước đo mục 1.3. Hai mốc tách riêng cho hai cảnh báo, để chúng không đếm nhầm nhịp của nhau.
+
 **C8 · 2026-09-23 · quyết định `irreversible` ở issue #169, phương án A (`D-C07`).** Cửa `automerge-delayed` có thêm **lối đi nhanh `hotfix`**: một `main` đỏ vì workflow không còn phải chờ 12 giờ mới xanh lại được. Mục `platform/P-032`, chữ ký ở `ops/known-failures.md` **KF-020**.
 - **Mục 3.3 · lối nhanh bỏ đúng MỘT thứ: khoảng chờ.** Sáu điều kiện kèm câu trả lời của chủ dự án nằm ở `ops/invariants.hotfix-lane.ts` dưới dạng phép kiểm máy, không phải lời dặn. Mọi phép kiểm khác — CI xanh trên đúng đầu nhánh, `fix-has-test`, không xung đột, không nháp, lời `dừng` — vẫn chặn y như cũ.
 - **Phụ lục P3 bước 1 · CHARTER thôi ghi cứng nhãn.** Câu cũ dặn dán `automerge` lên PR revert, còn `ops/invariants.protected-area.ts` tính ra `automerge-delayed` cho đúng loại PR đó: hai luật, hai nhãn, cùng một PR. Từ nay nhãn là trường `gate` do tool tính ra. Chính chủ dự án chỉ ra chỗ lệch này trong câu trả lời `#169`.
@@ -717,9 +732,13 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    "có worker khác của đúng làn này rảnh ở lượt kế tiếp không" để mà nhường. Phần việc mà bullet gốc của
    mục `P-022` thật sự cần — không giải mù, phải biết PR định làm gì — đã giữ nguyên trong câu ngay trên;
    phần "làn sở hữu đi trước" bị bỏ vì không có gì để gắn nó vào.
-3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
-   mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
-   coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.
+3. Nếu không: chạy `pnpm backlog:status` và lấy trường `readyNow` — ĐỪNG đối chiếu `deps` bằng mắt (mục `I-015`).
+   `readyNow` đã tính cả mục còn `status: review` mà PR của nó đã vào `main` thật, nên một `deps` "trông như chưa
+   xong" không chặn oan; trường `blocked` nói rõ mục nào còn chờ ai. Duyệt các làn theo thứ tự ưu tiên trong
+   ops/lanes/priority.md và nhận mục `readyNow` đầu tiên gặp được mà chưa có nhánh claude/<lane>/<id> và chưa có PR
+   mở (PR nháp không có commit mới quá 24 giờ coi như đã bỏ). Chỉ in "idle" khi `readyNow` rỗng, hoặc mọi mục trong
+   đó đều đã có nhánh hay PR — và khi in `idle`, dán luôn `readyNow` để lượt sau biết đó là hàng đợi thật chứ không
+   phải một phép đọc sai. Không có mục nào thì kết thúc, không commit gì.
 4. Nhận mục: tạo nhánh claude/<lane>/<id>, push, mở PR nháp tiêu đề "[<lane>] <id> …", mô tả PR bắt đầu bằng 🤖.
 5. Làm theo tiêu chí xong của mục. Commit và push sau mỗi bước có ý nghĩa. Chạy `pnpm check` và tập vàng replay.
    PR sửa lỗi phải có test tái hiện lỗi.
@@ -727,7 +746,11 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
 7. Trong cùng PR: cập nhật backlog (status: review) và ops/logs/<lane>/<id>.jsonl (có costUsd). Chuyển PR khỏi trạng thái nháp.
    Gắn nhãn theo cửa merge (CHARTER mục 3, D-C06). Không đoán: chạy
    `git diff --name-only origin/main...HEAD > /tmp/changed.txt` rồi
-   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`:
+   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`.
+   PR có chạm `CHARTER.md` thì thêm `--base-charter <bản CHARTER.md trên main>` (`git show origin/main:CHARTER.md`):
+   thiếu nó tool không biết mục nào đổi nên trả `owner-merge` cho mọi thay đổi CHARTER — an toàn nhưng sai, và cả
+   `ci.yml` lẫn `automerge.yml` đều truyền tham số này.
+   Các cửa:
    open → automerge · automerge-delayed → automerge-delayed · owner-merge → owner-merge cộng issue 🤖 [QĐ].
    CI gắn lại nhãn theo đúng luật đó, nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
 8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn tám nhóm; mọi thứ khác làm ngay theo khuyến nghị.
@@ -803,7 +826,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      liệu để chiếu" khi 3 ngày không mục nào done). Một dòng **nút thắt hiện tại là máy hay người** — người
      khi có PR `owner-merge` hay quyết định đang chờ, máy khi có PR xung đột hay CI đỏ. Một dòng **số lượt
      chạy routine trong 24 giờ** — số để kiểm giả định `G3` (trần lượt chạy mỗi ngày); đếm dòng log bước 0,
-     nên là số lượt worker cộng integrator, không gồm lượt digest.
+     nên là số lượt worker cộng integrator, không gồm lượt digest. Một dòng **làn nào đang đứng im** — chạy
+     `pnpm lanes:heartbeat` và dán kết quả, đừng tự đọc log (mục `platform/P-014` sóng 3, chỗ `Z7`): liệt kê
+     làn quá ngưỡng kèm số giờ, và TÁCH RIÊNG làn chưa có dòng log nào — "đã chạy rồi im" và "chưa chạy lần
+     nào" là hai việc khác nhau. Dòng bước 0 KHÔNG tính vào nhịp tim của làn: nó được ghi ở mọi lượt worker
+     nên nó giữ làn `integration` xanh vĩnh viễn (đo được: 2,2 giờ khi tính, 23,4 giờ khi trừ ra). Không làn
+     nào im thì ghi một dòng "mọi làn đều có dòng log trong ngưỡng" — im lặng ở đây là đúng thứ `Z7` cấm.
 
    Thước đo
      Các thước đo ở CHARTER 1.3. DÒNG CUỐI CÙNG luôn là:
@@ -896,7 +924,10 @@ mỗi ngày, như trước khi đổi nhịp):
    ("nhãn automerge") là một chỗ CHARTER nói ngược với chính lớp chặn của nó (`D-C07`, `KF-020`). Nếu PR revert chỉ
    chạm đúng các file trong khối `crux-hotfix-scope` của issue cảnh báo thì gắn THÊM nhãn `hotfix`: lối đi nhanh của
    `D-C07` (mục 3.3) bỏ khoảng chờ 12 giờ cho đúng ca này.
-2. Dọn dẹp: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
+2. Dọn dẹp: chạy `pnpm backlog:status --fix` — mục đã vào `main` mà còn `status: review` được chuyển `done`, để
+   `deps` của các mục sau không đứng chờ một mục đã xong (mục `I-010`, `I-015`). Tool chỉ chuyển mục ở nhóm `stale`
+   và tự giữ lại mọi mục còn dấu treo, nên không cần phán đoán tay; đưa thay đổi đó vào PR của lượt chạy này.
+   Rồi: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
 3. Cập nhật ops/metrics.md: số file code so với số mục done, số lần revert, tỷ lệ main xanh.
 4. Nếu hôm nay là thứ Hai: chạy lại các kiểm tra tự động trong docs/assumptions.md. Giả định nào đổi trạng thái thì mở [QĐ]
    kèm danh sách phần bị ảnh hưởng (CHARTER 11.1).

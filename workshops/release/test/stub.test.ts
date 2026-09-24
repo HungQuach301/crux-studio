@@ -27,7 +27,7 @@ test('BẤT BIẾN I5: máy không công khai video', async () => {
 test('contract chặn ngay cả khi code xưởng cố đặt public', async () => {
   const artifact = await runWorkshop(definition, fixture, ctx);
   const tampered = JSON.parse(JSON.stringify(artifact)) as typeof artifact;
-  tampered.payload.publication.visibility = 'public' as 'private';
+  tampered.payload.publication.visibility = 'public' as 'private'; // I5-allow: bài kiểm chứng minh contract CHẶN artifact bị sửa thành công khai
   assert.equal(validateArtifact('release', tampered).valid, false);
 });
 

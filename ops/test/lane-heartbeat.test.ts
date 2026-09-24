@@ -1,0 +1,323 @@
+/**
+ * Rà soát **Z7** — `ops/known-failures.md`, nhóm Z. Mục `platform/P-014`, sóng 3.
+ *
+ * Luật chỉ có giá trị khi nó **đỏ đúng lúc phải đỏ** (bài học KF-003), nên
+ * mỗi ca cho qua ở đây đi kèm một ca âm tương ứng. Bài quan trọng nhất là
+ * *"dòng bước 0 KHÔNG được giữ một làn xanh"*: đó là chỗ duy nhất Z7 khác
+ * dấu hiệu số 5 của `watchdog`, và nếu nó hỏng thì ô của làn không bao giờ
+ * đỏ được — một luật không bao giờ đỏ là một luật vô giá trị.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+import type { RunLogLine } from '../../kernel/src/log.ts';
+import { readRunLogs } from '../../kernel/src/log.ts';
+import { LANES } from '../../kernel/src/envelope.ts';
+import {
+  FUTURE_TOLERANCE_HOURS,
+  LANE_THRESHOLD_HOURS,
+  LaneHeartbeatUnreadable,
+  STEP0_LEGACY_REF,
+  STEP0_REF_PATTERN,
+  isStep0Ref,
+  laneHeartbeatProblems,
+  laneHeartbeats,
+  renderLaneHeartbeats,
+} from '../scripts/lane-heartbeat.ts';
+
+const NOW = '2026-09-23T12:00:00.000Z';
+
+function line(at: string, lane: RunLogLine['lane'], ref: string): RunLogLine {
+  return { at, lane, kind: 'lane', ref, status: 'ok', durationMs: 0, costUsd: 0 };
+}
+
+function beatOf(beats: ReturnType<typeof laneHeartbeats>, lane: string) {
+  const found = beats.find((b) => b.lane === lane);
+  assert.ok(found !== undefined, `thiếu ô của làn ${lane}`);
+  return found;
+}
+
+// ── Ba trạng thái, và chúng phải PHÂN BIỆT được với nhau ──────────────────
+
+test('Z7 · làn có dòng mới trong ngưỡng thì `fresh`', () => {
+  const beats = laneHeartbeats([line('2026-09-23T11:00:00.000Z', 'visual', 'visual/V-003')], NOW);
+  assert.equal(beatOf(beats, 'visual').verdict, 'fresh');
+  assert.equal(beatOf(beats, 'visual').hoursSinceLastBeat, 1);
+});
+
+test('Z7 · làn có dòng nhưng đã quá ngưỡng thì `stale`', () => {
+  // 30 giờ, ngưỡng của `visual` là 26.
+  const beats = laneHeartbeats([line('2026-09-22T06:00:00.000Z', 'visual', 'visual/V-003')], NOW);
+  assert.equal(beatOf(beats, 'visual').verdict, 'stale');
+  assert.equal(beatOf(beats, 'visual').hoursSinceLastBeat, 30);
+});
+
+test('Z7 · làn chưa có dòng nào là `never`, KHÔNG phải `stale` — hai nguyên nhân, hai việc phải làm', () => {
+  const beats = laneHeartbeats([line(NOW, 'platform', 'platform/P-014')], NOW);
+  const release = beatOf(beats, 'release');
+  assert.equal(release.verdict, 'never');
+  assert.equal(release.lastBeatAt, null);
+  assert.equal(release.hoursSinceLastBeat, null);
+});
+
+test('Z7 · MỌI làn đều có một ô — làn vắng mặt là làn không ai nhìn', () => {
+  const beats = laneHeartbeats([line(NOW, 'platform', 'platform/P-014')], NOW);
+  assert.deepEqual(
+    beats.map((b) => b.lane),
+    [...LANES],
+  );
+});
+
+// ── Ca âm quan trọng nhất: dòng bước 0 không được giữ một làn xanh ────────
+
+test('Z7 · dòng bước 0 KHÔNG giữ làn `integration` xanh — và đó là cả điểm khác biệt với dấu hiệu số 5', () => {
+  const lines = [
+    line('2026-09-22T06:00:00.000Z', 'integration', 'integration/I-017'), // việc thật, 30 giờ trước
+    line('2026-09-23T11:50:00.000Z', 'integration', 'integration/step0-2026-09-23T115000Z-crux-worker-1'),
+    line('2026-09-23T11:55:00.000Z', 'integration', 'integration/step0-2026-09-23T115500Z-crux-worker-2'),
+  ];
+  const beat = beatOf(laneHeartbeats(lines, NOW), 'integration');
+  assert.equal(beat.verdict, 'stale');
+  assert.equal(beat.lastBeatAt, '2026-09-22T06:00:00.000Z');
+
+  // PHÉP PHÁ: bỏ luật loại dòng bước 0 thì đúng ca này ra `fresh` — tức là
+  // ô của làn không bao giờ đỏ được, vì bước 0 ghi ở MỌI lượt worker.
+  const newestIncludingStep0 = lines.map((l) => l.at).sort().at(-1);
+  assert.equal(newestIncludingStep0, '2026-09-23T11:55:00.000Z');
+  const hoursIfStep0Counted = (Date.parse(NOW) - Date.parse(newestIncludingStep0!)) / 3_600_000;
+  assert.ok(hoursIfStep0Counted < LANE_THRESHOLD_HOURS.integration);
+});
+
+test('Z7 · dòng bước 0 cũng bị loại ở làn `platform` — file dùng chung cũ nằm ở đó', () => {
+  const lines = [
+    line('2026-09-21T00:00:00.000Z', 'platform', 'platform/P-016'),
+    line('2026-09-23T11:00:00.000Z', 'platform', 'platform/P-016'),
+  ];
+  assert.equal(beatOf(laneHeartbeats(lines, NOW), 'platform').verdict, 'never');
+});
+
+// ── Năm hình dạng `ref` của bước 0 ────────────────────────────────────────
+
+test('Z7 · `isStep0Ref` nhận đủ năm hình dạng đã từng được ghi', () => {
+  for (const ref of [
+    'integration/step0-2026-09-23T144500Z-crux-worker-1',
+    'platform/P1-step0-2026-09-21T15h15',
+    'integration/P3-run-2026-09-22T04h05',
+    'integration/P3-daily-2026-09-21',
+    STEP0_LEGACY_REF,
+  ]) {
+    assert.equal(isStep0Ref(ref), true, ref);
+  }
+});
+
+test('Z7 · `isStep0Ref` KHÔNG nhận nhầm `ref` nào NGOÀI file dùng chung cũ', () => {
+  for (const ref of [
+    'integration/I-018',
+    'platform/P-014',
+    'platform/P-0161', // không phải file dùng chung cũ, chỉ trông giống
+    'verify/VF-G12',
+    'topic/step0notes', // thiếu gạch nối — không phải tiền tố bước 0
+  ]) {
+    assert.equal(isStep0Ref(ref), false, ref);
+  }
+  // Đánh đổi đã khai ở docblock của `STEP0_LEGACY_REF`: file dùng chung cũ
+  // TRỘN dòng bước 0 với 8 dòng việc thật của mục `P-016`, và cả 60 dòng
+  // mang cùng một `ref` nên không tách được. Luật loại cả cụm — hướng lệch
+  // an toàn (làn trông cũ hơn thật), và bài kiểm này nói thẳng ra thay vì
+  // để tiêu đề ở trên nghe như luật không bỏ sót gì.
+  assert.equal(isStep0Ref(STEP0_LEGACY_REF), true);
+});
+
+test('Z7 · ĐÚNG DÒNG `jq` của `watchdog.yml` mang hằng `STEP0_REF_PATTERN` — không phải chỉ đâu đó trong file', () => {
+  const yml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
+  // So trên CẢ FILE là một chiều fail-open thật: một dòng chú thích chép
+  // nguyên văn hằng cũng giữ bài kiểm xanh, trong khi `jq` thật lọc bằng
+  // một biểu thức khác hẳn. Vòng soát ngữ cảnh sạch dựng đúng ca đó và bài
+  // kiểm bản đầu vẫn 17/17 xanh. Nên chỉ đọc dòng THỰC THI.
+  const jqLines = yml
+    .split('\n')
+    .filter((raw) => raw.includes('jq ') && !raw.trimStart().startsWith('#'));
+  assert.ok(jqLines.length > 0, '`watchdog.yml` không còn dòng `jq` nào — dấu hiệu số 5 đã biến mất?');
+
+  const step0Filter = jqLines.filter((raw) => raw.includes(STEP0_LEGACY_REF));
+  assert.equal(
+    step0Filter.length,
+    1,
+    `Cần đúng MỘT dòng \`jq\` lọc dòng bước 0 (nhận ra bằng ${JSON.stringify(STEP0_LEGACY_REF)}), thấy ${step0Filter.length}.`,
+  );
+  assert.ok(
+    step0Filter[0]!.includes(STEP0_REF_PATTERN),
+    `Dòng \`jq\` của dấu hiệu số 5 không lọc bằng nguyên văn ${JSON.stringify(STEP0_REF_PATTERN)}:\n${step0Filter[0]}`,
+  );
+});
+
+// ── Ngưỡng theo làn ──────────────────────────────────────────────────────
+
+test('Z7 · ngưỡng theo làn: cùng một khoảng 10 giờ, `platform` đỏ mà `visual` xanh', () => {
+  const at = '2026-09-23T02:00:00.000Z';
+  const beats = laneHeartbeats([line(at, 'platform', 'platform/P-014'), line(at, 'visual', 'visual/V-003')], NOW);
+  assert.equal(beatOf(beats, 'platform').verdict, 'stale');
+  assert.equal(beatOf(beats, 'visual').verdict, 'fresh');
+});
+
+test('Z7 · mốc Ở TƯƠNG LAI ra `future`, KHÔNG ra `fresh` — số âm nhỏ hơn mọi ngưỡng', () => {
+  // Ca thật, không dựng: dòng log của chính PR này mang `at` sớm hơn đồng
+  // hồ ~10 phút và làn `platform` hiện ra `-0,14h … fresh`. Một dòng ghi
+  // nhầm năm thì làn đó KHÔNG BAO GIỜ `stale` được, và không gì đỏ.
+  const beats = laneHeartbeats([line('2026-09-24T12:00:00.000Z', 'visual', 'visual/V-003')], NOW);
+  const visual = beatOf(beats, 'visual');
+  assert.equal(visual.verdict, 'future');
+  assert.equal(visual.hoursSinceLastBeat, -24);
+  assert.notEqual(visual.verdict, 'fresh');
+});
+
+test('Z7 · lệch đồng hồ vài giây vẫn là `fresh` — dung sai, không phải báo động', () => {
+  const beats = laneHeartbeats([line('2026-09-23T12:00:10.000Z', 'visual', 'visual/V-003')], NOW);
+  assert.equal(beatOf(beats, 'visual').verdict, 'fresh');
+});
+
+test('Z7 · `future` ra dòng cảnh báo riêng, nói rõ làn đó không bao giờ `stale` được', () => {
+  const problems = laneHeartbeatProblems(
+    laneHeartbeats([line('2026-09-24T12:00:00.000Z', 'visual', 'visual/V-003')], NOW),
+  );
+  const futureLine = problems.find((p) => p.includes('TƯƠNG LAI'));
+  assert.ok(futureLine !== undefined, `không có dòng cho ca future: ${JSON.stringify(problems)}`);
+  assert.match(futureLine, /`visual`/);
+  assert.match(futureLine, /KHÔNG BAO GIỜ/);
+});
+
+test('Z7 · thiếu ngưỡng của một làn thì NÉM — không để `> undefined` biến nó thành `fresh` vĩnh viễn', () => {
+  const broken = { ...LANE_THRESHOLD_HOURS } as Record<string, number>;
+  delete broken.visual;
+  assert.throws(
+    () =>
+      laneHeartbeats(
+        [line('2026-09-01T00:00:00.000Z', 'visual', 'visual/V-003')],
+        NOW,
+        broken as typeof LANE_THRESHOLD_HOURS,
+      ),
+    /visual/,
+  );
+});
+
+test('Z7 · bên gọi thay được bảng ngưỡng', () => {
+  const thresholds = { ...LANE_THRESHOLD_HOURS, visual: 1 };
+  const beats = laneHeartbeats([line('2026-09-23T09:00:00.000Z', 'visual', 'visual/V-003')], NOW, thresholds);
+  assert.equal(beatOf(beats, 'visual').verdict, 'stale');
+});
+
+// ── Không quét được thì NÉM, không trả mười kết luận ──────────────────────
+
+test('Z7 · `ops/logs` không có dòng nào thì NÉM — không trả mười ô `never` (bài học Z15)', () => {
+  assert.throws(() => laneHeartbeats([], NOW), LaneHeartbeatUnreadable);
+});
+
+test('Z7 · `now` không đọc được thì ném, không lặng lẽ ra NaN giờ', () => {
+  assert.throws(() => laneHeartbeats([line(NOW, 'platform', 'platform/P-014')], 'hôm qua'), /now/);
+});
+
+// ── Thân cảnh báo ────────────────────────────────────────────────────────
+
+test('Z7 · mọi làn `fresh` thì không có dòng cảnh báo nào', () => {
+  const beats = LANES.map((lane) => ({
+    lane,
+    lastBeatAt: NOW,
+    hoursSinceLastBeat: 0,
+    thresholdHours: LANE_THRESHOLD_HOURS[lane],
+    verdict: 'fresh' as const,
+  }));
+  assert.deepEqual(laneHeartbeatProblems(beats), []);
+});
+
+test('Z7 · `stale` và `never` ra HAI dòng riêng, không trộn', () => {
+  const beats = laneHeartbeats(
+    [line('2026-09-22T06:00:00.000Z', 'visual', 'visual/V-003'), line(NOW, 'platform', 'platform/P-014')],
+    NOW,
+  );
+  const problems = laneHeartbeatProblems(beats);
+  assert.equal(problems.length, 2);
+  assert.match(problems[0]!, /quá ngưỡng \(Z7\)/);
+  assert.match(problems[0]!, /`visual` 30h\/26h/);
+  assert.doesNotMatch(problems[0]!, /chưa có dòng log nào/);
+  assert.match(problems[1]!, /chưa có dòng log nào/);
+  assert.match(problems[1]!, /`release`/);
+});
+
+test('Z7 · bảng người đọc in đủ mười làn, kể cả làn xanh', () => {
+  const rendered = renderLaneHeartbeats(laneHeartbeats([line(NOW, 'platform', 'platform/P-014')], NOW));
+  for (const lane of LANES) assert.ok(rendered.includes(lane), `bảng thiếu làn ${lane}`);
+});
+
+// ── Chạy trên log THẬT của repo ──────────────────────────────────────────
+
+test('Z7 · trên `ops/logs` thật: đủ mười làn, và không ô nào lấy mốc từ một dòng bước 0', () => {
+  const lines = readRunLogs('ops/logs');
+  assert.ok(lines.length > 0, 'ops/logs không đọc được dòng nào');
+  const beats = laneHeartbeats(lines, new Date().toISOString());
+  assert.equal(beats.length, LANES.length);
+
+  for (const beat of beats) {
+    if (beat.lastBeatAt === null) continue;
+    const source = lines.filter((l) => l.lane === beat.lane && l.at === beat.lastBeatAt);
+    assert.ok(source.length > 0, `không tìm lại được dòng nguồn của làn ${beat.lane}`);
+    assert.ok(
+      source.some((l) => !isStep0Ref(l.ref)),
+      `mốc của làn ${beat.lane} tới từ một dòng bước 0 — luật loại dòng bước 0 đã hỏng`,
+    );
+  }
+});
+
+test('Z7 · trên `ops/logs` thật: KHÔNG làn nào ra `future` — mốc tương lai tắt báo động mà không gì đỏ', () => {
+  // TÁI HIỆN LỖI (bất biến I2), mục `I-021`. Bài `mốc Ở TƯƠNG LAI ra future`
+  // ở trên chạy trên log DỰNG, nên nó khoá *hàm*. Không bài nào khoá *dữ
+  // liệu thật* — và đó là chỗ thủng, đo được:
+  //
+  // Lượt `crux-worker-1` 2026-09-24 ghi tay `at: 2026-09-24T07:05:00.000Z`
+  // vào một commit tạo lúc `06:51:27Z`. Trong ~14 phút sau đó,
+  // `laneHeartbeats` trả cho làn `integration`:
+  //     {"verdict":"future","hoursSinceLastBeat":-0.1}
+  // Số âm nhỏ hơn MỌI ngưỡng, nên làn đó **không bao giờ `stale` được** —
+  // đúng dấu hiệu số 5 của CHARTER 2.4 bị tắt. `pnpm check` vẫn xanh
+  // (21/21 ở file này), `watchdog.yml` vẫn im. Nhóm **Z**: hỏng mà mọi chỉ
+  // báo đều xanh.
+  //
+  // Ca đó tự hết sau `07:05Z`, nên bài này KHÔNG bắt được nó hôm nay. Nó
+  // bắt lần sau — và lần sau là chuyện gần như chắc: ba mốc tròn trịa
+  // `04:05:00.000` / `04:35:00.000` / `07:05:00.000` trong cùng một file
+  // cho thấy đây là thói quen ghi tay, không phải một lần lỡ.
+  //
+  // Cách chữa khi bài này đỏ luôn là **ghi `at` bằng đồng hồ thật**, không
+  // phải nới dung sai: `FUTURE_TOLERANCE_HOURS` đã có sẵn cho lệch đồng hồ
+  // vài giây, nên một mốc vượt qua nó là mốc đặt tay.
+  const lines = readRunLogs('ops/logs');
+  const now = new Date().toISOString();
+
+  const future = laneHeartbeats(lines, now).filter((beat) => beat.verdict === 'future');
+  assert.deepEqual(
+    future.map((beat) => `${beat.lane} ${beat.lastBeatAt}`),
+    [],
+    'có dòng log mang mốc Ở TƯƠNG LAI — làn đó không bao giờ stale được; sửa mốc `at`, đừng nới dung sai',
+  );
+
+  // `laneHeartbeats` cố ý LOẠI dòng bước 0 (luật thiết kế 1), nên phép khẳng
+  // định trên KHÔNG phủ chúng — và chỗ tiêu thụ mốc bước 0 có ĐÚNG cùng lỗ,
+  // ở nhánh sát bên: `ops/workflows/watchdog.yml` dấu hiệu 5 tính
+  // `AGE_MIN=$(( (NOW - LAST_BEAT) / 60 ))` **không kẹp sàn**, rồi hỏi
+  // `-gt 180`. Một mốc bước 0 ở tương lai cho `AGE_MIN` âm, phép so sai, và
+  // dấu hiệu 5 của CHARTER 2.4 im VĨNH VIỄN.
+  //
+  // Nên phủ cả dòng bước 0 ở đây. Khẳng định trên `laneHeartbeats` một mình
+  // là một phép đo khai phạm vi rộng hơn phạm vi thật — đúng lỗi `S6` mà
+  // cùng mục này đang sửa ở `ops/test/backlog-status.test.ts`.
+  const toleranceMs = FUTURE_TOLERANCE_HOURS * 3_600_000;
+  const futureStep0 = lines
+    .filter((line) => isStep0Ref(line.ref))
+    .filter((line) => Date.parse(line.at) - Date.parse(now) > toleranceMs)
+    .map((line) => `${line.ref} ${line.at}`);
+  assert.deepEqual(
+    futureStep0,
+    [],
+    'dòng BƯỚC 0 mang mốc Ở TƯƠNG LAI — `AGE_MIN` của watchdog.yml không kẹp sàn nên dấu hiệu 5 im vĩnh viễn',
+  );
+});

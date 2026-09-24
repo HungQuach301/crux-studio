@@ -35,7 +35,7 @@ import {
   type GhPr,
 } from '../scripts/digest-metrics.ts';
 import type { BacklogItem } from '../scripts/backlog-status.ts';
-import type { LaneName, RunLogLine } from '@crux/kernel';
+import { step0LogRef, type LaneName, type RunLogLine } from '@crux/kernel';
 import { conflictRows } from '../scripts/conflict-watch.ts';
 
 const NOW = new Date('2026-09-21T18:00:00.000Z');
@@ -645,7 +645,11 @@ test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, khô
 // --- Tiến độ (mục `platform/P-019`) ---
 
 function item(id: string, status: string): BacklogItem {
-  return { id, status, title: id, hasHoldMarker: status === 'parked', statusLine: 1 };
+  // `deps: null` = mục không khai dòng `- deps:`, đúng hình dạng của fixture
+  // tối giản ở đây. `computeProgress` không đọc trường này; nó có mặt vì
+  // `BacklogItem` (mục `integration/I-015`) đòi khai đủ, không mặc định.
+  // `holdField: null` cùng lý do, từ mục `integration/I-020`.
+  return { id, status, title: id, hasHoldMarker: status === 'parked', holdField: null, statusLine: 1, deps: null };
 }
 
 function step0Line(at: string): RunLogLine {
@@ -657,6 +661,67 @@ test('laneFromTitle: lấy làn từ tiêu đề `[lane] id`, null khi không th
   assert.equal(laneFromTitle('[visual] V-001 — x'), 'visual');
   assert.equal(laneFromTitle('Gộp origin/main (integrator, không xung đột)'), null);
   assert.equal(laneFromTitle('[bogus] X-1 — y'), null);
+});
+
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`, vế thứ hai của cùng
+ * một lỗ.
+ *
+ * Ở đây cái giá là một con số gửi thẳng tới chủ dự án: PR không được tính
+ * vào "số mục done 24 giờ" thì mục **Tiến độ** của bản tin báo thông lượng
+ * thấp hơn thật và ngày dự kiến xong muộn hơn thật (bất biến I6).
+ *
+ * Hai tiêu đề dưới đây là PR THẬT đã merge vào `main`.
+ */
+test('laneFromTitle: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố 🤖 vẫn lấy được làn', () => {
+  assert.equal(
+    laneFromTitle('🤖 [platform] P-038 — cổng quyết định: lượt bước 0 không gỡ được gì (#212)'),
+    'platform',
+  );
+  assert.equal(
+    laneFromTitle('🤖 [integration] dòng log bước 0 lượt crux-worker-2 ~07:23Z (I8) (#227)'),
+    'integration',
+  );
+  // Bỏ tiền tố KHÔNG nới luật: làn lạ vẫn `null`, không theo mẫu vẫn `null`.
+  assert.equal(laneFromTitle('🤖 [bogus] X-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Gộp origin/main (integrator, không xung đột)'), null);
+});
+
+/**
+ * Phép đo ĐẦU–CUỐI, gọi thẳng `computeProgress` — thứ thật sự sinh con số
+ * gửi tới chủ dự án (bất biến I6). Gọi hàm thật chứ không chép lại phép lọc
+ * bằng tay: một bài chép lại luật thì xanh cả khi `computeProgress` tự neo
+ * `^` lần nữa, và vòng soát ngữ cảnh sạch đã bắt đúng lỗ đó ở bản đầu.
+ *
+ * Trước bản sửa `P-042`, hai PR thật dưới đây không được đếm và bản tin báo
+ * **0** mục done — thông lượng thấp hơn thật, ngày dự kiến xong muộn hơn thật.
+ */
+test('computeProgress: PR mang tiền tố 🤖 được tính vào số mục done của bản tin', () => {
+  const now = new Date('2026-09-24T12:00:00.000Z');
+  const merged: GhPr[] = [
+    {
+      number: 212,
+      title: '🤖 [platform] P-038 — cổng quyết định (#212)',
+      headRefName: 'x',
+      mergedAt: '2026-09-24T06:00:00Z',
+    },
+    {
+      number: 227,
+      title: '🤖 [integration] I-020 — a (#227)',
+      headRefName: 'y',
+      mergedAt: '2026-09-24T07:00:00Z',
+    },
+    // Vẫn KHÔNG đếm: commit gộp mang tiền tố cũng không phải một mục done.
+    { number: 9, title: '🤖 Gộp origin/main', headRefName: 'z', mergedAt: '2026-09-24T08:00:00Z' },
+  ];
+  const p = computeProgress(new Map(), merged, [], 0, 0, now);
+  assert.equal(p.doneLast24h, 2);
+  assert.equal(p.done3d, 2);
+});
+
+test('laneFromTitle: neo `^` vẫn phải giữ — dạng đúng nằm GIỮA câu không tính', () => {
+  assert.equal(laneFromTitle('🤖 abc [platform] P-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Revert "[platform] P-1 — y"'), null);
 });
 
 test('computeProgress: đếm mục done 24h/3d và thông lượng, chỉ tính PR mang mã mục', () => {
@@ -728,6 +793,24 @@ test('computeProgress: nút thắt người đứng trước máy; đếm đúng
   assert.equal(computeProgress(new Map(), [], [], 2, 5, now).bottleneck, 'người'); // người thắng máy
   assert.equal(computeProgress(new Map(), [], [], 0, 3, now).bottleneck, 'máy');
   assert.equal(computeProgress(new Map(), [], [], 0, 0, now).bottleneck, 'không tắc');
+});
+
+test('P-036 · đếm cả dòng bước 0 hình dạng P-023 (`integration/step0-…`), không chỉ file phẳng cũ', () => {
+  // Tái hiện lỗi nhóm Z ở bản tin #193: sau khi P-023 vào `main`, mọi dòng
+  // bước 0 mang `ref` do `step0LogRef` sinh (`integration/step0-…`). `isStep0Line`
+  // cũ chỉ khớp `platform/P-016`, nên số lượt routine tụt về 0 im lặng. Trước
+  // bản vá dòng này ra 0; sau bản vá ra 3 (không đếm dòng `kind: stage` và dòng
+  // mục thường trùng cửa sổ thời gian).
+  const now = new Date('2026-09-23T14:00:00.000Z');
+  const logs: RunLogLine[] = [
+    { at: '2026-09-23T12:26:03.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-23T12:26:03.000Z', 'crux-worker-2'), status: 'ok', durationMs: 0, costUsd: 0 },
+    { at: '2026-09-23T12:38:30.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-23T12:38:30.000Z', 'crux-worker-1'), status: 'ok', durationMs: 0, costUsd: 0 },
+    step0Line('2026-09-23T06:00:00.000Z'), // hình dạng cũ `platform/P-016`, vẫn phải đếm
+    { at: '2026-09-21T06:00:00.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-21T06:00:00.000Z', 'crux-worker-3'), status: 'ok', durationMs: 0, costUsd: 0 }, // ngoài 24h
+    { at: '2026-09-23T12:00:00.000Z', lane: 'integration', kind: 'stage', ref: step0LogRef('2026-09-23T12:00:00.000Z', 'crux-worker-1'), status: 'ok', durationMs: 0, costUsd: 0 }, // kind stage → không tính
+    { at: '2026-09-23T12:00:00.000Z', lane: 'platform', kind: 'lane', ref: 'platform/P-019', status: 'ok', durationMs: 0, costUsd: 0 }, // dòng mục thường → không tính
+  ];
+  assert.equal(computeProgress(new Map(), [], logs, 0, 0, now).routineRuns24h, 3);
 });
 
 test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí xong của P-019', () => {

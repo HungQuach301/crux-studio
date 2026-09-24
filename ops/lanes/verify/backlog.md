@@ -12,6 +12,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: low
 - status: review
+- hold: không tự kiểm được — vế 'tài khoản có Projects' ở trang cấu hình, agent không thấy; chờ chủ dự án trả lời issue #5
 - kiểm: mở `claude.ai/code`, xem có tạo được Project không.
 - dự phòng nếu sai: Plan B — chỉ dùng routines.
 - tiêu chí xong: trạng thái G1 trong sổ chuyển sang `đã kiểm`, kèm ngày và kết quả. Nếu không có Projects thì phụ lục P1 chuyển sang cấu hình 2 worker chạy mỗi giờ.
@@ -24,6 +25,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: low
 - status: review
+- hold: còn treo ngoài DoD Đợt 0 — chuỗi automerge→labels/sync-workflows chưa quan sát được bằng một PR automerge thật
 - kiểm: **DoD Đợt 0** — để `automerge` merge thật một PR low-risk mà không cần người, rồi xem `main-ci` có chạy ngay sau đó không.
 - dự phòng: đã viết sẵn — `main-ci.yml` chạy thêm theo lịch mỗi giờ.
 - tiêu chí xong: một PR low-risk đã được merge tự động, và lần chạy `main-ci` tương ứng có trong tab Actions. Ghi kết quả vào sổ.
@@ -86,6 +88,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: review
+- hold: còn treo, chặn ở Mốc 8 — chưa đọc toàn văn NĐ 68/141, chưa chạy thật đầu cuối, chưa kiểm khấu trừ 30% thuế Mỹ giữ
 - kiểm: tra điều kiện AdSense và nghĩa vụ thuế hiện hành.
 - dự phòng nếu sai: mở `🤖 [QĐ]`.
 - ✅ **Đọc nguồn chính thức 2026-09-21** (lượt `crux-worker-1`), G8 chuyển `suy luận` → **`tài liệu nói vậy`**. Không khai cao hơn: theo thang độ tin cậy ở đầu `docs/assumptions.md`, `đã kiểm một phần` đòi **chạy thật trong một ngữ cảnh**, mà chưa ngữ cảnh nào của đường tiền được chạy. Kết quả đầy đủ kèm URL nguồn và ngày truy cập ở `docs/assumptions.md` mục `G8`; ba điểm chính:
@@ -99,6 +102,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: review
+- hold: còn treo — chưa đăng tin thuê người (irreversible, cam kết trả tiền); nhiều nền tảng trả 403 với egress sandbox
 - kiểm: tìm ít nhất hai kênh tuyển thực tế và một cách giao việc không cần tài khoản.
 - dự phòng nếu sai: mở `🤖 [QĐ]`. Rủi ro A4: vai "người ngoài" nhận việc qua link, có thời hạn phản hồi. Lượt kiểm 2026-09-21 **không** làm G9 sai, nên chưa phải mở.
 - nguồn: `docs/assumptions.md` mục `G9`; `ops/network-domains.md`; rủi ro A4; CHARTER mục 8 (ngân sách)
@@ -134,6 +138,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: review
+- hold: còn treo — phát hiện phụ đáng mục riêng; guard.mjs chặn cả đọc .github/ (thuộc owner-merge nên không đụng)
 - kiểm: trong một lần chạy routine, cho agent thử một lệnh nằm trong danh sách chặn của `.claude/hooks/guard.mjs` và xem nó có bị chặn không.
 - dự phòng nếu sai: bổ sung kiểm tra phía CI. Xem bảng hai lớp trong `.claude/README.md`. G11 ra **đúng**, nên dự phòng này chưa phải dùng tới — nhưng **lớp thứ hai vẫn giữ nguyên, không gỡ**: G11 nói về hành vi của nền tảng, mà nền tảng đổi thì không ai báo trước.
 - ✅ **Kiểm bằng chạy thật TRONG routine, 2026-09-21** (lượt `crux-worker-2`): **cả hai lớp đều có hiệu lực**. 5 phép thử, mỗi phép chọn sao cho vô hại nếu không bị chặn. 2 phép bị `guard.mjs` chặn (trả về đúng câu tiếng Việt của hook, kèm đường dẫn file hook); 3 phép bị `permissions.deny` chặn (câu của lớp quyền, không nhắc hook). Phép tách hai lớp: `git push --force origin <nhánh của chính lượt chạy>` — nằm trong `permissions.deny` mà **không** có trong `guard.mjs`, và nhánh trùng khít `origin` nên chạy được thì cũng là lệnh rỗng. Đối chứng ngược: công cụ `Read` trên `.gitattributes` trong cùng lượt đọc được bình thường. Bảng đủ 5 phép, kèm lời báo lỗi của từng phép, ở `docs/assumptions.md` mục `G11`.
@@ -191,7 +196,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - **cửa merge: `open`** — mục này chỉ chạm tài liệu, sổ giả định, backlog và log. Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
 - kiểm: cần hai PR song song mà **cả hai đã mang sẵn** `.gitattributes`, cùng ghi vào **một** file append-only. Từ `D-C04` log tách tới mức mục, nên ca kiểm là hai lần chạy của cùng một mục (`ops/logs/<lane>/<id>.jsonl`) hoặc `docs/visual/calibration-log.jsonl`. Merge một PR, rồi đọc **hai** thứ: trạng thái `mergeable` của PR kia trên GitHub, và kết quả `git merge origin/main` ở phía worker. Hai câu trả lời có thể khác nhau — ghi cả hai.
 - vì sao mục này treo lâu: lần quan sát ở PR #11 **không** kết luận được gì về GitHub, vì lúc đó git ở phía dưới cũng xung đột thật (nhánh chưa mang luật), nên GitHub báo xung đột là đúng. Phải chờ tới khi có một cặp PR mà **cả hai** đã mang sẵn luật. Xem G17.

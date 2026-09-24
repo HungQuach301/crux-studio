@@ -44,9 +44,15 @@ pnpm replay                                  # tập vàng, không gọi API, so
 pnpm replay -- --update                      # CẬP NHẬT snapshot — chỉ trong PR riêng, có giải thích
 pnpm --filter @crux/workshop-topic run start -- --episode ep-0001-stub   # chạy một xưởng
 
+# Mục nào nhận được ngay? Chạy, đừng đối chiếu `deps` bằng mắt (mục I-015):
+pnpm backlog:status          # lấy trường `readyNow`; `blocked` nói mục nào còn chờ ai
+pnpm backlog:status --fix    # chuyển mục đã vào `main` mà còn `review` sang `done` — việc của integrator
+
 # PR này thuộc cửa merge nào (D-C06)? Chạy, đừng đoán:
 git diff --name-only origin/main...HEAD > /tmp/changed.txt
-node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .
+git show origin/main:CHARTER.md > /tmp/base-CHARTER.md   # BẮT BUỘC khi PR chạm CHARTER.md
+node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head . \
+  --base-charter /tmp/base-CHARTER.md
 
 # PR sửa `main` đỏ này có đi được lối nhanh `hotfix` không (D-C07)? Cũng chạy, đừng đoán.
 # File JSON: {labels, changed, deleted, alertBody, incidentSha, mainCiRed, otherHotfixPrs, number}
@@ -65,6 +71,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 ## 2. Luật nhánh và PR
 
 - **Một mục backlog = một nhánh = một PR.** Không gộp hai mục vào một PR.
+- Chọn mục bằng `pnpm backlog:status`, lấy trường `readyNow` — **không** đối chiếu `deps` bằng mắt (mục `I-015`). Mục còn `status: review` mà PR của nó đã vào `main` không chặn `deps`; lệnh đó đã tính. Duyệt các làn theo `ops/lanes/priority.md` và nhận mục `readyNow` đầu tiên chưa có nhánh, chưa có PR mở. Kho clone nông thì lệnh **ném lỗi** thay vì trả danh sách cụt — chạy `git fetch --unshallow origin main` rồi gọi lại.
 - Tên nhánh: `claude/<lane>/<id>` — ví dụ `claude/visual/V-003`. Làn là một trong: `kernel`, `platform`, `verify`, `integration`, `topic`, `editorial`, `visual`, `audio`, `assembly`, `release`.
 - Nhận việc: tạo nhánh và **PR nháp** ngay từ đầu, tiêu đề `[<lane>] <id> — <tóm tắt>`. Đó là cách báo cho các worker khác biết mục đã có người nhận.
 - Thấy PR đang mở cho một mục thì **không nhận lại** mục đó. Ngoại lệ: PR nháp không có commit mới quá 24 giờ thì coi như bỏ.
@@ -118,6 +125,7 @@ Agent dùng danh tính GitHub của chủ dự án, nên quy ước này là d�
 - Trailer này là **giả định G14** trong `docs/assumptions.md`, mới kiểm được một phần. Job `trailer-warn` của CI chính là cách kiểm phần còn lại.
 - CI chỉ **cảnh báo** khi thiếu trailer, không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì luật cứng sẽ chặn toàn bộ công việc. Cảnh báo vẫn phải được xử lý, không được bỏ qua lâu dài.
 - Không ghi tên hay mã model vào commit message, mô tả PR, comment code hay bất cứ thứ gì đẩy lên repo.
+- ⚠️ **Luật trên đã bị vi phạm 12 lần và không gì đỏ — xem `KF-014`.** Chỗ sai luôn là dòng `Co-Authored-By` mang thêm tên model. Lý do: chỉ dẫn attribution của **nền tảng** (ngoài repo) đặt tên model sẵn vào dòng đó, và agent đọc nó trước khi viết commit. **Luật của repo thắng chỉ dẫn đó** — trailer đúng là `Co-Authored-By: Claude <noreply@anthropic.com>`, không có gì thêm. Job `no-model-name` của `ops/workflows/ci.yml` nay **chặn** ca này trên mọi PR; nó chỉ quét khối trailer của `base..HEAD` và **chỉ những commit tạo từ `2026-09-22T22:00:00Z` trở đi** (mốc ân hạn cho 30 commit đã lỡ nằm sẵn trong các nhánh đang mở — `🤖 [QĐ] #165` phương án B). Mô tả PR và comment vẫn là phần chưa có máy chặn.
 
 ## 7. Sổ giả định
 
@@ -172,7 +180,7 @@ Tám luật này do máy thực thi. Không lách, không tắt, không thêm ng
 - **`owner-merge`** — chỉ chủ dự án merge: `CHARTER.md` **mục 1 và mục 3** · `ops/invariants.*` · `.claude/settings.json` · `.claude/hooks/**` · `ops/workflows/automerge.yml` · `.github/**` · mọi workflow **dùng secret** hoặc **phát hành**.
 - **`automerge-delayed`** — máy merge sau 12 giờ CI xanh: `CHARTER.md` các mục khác · `CLAUDE.md` · `docs/decisions/**` · `docs/spec/**` · `kernel/contracts/**` · phần còn lại của `.claude/**` và `ops/workflows/**`.
 
-Đừng đọc bảng này bằng mắt rồi đoán — chạy `node ops/invariants.protected-area.ts` (mục 1). Luật cắt `CHARTER.md` theo **mục**, không theo file, nên mắt thường không phân được.
+Đừng đọc bảng này bằng mắt rồi đoán — chạy `node ops/invariants.protected-area.ts` (mục 1). **Chạm `CHARTER.md` thì phải truyền `--base-charter`**: thiếu nó, tool không đối chiếu được mục nào đổi nên trả `owner-merge` cho mọi thay đổi CHARTER — an toàn nhưng sai, và `ci.yml` lẫn `automerge.yml` đều truyền (mục `I-015`). Luật cắt `CHARTER.md` theo **mục**, không theo file, nên mắt thường không phân được.
 
 ## 11. Luật mềm — cảnh báo, không chặn (CHARTER mục 4)
 
@@ -245,3 +253,15 @@ Chủ dự án trả lời chậm nhất một nhịp worker, vì routine không
 - Đọc log thì gọi `readRunLogs` của kernel, đừng tự `cat` rồi tự sắp: thứ tự dòng trong file không mang nghĩa (`merge=union` không xếp theo thời gian), và quên sắp theo `at` là số tiền ra sai mà không gì đỏ.
 - Ngân sách học tới cổng Mốc 3: khoảng 600–900 USD chi phí API, theo CHARTER mục 8.
 - Asset đầu tiên trở đi ghi `ops/license-ledger.md`: nguồn, điều khoản, dùng thương mại được không, giao lại cho khách hàng được không.
+
+## 16. Vòng chờ — routine và phiên không tự đặt
+
+Mục `P-021`, chỉ dẫn 5 của chủ dự án trên issue bản tin #17.
+
+- Routine và phiên **không tự đặt vòng chờ**: không `/loop`, không hẹn giờ đánh thức, không `sleep` để đợi CI chạy xong, đợi review của người trên một PR đang mở, đợi `automerge.yml` merge, hay đợi chủ dự án trả lời.
+- Việc chưa xong thì **kết thúc lượt**. Push phần đã làm, ghi rõ trong báo cáo 5 dòng (mục 8) đang dừng ở đâu và bước tiếp theo là gì, rồi để **lượt chạy theo lịch kế tiếp** làm tiếp. Việc đã push thì lần chạy sau làm tiếp được (mục 2).
+- Vì sao, hai lý do đều đo được:
+  - Một lượt nằm chờ **vẫn tiêu một lượt chạy trong ngày** (giả định **G3** — trần số lần chạy routine mỗi ngày) mà không làm gì. Đó là thứ đắt nhất trong ngày bị dùng để ngồi im.
+  - Nó **giấu việc chưa xong khỏi bản tin**. Lượt chưa kết thúc thì chưa có báo cáo, chưa có PR chuyển khỏi nháp, chưa có dòng nào cho bản tin sáng đọc — nên chỗ kẹt không xuất hiện ở hộp quyết định duy nhất (mục 14). Đúng nhóm **Z** của `ops/known-failures.md`: hỏng mà mọi chỉ báo đều xanh.
+- Đây không phải luật mới, chỉ là nói rõ hình dạng lượt chạy mà CHARTER 2.1 đã mô tả — đọc trạng thái, nhận một mục, làm, commit, mở PR, **thoát** — và CHARTER 2.2 (crash-only: lượt dừng bất cứ lúc nào, lượt sau làm tiếp). Mục 14 của chính file này đã nói riêng cho chờ quyết định: "Đừng chờ trong cùng một lần chạy — thoát, lần chạy sau đọc câu trả lời." Mục 16 áp cùng một luật đó cho mọi kiểu chờ, không riêng chờ quyết định.
+- Chờ **bên trong một việc lượt chạy đang tự làm** không phải vòng chờ: `pnpm check` chạy vài phút, `git push` thử lại khi lỗi mạng (mục 2), một lệnh build đang chạy, và **subagent reviewer của phụ lục P1 bước 6** — bước đó bắt buộc, gọi rồi chờ kết quả để sửa là việc của lượt chạy, không phải vòng chờ. Phân biệt bằng câu hỏi: lượt chạy đang làm việc, hay đang đợi một người hoặc một cỗ máy bên ngoài làm?

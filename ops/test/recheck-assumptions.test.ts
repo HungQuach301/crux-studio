@@ -114,6 +114,28 @@ test('isToolCommit chỉ nhận đúng message do máy sinh, không nhận commi
   assert.ok(!isToolCommit('Gộp hai mô hình định lượng vào một bảng'), 'commit việc thật có chữ "Gộp" vẫn là của agent');
 });
 
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`, bộ đọc tiêu đề thứ tư.
+ *
+ * Mọi luật của `isToolCommit` neo `^`, mà `CLAUDE.md` mục 5 bắt buộc agent
+ * mở đầu bằng 🤖. Message dưới đây có THẬT trong lịch sử repo. Chiều hỏng ở
+ * đây là fail-**closed** (commit công cụ bị đếm thành commit agent, nên bài
+ * kiểm G14 báo "sai" oan) — ồn chứ không im lặng, nhưng vẫn là cùng một chữ
+ * ký lỗi mà `KF-027` tồn tại để không có lần thứ tư.
+ */
+test('P-042 · isToolCommit không mù trước tiền tố 🤖 của CLAUDE.md mục 5', () => {
+  assert.ok(isToolCommit('🤖 Gộp origin/main vào nhánh #174 — gỡ chỗ đỏ kế thừa từ main'));
+  assert.ok(isToolCommit('🤖 chore: sync workflows from ops/workflows [skip ci]'));
+  assert.ok(isToolCommit("🤖 Merge branch 'main' into claude/topic/T-001"));
+  assert.ok(isToolCommit('🤖 Gộp origin/main (integrator, không xung đột)'));
+  // KHÔNG nới: danh sách trắng vẫn là danh sách trắng sau khi bỏ tiền tố.
+  assert.ok(
+    !isToolCommit('🤖 Gộp hai mô hình định lượng vào một bảng'),
+    'bỏ tiền tố không được biến danh sách trắng thành danh sách đen trá hình',
+  );
+  assert.ok(!isToolCommit('🤖 [platform] P-042 — a'));
+});
+
 test('I-012 · isToolCommit nhận thêm commit sync-workflows và merge tay "Gộp main vào <nhánh>"', () => {
   // Quan sát thật, lượt crux-integrator 2026-09-22 02:05 (thân mục I-012).
   assert.ok(isToolCommit('chore: sync workflows from ops/workflows [skip ci]'));
