@@ -6,7 +6,7 @@
     "market": "Thêm từ spec. Khác `geoScope`: `market` là thị trường của kênh, `geoScope` là phạm vi địa lý mặc định của claim (bất biến I6, luật 3 trong data-sources.md).",
     "engineVersion": "KHÔNG chuyển. Trường này đếm phiên bản engine cũ; ở Crux phiên bản nằm ở `schemaVersion` của phong bì artifact."
   },
-  "$unfilled": "Bốn nhóm giá trị dưới đây để `null`, không để chuỗi rỗng hay chuỗi '<ĐIỀN>': null đọc được bằng máy và không giả vờ là một giá trị thật. displayName và googleAccount cần chủ dự án. ttsVoiceId và providers.tts bị chặn bởi giả định G7 (điều khoản thương mại chưa đọc được — issue #36) và bởi CHARTER 2.3 nhóm 3: chọn nhà cung cấp và chọn giọng đọc là quyết định irreversible.",
+  "$unfilled": "Bốn nhóm giá trị dưới đây để `null`, không để chuỗi rỗng hay chuỗi '<ĐIỀN>': null đọc được bằng máy và không giả vờ là một giá trị thật. displayName và googleAccount cần chủ dự án. ttsVoiceId và providers.tts bị chặn bởi giả định G7 (điều khoản thương mại chưa đọc được — issue #36) và bởi CHARTER 2.3 nhóm 3: chọn nhà cung cấp và chọn giọng đọc là quyết định irreversible. `voiceSpec` ngay dưới KHÔNG lấp hai ô đó: nó tả giọng cần tìm, không chọn giọng nào — mục `audio/AU-006`.",
   "slug": "us-personal-finance",
   "displayName": null,
   "genre": "data-explainer",
@@ -47,6 +47,37 @@
       "affiliate",
       "email"
     ]
+  },
+  "voiceSpec": {
+    "$source": "Chỉ dẫn của chủ dự án, khối GIỌNG ĐỌC trong comment ngày 2026-09-23T14:18:09Z trên issue bản tin #193. Mục backlog: `audio/AU-006`.",
+    "$supersedes": "Cùng comment đó, dòng NGAY TRÊN khối GIỌNG ĐỌC, là câu trả lời cho `🤖 [QĐ]` #158 (chọn nhà cung cấp TTS trong ba lựa chọn): '#158: xem khối GIỌNG ĐỌC dưới đây, không chốt theo 3 lựa chọn cũ.' Câu đó thuộc về #158, không thuộc khối GIỌNG ĐỌC — dẫn đúng chỗ để lượt sau tìm ra được. Khảo sát điều khoản của `AU-001` trong `ops/license-ledger.md` VẪN GIỮ; thứ bị thay là cách chọn.",
+    "$why": "Đây là spec của GIỌNG, không phải lựa chọn nhà cung cấp. Spec nằm được trong pack ngay vì nó không tốn tiền và không khoá ai vào đâu; `ttsVoiceId` và `providers.tts` vẫn `null` cho tới khi quyết định irreversible đóng (CHARTER 2.3 nhóm 3).",
+    "character": "Calm, precise, warm analyst",
+    "mustNot": [
+      "no hype",
+      "no claim of certified expertise",
+      "no impersonation of a real person"
+    ],
+    "accent": "General American",
+    "perceivedAgeRange": "30-45",
+    "genderCandidates": [
+      "male",
+      "female"
+    ],
+    "paceWpm": {
+      "default": [150, 160],
+      "keyFigures": [130, 140]
+    },
+    "prosody": [
+      "falling intonation at sentence end",
+      "stress the numbers",
+      "pause before the reveal number"
+    ],
+    "originPreference": "designed",
+    "$ownerWords": "Ưu tiên giọng thiết kế riêng, không dùng giọng thư viện.",
+    "$originNote": "Ghi nguyên văn ở `$ownerWords` vì `originPreference` chỉ giữ được vế đầu. Vế sau KHÔNG thành lệnh cấm máy đọc được: 'ưu tiên' và 'cấm' là hai thứ khác nhau, và đọc quá lời chủ dự án cũng là một cách làm sai. Căng thẳng có thật ở hạ nguồn — `AU-008` định thử 5 nhà cung cấp × 2 giọng, tức toàn giọng thư viện; mục đó phải hỏi lại chứ không được lặng lẽ bỏ qua vế sau.",
+    "changeIsIrreversible": true,
+    "$changeNote": "Đổi giọng LUÔN là quyết định `irreversible` (CHARTER 2.3 nhóm 3), kể cả khi giọng mới cùng nhà cung cấp."
   },
   "ttsVoiceId": null,
   "googleAccount": null,
