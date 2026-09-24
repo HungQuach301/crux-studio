@@ -704,6 +704,9 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    worker chạy dày nhất trong ba routine, nên gắn việc vào đầu lượt worker là đủ dày.
    Bước 0 rẻ: liệt kê PR xung đột, gọi ops/scripts/integrator-resolve.ts, chỉ chạy pnpm check khi có gộp thật.
    Không có PR nào xung đột thì in một dòng "không có PR xung đột" rồi đi tiếp — không bao giờ bỏ qua im lặng.
+   Bước 0e (mục P-043) chạy CẢ khi không có PR nào xung đột: đẩy bản sao dòng log bước 0 lên nhánh
+   claude/telemetry, KHÔNG mở PR. Đó là nguồn nhịp tim mà watchdog.yml đọc được trước khi PR của lượt này
+   merge — điều kiện chủ dự án đặt ra trên 🤖 [QĐ] #213.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
 2. Ưu tiên (mục P-022 và P-025, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó,
    đừng tự suy): nếu có PR đang mở với CI đỏ, hoặc có comment chưa xử lý, hoặc lượt bước 0 gần nhất
@@ -732,9 +735,13 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    "có worker khác của đúng làn này rảnh ở lượt kế tiếp không" để mà nhường. Phần việc mà bullet gốc của
    mục `P-022` thật sự cần — không giải mù, phải biết PR định làm gì — đã giữ nguyên trong câu ngay trên;
    phần "làn sở hữu đi trước" bị bỏ vì không có gì để gắn nó vào.
-3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
-   mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
-   coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.
+3. Nếu không: chạy `pnpm backlog:status` và lấy trường `readyNow` — ĐỪNG đối chiếu `deps` bằng mắt (mục `I-015`).
+   `readyNow` đã tính cả mục còn `status: review` mà PR của nó đã vào `main` thật, nên một `deps` "trông như chưa
+   xong" không chặn oan; trường `blocked` nói rõ mục nào còn chờ ai. Duyệt các làn theo thứ tự ưu tiên trong
+   ops/lanes/priority.md và nhận mục `readyNow` đầu tiên gặp được mà chưa có nhánh claude/<lane>/<id> và chưa có PR
+   mở (PR nháp không có commit mới quá 24 giờ coi như đã bỏ). Chỉ in "idle" khi `readyNow` rỗng, hoặc mọi mục trong
+   đó đều đã có nhánh hay PR — và khi in `idle`, dán luôn `readyNow` để lượt sau biết đó là hàng đợi thật chứ không
+   phải một phép đọc sai. Không có mục nào thì kết thúc, không commit gì.
 4. Nhận mục: tạo nhánh claude/<lane>/<id>, push, mở PR nháp tiêu đề "[<lane>] <id> …", mô tả PR bắt đầu bằng 🤖.
 5. Làm theo tiêu chí xong của mục. Commit và push sau mỗi bước có ý nghĩa. Chạy `pnpm check` và tập vàng replay.
    PR sửa lỗi phải có test tái hiện lỗi.
@@ -742,7 +749,11 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
 7. Trong cùng PR: cập nhật backlog (status: review) và ops/logs/<lane>/<id>.jsonl (có costUsd). Chuyển PR khỏi trạng thái nháp.
    Gắn nhãn theo cửa merge (CHARTER mục 3, D-C06). Không đoán: chạy
    `git diff --name-only origin/main...HEAD > /tmp/changed.txt` rồi
-   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`:
+   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`.
+   PR có chạm `CHARTER.md` thì thêm `--base-charter <bản CHARTER.md trên main>` (`git show origin/main:CHARTER.md`):
+   thiếu nó tool không biết mục nào đổi nên trả `owner-merge` cho mọi thay đổi CHARTER — an toàn nhưng sai, và cả
+   `ci.yml` lẫn `automerge.yml` đều truyền tham số này.
+   Các cửa:
    open → automerge · automerge-delayed → automerge-delayed · owner-merge → owner-merge cộng issue 🤖 [QĐ].
    CI gắn lại nhãn theo đúng luật đó, nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
 8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn tám nhóm; mọi thứ khác làm ngay theo khuyến nghị.
@@ -927,6 +938,38 @@ Làn integration của Crux Studio.
       2026-09-22, rồi 8 PR ở lượt kế tiếp. Dòng **cũ** trong `P-016.jsonl` ở lại nguyên, log append-only; bên đọc
       gọi `readRunLogs` trên cả `ops/logs` nên tự thấy cả hai chỗ.
 
+   e. **Đẩy một bản sao dòng đó lên nhánh `claude/telemetry`** (mục `P-043`), ngay sau khi ghi file ở bước d và
+      **không chờ** PR của lượt này merge:
+
+      ```bash
+      node ops/scripts/telemetry-beat.ts <file log bước 0 vừa ghi> --commands
+      # In {branch, target, bytes} rồi in ĐÚNG các lệnh git phải chạy. Chạy chúng.
+      # Script không bao giờ tự ghi lên remote: thao tác ghi nằm ở chỗ người đọc
+      # bản ghi lượt chạy thấy được, không chôn trong một script.
+      ```
+
+      Commit đẩy lên nhánh đó **phải** mang `Co-Authored-By: Claude <noreply@anthropic.com>` và
+      `Claude-Session: <url phiên>` (`CLAUDE.md` mục 6) — các lệnh in ra đã mang sẵn. Đây là chỗ duy nhất
+      trong repo mà trailer **không sửa lại được về sau**: commit trên nhánh này không bao giờ vào `main`,
+      nên `no-model-name` và `check-commit-trailers` của `ci.yml` không quét nó, mà bài kiểm giả định **G14**
+      của `ops/scripts/recheck-assumptions.ts` **có** quét mọi nhánh `claude/*`. Một lần đẩy thiếu trailer là
+      một giả định báo `sai` vì một commit không PR nào chữa được.
+
+      `watchdog.yml` dấu hiệu số 5 lấy `max` nhịp tim trên **hai** nguồn: `ops/logs` của bản trên `main`, **và** nhánh
+      này. Trước `P-043` chỉ có nguồn thứ nhất, nên nhịp tim chỉ đập khi một PR vào `main` — và trong một khoảng yên
+      người canh `@nhắc` chủ dự án vì một nhà máy đang chạy đúng. Chủ dự án chốt điều kiện trên `🤖 [QĐ]` **#213**
+      (`2026-09-24T06:10:33Z`): chuyển nguồn nhịp tim ra khỏi `main` **trước** khi bỏ PR log của bước 0, và **không có
+      khoảng thời gian nào watchdog mất tín hiệu**.
+
+      Nhánh này **không bao giờ có PR**, nên push vào nó không chạy CI (`ops/workflows/ci.yml` chỉ kích bằng
+      `pull_request` và `workflow_dispatch`). Nguồn thật của dòng log vẫn là `ops/logs/integration/` trong PR của lượt
+      chạy — bất biến **I8** không đổi chỗ, đây chỉ là bản sao để đọc được sớm hơn. Một file cho mỗi lượt, tên lấy
+      nguyên từ bước d, nên hai worker chạy chồng nhau không bao giờ chạm cùng một file.
+
+      Đẩy bản sao **không** thay việc ghi file ở bước d, và cũng không phải điều kiện của nó: bước d hỏng thì bất biến
+      I8 đỏ, bước e hỏng thì nhịp tim rơi về nguồn `main` như trước `P-043` — hướng lệch an toàn, và
+      `heartbeat-source.ts` in ra nguồn nào đã trả lời nên chỗ rơi đó không im lặng.
+
 Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
 mỗi ngày, như trước khi đổi nhịp):
 
@@ -937,7 +980,10 @@ mỗi ngày, như trước khi đổi nhịp):
    ("nhãn automerge") là một chỗ CHARTER nói ngược với chính lớp chặn của nó (`D-C07`, `KF-020`). Nếu PR revert chỉ
    chạm đúng các file trong khối `crux-hotfix-scope` của issue cảnh báo thì gắn THÊM nhãn `hotfix`: lối đi nhanh của
    `D-C07` (mục 3.3) bỏ khoảng chờ 12 giờ cho đúng ca này.
-2. Dọn dẹp: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
+2. Dọn dẹp: chạy `pnpm backlog:status --fix` — mục đã vào `main` mà còn `status: review` được chuyển `done`, để
+   `deps` của các mục sau không đứng chờ một mục đã xong (mục `I-010`, `I-015`). Tool chỉ chuyển mục ở nhóm `stale`
+   và tự giữ lại mọi mục còn dấu treo, nên không cần phán đoán tay; đưa thay đổi đó vào PR của lượt chạy này.
+   Rồi: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
 3. Cập nhật ops/metrics.md: số file code so với số mục done, số lần revert, tỷ lệ main xanh.
 4. Nếu hôm nay là thứ Hai: chạy lại các kiểm tra tự động trong docs/assumptions.md. Giả định nào đổi trạng thái thì mở [QĐ]
    kèm danh sách phần bị ảnh hưởng (CHARTER 11.1).
