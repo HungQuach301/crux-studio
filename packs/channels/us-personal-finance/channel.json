@@ -48,6 +48,15 @@
       "email"
     ]
   },
+  "revenueWithholding": {
+    "$why": "Mọi ước tính doanh thu trong Channel Pack tính theo số SAU khấu trừ. Hệ số là DỮ LIỆU ở đây, không phải hằng số rải trong code — kênh khác thị trường khác có hệ số khác. Bất biến I6: con số doanh thu là số sau một mô hình khấu trừ, không phải con số trần.",
+    "$reason": "Kênh nhắm người xem Mỹ; doanh thu có nguồn từ Mỹ chịu khấu trừ 30% vì Mỹ–Việt Nam CHƯA có hiệp định thuế thu nhập có hiệu lực, nên nền tảng khấu trừ mặc định 30% với người tạo nội dung không cư trú.",
+    "$asOf": "2026-09-24",
+    "$source": "Chỉ dẫn của chủ dự án, cuối khối GIỌNG ĐỌC trong comment 2026-09-23T14:18:09Z trên issue bản tin #193; mục backlog topic/T-013.",
+    "$reviewWhen": "Khi hiệp định thuế Mỹ–Việt Nam có hiệu lực thì sửa NGAY khoá này. Tìm nhanh bằng chuỗi `revenueWithholding`.",
+    "market": "US",
+    "usSourcedRate": 0.3
+  },
   "voiceSpec": {
     "$source": "Chỉ dẫn của chủ dự án, khối GIỌNG ĐỌC trong comment ngày 2026-09-23T14:18:09Z trên issue bản tin #193. Mục backlog: `audio/AU-006`.",
     "$supersedes": "Cùng comment đó, dòng NGAY TRÊN khối GIỌNG ĐỌC, là câu trả lời cho `🤖 [QĐ]` #158 (chọn nhà cung cấp TTS trong ba lựa chọn): '#158: xem khối GIỌNG ĐỌC dưới đây, không chốt theo 3 lựa chọn cũ.' Câu đó thuộc về #158, không thuộc khối GIỌNG ĐỌC — dẫn đúng chỗ để lượt sau tìm ra được. Khảo sát điều khoản của `AU-001` trong `ops/license-ledger.md` VẪN GIỮ; thứ bị thay là cách chọn.",
