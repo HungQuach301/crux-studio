@@ -11,6 +11,7 @@ Thư mục này là **nguồn thẩm quyền số hai** (CHARTER mục 0): dư�
 | `D-C05` | chưa dùng | — |
 | `D-C06` | Chế độ vận hành 1–2 lần mỗi ngày: phân loại lại quyết định, thu hẹp `owner-merge`, một hộp quyết định duy nhất | [`D-C06.md`](D-C06.md) |
 | `D-C07` | Lối đi nhanh `hotfix`: một `main` đỏ vì workflow không phải chờ 12 giờ, với sáu điều kiện máy khoá được | [`D-C07.md`](D-C07.md) |
+| `D-C08` | Danh sách năm status check bắt buộc của ruleset `protect-main`, ghi lại vào nguồn thẩm quyền (`platform/P-006`) | [`D-C08.md`](D-C08.md) |
 
 `D-C01` và `D-C02` được ghi thẳng trong `CHARTER.md` từ trước khi có thư mục này. Chúng **không** được chép lại ở đây: một nội dung hai chỗ là một nội dung sẽ lệch. Từ `D-C06` trở đi, mỗi quyết định là một file — `D-C04` mang số nhỏ hơn nhưng được chốt sau `D-C06`, nên nó cũng có file riêng.
 

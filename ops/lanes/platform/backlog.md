@@ -489,11 +489,11 @@ Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với
 ### P-006 · Bảo vệ nhánh bằng ruleset
 - deps: VF-G12
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER mục 10 (việc của chủ dự án); giả định G12
 - tiêu chí xong:
-  - Danh sách status check bắt buộc được ghi vào `docs/decisions/` sau khi chủ dự án bật.
-  - Không bật được (gói không cho) thì ghi rõ và dựa vào `automerge.yml` cộng hook.
+  - ✅ Danh sách status check bắt buộc được ghi vào `docs/decisions/` sau khi chủ dự án bật — `docs/decisions/D-C08.md`, năm check `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` của ruleset `protect-main`; nguồn máy đọc là `ops/scripts/required-checks.ts`.
+  - ✅ Không bật được (gói không cho) thì ghi rõ và dựa vào `automerge.yml` cộng hook — ca này **không** xảy ra: `VF-G12` đã đo được ruleset bật thật, nên `D-C08` ghi phương án chính (đã bật) và giữ nguyên dự phòng, không gỡ.
 
 ### P-023 · Dòng log bước 0 tự khoá hàng đợi: tách khỏi file dùng chung `ops/logs/platform/P-016.jsonl`
 Mỗi lượt integrator và mỗi lượt worker ghi một dòng bước 0 vào **cùng một** file `ops/logs/platform/P-016.jsonl`. Dòng đó vào `main` là mọi PR đang mở có dòng riêng trong file ấy **xung đột ngay** phía GitHub — vì GitHub không áp `merge=union` khi tự tính `mergeable` (**KF-009**), còn `automerge.yml` thì nghe phía GitHub.
