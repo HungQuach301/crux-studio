@@ -832,7 +832,18 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      gỡ một chỗ kẹt, bấm dừng một PR. Vượt ngưỡng hai ngày liên tiếp thì mở 🤖 [QĐ] đề xuất
      chỗ cần tự động hoá tiếp — đó là tín hiệu thiết kế sai, không phải tín hiệu chủ dự án bận.
 
-   Kết thúc bằng một dòng: "Trả lời tất cả trong MỘT comment ngay dưới đây."
+   Kết thúc bằng khối **"Sẵn sàng duyệt"** — bản nháp comment tổng hợp mọi khuyến nghị, để chủ dự án
+   duyệt trọn gói thay vì gõ lại từng mã số (chỉ dẫn của chủ dự án trên issue bản tin `#193`, khối
+   TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI mục (1); mục `platform/P-046`). ĐỪNG tự dựng khối này bằng tay —
+   chạy `pnpm digest:approval -- <items.json>` (`ops/scripts/digest-approval.ts`,
+   `renderApprovalDraft`), cùng lý do với `digest-metrics.ts`: một khối dựng tay là một chỗ đếm sai
+   không có test. `items.json` là mảng `ApprovalItem`; ba trường `recommendation`, `options` và
+   `ifNoAnswer` lấy bằng `parseDecisionBody` trên chính thân issue `[QĐ]`, không chép tay.
+   Khối đó tự mang ba hình dạng trả lời, và bản tin KHÔNG lặp lại chúng ở chỗ khác:
+     `Duyệt` = nhận toàn bộ khuyến nghị · `Duyệt, trừ #N B` = nhận tất cả, riêng `#N` lấy `B` ·
+     `#19 A, #14 B` = chốt từng mục. `irreversible` liệt kê riêng, MỖI mục kèm hệ quả nếu không trả
+     lời; `reversible` đã tự làm CHỈ liệt kê, không hỏi lại (`D-C06`), kèm lối `hoàn tác #N`.
+   Dòng cuối cùng của khối vẫn là: "Trả lời tất cả trong MỘT comment ngay dưới đây."
 
 4. Đóng bản tin của ngày hôm trước.
 ```
