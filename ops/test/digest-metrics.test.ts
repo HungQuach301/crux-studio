@@ -659,6 +659,60 @@ test('laneFromTitle: lấy làn từ tiêu đề `[lane] id`, null khi không th
   assert.equal(laneFromTitle('[bogus] X-1 — y'), null);
 });
 
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`, vế thứ hai của cùng
+ * một lỗ.
+ *
+ * Ở đây cái giá là một con số gửi thẳng tới chủ dự án: PR không được tính
+ * vào "số mục done 24 giờ" thì mục **Tiến độ** của bản tin báo thông lượng
+ * thấp hơn thật và ngày dự kiến xong muộn hơn thật (bất biến I6).
+ *
+ * Hai tiêu đề dưới đây là PR THẬT đã merge vào `main`.
+ */
+test('laneFromTitle: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố 🤖 vẫn lấy được làn', () => {
+  assert.equal(
+    laneFromTitle('🤖 [platform] P-038 — cổng quyết định: lượt bước 0 không gỡ được gì (#212)'),
+    'platform',
+  );
+  assert.equal(
+    laneFromTitle('🤖 [integration] dòng log bước 0 lượt crux-worker-2 ~07:23Z (I8) (#227)'),
+    'integration',
+  );
+  // Bỏ tiền tố KHÔNG nới luật: làn lạ vẫn `null`, không theo mẫu vẫn `null`.
+  assert.equal(laneFromTitle('🤖 [bogus] X-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Gộp origin/main (integrator, không xung đột)'), null);
+});
+
+test('laneFromTitle: PR mang tiền tố 🤖 được tính vào số mục done của bản tin', () => {
+  // Phép đo đầu-cuối: trước bản sửa, hai PR này không được đếm và `computeProgress`
+  // báo 0 mục done — con số sai mà không gì đỏ.
+  const now = new Date('2026-09-24T12:00:00.000Z');
+  const merged: GhPr[] = [
+    {
+      number: 212,
+      title: '🤖 [platform] P-038 — cổng quyết định (#212)',
+      headRefName: 'x',
+      mergedAt: '2026-09-24T06:00:00Z',
+    },
+    {
+      number: 227,
+      title: '🤖 [integration] I-020 — a',
+      headRefName: 'y',
+      mergedAt: '2026-09-24T07:00:00Z',
+    },
+  ];
+  const lanes = merged.map((pr) => laneFromTitle(pr.title));
+  assert.deepEqual(lanes, ['platform', 'integration']);
+  assert.equal(
+    merged.filter(
+      (pr) =>
+        laneFromTitle(pr.title) !== null &&
+        now.getTime() - new Date(pr.mergedAt!).getTime() <= 24 * 3_600_000,
+    ).length,
+    2,
+  );
+});
+
 test('computeProgress: đếm mục done 24h/3d và thông lượng, chỉ tính PR mang mã mục', () => {
   const now = new Date('2026-09-22T12:00:00.000Z');
   const merged: GhPr[] = [

@@ -53,6 +53,7 @@ import {
   type LaneName,
   type RunLogLine,
 } from '@crux/kernel';
+import { stripAgentPrefix } from './agent-prefix.ts';
 import { parseBacklog, type BacklogItem } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
@@ -351,9 +352,17 @@ function isStep0Line(line: Pick<RunLogLine, 'kind' | 'ref'>): boolean {
  * log-only của routine (`claude/<tên-ngẫu-nhiên>`) không mang làn. `null`
  * nếu tiêu đề không theo mẫu hoặc làn lạ — khi đó PR không được tính là
  * một mục `done`.
+ *
+ * ⚠️ **Tiền tố 🤖 được bỏ trước khi so** (mục `platform/P-042`) — cùng lỗ,
+ * cùng bản sửa như `hasCompletionCommit`. Ở đây cái giá là một con số sai
+ * gửi thẳng tới chủ dự án: PR đặt tiêu đề `🤖 [<lane>] <id> — …` (ca thật
+ * `#212`, `#227`) không được tính vào "số mục done 24 giờ", nên mục **Tiến
+ * độ** của bản tin (`platform/P-019`) báo thông lượng THẤP hơn thật và ngày
+ * dự kiến xong MUỘN hơn thật — bất biến I6 đòi con số có nguồn, và nguồn
+ * này đang đếm thiếu mà không gì đỏ.
  */
 export function laneFromTitle(title: string): LaneName | null {
-  const m = /^\[([a-z]+)\]\s+\S/.exec(title);
+  const m = /^\[([a-z]+)\]\s+\S/.exec(stripAgentPrefix(title));
   if (m === null) return null;
   const lane = m[1]!;
   return (LANES as readonly string[]).includes(lane) ? (lane as LaneName) : null;

@@ -120,6 +120,45 @@ test('hasCompletionCommit: commit chỉ NHẮC mã mục trong ngoặc không t�
   assert.equal(hasCompletionCommit('platform', 'P-014', subjects), false);
 });
 
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`.
+ *
+ * `CLAUDE.md` mục 5 bắt buộc mọi thứ agent viết mở đầu bằng 🤖, nên tiêu đề
+ * PR đi vào `main` qua squash-merge giữ nguyên tiền tố. Trước bản sửa, neo
+ * `^\[` không khớp và mục **không bao giờ** được nhận là đã xong — CI xanh,
+ * backlog hợp lệ, `git log` vẫn có commit, chỉ kết luận là sai (nhóm Z).
+ *
+ * Tiêu đề dưới đây là commit THẬT trên `main` (`#212`, mục `platform/P-038`).
+ */
+test('hasCompletionCommit: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố 🤖 vẫn phải khớp', () => {
+  const subjects = [
+    '🤖 [platform] P-038 — cổng quyết định: lượt bước 0 không gỡ được gì thì không tốn một lần CI (#212)',
+  ];
+  assert.equal(hasCompletionCommit('platform', 'P-038', subjects), true);
+});
+
+test('hasCompletionCommit: bỏ tiền tố KHÔNG nới hai luật chặt cũ', () => {
+  // Mã mục vẫn phải đứng trọn, và vẫn phải sai làn thì không khớp.
+  const subjects = ['🤖 [verify] VF-G11 — Hook và luật deny có hiệu lực trong routine không (#33)'];
+  assert.equal(hasCompletionCommit('verify', 'VF-G11', subjects), true);
+  assert.equal(hasCompletionCommit('verify', 'VF-G1', subjects), false);
+  assert.equal(hasCompletionCommit('topic', 'VF-G11', subjects), false);
+  // Và commit chỉ NHẮC mã mục giữa câu vẫn không tính, dù có tiền tố.
+  assert.equal(
+    hasCompletionCommit('platform', 'P-015', [
+      '🤖 platform: file log dùng chung không còn sinh xung đột mỗi PR (KF-005, P-015) (#13)',
+    ]),
+    false,
+  );
+});
+
+test('hasRevertCommit: revert một tiêu đề mang tiền tố 🤖 vẫn bị bắt', () => {
+  // Hàm này tìm mã mục GIỮA chuỗi nên vốn miễn nhiễm với tiền tố; bài này
+  // khoá điều đó lại, để bản sửa P-042 sau này không bị "dọn" nhầm sang đây.
+  const subjects = ['Revert "🤖 [platform] P-038 — cổng quyết định (#212)" (#999)'];
+  assert.equal(hasRevertCommit('platform', 'P-038', subjects), true);
+});
+
 test('hasCompletionCommit: sai làn thì không khớp', () => {
   const subjects = ['[topic] T-002 — chuyển Channel Pack từ spec vào packs/channels/ (#38)'];
   assert.equal(hasCompletionCommit('topic', 'T-002', subjects), true);

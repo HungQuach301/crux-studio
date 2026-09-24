@@ -996,3 +996,31 @@ Con số này là số để kiểm giả định `G3` (trần lượt chạy ro
   - ✅ Comment doc của `isStep0Line` cập nhật: hết "khi P-023 vào `main` thì mở rộng", nay nói thẳng đã nhận cả hai hình dạng.
   - ✅ Ghi `ops/known-failures.md` KF-022.
 - **mã mục nhận lúc 2026-09-23 ~14:3x giờ UTC** (`KF-005`): dò `### P-` trên `main` và mọi nhánh PR đang mở, cao nhất là `P-035`, nên `P-036` không đụng ai.
+
+### P-042 · fix · tiền tố 🤖 bắt buộc của `CLAUDE.md` mục 5 làm mù mọi bộ đọc tiêu đề neo `^`
+
+Hai luật của repo đều đúng, và chúng cắn nhau ở đúng ký tự đầu tiên. `CLAUDE.md` mục 5 bắt buộc **mọi** thứ agent viết mở đầu bằng 🤖 — dấu vết duy nhất phân biệt người với máy khi agent dùng danh tính chủ dự án (CHARTER 3.1, mặc định M6). Phụ lục P1 bước 4 đòi tiêu đề PR dạng `[<lane>] <id> — …`, và mọi bộ đọc tiêu đề neo `^\[`. Squash-merge giữ nguyên tiêu đề, nên tiền tố đi thẳng vào commit subject trên `main`: **30 / 213** commit subject trên `e4a5931` mang tiền tố đó.
+
+Hệ quả, đo được chứ không suy:
+
+- `hasCompletionCommit('platform','P-038',…)` trả **`false`** cho commit thật `🤖 [platform] P-038 — … (#212)` → mục không bao giờ được nhận là đã xong, nên mọi `deps` trỏ vào nó chặn oan. Đúng chỗ hỏng mà `integration/I-015` sinh ra để chữa, quay lại bằng một cửa khác.
+- `laneFromTitle` trả **`null`** cho cùng hình dạng → PR không được tính vào "số mục done 24 giờ", nên mục **Tiến độ** của bản tin (`platform/P-019`) báo thông lượng thấp hơn thật và ngày dự kiến xong muộn hơn thật. Đây là một **con số sai gửi thẳng tới chủ dự án**, đúng thứ bất biến **I6** tồn tại để chặn.
+
+Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog vẫn hợp lệ — chỉ kết luận là sai.
+
+**Lần thứ ba, nên sửa cơ chế chứ không vá sản phẩm** (`CLAUDE.md` mục 13). Lần một: `claimKeyFromTitle` của `P-041`, vòng soát `#225` bắt được và vá tại chỗ. Lần hai: `hasCompletionCommit`, cùng vòng soát đó khai "đáng một mục backlog riêng" rồi **không ai nhận**. Lần ba: `laneFromTitle`, lượt này. Vá tại chỗ lần thứ ba là mời lần thứ tư.
+
+- deps: —
+- risk: medium — không chặn merge, nhưng giấu hai thứ: một hàng đợi việc cạn giả, và một con số sai trong hộp quyết định duy nhất.
+- status: review
+- hold: còn lại, tách phạm vi — `claimKeyFromTitle` của `P-041` (`#225`, đang mở) còn mang bản vá tại chỗ riêng; gộp về `stripAgentPrefix` sau khi `#225` merge
+- nguồn: vòng soát ngữ cảnh sạch của PR [#225](https://github.com/HungQuach301/crux-studio/pull/225) (điểm C2 và mục "Giới hạn đã khai" (c)); `CLAUDE.md` mục 5 và mục 13; CHARTER phụ lục P1 bước 4; `ops/known-failures.md` **KF-027**; đo trên `main` `e4a5931` (30/213 commit subject mang tiền tố)
+- tiêu chí xong:
+  - ✅ `ops/scripts/agent-prefix.ts` (mới): `AGENT_PREFIX` và `stripAgentPrefix` — **một** chỗ giữ luật bỏ tiền tố. Chặt theo đúng ba hướng, mỗi hướng là một cách fail-open đã cân nhắc: chỉ bỏ ở **đầu** chuỗi, chỉ bỏ **một** lần, không `trim()` hộ bên gọi.
+  - ✅ `hasCompletionCommit` (`ops/scripts/backlog-status.ts`) và `laneFromTitle` (`ops/scripts/digest-metrics.ts`) gọi `stripAgentPrefix`. Hai luật chặt cũ **không** bị nới: sau khi bỏ tiền tố, phần còn lại vẫn phải khớp đúng dạng cũ từ ký tự đầu tiên.
+  - ✅ Bài **tái hiện lỗi** (bất biến I2) dựng trên tiêu đề PR **thật** đã merge: `ops/test/backlog-status.test.ts` (`#212`) và `ops/test/digest-metrics.test.ts` (`#212`, `#227`, cộng một phép đếm đầu-cuối cho mục "Tiến độ").
+  - ✅ `ops/test/agent-prefix.test.ts` khoá **chiều ngược lại** — bỏ tiền tố quá tay cũng phải đỏ. Phá thử, mỗi phép đỏ đúng chỗ rồi khôi phục: gỡ `stripAgentPrefix` khỏi hai bộ đọc → 4 bài đỏ; bỏ 🤖 ở mọi chỗ trong chuỗi → 3 bài đỏ; bỏ lặp lại → 1 bài đỏ; thêm `trim()` → 1 bài đỏ.
+  - ✅ `hasRevertCommit` **không** đổi, và có bài khoá lý do: nó tìm mã mục **giữa** chuỗi nên vốn miễn nhiễm với tiền tố. Chỉ bộ đọc neo `^` mới mù — đó là toàn bộ hình dạng của lỗi.
+  - ✅ Ghi `ops/known-failures.md` **KF-027**.
+  - ⬜ **Còn lại, tách phạm vi:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở (`CLAUDE.md` mục 11: hai làn cùng sửa một file). Việc của lượt sau `#225` merge.
+- **mã mục nhận lúc 2026-09-24 ~07:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở, cao nhất là `P-041` (`#225`), nên `P-042` không đụng ai. Mã `KF-027` nhận cùng cách, cao nhất là `KF-026` (`#226`).

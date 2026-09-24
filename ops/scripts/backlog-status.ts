@@ -45,6 +45,8 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { stripAgentPrefix } from './agent-prefix.ts';
+
 /** Ô "còn treo" — quy ước sẵn có của backlog cho phần chưa xong. */
 export const OPEN_BOX = '⬜';
 
@@ -275,16 +277,30 @@ function escapeRegExp(value: string): string {
  *   `VF-G11`, nên sau mã mục bắt buộc có khoảng trắng.
  * - **Phải đúng dạng tiêu đề**, tức `[<lane>] <id>` ở ĐẦU dòng rồi tới dấu
  *   gạch. Commit nhắc mã mục ở giữa câu hay trong ngoặc là PR của mục khác.
+ *
+ * ⚠️ **Tiền tố 🤖 được bỏ trước khi so** (mục `platform/P-042`). `CLAUDE.md`
+ * mục 5 bắt buộc mọi thứ agent viết mở đầu bằng 🤖, nên tiêu đề PR đi vào
+ * `main` qua squash-merge giữ nguyên tiền tố đó — và neo `^\[` không khớp.
+ * Ca thật: `🤖 [platform] P-038 — …` (`#212`), mục không bao giờ được nhận là
+ * đã xong, mà không gì đỏ. Luật bỏ tiền tố nằm ở `stripAgentPrefix`, một
+ * chỗ, để lần sau không phải vá thêm một bộ đọc nữa.
+ *
+ * Hai chỗ chặt trên **không** bị nới theo: sau khi bỏ tiền tố, phần còn lại
+ * vẫn phải khớp đúng dạng cũ từ ký tự đầu tiên.
  */
 export function hasCompletionCommit(lane: string, id: string, subjects: readonly string[]): boolean {
   const pattern = new RegExp(`^\\[${escapeRegExp(lane)}\\]\\s+${escapeRegExp(id)}\\s+[—–-]\\s`);
-  return subjects.some((subject) => pattern.test(subject));
+  return subjects.some((subject) => pattern.test(stripAgentPrefix(subject)));
 }
 
 /**
  * Mục đã merge rồi bị revert vẫn còn tiêu đề commit gốc trong `git log`, nên
  * `hasCompletionCommit` một mình sẽ nói "đã xong". CLAUDE.md mục 13 ("`main`
  * đỏ thì revert ngay") làm ca này có thật, không phải giả định.
+ *
+ * Hàm này **không** cần `stripAgentPrefix` (mục `P-042`): nó tìm mã mục ở
+ * GIỮA chuỗi (`includes`), nên `Revert "🤖 [platform] P-038 — …"` vẫn khớp.
+ * Chỉ bộ đọc neo `^` mới mù trước tiền tố — đó là toàn bộ hình dạng của lỗi.
  *
  * Luật cố ý thô và lệch về hướng an toàn: thấy **bất cứ** commit `Revert`
  * nào nhắc tới tiêu đề của mục thì coi như chưa xong, không xét thứ tự thời
