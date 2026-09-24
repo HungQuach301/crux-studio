@@ -996,7 +996,7 @@ Con số này là số để kiểm giả định `G3` (trần lượt chạy ro
   - ✅ Ghi `ops/known-failures.md` KF-022.
 - **mã mục nhận lúc 2026-09-23 ~14:3x giờ UTC** (`KF-005`): dò `### P-` trên `main` và mọi nhánh PR đang mở, cao nhất là `P-035`, nên `P-036` không đụng ai.
 
-### P-040 · Hai worker nhận cùng một mục trong cùng một phút, và không gì đỏ
+### P-041 · Hai worker nhận cùng một mục trong cùng một phút, và không gì đỏ — đã gặp hai lần
 Phụ lục P1 bước 3 đòi mục `ready`, `deps` đã xong, *"chưa có nhánh `claude/<lane>/<id>` và chưa có PR mở"*. Phép hỏi đó chạy **một lần**, lúc lượt chạy bắt đầu duyệt backlog — rồi lượt chạy làm việc cả giờ đồng hồ và push. Khoảng trống giữa hai mốc ấy không có cổng nào.
 
 Đo được ngày 2026-09-24, mục `integration/I-020`:
@@ -1021,8 +1021,13 @@ Hai tín hiệu nhận việc đang có đều không bắt được ca này. T�
   - ✅ Sóng nối tiếp **không** bị báo: `platform/P-014` cố ý làm theo sóng (`#62`, `#196`, `#223`), và một bộ dò kêu sai vài lần là một bộ dò bị tắt. Phép phân biệt là thời gian sống, không phải mã mục.
   - ✅ PR có tiêu đề không đọc được thành mã mục được **đếm và in ra**, không biến mất khỏi phép đo (bài học `Z15`).
   - ✅ `pnpm claims <file.json>` in bảng người đọc; `--json` cho máy. Thoát 0 kể cả khi có va chạm — đây là phép **đo**, cổng chặn duy nhất là người nhận việc đọc `verdict` rồi đi mục khác.
-  - ✅ `ops/test/claim-collision.test.ts` — 17 bài, mở đầu bằng **ba bài tái hiện lỗi** dựng lại đúng mốc thật của `#221`/`#222` (bất biến I2).
-  - ✅ Chạy thật trên ảnh chụp 25 PR (7 mở + 18 merge gần nhất) lúc 2026-09-24T05:40Z: **đúng 1 va chạm** — `integration/I-020` `#221`/`#222` — và **0 báo giả** trên hai sóng của `P-014`.
+  - ✅ `ops/test/claim-collision.test.ts` — **29 bài**, mở đầu bằng bốn bài tái hiện lỗi dựng lại đúng mốc thật của `#221`/`#222` **và** `#224`/`#225` (bất biến I2).
+  - ✅ Chạy thật trên ảnh chụp PR thật: **đúng 2 va chạm**, cả hai là va chạm thật — `integration/I-020` (`#221`/`#222`, 1,48 phút) và `platform/P-040` (`#224`/`#225`, 9,75 phút) — và **0 báo giả** trên hai sóng của `P-014` (`#196` đóng 03:41:39Z, `#223` tạo 04:38:39Z).
+  - ✅ Tiền tố `🤖` của `CLAUDE.md` mục 5 được bỏ qua khi đọc tiêu đề: 29 commit trên `main` mang nó, trong đó `🤖 [platform] P-038 — …` (#212) là một PR nhận mục **thật**. Neo cứng vào `[` làm `claimCheck` trả `free` cho một mục đang có người giữ — fail-open ở đúng chỗ mục này chữa.
+  - ✅ **Đầu vào thiếu hay hỏng thì NÉM, không trả `free`**: tên làn ngoài `LANES`, mốc `now` không đọc được, `PrSnapshot` thiếu `closedAt`/`isDraft`/`updatedAt` — cả ba trước đây cho `free` im lặng và exit 0. CLI in `⚠ KHÔNG TRẢ LỜI ĐƯỢC` và thoát 2. "Không trả lời được" khác "không ai giữ mục này", và phải khác cả ở mã thoát.
+  - ✅ Ngoại lệ **PR nháp bỏ quá 24 giờ** (`CLAUDE.md` mục 2) không bị luật mới nuốt: verdict `abandoned-draft`, ngưỡng `ABANDONED_DRAFT_HOURS`. Thiếu nó thì `integration/I-020` bị `#222` khoá **vĩnh viễn**. Một PR sống cộng một PR nháp chết vẫn là "có người giữ".
+  - ✅ "Đã merge" suy từ `mergedAt`, không nhận cờ boolean: endpoint **liệt kê** PR của GitHub trả `merged:false` cho cả PR đã merge, nên một cờ boolean làm nhánh `recently-merged` thành mã chết.
+  - ✅ Thứ tự kết quả **ổn định**, có bài kiểm chạy hai chiều đầu vào với `createdAt` bằng nhau: hai lượt đọc cùng dữ liệu không được ghi hai câu khác nhau (`KF-021`).
   - ⬜ **Còn lại, tách phạm vi:** đưa `duplicateClaims` vào bản tin ngày (`ops/scripts/digest-metrics.ts`) để va chạm nổi lên hộp quyết định duy nhất. Không làm ở PR này vì `digest-metrics.ts` đang bị `#223` sửa — hai PR cùng chạm một file là đúng thứ luật mềm CHARTER mục 4 bảo tránh.
   - ⬜ **Còn lại:** trạng thái `claimed` của `ops/lanes/README.md` vẫn chưa ai ghi. Hoặc phụ lục P1 bước 4 ghi nó, hoặc bảng trong README bỏ nó đi — hai nguồn nói hai chuyện là chỗ sinh ra lỗi tiếp theo.
-- **mã mục nhận lúc 2026-09-24 ~05:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và trên nhánh của cả 7 PR đang mở**, cao nhất là `P-039`, nên `P-040` không đụng ai. Mã `KF-025` dò cùng cách, cao nhất là `KF-024`.
+- **mã mục nhận lúc 2026-09-24 ~05:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và trên nhánh của cả 7 PR đang mở**, cao nhất là `P-039`, nên `P-041` không đụng ai. Mã `KF-025` dò cùng cách, cao nhất là `KF-024`.

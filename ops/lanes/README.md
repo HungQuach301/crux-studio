@@ -19,8 +19,8 @@ Mỗi làn một thư mục, mỗi làn một `backlog.md`. **Phân vùng theo l
 
 - **Một mục = một nhánh = một PR.** Không gộp.
 - Worker nhận mục đầu tiên có `status: ready`, mọi `deps` đã `done`, chưa có nhánh và chưa có PR mở. Nhận xong đổi thành `claimed` ngay trong PR nháp.
-  - **"Chưa có PR mở" hỏi bằng máy, không bằng mắt:** `claimCheck` của `ops/scripts/claim-collision.ts` (`pnpm claims`), đọc chữ ký từ **tiêu đề PR** chứ không từ tên nhánh — nền tảng gán nhánh ngẫu nhiên nên tên nhánh không nói được gì. Hỏi lại lần nữa ngay trước khi push commit đầu tiên (`KF-025`, mục `platform/P-040`).
-  - ⚠️ **Dòng `claimed` ở trên chưa lượt nào thi hành**, và CHARTER phụ lục P1 bước 4 không nhắc tới nó — hai nguồn đang nói hai chuyện. Chỗ hở này ghi trong tiêu chí còn lại của `P-040`; tới khi nó được chốt, `claimCheck` là tín hiệu duy nhất chạy thật.
+  - **"Chưa có PR mở" hỏi bằng máy, không bằng mắt:** `claimCheck` của `ops/scripts/claim-collision.ts` (`pnpm claims`), đọc chữ ký từ **tiêu đề PR** chứ không từ tên nhánh — nền tảng gán nhánh ngẫu nhiên nên tên nhánh không nói được gì. Hỏi lại lần nữa ngay trước khi push commit đầu tiên (`KF-025`, mục `platform/P-041`).
+  - ⚠️ **Dòng `claimed` ở trên chưa lượt nào thi hành**, và CHARTER phụ lục P1 bước 4 không nhắc tới nó — hai nguồn đang nói hai chuyện. Chỗ hở này ghi trong tiêu chí còn lại của `P-041`; tới khi nó được chốt, `claimCheck` là tín hiệu duy nhất chạy thật.
 - Mục nào phụ thuộc một **giả định** chưa kiểm thì `deps` ghi mã giả định (ví dụ `G7`). Không xây trên giả định "suy luận" chưa kiểm, trừ khi phương án dự phòng đã viết sẵn (CHARTER 11.1 luật 2).
 - Cùng một chữ ký lỗi ba lần trên một mục → `parked` + issue `🤖 [QĐ]` + chuyển sang mục khác. Làn không dừng.
 - Backlog **do agent tự sinh và chia nhỏ** từ CHARTER và spec. Chủ dự án chỉnh được bất cứ lúc nào bằng cách sửa file.
