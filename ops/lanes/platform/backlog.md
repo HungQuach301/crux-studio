@@ -1014,6 +1014,7 @@ Hai tín hiệu nhận việc đang có đều không bắt được ca này. T�
 - deps: —
 - risk: medium
 - status: review
+- hold: còn lại, tách phạm vi — hai mục `⬜` chưa làm ở PR này: đưa `duplicateClaims` vào bản tin ngày (chờ `#223` thôi chạm `digest-metrics.ts`), và chốt một đường cho trạng thái `claimed` giữa `ops/lanes/README.md` và phụ lục P1 bước 4; cả hai là việc của lượt sau, không chặn phần lõi đã xong
 - nguồn: `ops/known-failures.md` KF-025; CHARTER phụ lục P1 bước 3 và bước 4; `ops/lanes/README.md`; PR [#221](https://github.com/HungQuach301/crux-studio/pull/221) và [#222](https://github.com/HungQuach301/crux-studio/pull/222)
 - tiêu chí xong:
   - ✅ Chữ ký nhận việc đọc từ **tiêu đề PR** (`[<lane>] <id> — …`), không đọc từ tên nhánh — `claimKeyFromTitle` của `ops/scripts/claim-collision.ts`, cùng hình dạng mà `hasCompletionCommit` đã đọc.
