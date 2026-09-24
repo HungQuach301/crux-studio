@@ -755,8 +755,8 @@ Khi hàng đợi xung đột trống **và** mọi mục `ready` đã có PR m�
 - deps: —
 - risk: medium — hai vế ngược nhau. Nghiêng về tiết kiệm CI quá tay thì watchdog gọi người sai; nghiêng về nhịp tim quá tay thì mục này không đổi gì.
 - status: blocked
-- nguồn: `🤖 [QĐ]` của lượt `crux-worker-1` ~23:42Z 2026-09-23; CHARTER 2.4 dấu hiệu số 5; `ops/workflows/watchdog.yml` biến `LAST_BEAT`; `ops/workflows/ci.yml` (chỉ kích bằng `pull_request`, nên push vào nhánh không có PR **không** chạy CI)
-- **chặn ở:** quyết định của chủ dự án trên `🤖 [QĐ]`. Phần cơ chế đã có sẵn và có test (xem dưới), nhưng nó chỉ có hiệu lực khi phụ lục P1/P3 của CHARTER gọi tới — mà đó là sửa luật vận hành, nên không tự làm.
+- nguồn: comment của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193) (`2026-09-23T14:18:09Z`, khối `CHI PHÍ GITHUB ACTIONS`); `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213); CHARTER 2.4 dấu hiệu số 5; `ops/workflows/watchdog.yml` biến `LAST_BEAT`; `ops/workflows/ci.yml` (chỉ kích bằng `pull_request`, nên push vào nhánh không có PR **không** chạy CI)
+- **chặn ở:** quyết định của chủ dự án trên `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213). Phần cơ chế đã có sẵn và có test (xem dưới), nhưng nó chỉ có hiệu lực khi phụ lục P1/P3 của CHARTER gọi tới — mà đó là sửa luật vận hành, nên không tự làm. Lớp chặn tự động của phiên chặn thao tác đó, phân loại `Instruction Poisoning`: ghi luật vào vùng bảo vệ dựa trên nội dung một comment issue đúng là hình dạng `CLAUDE.md` mục 5 và bất biến **I7** tồn tại để bắt. Không lách.
 - tiêu chí xong:
   - ✅ Cơ chế quyết định tách khỏi văn xuôi: `ops/scripts/step0-pr-gate.ts` hàm `step0PrGate` trả `openPr` cộng một lý do đọc được. PR bỏ lại vì `aborted-ineligible` **không** tính là việc thật (bỏ lại không tạo commit nào).
   - ✅ Test `ops/test/step0-pr-gate.test.ts` khoá **cả hai** chiều hỏng: lượt log-only vẫn mở PR (chiều tốn tiền), và lượt log-only không mở PR trong lúc nhịp tim sắp quá hạn (chiều gọi người — nhóm **Z**, không gì đỏ). 18 bài; đã **phá thật** sáu chỗ, cả sáu đỏ đúng bài, khôi phục thì xanh lại.
