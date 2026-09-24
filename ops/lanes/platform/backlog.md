@@ -368,11 +368,27 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     dài nhiều ngày sẽ thành nhiều chục lần @nhắc, và đúng sáu làn đang quá ngưỡng ngay hôm nay. Nhịp cảnh báo là
     phạm vi mục `P-034`. Đường phát hiện **độc lập** của Z7 đi qua bản tin ngày: CHARTER phụ lục P2 mục "Tiến độ"
     nay gọi `pnpm lanes:heartbeat` — một lần mỗi ngày, 0 lần thao tác thêm của chủ dự án.
-  - **Z6 và Z14 chưa làm.** Z6 (nhịp tim của `cron`) đòi `main-ci` ghi một file vào repo, tức một đường ghi vào
-    `main` không qua PR — câu hỏi thiết kế riêng, không nhét chung được. Z14 (so số PR merged theo làn với số
-    dòng log cùng khoảng) sống trong `ops/scripts/digest-metrics.ts`, mà PR `#194` đang mở và đang sửa đúng file
-    đó; gộp vào đây là tự tạo một xung đột cho hàng đợi merge. Cả hai đáng một PR riêng.
-  - `status` giữ **`ready`**: Z2, Z6, Z8 và Z14 vẫn đang chờ.
+- **Sóng 3 — xong thêm: Z14** (lượt `crux-worker-2`, 2026-09-24).
+  - **Z14** (so số PR merged theo làn với số dòng log cùng khoảng): `laneLogBalance` trong
+    `ops/scripts/digest-metrics.ts`, đưa vào bản tin ngày qua `renderDigestMetrics` (mục "Cân đối log/merge theo
+    làn (Z14)") và trường `laneLogBalance` của `DigestMetrics`. **7** bài ở `ops/test/digest-metrics.test.ts`
+    (nền 39 → 46). PR `#194` từng sửa cùng file nay đã đóng/merge, nên không còn xung đột hàng đợi để né.
+  - **Đúng công thức nhóm Z — một thứ ở ngoài đếm và so, không tự khai.** So số PR đã merge theo làn
+    (`laneFromTitle`) với số dòng log **của việc** theo làn trong cùng cửa sổ `since`. Báo **một chiều**: chỉ khi
+    log ÍT hơn merge quá `LANE_LOG_GAP_THRESHOLD` (1) — log nhiều hơn merge là bình thường (một mục chạy nhiều
+    lượt trước khi merge, việc chưa merge vẫn ghi log).
+  - **Ba chỗ dễ làm sai, mỗi chỗ một bài âm:** (1) **dòng bước 0 bị loại** (`isStep0Line`) — bước 0 ghi một dòng
+    ở mọi lượt và dồn vào `integration`, tính vào thì vừa thổi phồng vừa che ca thiếu log của chính làn đó; bài âm
+    dựng "integration chỉ có dòng bước 0" và khẳng định vẫn `flagged`. (2) **ngưỡng dùng `>` không `>=`** — bài âm
+    khẳng định lệch = ngưỡng thì KHÔNG báo, lệch > ngưỡng thì báo. (3) **in cả khi 0 làn lệch** — im lặng ở đây
+    đúng là thứ nhóm Z cấm (bài học Z7/Z15); bài kiểm khẳng định dòng "Mọi làn … khớp …" xuất hiện.
+  - **Giới hạn đã khai, không giấu:** phép đếm là **số dòng**, nên nhiều lượt của một mục có thể che một mục khác
+    thiếu hẳn dòng log trong cùng làn + cửa sổ. Đây là báo động (CHARTER mục 4), không phải cổng chặn — bắt ca cả
+    một làn im, không hứa bắt mọi dòng lẻ.
+  - **Z6 chưa làm.** Z6 (nhịp tim của `cron`) đòi `main-ci` ghi một file vào repo, tức một đường ghi vào `main`
+    không qua PR, cộng bước đọc của `crux-integrator` mỗi thứ Hai — câu hỏi thiết kế riêng, chạm workflow, đáng
+    một PR riêng.
+  - `status` giữ **`ready`**: Z2, Z6 và Z8 vẫn đang chờ.
 
 ### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
