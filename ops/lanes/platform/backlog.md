@@ -1089,3 +1089,25 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ✅ Ghi `ops/known-failures.md` **KF-027**.
   - ⬜ **Còn lại, tách phạm vi:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở (`CLAUDE.md` mục 11: hai làn cùng sửa một file). Việc của lượt sau `#225` merge.
 - **mã mục nhận lúc 2026-09-24 ~07:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở, cao nhất là `P-041` (`#225`), nên `P-042` không đụng ai. Mã `KF-027` nhận cùng cách, cao nhất là `KF-026` (`#226`).
+
+---
+
+### P-047 · fix · Một lượt `ci.yml` bị `concurrency` huỷ để lại check run `cancelled` mang tên check **bắt buộc**, và PR kẹt `blocked` vĩnh viễn
+Chỉ dẫn của chủ dự án trên issue bản tin [#241](https://github.com/HungQuach301/crux-studio/issues/241), comment `2026-09-24T14:59:40Z` (comment không mở đầu 🤖 trên issue nhãn `digest` → là lệnh, `CLAUDE.md` mục 5):
+
+> `#233`: đã merge. Xác minh nguyên nhân gốc lỗi 405 của `#226`: `#226` và `#224` chỉ có 1/1 check trong khi ruleset `protect-main` đòi 5 check bắt buộc — kiểm xem CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không; sửa gốc, ghi KF.
+
+`ops/known-failures.md` `KF-029` đã khai giả thuyết này và tự dặn *"Tách thành mục backlog riêng"*; ~10 giờ sau không mục nào giữ nó. Mục này giữ.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/ci.yml` (vùng `automerge-delayed`). Không đổi tên, không gộp, không xoá job nào trong năm job mà ruleset `protect-main` đòi, nên **không** rơi vào nhóm `irreversible` số 8 của CHARTER 2.3.
+- status: review
+- hold: bản sửa `ci.yml` chỉ có hiệu lực sau khi PR vào `main` và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4) — chưa chạy thật lần nào
+- nguồn: chỉ dẫn chủ dự án trên `#241`; `ops/known-failures.md` `KF-029` và **`KF-031`**; `D-C08`; `ops/scripts/required-checks.ts`
+- tiêu chí xong:
+  - ⬜ Nguyên nhân gốc được **xác minh bằng đo**, và cả hai vế của chỉ dẫn được trả lời — kể cả vế đo được là **sai**.
+  - ⬜ Sửa gốc: nhóm `concurrency` của mọi workflow sinh ra check bắt buộc phải **mang `head.sha`** và **không** `cancel-in-progress`.
+  - ⬜ Máy chặn luật đó, tách khỏi YAML, chạy trong `pnpm lint:workflows`.
+  - ⬜ Bộ dò PR đang kẹt theo đúng chữ ký này, để chỗ kẹt nổi lên thay vì im.
+  - ⬜ Ghi `ops/known-failures.md` `KF-031`.
+- **mã mục nhận lúc 2026-09-24 ~20:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 8 PR đang mở (242, 238, 231, 229, 225, 224, 223, 39), cao nhất là `P-046` (`#238`), nên `P-047` không đụng ai. Mã `KF-031` nhận cùng cách, cao nhất là `KF-030` (`#231`, `#225`).
