@@ -160,6 +160,33 @@ test('ÂM: phép đo không được xanh vì chẳng đọc gì — phải th�
   assert.ok(allContractLockProblems(ROOT).locked > 0, 'không contract nào được soát khoá');
 });
 
+test('ÂM: hai khoá trên CÙNG một dòng — chỗ khớp đầu tiên ĐẠT không được che chỗ sau', () => {
+  // Hình dạng tự nhiên nhất của một body gửi YouTube Data API. Lấy một chỗ
+  // khớp mỗi dòng thì cả dòng đi qua sạch: đo được ở vòng soát, cổng ra
+  // EXIT=0 và 22/22 bài vẫn xanh.
+  const { problems } = scan(`export const body = { visibility: 'private', privacyStatus: 'public' };`);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0]!, /privacyStatus/);
+});
+
+test('ÂM: gán qua ngoặc vuông cũng bị bắt', () => {
+  const { problems } = scan(`  body['privacyStatus'] = 'public';`);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0]!, /privacyStatus/);
+});
+
+test(`ÂM: ba vị trí ${ALLOW_MARKER} bị KHOÁ — thêm lối thoát thứ tư là phải sửa bài kiểm này`, () => {
+  // In ra thôi không đủ: không ai đọc stdout của một job xanh, nên một dòng
+  // `I5-allow:` thứ tư trôi qua im lặng. Khoá danh sách, đúng cách
+  // `SCAN_EXCLUDED` bị khoá — thêm một lối thoát thì phải nói ra.
+  const { allowed, problems } = scanVisibility(ROOT);
+  assert.deepEqual(problems, []);
+  assert.deepEqual(
+    allowed.map((line) => line.split(' ')[0]),
+    ['kernel/test/contracts.test.ts:48', 'kernel/test/contracts.test.ts:49', 'workshops/release/test/stub.test.ts:30'],
+  );
+});
+
 test('ÂM: danh sách đứng ngoài phép quét bị khoá ở ĐÚNG file test của chính cổng này', () => {
   // Nới danh sách này là cách rẻ nhất để làm cổng im mà không gì đỏ — một
   // file `*.test.ts` thêm vào đây đủ để giấu một đường tải lên thật.

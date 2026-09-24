@@ -67,7 +67,7 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
     chính tiêu chí này cấm.
   - ✅ Không có đường nào trong code đặt `visibility` khác `private`. Contract đã khoá; test phải chứng
     minh code cũng không thử. → cổng `pnpm check:visibility` (`ops/scripts/check-visibility.ts`), nối vào
-    `pnpm check`; 22 bài ở `ops/test/check-visibility.test.ts`. Cổng soát **hai** chiều mà contract một
+    `pnpm check`; 25 bài ở `ops/test/check-visibility.test.ts`. Cổng soát **hai** chiều mà contract một
     mình không soát được: khoá `privacyStatus` của YouTube API (contract không nhìn thấy khoá này), và
     chính chỗ khoá của contract bị nới. Đo được lỗ cũ: nới thành `enum: ["private","unlisted"]` thì
     **11/11 bài trước mục này vẫn xanh** trong khi I5 đã mất.

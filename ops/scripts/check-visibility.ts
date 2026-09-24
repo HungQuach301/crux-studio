@@ -54,12 +54,20 @@
  *
  * ## Lối thoát có kiểm soát, và cấm im lặng
  *
- * Một dòng cố ý đặt giá trị khác — hôm nay có đúng một: bài kiểm chứng minh
- * contract chặn `public` — khai bằng dấu `I5-allow: <lý do>` ngay trên dòng
- * đó. Cổng **đếm và in ra** mọi dòng như vậy ở mọi lần chạy, kể cả khi
- * không có vấn đề nào: một lối thoát không ai đếm là một lối thoát sẽ lặng
- * lẽ thành thường lệ. Lý do bắt buộc phải có chữ — `I5-allow:` trống bị coi
- * là vi phạm.
+ * Một dòng cố ý đặt giá trị khác khai bằng dấu `I5-allow: <lý do>` ngay
+ * trên dòng đó. Hôm nay có **ba**, tất cả đều là bài kiểm chứng minh
+ * contract **chặn** một giá trị sai — chiều ngược, không phải đường tải
+ * lên: `kernel/test/contracts.test.ts:48` và `:49`, cộng
+ * `workshops/release/test/stub.test.ts:30`.
+ *
+ * Cổng **đếm và in ra** mọi dòng như vậy ở mọi lần chạy, kể cả khi không có
+ * vấn đề nào: một lối thoát không ai đếm là một lối thoát sẽ lặng lẽ thành
+ * thường lệ. Lý do bắt buộc phải có chữ — `I5-allow:` trống bị coi là vi
+ * phạm. Nhưng in ra thôi thì **không đủ**: không ai đọc stdout của một job
+ * xanh, nên dòng thứ tư sẽ trôi qua im lặng. Vì vậy ba vị trí trên bị một
+ * bài kiểm khoá lại (`ops/test/check-visibility.test.ts`), đúng cách
+ * `SCAN_EXCLUDED` bị khoá: thêm một lối thoát là phải sửa một bài kiểm, tức
+ * là phải nói ra.
  *
  * ## Giới hạn, khai ra thay vì để ngầm
  *
@@ -135,7 +143,8 @@ export interface VisibilitySite {
  * không đặt giá trị nào.
  */
 const KEY_PATTERN = new RegExp(
-  String.raw`["'\`]?\b(${VISIBILITY_KEYS.join('|')})\b["'\`]?\s*[:=]\s*(.*)$`,
+  String.raw`["'\`]?\b(${VISIBILITY_KEYS.join('|')})\b["'\`]?\s*\]?\s*[:=]\s*`,
+  'g',
 );
 
 /** Dòng chỉ có chú thích — không phải đường code. */
@@ -155,23 +164,38 @@ const allowReasonOf = (line: string): string | null => {
 };
 
 /**
- * Mọi chỗ gán khoá tầm nhìn trong một nội dung. Một dòng có thể mang nhiều
- * khoá, nhưng chỉ lấy chỗ khớp ĐẦU TIÊN mỗi dòng cho mỗi khoá — đủ để chặn,
- * và giữ phép đo đọc được.
+ * Mọi chỗ gán khoá tầm nhìn trong một nội dung — **tất cả** chỗ khớp trên
+ * một dòng, không phải chỗ đầu tiên.
+ *
+ * Lấy một chỗ mỗi dòng nghe như đủ, và không đủ: một body gửi YouTube Data
+ * API mang khoá của repo và khoá của API **trên cùng một dòng** là hình
+ * dạng tự nhiên nhất của thứ cổng này sinh ra để chặn —
+ *
+ *     { visibility: 'private', privacyStatus: 'public' }
+ *
+ * — và chỗ khớp đầu tiên là chỗ ĐẠT, nên cả dòng đi qua sạch sẽ. Đo được ở
+ * vòng soát ngữ cảnh sạch của chính mục này: cổng ra `EXIT=0` và cả 22 bài
+ * vẫn xanh. Có một bài ÂM khoá đúng ca đó.
  */
 export function findVisibilitySites(file: string, content: string): VisibilitySite[] {
   const sites: VisibilitySite[] = [];
   content.split('\n').forEach((line, index) => {
     if (isCommentOnly(line)) return;
-    const match = KEY_PATTERN.exec(line);
-    if (match === null) return;
-    sites.push({
-      file,
-      line: index + 1,
-      key: match[1]!,
-      value: match[2]!.trim(),
-      allowReason: allowReasonOf(line),
-    });
+    const allowReason = allowReasonOf(line);
+    // `lastIndex` của một regex có cờ `g` sống qua các lần gọi, nên đặt lại
+    // trước mỗi dòng: quên là bỏ sót chỗ khớp một cách ngẫu nhiên.
+    KEY_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = KEY_PATTERN.exec(line)) !== null) {
+      sites.push({
+        file,
+        line: index + 1,
+        key: match[1]!,
+        value: line.slice(match.index + match[0].length).trim(),
+        allowReason,
+      });
+      if (match[0].length === 0) KEY_PATTERN.lastIndex += 1;
+    }
   });
   return sites;
 }
@@ -343,7 +367,10 @@ export function contractLockProblems(label: string, schema: unknown): string[] {
           problems.push(
             `${label} ${path}.properties.${name}: không còn khoá ở \`"${ALLOWED_VALUE}"\` ` +
               `(cần \`const: "${ALLOWED_VALUE}"\` hoặc \`enum: ["${ALLOWED_VALUE}"]\`) — ` +
-              `nới bất biến I5 cần PR owner-merge cộng một quyết định irreversible (CHARTER 2.3 nhóm 4).`,
+              `nới bất biến I5 cần một quyết định \`irreversible\` (CHARTER 2.3 nhóm 4) VÀ sửa CHARTER mục 3, ` +
+              `tức một PR \`owner-merge\`. Đừng đọc cửa merge của chính PR này thay cho điều đó: ` +
+              `một PR chỉ sửa \`kernel/contracts/**\` ra \`automerge-delayed\`, nên máy sẽ merge nó sau 12 giờ ` +
+              `mà không ai duyệt việc nới một bất biến.`,
           );
         }
       }
