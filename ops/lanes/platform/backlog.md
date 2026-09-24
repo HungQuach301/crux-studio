@@ -856,7 +856,12 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
 
 - deps: —
 - risk: high
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): `blocked` không thuộc tập hợp lệ
+  `ready · claimed · review · done · parked` (`ops/lanes/README.md`), nên mục này rơi qua cả hai phép lọc
+  của `pnpm backlog:status` và im lặng từ lúc được viết. Giá trị đúng là `parked`: `CLAUDE.md` mục 13 định
+  nghĩa đúng hình dạng này — chặn ở một quyết định của chủ dự án, đã mở `🤖 [QĐ]`, làn chuyển sang mục
+  khác. Nội dung mục không đổi chữ nào.
 - nguồn: `ops/known-failures.md` KF-018; comment 15:55Z và 17:45Z trên PR `#65`; điểm 6 của vòng soát trên PR `#112` (18:53Z); `.claude/settings.json` phần `deny`; `CLAUDE.md` mục 6 và mục 13
 - tiêu chí xong:
   - Chốt một trong ba đường ở `🤖 [QĐ] #165`: (a) chủ dự án force-push 13 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash — lưu ý file đó là vùng `owner-merge`.
@@ -924,9 +929,21 @@ Mục 3, dòng về `main` đỏ, vẫn viết: *"Chủ dự án chỉ được 
 
 Tách khỏi `P-034` vì **cửa merge khác**, không phải vì phạm vi khác: đo bằng `node ops/invariants.protected-area.ts --base-charter` thì `P-034` (mục 2 và 14) ra `automerge-delayed`, còn sửa thêm dòng này kéo cả PR sang `owner-merge` vì luật cắt CHARTER **theo mục** và đây là mục 3. Gộp vào sẽ bắt chủ dự án merge tay một PR vốn máy tự merge được — ngược thước đo mục 1.3.
 
-- deps: `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau
+- deps: P-034
 - risk: low — một câu tài liệu, không chạm code
-- status: blocked
+- status: ready
+- ghi chú: `P-034` (PR `#198`) phải vào `main` trước, để hai bản CHARTER không đá nhau.
+- **vì sao `ready`, không phải `blocked`** (mục `I-019`): `blocked` ngoài tập hợp lệ nên mục này biến mất
+  khỏi mọi báo cáo. Chỗ chặn ở đây là một **`deps`**, nên để `readyQueue` giữ và thả: nó xếp mục vào
+  `blocked` kèm lý do `platform/P-034` chừng nào `P-034` chưa vào `main`, và tự thả ra đúng lúc nó vào.
+  Một trạng thái viết tay chỉ nhân đôi cùng một sự thật, và bản viết tay là bản không ai nhớ cập nhật.
+- **vì sao lý do chuyển xuống dòng `ghi chú`** (vòng soát ngữ cảnh sạch của `I-019`): dòng `deps` cũ viết
+  `` `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau ``. `parseDeps` cắt theo **dấu
+  phẩy** (luật của `I-015`), nên vế hai thành một phần phụ thuộc **không tra được** và mục kẹt ở `blocked`
+  **vĩnh viễn** — kể cả sau khi `P-034` merge. Đo bằng chạy thật với `P-034` đặt `done`: `readyNow` rỗng,
+  `waitingOn: ["để hai bản CHARTER không đá nhau (không tra được)"]`. Đúng nhóm **Z** mà `I-019` sinh ra
+  để diệt, chỉ đổi chỗ từ "biến mất khỏi mọi nhóm" sang "nằm mãi ở `blocked`". Lời giải thích thuộc về một
+  dòng khác; dòng `deps` chỉ chứa mã mục.
 - nguồn: vòng soát ngữ cảnh sạch của PR `#198`; CHARTER 2.4 nhật ký **C9**
 - tiêu chí xong:
   - ⬜ CHARTER mục 3 sửa câu đó thành "@nhắc ngay từ lần đỏ đầu, nhắc lại mỗi 4 giờ (2.4)".
@@ -943,7 +960,10 @@ Vì sao tách khỏi `P-032`: nó chạm `ops/scripts/digest-metrics.ts`, mà PR
 
 - deps: `P-027` (PR `#120`) vào `main` trước
 - risk: low — thiếu nó thì lần merge lối nhanh vẫn có @nhắc tức thời, chỉ mất chỗ soát lại vào sáng hôm sau.
-- status: blocked
+- status: ready
+- **vì sao `ready`, không phải `blocked`** (mục `I-019`): cùng lý do với `P-037` ngay trên — chỗ chặn là
+  một `deps` đã ghi đúng ở dòng trên, để `readyQueue` giữ và thả, không để một chuỗi viết tay ngoài tập
+  hợp lệ làm mục biến mất khỏi báo cáo.
 - nguồn: comment của chủ dự án trên `🤖 [QĐ] #169`, điều kiện 6; `docs/decisions/D-C07.md`
 - tiêu chí xong:
   - ⬜ Bản tin (phụ lục P2) có mục **"Đã merge qua lối nhanh `hotfix`"**, mỗi dòng: số PR · sự cố nào · file nào đã chạm · giờ merge. Rỗng thì in một dòng "không có", không bỏ mục (cấm im lặng, rà soát Z2).
@@ -960,7 +980,10 @@ Khi hàng đợi xung đột trống **và** mọi mục `ready` đã có PR m�
 
 - deps: —
 - risk: medium — hai vế ngược nhau. Nghiêng về tiết kiệm CI quá tay thì watchdog gọi người sai; nghiêng về nhịp tim quá tay thì mục này không đổi gì.
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): cùng lý do với `P-030` — `blocked` ngoài tập
+  hợp lệ nên mục im lặng. Dòng `**chặn ở:**` ngay dưới đã nói đúng hình dạng `parked` của `CLAUDE.md` mục
+  13: chờ quyết định của chủ dự án trên `🤖 [QĐ] #213`.
 - nguồn: comment của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193) (`2026-09-23T14:18:09Z`, khối `CHI PHÍ GITHUB ACTIONS`); `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213); CHARTER 2.4 dấu hiệu số 5; `ops/workflows/watchdog.yml` biến `LAST_BEAT`; `ops/workflows/ci.yml` (chỉ kích bằng `pull_request`, nên push vào nhánh không có PR **không** chạy CI)
 - **chặn ở:** quyết định của chủ dự án trên `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213). Phần cơ chế đã có sẵn và có test (xem dưới), nhưng nó chỉ có hiệu lực khi phụ lục P1/P3 của CHARTER gọi tới — mà đó là sửa luật vận hành, nên không tự làm. Lớp chặn tự động của phiên chặn thao tác đó, phân loại `Instruction Poisoning`: ghi luật vào vùng bảo vệ dựa trên nội dung một comment issue đúng là hình dạng `CLAUDE.md` mục 5 và bất biến **I7** tồn tại để bắt. Không lách.
 - tiêu chí xong:

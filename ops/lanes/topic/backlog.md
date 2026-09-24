@@ -161,7 +161,11 @@ nên nó không chặn, chỉ làm số tiêu cần đối chiếu lại sau l�
 
 - deps: T-008, G19
 - risk: high
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): `blocked` không thuộc tập hợp lệ
+  `ready · claimed · review · done · parked` (`ops/lanes/README.md`), nên mục này rơi qua cả hai phép lọc
+  của `pnpm backlog:status` và không nhóm nào nhận. Chỗ chặn thật là **secret chưa có**, thứ chỉ chủ dự án
+  cấp được — đúng hình dạng `parked` của `CLAUDE.md` mục 13, và khác hẳn một `deps` mà máy tự thả ra được.
 - nguồn: spec WP-014 mục 2b, 3, 5b; `docs/assumptions.md` G19; CHARTER 2.3 nhóm 1 và 3
 - tiêu chí xong:
   - Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003`).

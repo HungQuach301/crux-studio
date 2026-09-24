@@ -705,19 +705,53 @@ Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi v
 
 - deps: I-015
 - risk: low
-- status: ready
-- nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z
+- status: review
+- nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z, nay là `KF-030`
 - **Số hiệu I-019:** mục này mở ra trong PR `#112` với số `I-016`, rồi lùi sang `I-017` (lúc `11:32Z`,
   khi `I-016` vào `main` qua PR `#132`) và sang `I-018` (lúc `14:45Z`, khi `I-017` vào `main` qua PR
   `#145`). Lần gộp `main` này mang thêm một mục `I-018` **khác** vào `main` (KF-016, cổng cú pháp của
   `integrator-resolve.ts`) — mục trên `main` đã chính danh nên giữ nguyên, mục này lùi tiếp sang
   `I-019`. Giữ nguyên nội dung và `deps`.
 - tiêu chí xong:
-  - `readyQueue` (hoặc một phép kiểm cạnh nó) phát hiện vòng phụ thuộc và in ra thành một nhóm riêng,
+  - ✅ `readyQueue` (hoặc một phép kiểm cạnh nó) phát hiện vòng phụ thuộc và in ra thành một nhóm riêng,
     kèm đường đi của vòng. Test dựng một vòng hai mục và một vòng ba mục.
-  - Mục có `status` ngoài tập hợp lệ ra một nhóm riêng trong báo cáo, **không** bị lọc đi im lặng —
+    → `dependencyCycles` (DFS ba màu) cạnh `readyQueue`, và `readyQueue` trả `cycles` để bên gọi không
+    phải tự dò. Đường đi in khép kín: `release/R-002 → verify/VF-G6 → release/R-002`. Test: vòng **hai**
+    mục (dựng đúng cặp thật), vòng **ba** mục, vòng tự-trỏ, vòng đi qua mục `parked`, cộng ba bài khoá
+    chiều **báo giả** (chuỗi dài, hình thoi, mã trùng giữa hai làn) — một phép kiểm kêu sai là một phép
+    kiểm sắp bị tắt.
+  - ✅ Mục có `status` ngoài tập hợp lệ ra một nhóm riêng trong báo cáo, **không** bị lọc đi im lặng —
     cùng luật với nhóm `unknown` của `I-010`. Test âm: `status: blocked` phải hiện ra.
-  - Hai ca dữ liệu thật ở trên được sửa trong chính PR của mục này, hoặc khai rõ vì sao giữ nguyên.
+    → `VALID_STATUSES` + verdict `invalid-status`, đi qua chính `classify`/`reviewFindings` đã có; nhóm
+    `invalidStatus` in ra **kể cả khi rỗng**. `unknown` và `invalid-status` là hai nhóm tách nhau: "không
+    khai" và "khai sai" cần hai cách sửa khác nhau. `--fix` không chạm mục `status` sai, và mục `status`
+    sai không bao giờ mở khoá một `deps` — cùng hướng lệch an toàn với phần còn lại của file.
+  - ✅ Hai ca dữ liệu thật ở trên được sửa trong chính PR của mục này, hoặc khai rõ vì sao giữ nguyên.
+    → `release/R-002` bỏ `G6` khỏi `deps` (cắt vòng ở chiều sai; lý do ghi ngay trong thân mục đó).
+    `status: blocked` **5** mục, không phải 1 như thân mục này viết lúc mở — số đã trôi: `platform/P-030`
+    và `P-038` → `parked` (chặn ở quyết định của chủ dự án, đúng hình dạng `CLAUDE.md` mục 13);
+    `platform/P-035` và `P-037` → `ready` (chặn ở một `deps` đã ghi đúng ở dòng trên, để `readyQueue` tự
+    giữ và tự thả); `topic/T-011` → `parked` (chặn ở secret chưa có, chỉ chủ dự án cấp được).
+  - Hệ quả đo được của việc cắt vòng: `release/R-002` từ `blocked` sang **`readyNow`** — `R-001` đã vào
+    `main` thật (`[release] R-001 — … (#84)`), nên mục đó bị khoá oan bởi chính cái vòng. Thân `R-002` nay
+    khai luôn chỗ chặn thật còn lại (đường xác thực YouTube chưa ghi ở đâu cả) để lượt nhận nó không dừng
+    tại chỗ.
+- vòng soát ngữ cảnh sạch (CHARTER 6.4) — **2 CHẶN, 4 nên sửa, xử lý cả sáu**:
+  - **C1** `platform/P-037` chuyển sang `ready` với dòng `deps` có vế hai sau dấu phẩy, mà `parseDeps` cắt
+    theo dấu phẩy → một phần phụ thuộc **không tra được**, mục kẹt `blocked` **vĩnh viễn** kể cả sau khi
+    `P-034` merge. Đúng nhóm Z đang chữa, chỉ đổi chỗ. Đã tách lời giải thích xuống dòng `- ghi chú:`; đo
+    lại: `waitingOn: ["platform/P-034"]`.
+  - **C2** lời khai "in `invalidStatus` và `cycles` kể cả khi rỗng" **không có máy canh** — phá thử cho 0
+    bài đỏ, vì mọi bài đều gọi hàm export chứ không chạy CLI. Đã thêm một bài `spawnSync` chạy CLI thật.
+  - **N2/N3** hai lỗ phá thử nữa (dừng ở vòng đầu tiên; chỉ lấy mục chưa `satisfied` làm gốc DFS) — mỗi lỗ
+    một bài mới. Cả ba phép phá nay cho **1 bài đỏ**, khôi phục thì xanh.
+  - **N4** khai thêm giới hạn mã trùng (mục **thứ hai** không vào chỉ mục nên `deps` của nó không sinh
+    cạnh) vào chú thích `dependencyCycles` và vào `KF-030`.
+  - **N1** `R-002` — xem dòng trên. Reviewer đề nghị `parked`; không làm, vì chỗ chặn nó nêu (secret
+    YouTube) **không có trong repo** ở bất kỳ đâu, nên viết một lý do `parked` là bịa. Ghi chỗ thiếu ra
+    thay vì đoán.
+  - **N5** luật mềm: diff vượt ~400 dòng và chạm backlog của ba làn khác — không tách được, vì tiêu chí
+    xong thứ ba **bắt buộc** sửa dữ liệu thật trong chính PR này. Nhãn `cross-lane`.
 
 ### I-020 · Dấu treo phải là một **trường**, không phải một câu văn — `HOLD_MARKERS` đã thủng hai lần
 
