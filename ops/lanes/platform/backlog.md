@@ -1027,3 +1027,27 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ✅ Ghi `ops/known-failures.md` **KF-027**.
   - ⬜ **Còn lại, tách phạm vi:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở (`CLAUDE.md` mục 11: hai làn cùng sửa một file). Việc của lượt sau `#225` merge.
 - **mã mục nhận lúc 2026-09-24 ~07:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở, cao nhất là `P-041` (`#225`), nên `P-042` không đụng ai. Mã `KF-027` nhận cùng cách, cao nhất là `KF-026` (`#226`).
+
+### P-044 · fix · cảnh báo `main` đỏ không bao giờ được đóng, nên lần đỏ SAU có thể im 4 giờ
+
+CHARTER 2.4 viết "nhắc lại mỗi **4 giờ** tới khi `main` **xanh lại**". Vế "xanh lại" **không có ai thực thi**: không workflow nào trong repo đóng một issue nhãn `alert`. Đo được trên `main` `2329988` lúc `2026-09-24T09:38Z` — `#131` (`main` đỏ tại `a44d265`, mở `2026-09-22T10:14Z`, 17 comment) vẫn **mở**, trong khi `main-ci` xanh liên tiếp ba lượt từ `04:41Z` cùng ngày và `pnpm check` trên `main` xanh (1094 bài).
+
+Hệ quả không phải "một issue thừa trong danh sách". Nó là một lần **`main` đỏ mà không ai được gọi**:
+
+1. `main-ci.yml` **dùng lại** issue cảnh báo: `gh issue list --label alert --state open --search "main đỏ in:title"` lấy issue đầu tiên, **không** so `sha`. Một issue không bao giờ đóng thì mọi sự cố về sau rơi vào nó.
+2. `decideMention` (`ops/scripts/alert-escalation.ts`, mục `P-034`) đọc `createdAt` của mục mang mốc `<!-- crux-escalate-main-do -->` **mới nhất** trên **cả** thân issue và comment — tức trên cả hai sự cố gộp lại.
+3. Nên: `main` đỏ → @nhắc → sửa xong, `main` xanh → **đỏ lại vì một commit khác** trong vòng 4 giờ → `decideMention` thấy lần nhắc gần nhất mới 1 giờ → **`quiet`**. Sự cố mới không gọi ai cho tới hết 4 giờ của sự cố **cũ**.
+
+Đây đúng là chỗ hỏng mà `P-034` sinh ra để chữa (cảnh báo `#131` im 13 giờ), quay lại bằng một cửa khác — và lần này thì `pnpm check` xanh, CI xanh, `watchdog` xanh, issue vẫn nằm đó: nhóm **Z** của `ops/known-failures.md`.
+
+- deps: —
+- risk: high — chiều hỏng là **im lặng trên một `main` đỏ**, tức đúng chiều mà CHARTER 2.4 xếp vào bốn cảnh báo khẩn.
+- status: ready
+- nguồn: đo bằng chạy thật ở lượt `crux-worker-1` `2026-09-24 ~09:38Z` (bước 3 phụ lục P1); CHARTER 2.4 luật 1 và 2; `ops/scripts/alert-escalation.ts`; `ops/workflows/main-ci.yml` (job `alert`, bước dùng lại issue); `#131` còn mở
+- tiêu chí xong:
+  - ⬜ `ops/scripts/alert-resolution.ts` (mới): phần **quyết định** nằm trong TypeScript chứ không trong khối `run:` — cùng lý do `P-034` đã chốt, để `pnpm test` kiểm được mà không cần để `main` đỏ thật.
+  - ⬜ `main-ci.yml` có một job đóng cảnh báo khi `check` **xanh**, tôn trọng `dry_run` (`P-010`) và lọc tác giả `github-actions[bot]` (bất biến **I7**).
+  - ⬜ Bài **tái hiện lỗi** (bất biến I2): dựng đúng cảnh "sự cố A nhắc lúc T, `main` xanh, sự cố B đỏ lúc T+1 giờ trên issue dùng lại" và đòi `decideMention` ra `quiet` — rồi đòi `decideClosure` ra `close` để sự cố B có issue mới.
+  - ⬜ Bài khoá hình dạng workflow, kiểu `ops/test/alert-escalation-workflows.test.ts`.
+  - ⬜ Phạm vi **chỉ** cảnh báo `main` đỏ. Ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) có điều kiện kết thúc khác nhau — một mục, một mục tiêu (`CLAUDE.md` mục 11).
+- **mã mục nhận lúc 2026-09-24 ~09:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của các PR đang mở, cao nhất là `P-043` (`#229`), nên `P-044` không đụng ai.
