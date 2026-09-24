@@ -11,7 +11,7 @@ Trước khi xây kho dữ liệu, chứng minh **bằng bảng** rằng mỗi �
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: spec WP-009
 - tiêu chí xong:
   - ✅ `packs/channels/us-personal-finance/topic-source-map.md` liệt kê mọi tham số của mỗi đề tài khởi đầu, kèm nguồn cụ thể (nhà công bố, mã chuỗi/tài liệu, tần suất, độ trễ công bố) — mọi chuỗi/tài liệu đã xác nhận tồn tại thật bằng `WebSearch`/`WebFetch`, không viết từ trí nhớ.
@@ -39,7 +39,7 @@ Dựng kho dữ liệu cho 3–4 chuỗi cụ thể sẽ dùng ở những tập
 
 - deps: T-001
 - risk: high
-- status: review
+- status: done
 - nguồn: spec WP-010, mục Lõi định lượng 1
 - tiêu chí xong:
   - ✅ Adapter `fred`, `bls`, `census` chuẩn hoá về một contract snapshot chung (`workshops/topic/contracts/snapshot.v0.schema.json`, `workshops/topic/src/snapshot.ts` — `normalizeFred/Bls/Census` cùng trả `{period, value}` ISO date).
@@ -65,7 +65,7 @@ Runner xác định chạy mô hình từ contract, cộng cơ chế kiểm bố
 
 - deps: T-003
 - risk: high
-- status: review
+- status: done
 - nguồn: spec WP-012, mục Lõi định lượng 2
 - tiêu chí xong:
   - Cùng đầu vào cho ra cùng kết quả, không phụ thuộc thứ tự chạy. ✅ `workshops/topic/src/model-runner.ts` (`runModel`) — không đọc đồng hồ hệ thống, không random; test chạy lặp lại và xen kẽ hai bộ tham số cho ra cùng kết quả từng chữ số.
@@ -93,7 +93,7 @@ Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng gi�
 
 - deps: T-006
 - risk: high
-- status: review
+- status: done
 - nguồn: spec WP-013, mục Lõi định lượng 3
 - tiêu chí xong:
   - ✅ Nhận `modelId`, trả về danh sách điểm đảo chiều kèm khoảng tham số. — `runSensitivityPass(model, registry, options)` nhận thẳng `ModelDefinition` đã nạp (cùng hình dạng với `runModel`); bên gọi tự `loadModel(modelId)` trước. Quét từng tham số một (giữ các tham số khác ở giá trị nền), tìm điểm đảo chiều bằng cách theo dõi dấu của một "biến kết luận" (`conclusionOutput`) đổi từ dương sang âm hay ngược lại, nhị phân tinh chỉnh giá trị đảo chiều.

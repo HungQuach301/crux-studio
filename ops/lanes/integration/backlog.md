@@ -150,7 +150,7 @@ là một cảnh báo không ai đọc.
 
 - deps: `I-005`
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-005`; `ops/known-failures.md` nhóm Z (cách 3 — cấm im lặng)
 - tiêu chí xong:
   - `git ls-remote --heads origin 'refs/heads/claude/*'` rỗng → `◦ chưa quan sát được` (quan sát hợp lệ);
@@ -378,7 +378,7 @@ hợp lệ kế tiếp — sau đó không chỉ báo nào còn thấy. Đúng n
 
 - deps: `I-009`
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-009` (PR `#54`); `ops/known-failures.md` hàng Z16
 - tiêu chí xong:
   - Bỏ bản chép thay vì thêm phép so, nếu làm được: `upstreamFrom.workshops` suy từ `definition.consumes`
@@ -484,7 +484,7 @@ còn tệ hơn là không viết").
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `topic/T-008` (PR `#91`); `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - ✅ `pnpm contracts` quét cả `workshops/*/contracts/*.schema.json`, không chỉ `kernel/contracts/` —
@@ -511,7 +511,7 @@ kiểm biến mất mà mọi chỉ báo vẫn xanh.
 
 - deps: `I-013`
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-013` (PR `#95`); `ops/known-failures.md` nhóm Z
 - PR: `#99`
 - tiêu chí xong:
@@ -572,7 +572,7 @@ muốn tránh. Lần hai (PR `#66`, lượt `13:27Z`) nó đi vào dòng log bư
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~13:40Z; `ops/known-failures.md` `KF-015`; comment `09:46:12Z` trên PR `#42` (đã nêu đúng phần còn thiếu nhưng chưa ai nhận)
 - **Số hiệu I-017:** `I-015` đã bị PR `#112` nhận, `I-016` đã có mục riêng.
 - tiêu chí xong:
@@ -610,7 +610,7 @@ quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - nguồn: lượt `crux-worker-1` 2026-09-22 ~16:45Z; `ops/known-failures.md` `KF-016`; `ops/logs/platform/P-010.jsonl`
 - **Số hiệu I-018:** `I-015` do PR `#112` giữ, `I-016` đã merge, `I-017` do PR `#150` giữ.
 - tiêu chí xong:
@@ -627,3 +627,39 @@ quả còn đọc được". Chi tiết ở `ops/known-failures.md` `KF-016`.
     `aborted-ineligible`, không phải "PR đỏ" — hai ca này đi hai đường khác nhau ở lượt sau (phụ lục P1
     bước 2). Cửa merge của phần sửa CHARTER: chạy `node ops/invariants.protected-area.ts`, đừng đoán.
   - `ops/known-failures.md` `KF-016` điền dòng *Đã sửa ở đâu* và *Máy chặn từ nay*.
+
+### I-020 · "Còn treo" phải là một **trường**, không phải một câu văn — `HOLD_MARKERS` đã thủng hai lần
+
+Nối tiếp `I-010`. `ops/scripts/backlog-status.ts` quyết định một mục có được lật sang `done` hay không
+bằng cách dò **chuỗi con** trong thân mục (`HOLD_MARKERS`). Cách đó bắt *cách viết*, không bắt *ý*, nên
+nó thủng ở đúng câu chưa ai nghĩ tới — và đã thủng **hai lần**:
+
+- lần một, vòng soát của `I-010`: bốn mục `P-011`, `P-013`, `P-016`, `I-002`;
+- lần hai, lượt `crux-worker-1` ~21:48Z 2026-09-23 (`KF-023`): ba mục `E-001`, `P-010`, `P-007`.
+
+Cả hai lần đều chữa bằng cách **thêm chuỗi**, và cả hai lần đều chỉ vá lỗ vừa gặp. Danh sách chuỗi con
+không hội tụ: câu thứ tư, viết bằng chữ khác nữa, vẫn lọt, và vẫn **không gì đỏ** — nhóm **Z**. Lần hai
+đắt hơn lần một vì `E-001` là `deps` của `E-003`, `E-004`, `E-005`, nên một lần lật nhầm mở khoá cả một
+nhánh việc.
+
+- deps: —
+- risk: medium
+- status: ready
+- **Số hiệu I-020:** `I-019` do PR `#112` giữ (nhánh `claude/hopeful-dirac-ekbass`); dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã (`KF-005`).
+- nguồn: `ops/known-failures.md` `KF-023`; mục `integration/I-010`; `ops/lanes/README.md` (định nghĩa `deps`)
+- tiêu chí xong:
+  - Thân mục khai "còn treo" bằng một **trường** mà tool đọc như đọc `- status:` và `- deps:` — ví dụ
+    `- hold: <lý do, một dòng>`. Có trường đó thì mục không bao giờ bị lật, bất kể thân mục viết gì.
+  - `HOLD_MARKERS` **giữ lại** làm lớp thứ hai cho các mục chưa kịp khai trường, không gỡ: gỡ nó đi là mở
+    lại đúng lỗ vừa bịt. Nhưng từ nay nó là lưới **dự phòng**, không phải nguồn quyết định.
+  - `pnpm backlog:status` in ra mục nào đang được giữ bởi **trường** và mục nào chỉ được giữ bởi **lời
+    văn** — con số thứ hai là nợ phải trả dần, và nó phải nhìn thấy được thì mới trả được.
+  - Chuyển 33 mục nhóm `held` (số đo tại `402444b`; nó trôi theo thời gian) sang khai bằng trường, mỗi mục một dòng `- hold:` lấy nguyên lý do
+    đã viết trong thân. Việc đọc tay một lần, không phải việc của máy.
+  - Bài `HOLD_MARKERS: giới hạn còn lại` trong `ops/test/backlog-status.test.ts` có ba `assert` **âm**
+    đang ghim đúng ba biến thể mà chuỗi con không bắt được. Mục này xong thì **ba `assert` đó đổi thành
+    `true`** — tiêu chí xong đo được, không phải lời hứa.
+  - Test, gồm test âm: mục có `- hold:` không bị lật dù thân mục sạch trơn; mục không có `- hold:` mà thân
+    mục mang một câu treo vẫn không bị lật (lớp thứ hai còn sống); mục sạch cả hai đường vẫn lật bình
+    thường; `- hold:` viết hoa/thường/thụt lề lệch vẫn nhận.
+  - `ops/known-failures.md` `KF-023` điền dòng *Máy chặn từ nay* bằng cơ chế mới, và gỡ phần "còn thiếu".
