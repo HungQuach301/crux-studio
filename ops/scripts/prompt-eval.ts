@@ -132,10 +132,12 @@ export function metricProblems(
   for (const metric of METRIC_NAMES) {
     const base = baseline[metric];
     if (base === undefined) continue;
-    const actual = metrics[metric];
+    const actual = (metrics as Record<MetricName, number | undefined>)[metric];
     const allowed = allowedDrift(base, config.tolerances[metric]);
-    if (Math.abs(actual - base) > allowed + EPSILON) {
-      problems.push({ setId, metric, baseline: base, actual, allowed });
+    // Baseline có chỉ số này mà đo được lại thiếu (không tính ra được) là một
+    // vấn đề, KHÔNG được nuốt: `NaN > x` là `false` nên phải bắt tường minh.
+    if (actual === undefined || Number.isNaN(actual) || Math.abs(actual - base) > allowed + EPSILON) {
+      problems.push({ setId, metric, baseline: base, actual: actual ?? Number.NaN, allowed });
     }
   }
   return problems;

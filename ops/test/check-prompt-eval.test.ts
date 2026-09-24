@@ -117,6 +117,18 @@ test('baseline thiếu một chỉ số thì không so chỉ số đó (không �
   assert.deepEqual(metricProblems('set-x', editorialMetrics(samplePayload()), baseline, CONFIG), []);
 });
 
+test('baseline CÓ chỉ số mà đo được lại thiếu (undefined) thì CHẶN, không nuốt', () => {
+  const baseline = { wordCount: 76 };
+  // Đo được thiếu wordCount (undefined) — NaN > x là false, phải bắt tường minh.
+  const broken = { ...editorialMetrics(samplePayload()), wordCount: undefined } as unknown as Record<
+    (typeof METRIC_NAMES)[number],
+    number
+  >;
+  const problems = metricProblems('set-x', broken, baseline, CONFIG);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]!.metric, 'wordCount');
+});
+
 test('quy tắc ba tập: dưới ngưỡng thì ĐỎ, đủ ngưỡng thì xanh (spec §2)', () => {
   assert.equal(sampleSetCountProblems(['a', 'b'], CONFIG).length, 1);
   assert.equal(sampleSetCountProblems([], CONFIG).length, 1);

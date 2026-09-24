@@ -23,6 +23,12 @@ Quy tắc ba tập (spec §2): cần **ít nhất `minSampleSets` tập** (khai 
 pack `limits.promptEval.minSampleSets`, mặc định 3). Đổi prompt phải chứng minh
 trên cả ba tập, không phải một.
 
+> **Ba hay năm tập?** Spec §3 ("Bộ chuẩn hồi quy nội dung") nêu **năm** brief cố
+> định. Đợt 0 ship **ba** theo đúng "quy tắc ba tập" §2 mà CHARTER 6.3 mục 3 nâng
+> lên ("Quy tắc ba tập của spec tham chiếu giữ nguyên"), và CHARTER thắng spec khi
+> lệch. Nâng sàn lên năm là **sửa cấu hình** (`minSampleSets` + thêm `set-04`,
+> `set-05`), không phải sửa code — để lại cho lượt sau khi có brief thật.
+
 ## Chạy
 
 ```bash
