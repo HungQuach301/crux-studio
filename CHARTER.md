@@ -811,7 +811,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      liệu để chiếu" khi 3 ngày không mục nào done). Một dòng **nút thắt hiện tại là máy hay người** — người
      khi có PR `owner-merge` hay quyết định đang chờ, máy khi có PR xung đột hay CI đỏ. Một dòng **số lượt
      chạy routine trong 24 giờ** — số để kiểm giả định `G3` (trần lượt chạy mỗi ngày); đếm dòng log bước 0,
-     nên là số lượt worker cộng integrator, không gồm lượt digest.
+     nên là số lượt worker cộng integrator, không gồm lượt digest. Một dòng **làn nào đang đứng im** — chạy
+     `pnpm lanes:heartbeat` và dán kết quả, đừng tự đọc log (mục `platform/P-014` sóng 3, chỗ `Z7`): liệt kê
+     làn quá ngưỡng kèm số giờ, và TÁCH RIÊNG làn chưa có dòng log nào — "đã chạy rồi im" và "chưa chạy lần
+     nào" là hai việc khác nhau. Dòng bước 0 KHÔNG tính vào nhịp tim của làn: nó được ghi ở mọi lượt worker
+     nên nó giữ làn `integration` xanh vĩnh viễn (đo được: 2,2 giờ khi tính, 23,4 giờ khi trừ ra). Không làn
+     nào im thì ghi một dòng "mọi làn đều có dòng log trong ngưỡng" — im lặng ở đây là đúng thứ `Z7` cấm.
 
    Thước đo
      Các thước đo ở CHARTER 1.3. DÒNG CUỐI CÙNG luôn là:

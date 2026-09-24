@@ -11,6 +11,7 @@ Mỗi làn một thư mục, mỗi làn một `backlog.md`. **Phân vùng theo l
 | `deps` | Các mục phải `done` trước. `—` là không phụ thuộc gì. Nhiều mục thì **cắt bằng dấu phẩy** — dấu `·` trong dòng này là lời giải thích, không phải dấu ngăn (mục `I-015`) |
 | `risk` | `low` hoặc `high`. `high` = chạm kiến trúc, chạm tiền, hoặc chưa biết cách làm |
 | `status` | `ready` · `claimed` · `review` · `done` · `parked` |
+| `hold` | *(tuỳ chọn)* Một dòng `- hold: <lý do>` giữ mục ở `review`, không cho `pnpm backlog:status` lật sang `done` dù PR đã merge. Đây là **nguồn quyết định** cho "còn treo" — khai bằng trường, không bằng câu văn (mục `I-020`, `KF-023`). Lưới lời văn `HOLD_MARKERS` chỉ là dự phòng cho mục chưa kịp khai trường |
 | tiêu chí xong | Danh sách kiểm được bằng máy hoặc bằng một câu trả lời dứt khoát |
 | nguồn | WP hoặc mục CHARTER mà mục này sinh ra từ đó |
 

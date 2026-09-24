@@ -21,6 +21,7 @@ Tín hiệu của rủi ro R12 (độ phức tạp tự phình to): số file co
 - deps: —
 - risk: low
 - status: review
+- hold: chưa kiểm bằng chạy thật — routine crux-integrator (P3 bước 3) chưa gọi update-metrics lần nào
 - nguồn: CHARTER 6.7; phụ lục P3 bước 3
 - tiêu chí xong:
   - ✅ Một lệnh tính: số file code / số mục `done`, số lần revert, tỷ lệ `main` xanh — `ops/scripts/update-metrics.ts`.
@@ -123,6 +124,7 @@ Tìm ra khi làm `I-004`, và cố ý **không** gộp vào đó: `I-004` chỉ 
 - deps: I-004
 - risk: low
 - status: review
+- hold: còn treo có chủ đích — dạng lệch importers thứ hai chưa đo được hệ quả thật (Z17); kiểm trước rồi mới dựng cổng
 - nguồn: phát hiện khi làm `I-004`; CHARTER mục 7; KF-005
 - tiêu chí xong:
   - ✅ **Kiểm trước, dựa vào sau (CHARTER 11.1):** ca hỏng **tái hiện được**, dựng bằng git thật và `pnpm` thật trước khi viết một dòng cơ chế nào. Hình dạng: một bên bỏ phụ thuộc cuối cùng còn dùng một gói (khối `packages:` biến mất), bên kia thêm phụ thuộc vào đúng gói đó ở một gói khác trong workspace (chỉ `importers` đổi). Hai vùng cách nhau xa hơn ba dòng ngữ cảnh của git ⇒ **gộp sạch**, không một dấu xung đột, mà `pnpm install --frozen-lockfile` đỏ với `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`.
@@ -234,6 +236,7 @@ trước khi viết máy kiểm.
 - deps: `I-008`
 - risk: low
 - status: review
+- hold: còn treo — luật máy Z13 chưa dựng; upstreamFrom.workshops khai tay chưa suy từ consumes (thành I-011)
 - nguồn: vòng soát `I-008` (PR `#40`); `ops/known-failures.md` hàng Z16; CHARTER 6.1
 - tiêu chí xong:
   - Chọn và ghi lý do một trong ba: (a) fixture **đọc** snapshot tập vàng lúc chạy, (b) fixture giữ bản
@@ -313,6 +316,7 @@ là làn chết đói nặng nhất.
 - deps: —
 - risk: low
 - status: review
+- hold: còn treo — nối `pnpm backlog:status --fix` vào phụ lục P3 bước 2 (đang ở PR #112) và vài mục con ⬜ khác chưa vào main
 - nguồn: `ops/lanes/README.md` (định nghĩa `deps`); CHARTER phụ lục P1 bước 7, P3 bước 2; `ops/known-failures.md` nhóm Z
 - tiêu chí xong:
   - `ops/scripts/backlog-status.ts`: đối chiếu mọi mục `status: review` trong `ops/lanes/*/backlog.md`
@@ -592,6 +596,7 @@ mang **một** trong hai file nên CI từng PR xanh; chỉ khi cả hai vào `m
 
 - risk: low
 - status: review
+- hold: chặn thật lỗ hổng gốc (bất biến ở nhánh A, vi phạm ở nhánh B) còn để ngỏ — cần chạy pnpm check trên gộp thử từng cặp PR
 - nguồn: lượt `crux-worker-2` 2026-09-22; `ops/known-failures.md` `KF-013`
 - PR: nhánh `claude/dreamy-ride-kvztso`
 - **Số hiệu I-016, không phải I-015:** `I-015` đã bị PR `#112` (`integration/readyNow`) nhận và PR đó còn mở.
@@ -714,7 +719,7 @@ Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi v
     cùng luật với nhóm `unknown` của `I-010`. Test âm: `status: blocked` phải hiện ra.
   - Hai ca dữ liệu thật ở trên được sửa trong chính PR của mục này, hoặc khai rõ vì sao giữ nguyên.
 
-### I-020 · "Còn treo" phải là một **trường**, không phải một câu văn — `HOLD_MARKERS` đã thủng hai lần
+### I-020 · Dấu treo phải là một **trường**, không phải một câu văn — `HOLD_MARKERS` đã thủng hai lần
 
 Nối tiếp `I-010`. `ops/scripts/backlog-status.ts` quyết định một mục có được lật sang `done` hay không
 bằng cách dò **chuỗi con** trong thân mục (`HOLD_MARKERS`). Cách đó bắt *cách viết*, không bắt *ý*, nên
@@ -730,22 +735,27 @@ nhánh việc.
 
 - deps: —
 - risk: medium
-- status: ready
+- status: review
 - **Số hiệu I-020:** `I-019` do PR `#112` giữ (nhánh `claude/hopeful-dirac-ekbass`); dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã (`KF-005`).
 - nguồn: `ops/known-failures.md` `KF-023`; mục `integration/I-010`; `ops/lanes/README.md` (định nghĩa `deps`)
 - tiêu chí xong:
-  - Thân mục khai "còn treo" bằng một **trường** mà tool đọc như đọc `- status:` và `- deps:` — ví dụ
-    `- hold: <lý do, một dòng>`. Có trường đó thì mục không bao giờ bị lật, bất kể thân mục viết gì.
-  - `HOLD_MARKERS` **giữ lại** làm lớp thứ hai cho các mục chưa kịp khai trường, không gỡ: gỡ nó đi là mở
-    lại đúng lỗ vừa bịt. Nhưng từ nay nó là lưới **dự phòng**, không phải nguồn quyết định.
-  - `pnpm backlog:status` in ra mục nào đang được giữ bởi **trường** và mục nào chỉ được giữ bởi **lời
-    văn** — con số thứ hai là nợ phải trả dần, và nó phải nhìn thấy được thì mới trả được.
-  - Chuyển 33 mục nhóm `held` (số đo tại `402444b`; nó trôi theo thời gian) sang khai bằng trường, mỗi mục một dòng `- hold:` lấy nguyên lý do
-    đã viết trong thân. Việc đọc tay một lần, không phải việc của máy.
-  - Bài `HOLD_MARKERS: giới hạn còn lại` trong `ops/test/backlog-status.test.ts` có ba `assert` **âm**
-    đang ghim đúng ba biến thể mà chuỗi con không bắt được. Mục này xong thì **ba `assert` đó đổi thành
-    `true`** — tiêu chí xong đo được, không phải lời hứa.
-  - Test, gồm test âm: mục có `- hold:` không bị lật dù thân mục sạch trơn; mục không có `- hold:` mà thân
-    mục mang một câu treo vẫn không bị lật (lớp thứ hai còn sống); mục sạch cả hai đường vẫn lật bình
-    thường; `- hold:` viết hoa/thường/thụt lề lệch vẫn nhận.
-  - `ops/known-failures.md` `KF-023` điền dòng *Máy chặn từ nay* bằng cơ chế mới, và gỡ phần "còn thiếu".
+  - ✅ Thân mục khai dấu treo bằng một **trường** mà tool đọc như đọc `- status:` và `- deps:` —
+    `- hold: <lý do, một dòng>` (`HOLD_FIELD`, `holdField`). Có trường đó thì mục không bao giờ bị lật,
+    bất kể thân mục viết gì — `classify` và `applyFix` (phòng thủ theo tầng) đều chặn.
+  - ✅ `HOLD_MARKERS` **giữ lại** làm lớp thứ hai cho các mục chưa kịp khai trường, không gỡ. Từ nay nó là
+    lưới **dự phòng**, không phải nguồn quyết định (`heldReason`: trường thắng lời văn).
+  - ✅ `pnpm backlog:status` in `heldByField` và `heldByProse` — con số thứ hai là nợ phải trả dần, nay
+    nhìn thấy được. Sau mục này `heldByProse` = 0 (đã khai trường cho cả nhóm).
+  - ✅ Chuyển nhóm `held` sang khai bằng trường, mỗi mục một dòng `- hold:` lấy nguyên lý do đã viết trong
+    thân — **35** mục (số trôi từ 33 ở `402444b`), đọc tay một lần.
+  - ✅ Bài `HOLD_MARKERS: giới hạn còn lại` (nay đổi tên `… ba biến thể lần ba nay đã vào lưới dự phòng`)
+    có ba `assert` **âm** đã đổi thành `true` — tiêu chí xong đo được.
+  - ✅ Test, gồm test âm: mục có `- hold:` không bị lật dù thân mục sạch trơn; mục chỉ giữ bằng lời văn
+    vẫn không bị lật (lớp thứ hai còn sống); mục sạch cả hai đường vẫn lật bình thường; `- hold:` viết
+    hoa/thường/thụt lề lệch vẫn nhận.
+  - ✅ `ops/known-failures.md` `KF-023` điền dòng *Máy chặn từ nay* bằng cơ chế mới, và gỡ phần "còn thiếu".
+- **Đã làm:** `ops/scripts/backlog-status.ts` (`HOLD_FIELD`, `holdField`, `heldReason`, `classify`/`applyFix`
+  phòng thủ theo tầng, output `heldByField`/`heldByProse`); `ops/test/backlog-status.test.ts` (+7 bài, ba
+  `assert` âm lật thành dương); `ops/lanes/README.md` (bảng trường thêm `hold`); `KF-023` cập nhật; 35 mục
+  `held` khai `- hold:`. Chính tiêu đề mục này đổi sang dùng "dấu treo" để mục — vốn nói VỀ khái niệm đó —
+  không tự sa vào lưới lời văn mà nó vừa hạ xuống hàng dự phòng.

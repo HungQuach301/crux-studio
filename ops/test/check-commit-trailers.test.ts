@@ -15,6 +15,14 @@ import {
 } from '../scripts/check-commit-trailers.ts';
 
 /**
+ * `%cI` của `dca3564` — lần merge đưa job `no-model-name` vào `main` (PR `#142`).
+ * Trước giây này repo không có gì chặn tên model trong trailer, nên đây là ranh
+ * giới "vi phạm mới" (`🤖 [QĐ] #219`, phương án A). Đo bằng
+ * `git log -1 --format=%cI dca3564`.
+ */
+const RULE_LANDED_ON_MAIN = '2026-09-24T02:02:41Z';
+
+/**
  * Ca sai THẬT, cả hai lần, dán nguyên văn — đây là chữ ký của `KF-014` và là
  * lý do file này tồn tại. Lần hai (`Opus 5`) đã vào `main` ở commit `024c29d`.
  */
@@ -165,16 +173,52 @@ test('KF-014 · mốc ân hạn là hằng số trong QUÁ KHỨ, không phải 
     cutoff > Date.parse('2026-09-22T21:26:04Z'),
     'mốc phải sau commit vi phạm muộn nhất đã đo, xem KF-014',
   );
+
+  // `🤖 [QĐ] #219` phương án A: mốc phải ít nhất bằng lúc job `no-model-name`
+  // LÊN `main` (dca3564, 2026-09-24T02:02:41Z). Đặt sớm hơn là để lại một
+  // khoảng hở mà commit trong đó vừa bị quét vừa không sửa được — bốn PR đã
+  // rơi vào đúng đó một lần.
+  assert.ok(
+    cutoff >= Date.parse(RULE_LANDED_ON_MAIN),
+    'mốc phải từ lúc luật lên main trở đi, xem 🤖 [QĐ] #219',
+  );
 });
 
 test('KF-014 · isInScanScope: trước mốc thì bỏ qua, từ mốc trở đi thì quét', () => {
-  assert.equal(isInScanScope('2026-09-22T21:59:59Z'), false);
-  assert.equal(isInScanScope('2026-09-22T22:00:00Z'), true, 'đúng giây của mốc thì QUÉT');
-  assert.equal(isInScanScope('2026-09-22T22:00:01Z'), true);
+  assert.equal(isInScanScope('2026-09-24T02:02:40Z'), false);
+  assert.equal(isInScanScope('2026-09-24T02:02:41Z'), true, 'đúng giây của mốc thì QUÉT');
+  assert.equal(isInScanScope('2026-09-24T02:02:42Z'), true);
 
   // Mốc mang offset khác UTC vẫn so đúng — `git log --format=%cI` in dạng này.
-  assert.equal(isInScanScope('2026-09-23T04:30:00+07:00'), false, '= 21:30Z, trước mốc');
-  assert.equal(isInScanScope('2026-09-23T05:30:00+07:00'), true, '= 22:30Z, sau mốc');
+  assert.equal(isInScanScope('2026-09-24T09:02:40+07:00'), false, '= 02:02:40Z, trước mốc');
+  assert.equal(isInScanScope('2026-09-24T09:02:42+07:00'), true, '= 02:02:42Z, sau mốc');
+});
+
+// ── Tái hiện lỗi: khoảng hở giữa lúc ĐO danh sách và lúc luật LÊN `main` ──
+
+test('🤖 [QĐ] #219 · TÁI HIỆN LỖI: commit trong khoảng hở 28 giờ không được đỏ', () => {
+  // Chữ ký lỗi, đo ngày 2026-09-24: mốc cũ `2026-09-22T22:00:00Z` là lúc ai đó
+  // ĐO danh sách vi phạm, còn job `no-model-name` chỉ vào `main` lúc
+  // `2026-09-24T02:02:41Z`. Sáu commit sinh ra trong khoảng hở ~28 giờ đó bị
+  // quét mà KHÔNG sửa được (sửa = rewrite + force-push, `.claude/settings.json`
+  // chặn ở `deny`), nên bốn PR — #112, #198, #84, #66 — đỏ vĩnh viễn.
+  //
+  // Bài này ĐỎ trên mốc cũ và XANH trên mốc mới. Mốc thật (`GRACE_CUTOFF`)
+  // được dùng chứ không phải một hằng chép tay, nên nó khoá đúng hằng đang chạy.
+  const inGap = '2026-09-23T15:27:13Z'; // %cI của fe6f57d, đầu nhánh #112 lúc đó
+  assert.ok(
+    Date.parse(inGap) > Date.parse('2026-09-22T22:00:00Z'),
+    'mốc cũ đã quét đúng commit này — đó là chỗ lỗi',
+  );
+  assert.equal(
+    isInScanScope(inGap),
+    false,
+    'commit tạo trước khi luật lên main phải được ân hạn, xem 🤖 [QĐ] #219',
+  );
+
+  // Chiều ngược lại, để bản vá không thành "tắt hẳn phép quét": một commit
+  // sinh SAU khi luật lên main vẫn bị quét.
+  assert.equal(isInScanScope('2026-09-24T02:30:00Z'), true, 'sau mốc thì vẫn quét');
 });
 
 test('KF-014 · isInScanScope ném lỗi khi mốc không đọc được, không đoán', () => {

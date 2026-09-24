@@ -101,8 +101,47 @@ export const HOLD_MARKERS: readonly string[] = [
   // giữ lại là hướng an toàn (xem khối chú thích trên).
   'tự chuyển `done`',
   'chỉ `done` khi',
-  'coi mục này `done`',
+  // Ba chuỗi dưới đây đo từ ba biến thể LẦN THỨ BA mà bài
+  // `HOLD_MARKERS: giới hạn còn lại` từng ghim ở hướng âm (mục `I-020`,
+  // `KF-023`). Chúng được thêm vào **lưới dự phòng** vì `HOLD_MARKERS` từ nay
+  // KHÔNG còn là nguồn quyết định — trường `- hold:` là nguồn (xem `HOLD_FIELD`
+  // và `heldReason` bên dưới). Một lưới dự phòng được phép nới rộng về hướng
+  // an toàn (giữ lại nhầm), vì chỗ nào cần chắc chắn thì khai trường; đó là
+  // khác biệt so với hai lần vá trước, khi danh sách này là nguồn DUY NHẤT và
+  // phải hội tụ mà không bao giờ hội tụ được.
+  //
+  // - `'coi mục này'` bao trọn `coi mục này `done`` cũ lẫn biến thể chèn chữ
+  //   ("coi mục này **là** `done`", "coi mục này **là** done"), nên thay cho
+  //   chuỗi cũ hẹp hơn.
+  // - `'chỉ done khi'` bắt biến thể `done` viết trần (không backtick).
+  // - `'chưa đóng'` bắt câu "mục này chưa đóng, dù PR đã merge".
+  'coi mục này',
+  'chỉ done khi',
+  'chưa đóng',
 ];
+
+/**
+ * Trường `- hold: <lý do>` — khai "còn treo" bằng một **trường** mà tool đọc
+ * như đọc `- status:` và `- deps:`, thay vì bằng lời văn. Cơ chế của mục
+ * `integration/I-020`.
+ *
+ * Vì sao cần: `HOLD_MARKERS` dò **chuỗi con** trong thân mục, nên nó bắt
+ * *cách viết* chứ không bắt *ý*. Nó đã thủng **hai lần** (`I-010` bốn mục;
+ * `KF-023` ba mục), và mỗi lần chỉ vá đúng câu vừa gặp — danh sách chuỗi con
+ * KHÔNG hội tụ, câu thứ N viết bằng chữ khác nữa vẫn lọt, và vẫn **không gì
+ * đỏ** (nhóm Z). Một mục lật nhầm sang `done` mở khoá một `deps` chưa thật sự
+ * xong; `E-001` là ca đắt nhất vì nó là `deps` của cả một nhánh việc.
+ *
+ * Trường này là **nguồn quyết định** từ nay: có `- hold:` thì mục không bao
+ * giờ bị lật, bất kể thân mục viết gì. `HOLD_MARKERS` tụt xuống thành **lưới
+ * dự phòng** cho các mục chưa kịp khai trường (`heldReason` trả `'prose'`),
+ * và `pnpm backlog:status` in riêng con số đó ra như **nợ phải trả dần**.
+ *
+ * Khoan dung như `- status:`: cho phép thụt lề, không phân biệt hoa thường,
+ * ăn khoảng trắng thừa hai đầu lý do. Lý do **phải không rỗng** — một dòng
+ * `- hold:` trống là khai thiếu, không tính là một lời giữ hợp lệ.
+ */
+const HOLD_FIELD = /^\s*-\s*hold:\s*(\S.*?)\s*$/i;
 
 export type ItemVerdict =
   /** Có commit hoàn thành trên `main`, thân mục không còn dấu treo → nên chuyển `done`. */
@@ -126,8 +165,13 @@ export interface BacklogItem {
    * định nghĩa "mục backlog" cho cả repo.
    */
   title: string;
-  /** Thân mục còn ít nhất một dấu treo — xem `HOLD_MARKERS`. */
+  /** Thân mục còn ít nhất một dấu treo bằng LỜI VĂN — xem `HOLD_MARKERS`. Lưới dự phòng, không phải nguồn quyết định. */
   hasHoldMarker: boolean;
+  /**
+   * Lý do của trường `- hold:` nếu mục có khai, `null` nếu không. Đây là
+   * **nguồn quyết định** cho việc giữ `review` (xem `HOLD_FIELD`, `heldReason`).
+   */
+  holdField: string | null;
   /** Dòng `- status: …`, hoặc `null` nếu mục không khai `status`. */
   statusLine: number | null;
   /**
@@ -247,11 +291,23 @@ export function parseBacklog(content: string): BacklogItem[] {
       }
     }
 
+    // Trường `- hold:` — dòng đầu tiên khớp thắng, cùng cách `- status:` lấy
+    // dòng đầu. Lý do đã được `HOLD_FIELD` cắt khoảng trắng hai đầu.
+    let holdField: string | null = null;
+    for (let i = 0; i < body.length; i++) {
+      const m = HOLD_FIELD.exec(body[i]!);
+      if (m) {
+        holdField = m[1]!;
+        break;
+      }
+    }
+
     return {
       id: start.id,
       title: start.title,
       status,
       hasHoldMarker: hasHoldMarker(body.join('\n')),
+      holdField,
       statusLine,
       deps,
     };
@@ -292,16 +348,38 @@ export function hasRevertCommit(lane: string, id: string, subjects: readonly str
   return subjects.some((subject) => subject.startsWith('Revert ') && subject.includes(marker));
 }
 
+/** Vì sao một mục đang được giữ `review`: bằng trường `- hold:` hay chỉ bằng lời văn. */
+export type HeldBy =
+  /** Có trường `- hold:` — nguồn quyết định, mục không bao giờ bị lật. */
+  | 'field'
+  /** Không có trường, chỉ dính `HOLD_MARKERS` — lưới dự phòng, và là **nợ** cần khai trường. */
+  | 'prose';
+
+/**
+ * Mục có đang được giữ không, và nếu có thì bằng cách nào. Trường `- hold:`
+ * (nguồn quyết định) thắng lời văn; không có cả hai thì trả `null`.
+ *
+ * Nhận `Pick` để test dựng object gọn được, và để `undefined`/`''` của trường
+ * (mục cũ chưa khai) đều rơi về lưới lời văn thay vì kích hoạt nhầm.
+ */
+export function heldReason(item: Pick<BacklogItem, 'holdField' | 'hasHoldMarker'>): HeldBy | null {
+  if (item.holdField != null && item.holdField !== '') return 'field';
+  if (item.hasHoldMarker) return 'prose';
+  return null;
+}
+
 export function classify(item: BacklogItem, merged: boolean): ItemVerdict {
   if (item.statusLine === null) return 'unknown';
   if (!merged) return 'unmerged';
-  return item.hasHoldMarker ? 'held' : 'stale';
+  return heldReason(item) !== null ? 'held' : 'stale';
 }
 
 export interface StatusFinding {
   lane: string;
   id: string;
   verdict: ItemVerdict;
+  /** Chỉ đặt khi `verdict === 'held'`: mục được giữ bằng trường hay bằng lời văn. */
+  heldBy?: HeldBy;
 }
 
 /**
@@ -318,14 +396,15 @@ export function reviewFindings(
 ): StatusFinding[] {
   return parseBacklog(content)
     .filter((item) => item.status === 'review' || item.statusLine === null)
-    .map((item) => ({
-      lane,
-      id: item.id,
-      verdict: classify(
+    .map((item) => {
+      const verdict = classify(
         item,
         hasCompletionCommit(lane, item.id, subjects) && !hasRevertCommit(lane, item.id, subjects),
-      ),
-    }));
+      );
+      const finding: StatusFinding = { lane, id: item.id, verdict };
+      if (verdict === 'held') finding.heldBy = heldReason(item) ?? undefined;
+      return finding;
+    });
 }
 
 /** Một làn cộng nội dung backlog của nó — đầu vào của `readyQueue`. */
@@ -480,6 +559,10 @@ export function applyFix(
   for (const item of parseBacklog(content)) {
     if (!wanted.has(item.id)) continue;
     if (item.status !== 'review' || item.statusLine === null) continue;
+    // Phòng thủ theo tầng (mục `I-020`): dù bên gọi có lỡ truyền vào một mục
+    // đang được giữ, applyFix vẫn KHÔNG lật. Trường `- hold:` (nguồn quyết
+    // định) và lưới lời văn đều chặn ở đây, không chỉ ở `classify`.
+    if (heldReason(item) !== null) continue;
     lines[item.statusLine] = '- status: done';
     changed.push(item.id);
   }
@@ -566,12 +649,20 @@ function main(): void {
 
   const by = (verdict: ItemVerdict) =>
     findings.filter((f) => f.verdict === verdict).map((f) => `${f.lane}/${f.id}`);
+  const heldByOutput = (heldBy: HeldBy) =>
+    findings.filter((f) => f.verdict === 'held' && f.heldBy === heldBy).map((f) => `${f.lane}/${f.id}`);
 
+  // `heldByField` là mục đã khai trường `- hold:`; `heldByProse` là mục còn
+  // dựa vào lưới lời văn — con số thứ hai là **nợ**: mỗi mục ở đó là một chỗ
+  // `HOLD_MARKERS` có thể thủng ở lần viết khác đi (mục `I-020`). Trả về 0 là
+  // đã khai trường hết. `held` giữ lại làm tổng hai nhóm cho bên đọc cũ.
   process.stdout.write(
     `${JSON.stringify(
       {
         stale: by('stale'),
         held: by('held'),
+        heldByField: heldByOutput('field'),
+        heldByProse: heldByOutput('prose'),
         unmerged: by('unmerged'),
         unknown: by('unknown'),
         fixed: fix ? by('stale') : [],
