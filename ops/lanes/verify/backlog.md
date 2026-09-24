@@ -51,6 +51,11 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - risk: high
 - status: ready
 - kiểm: đo phút Actions của một lần render thử (dùng kết quả V-002 và A-001).
+- **việc cụ thể còn lại, làm được ngay sau khi PR của `A-001` merge:** chạy `ops/workflows/render-trial.yml`
+  (`workflow_dispatch`, `config: all`) rồi dán **phút Actions tính tiền** từ step summary vào `docs/assumptions.md` G5.
+  Đây là mảnh mà `A-001` để ⬜: giây tường đã đo trên container phiên cloud, nhưng con số hoá đơn chỉ runner
+  thật trả lời được, và workflow chỉ có hiệu lực sau khi `sync-workflows` chép sang `.github/` (**G10**).
+  Ghi ở đây để nó có chỗ đậu — `A-001` sẽ `done`, `A-003` thì `deps: A-001`, nên không mục nào khác ôm mảnh này.
 - dự phòng nếu sai: đưa vào ngân sách, hoặc dùng runner khác.
 
 ### VF-G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
@@ -141,9 +146,18 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 ### VF-G12 · Ruleset bảo vệ nhánh trên repo private cần gói nào
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - kiểm: thử bật ruleset trên repo này và xem GitHub đòi gì.
 - dự phòng nếu sai: không bật ruleset; dựa vào `automerge.yml` và hook.
+- tiêu chí xong: trạng thái G12 trong sổ chuyển sang `đã kiểm`, kèm ngày và kết quả thật.
+- ✅ **Chủ dự án đã bật, 2026-09-21 14:01Z** (issue bản tin `#50`): ruleset `protect-main`, năm check bắt buộc `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn`.
+- ✅ **Đo lại từ phía agent, 2026-09-21 20:16Z:** `main` trả `protected: true` (mọi nhánh `claude/*` đều `false`, 52 nhánh tại thời điểm đo); mọi PR đang mở có đúng 5 check run mang đúng năm tên đó; và `automerge.yml` **vẫn merge được** bằng `GITHUB_TOKEN` sau khi ruleset bật — PR `#52` merge `14:44:01Z` với `merged_by: github-actions[bot]`, và từ mốc bật tới `20:15Z` có **17** PR vào `main`, không lần nào chủ dự án phải bấm.
+- ✅ **Tách nguồn, không trộn (bất biến I6):** ba dòng trên là **phép đo**. Còn *tên* ruleset (`protect-main`) và *danh sách năm check* thì agent **không xác minh lại được** — trang Settings nằm ngoài tầm nhìn, và cờ `protected` bật cả với branch protection cổ điển. Hai điều đó là **lời chủ dự án, nguồn `#50`**. Đủ để hành động theo, nhưng ghi đúng là lời. Bảng đầy đủ ở `docs/assumptions.md` mục `G12`.
+- ✅ **Nói đúng phạm vi:** vế "cần gói GitHub Pro" không đo được từ phía agent và **không còn chịu tải** — nó chỉ dùng để quyết định có dựa vào ruleset hay không, mà câu đó nay đã trả lời bằng chạy thật. Dự phòng giữ nguyên, không gỡ.
+- ✅ **Máy canh cho thứ mới chịu tải:** năm *tên* check nay là hợp đồng giữa Settings của GitHub (ngoài repo) và `ops/workflows/ci.yml` (trong repo). `ops/scripts/required-checks.ts` giữ danh sách, `ops/test/required-checks.test.ts` đối chiếu. Đo bằng phá thật: đổi `name: protected-area` thành `name: protected` → **đúng một bài đỏ**; khôi phục → xanh. Kèm ba ca âm cho đổi tên, xoá job và gộp hai job.
+- ✅ **Luật:** đổi danh sách đó là `irreversible` — CHARTER 2.3 **nhóm 8**, theo chỉ dẫn của chủ dự án. Ghi vào CHARTER (2.3, 11.2, mục 10, nhật ký C6) và `CLAUDE.md` mục 14.
+- ✅ **Một mâu thuẫn đã sửa, không để lặng lẽ:** `ops/workflows/README.md` trước đó viết `trailer-warn` "cố ý **không** vào danh sách", trong khi chủ dự án đã bật nó. Đã sửa, kèm lý do vì sao việc đó không biến luật mềm thành luật cứng: bước chạy của job khai `continue-on-error: true` nên job luôn kết luận `success`.
+- ghi chú: mục này mở khoá `platform/P-006` (deps `VF-G12`) — ghi danh sách check bắt buộc vào `docs/decisions/`. **Không** làm ở đây: một mục = một PR.
 
 ### VF-G13 · Actions gọi được API trigger `/fire` của routine không
 - deps: VF-G1
