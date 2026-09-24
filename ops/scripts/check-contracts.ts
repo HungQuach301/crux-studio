@@ -3,7 +3,7 @@
  * Tự kiểm bộ contract (CHARTER: contract-first — không stage nào được viết
  * trước khi contract của nó tồn tại và VALIDATE ĐƯỢC).
  *
- * Mười hai việc:
+ * Mười ba việc:
  * 1. Mỗi xưởng có đúng một file payload v0.
  * 2. Không schema nào dùng từ khoá mà validator của kernel chưa hiểu — nếu
  *    không, một ràng buộc có thể im lặng không được kiểm.
@@ -26,8 +26,11 @@
  *    xưởng `topic` canh, không có cổng dùng chung nào ở tầng `pnpm contracts`.
  * 9. `layouts.json` của mỗi genre pack đã có hợp `layouts.schema.json` (mục V-001).
  * 10. `visual-tokens.json` của mỗi channel pack hợp `visual-tokens.schema.json` (mục V-001).
- * 11. Fact & Risk Pass trên tập vàng (mục `editorial/E-002`, bất biến I6).
- * 12. Channel Pack khai đủ `revenueWithholding` (mục `topic/T-013`, bất biến I6).
+ * 11. Mỗi `title-formulas.json` dưới `packs/channels/` hợp contract và không
+ *    có `id` trùng; `titles[].formula` của artifact `release` đối chiếu
+ *    được với danh sách thật của đúng kênh nó khai — mục `release/R-001`.
+ * 12. Fact & Risk Pass trên tập vàng (mục `editorial/E-002`, bất biến I6).
+ * 13. Channel Pack khai đủ `revenueWithholding` (mục `topic/T-013`, bất biến I6).
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -50,6 +53,11 @@ import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 import { scanSchemaScope } from './check-schema-scope.ts';
 import { modelDataFiles, modelDataProblems } from './check-models.ts';
+import {
+  allTitleFormulasPackProblems,
+  releaseFormulaProblems,
+  type ReleaseArtifactForFormulaCheck,
+} from './check-title-formulas.ts';
 import { scanGoldenFactRisk } from './check-fact-risk.ts';
 import { revenueWithholdingProblems, channelPackFiles } from './check-revenue-withholding.ts';
 
@@ -106,6 +114,7 @@ for (const workshop of WORKSHOPS) {
 
 // 4 · Fixture và snapshot tập vàng
 let checked = 0;
+const releaseFormulaNotes: string[] = [];
 function checkArtifactFile(workshop: WorkshopName, label: string, path: string): void {
   checked += 1;
   const value: unknown = JSON.parse(readFileSync(path, 'utf8'));
@@ -114,6 +123,16 @@ function checkArtifactFile(workshop: WorkshopName, label: string, path: string):
     problems.push(
       `${label} không hợp contract:\n${result.errors.map((e) => `    ${e.path}: ${e.message}`).join('\n')}`,
     );
+    return;
+  }
+  if (workshop === 'release') {
+    const { problems: formulaProblems, notes } = releaseFormulaProblems(
+      root,
+      label,
+      value as ReleaseArtifactForFormulaCheck,
+    );
+    problems.push(...formulaProblems);
+    releaseFormulaNotes.push(...notes);
   }
 }
 
@@ -186,7 +205,11 @@ if (existsSync(channelsDir)) {
   }
 }
 
-// 11 · Fact & Risk Pass (editorial/E-002, bất biến I6): mọi con số trong lời
+// 11 · title-formulas.json của mỗi kênh (mục release/R-001) — kênh nào cũng soát, không hardcode tên
+const titleFormulas = allTitleFormulasPackProblems(root);
+problems.push(...titleFormulas.problems);
+
+// 12 · Fact & Risk Pass (editorial/E-002, bất biến I6): mọi con số trong lời
 // thoại truy được về claimId, và số phản biện đạt ngưỡng genre pack. Chặn thật
 // khi artifact do lượt chạy `impl != stub` sinh ra; ở stub chỉ GHI NHẬN, để
 // tập vàng stub giữ nguyên (CHARTER 6.1). Khâu định tuyến chặn/ghi-nhận nằm
@@ -195,7 +218,7 @@ const factRisk = scanGoldenFactRisk(root);
 problems.push(...factRisk.blocking);
 notes.push(...factRisk.notes);
 
-// 12 · Khấu trừ doanh thu (topic/T-013, bất biến I6): mỗi Channel Pack khai
+// 13 · Khấu trừ doanh thu (topic/T-013, bất biến I6): mỗi Channel Pack khai
 // `revenueWithholding` đủ và đúng, và không chỗ code nào ước tính doanh thu mà
 // bỏ qua hệ số. Logic thuần ở check-revenue-withholding.ts để có test độc lập.
 problems.push(...revenueWithholdingProblems(root));
@@ -205,10 +228,18 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
+if (releaseFormulaNotes.length > 0) {
+  process.stdout.write(
+    `Ghi nhận, không chặn (impl: stub — nối chặt là việc của release/R-005):\n` +
+      `${releaseFormulaNotes.map((m) => `  - ${m}`).join('\n')}\n`,
+  );
+}
+
 process.stdout.write(
   `Contract ok: phong bì + ${WORKSHOPS.length} payload v0, ${workshopContracts.files.length} contract xưởng, ` +
     `${schemaScope.files.length} schema ngoài contracts/ (workshops+packs) qua phép kiểm từ khoá, ` +
     `${checked} artifact hợp lệ, ` +
+    `${titleFormulas.checked} title-formulas.json, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng, ` +
     `${modelFiles.length} file mô hình định lượng hợp model.schema.json, ` +
     `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json, ` +

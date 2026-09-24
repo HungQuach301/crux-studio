@@ -114,7 +114,9 @@ export const HOLD_MARKERS: readonly RegExp[] = [
   new RegExp(OPEN_BOX, 'u'),
   /còn treo/u,
   /chưa kiểm bằng chạy thật/u,
-  /không đóng khi pr merge/u,
+  // Mẫu ngay dưới bao trọn cả `không đóng khi pr merge` — ca gốc của lưới
+  // lần đầu. Khai ở đây thay vì giữ một mẫu riêng: một mẫu không bài nào
+  // ghim là chỗ lần sau có người sửa mà không biết mình sửa gì (`I-021`).
   // "chỉ đóng khi…" · "chưa đóng, dù PR đã merge" · "không đóng". Ca thứ hai
   // là biến thể lọt lưới mà `I-020` ghim: chỉ hai chữ, không có `done` nào để
   // neo vào.

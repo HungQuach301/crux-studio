@@ -1,0 +1,11 @@
+{
+  "$note": "🤖 KHÔNG có trong spec gốc — thêm ở mục release/R-001 để kernel đối chiếu titles[].formula bằng máy, thay vì chấp nhận mọi chuỗi (tiêu chí xong của mục đó). Năm id khớp 1-1, đúng thứ tự, với cột 'Khuôn' của title-formulas.md cạnh đây; đặt tên tiếng Anh vì đây là khoá dữ liệu (CLAUDE.md mục 9: định danh trong code dùng tiếng Anh), không phải nội dung kênh.",
+  "channel": "us-personal-finance",
+  "formulas": [
+    { "id": "threshold", "name": "Ngưỡng" },
+    { "id": "reversal", "name": "Đảo chiều" },
+    { "id": "narrow-question", "name": "Câu hỏi hẹp" },
+    { "id": "hidden-cost", "name": "Chi phí ẩn" },
+    { "id": "numeric-comparison", "name": "So sánh có số" }
+  ]
+}

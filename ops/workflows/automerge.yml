@@ -126,8 +126,20 @@ jobs:
           mkdir -p "$WORK"
           MERGED=""
 
+          # `KF-029` (mục `P-045`) · sổ kết luận của hàng đợi. Bên bash CHỈ
+          # ghi; phần xét nằm ở `ops/scripts/merge-queue.ts` để có test, và
+          # chạy ở BƯỚC CUỐI CÙNG — sau bước gọi các workflow sau merge, nên
+          # một PR hỏng không còn nuốt được lời gọi đó.
+          ATTEMPTS="$WORK/attempts.jsonl"
+          SKIPPED="$WORK/skipped.jsonl"
+          : > "$ATTEMPTS"
+          : > "$SKIPPED"
+
           if [ -z "${NUMS// /}" ]; then
             echo "Không có PR nào mang nhãn tự merge. Kết thúc."
+            # `KF-029`: bước cuối luôn đòi một sổ. Hàng đợi rỗng là một câu
+            # trả lời hợp lệ, "không có sổ" thì không.
+            echo '{"queue":[],"attempts":[],"skipped":[]}' > "$WORK/report.json"
             echo "merged=" >> "$GITHUB_OUTPUT"
             echo "merged_hotfix=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -307,7 +319,12 @@ jobs:
             # Cấm im lặng (rà soát Z2): mọi PR đều in ra kết luận của nó,
             # kể cả kết luận "không làm gì".
             echo "  $OUTCOME — $(echo "$DECISION" | jq -r .reason)"
-            [ "$OUTCOME" != "merge" ] && continue
+            if [ "$OUTCOME" != "merge" ]; then
+              jq -cn --argjson number "$NUM" --arg outcome "$OUTCOME" \
+                --arg reason "$(echo "$DECISION" | jq -r .reason)" \
+                '{number: $number, outcome: $outcome, reason: $reason}' >> "$SKIPPED"
+              continue
+            fi
 
             # Chạy thử dừng ở ĐÚNG đây và không sớm hơn: mọi thứ phía trên
             # — hàng đợi, `mergeable` hỏi lại, tính lại cửa bằng
@@ -317,18 +334,46 @@ jobs:
             # không hoàn tác được.
             if [ "$DRY_RUN" = "true" ]; then
               echo "  CHẠY THỬ — ĐỊNH merge #$NUM (squash, sha $HEAD). KHÔNG merge."
+              jq -cn --argjson number "$NUM" --arg head "$HEAD" \
+                '{number: $number, outcome: "dry-run", reason: ("định merge squash tại " + $head)}' \
+                >> "$SKIPPED"
               continue
             fi
 
-            gh api -X PUT "repos/$REPO/pulls/$NUM/merge" \
+            # `KF-029` · lời gọi merge KHÔNG được để trần. Dưới
+            # `set -euo pipefail`, một PR mà GitHub từ chối merge giết cả
+            # bước, và mọi PR xếp SAU nó trong hàng đợi không bao giờ được
+            # xét — đúng hình dạng `KF-017`, lần thứ hai (đo được: tám lượt
+            # 730→737 chết ở #226 với HTTP 405, trong khi #84 và #39 đã quá
+            # khoảng chờ 12 giờ). Lỗi được GHI rồi đi tiếp; bước cuối cùng
+            # đọc sổ và làm lượt chạy ĐỎ, nên "đi tiếp" không phải "nuốt".
+            if MERGE_OUT=$(gh api -X PUT "repos/$REPO/pulls/$NUM/merge" \
               -f merge_method=squash \
-              -f sha="$HEAD"
-            echo "  đã merge #$NUM"
-            MERGED="$MERGED $NUM"
-            if [ "$(echo "$HOTFIX" | jq -r .lane)" = "hotfix" ]; then
-              MERGED_HOTFIX="$MERGED_HOTFIX $NUM"
+              -f sha="$HEAD" 2>&1); then
+              echo "  đã merge #$NUM"
+              jq -cn --argjson number "$NUM" --arg head "$HEAD" \
+                '{number: $number, ok: true, reason: ("squash merge tại " + $head)}' >> "$ATTEMPTS"
+              MERGED="$MERGED $NUM"
+              if [ "$(echo "$HOTFIX" | jq -r .lane)" = "hotfix" ]; then
+                MERGED_HOTFIX="$MERGED_HOTFIX $NUM"
+              fi
+            else
+              MERGE_REASON=$(echo "$MERGE_OUT" | tr '\n\t' '  ' | tr -s ' ')
+              echo "  LỖI MERGE #$NUM — $MERGE_REASON"
+              jq -cn --argjson number "$NUM" --arg reason "$MERGE_REASON" \
+                '{number: $number, ok: false, reason: $reason}' >> "$ATTEMPTS"
+              continue
             fi
           done
+
+          # Sổ hàng đợi: đầu vào (`queue`) và đầu ra (`attempts` + `skipped`)
+          # nằm cạnh nhau, để bước cuối SO HAI CON SỐ thay vì tin một lời
+          # khai. `--slurpfile` trên file rỗng trả `[]`.
+          jq -cn --arg queue "$NUMS" \
+            --slurpfile attempts "$ATTEMPTS" \
+            --slurpfile skipped "$SKIPPED" \
+            '{queue: ($queue | split(" ") | map(select(. != "")) | map(tonumber)),
+              attempts: $attempts, skipped: $skipped}' > "$WORK/report.json"
 
           echo "merged=${MERGED# }" >> "$GITHUB_OUTPUT"
           echo "merged_hotfix=${MERGED_HOTFIX# }" >> "$GITHUB_OUTPUT"
@@ -396,3 +441,25 @@ jobs:
               echo "::warning::gọi $WF không thành công — nhiều khả năng nó vừa được THÊM trong lượt merge này và sync-workflows chưa chép xong. Nó sẽ chạy ở lần ops/workflows/** đổi kế tiếp."
             fi
           done < <(node ops/invariants.post-merge-dispatch.ts "$ALL")
+
+      # `KF-029` (mục `P-045`) · bước cuối cùng, và CỐ Ý đứng SAU bước gọi
+      # các workflow sau merge. Vòng lặp trên không còn chết giữa chừng, nên
+      # chỗ duy nhất được phép làm lượt chạy đỏ là ở đây — sau khi mọi PR đã
+      # có kết luận và mọi lời gọi sau merge đã chạy. Đặt nó TRƯỚC hai bước
+      # kia là dựng lại đúng hậu quả thứ hai của `KF-029`: lượt 737 merge
+      # `#232` rồi chết, và `main = a92df04` không có lần chạy `main-ci` nào.
+      #
+      # `!cancelled()` chứ không phải điều kiện mặc định: nếu bước xét từng
+      # PR vẫn chết vì một lý do khác, sổ hàng đợi sẽ thiếu — và bước này
+      # phải nói ra điều đó, chứ không được bị bỏ qua cùng với nó.
+      - name: Kết luận hàng đợi merge
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          REPORT="$RUNNER_TEMP/automerge/report.json"
+          if [ ! -f "$REPORT" ]; then
+            echo "⚠ KHÔNG TRẢ LỜI ĐƯỢC — không có sổ hàng đợi ($REPORT)."
+            echo "Bước xét từng PR đã chết TRƯỚC khi ghi sổ, nên không biết PR nào đã được xét."
+            exit 1
+          fi
+          node ops/scripts/merge-queue.ts "$REPORT"
