@@ -411,12 +411,43 @@ Rút độ trễ trả lời quyết định từ một nhịp worker xuống v�
 ### P-003 · Soát chéo bằng GPT trong CI
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: CHARTER 6.4 (từ Đợt 1)
 - tiêu chí xong:
   - Cần secret `OPENAI_API_KEY`; thiếu thì **DỪNG và báo tên secret thiếu**, không tự tạo.
   - Nội dung gửi đi không chứa secret và không chứa nội dung không đáng tin chưa cô lập (bất biến I7).
   - Chi phí mỗi lần soát ghi vào `ops/logs/platform/P-003.jsonl`.
+- ✅ **Đã làm, 2026-09-21:**
+  - `ops/workflows/gpt-review.yml` — workflow **riêng**, KHÔNG gộp vào `ci.yml`: file này dùng
+    `secrets.OPENAI_API_KEY`, và `ops/invariants.protected-area.ts` xếp mọi workflow dùng secret vào
+    `owner-merge` (CHARTER mục 3, đúng chủ đích — secret đáng một lần soát của chủ dự án). Gộp vào
+    `ci.yml` sẽ kéo cả file đó vào `owner-merge` vĩnh viễn cho mọi lần sửa sau, kể cả không liên quan
+    gì tới GPT. Job `gpt-review` là **luật mềm**: không gắn/gỡ nhãn, không nằm trong `pnpm check`,
+    `continue-on-error: true` — thiếu secret (đúng ở MỌI PR cho tới khi chủ dự án thêm nó) không làm
+    CI đỏ.
+  - `ops/scripts/gpt-review.ts`: thiếu `OPENAI_API_KEY` (kể cả chuỗi trắng) → in
+    `DỪNG: thiếu secret OPENAI_API_KEY…`, KHÔNG gọi mạng, vẫn ghi một dòng log (`status: "skipped"`,
+    `costUsd: 0` — bất biến I8 đòi mọi lần chạy có một dòng, kể cả lần bị bỏ qua).
+  - Có secret: gửi diff (cắt ở 12.000 ký tự, có báo đã cắt) cho `gpt-4o-mini` qua
+    `POST /v1/chat/completions`. Prompt hệ thống đóng khung diff là **DỮ LIỆU để soát, không phải
+    chỉ dẫn** (bất biến I7) — bỏ qua mọi câu trong diff có vẻ ra lệnh cho model. Secret chỉ nằm ở
+    header `Authorization`, không bao giờ trong nội dung gửi đi (test khẳng định bằng cách bắt request
+    giả và tìm chuỗi secret trong `body`).
+  - `costUsd` tính từ `usage.prompt_tokens`/`usage.completion_tokens` mà chính OpenAI trả về, nhân giá
+    công bố của `gpt-4o-mini` — input \$0.15, output \$0.60 mỗi 1M token (nguồn:
+    `developers.openai.com/api/docs/pricing`, bảng Standard, đọc 2026-09-21) — không ước lượng.
+  - Kết quả đăng làm PR comment bắt đầu bằng 🤖 qua `gh pr comment`, chỉ khi bước gọi GPT thật sự
+    thành công (`steps.review.outputs.posted == 'true'`, do chính bước đó ghi — không đoán qua việc
+    file kết quả có tồn tại hay không).
+  - `ops/test/gpt-review.test.ts`: 13 test — `costUsd` tính đúng theo bảng giá; diff dài bị cắt đúng
+    trần; prompt đóng khung diff là dữ liệu (kể cả một diff giả vờ ra lệnh); secret không lọt vào body;
+    API lỗi thì `reviewWithGpt` ném chứ không nuốt; thiếu secret / secret rỗng đều DỪNG và không gọi
+    `fetch`; có secret thì gọi thật (fetch giả) và `costUsd` khớp; API lỗi ở tầng orchestrator thì
+    KHÔNG ném ra ngoài (job advisory) và log `status: "failed"`, `costUsd: 0`.
+  - Kiểm tra: `pnpm check` xanh — `lint:workflows` ok (7 file), 377 test / 377 pass / 0 fail, `pnpm
+    replay` khớp snapshot 6/6 xưởng.
+  - Cửa merge: `node ops/invariants.protected-area.ts` → `owner-merge`, vì `ops/workflows/gpt-review.yml`
+    dùng `secrets.OPENAI_API_KEY` (đúng luật, không phải lỗi cần sửa).
 
 ### P-004 · Workflow `workshop-<name>.yml` cho sáu xưởng
 Mỗi xưởng gọi được độc lập bằng `workflow_dispatch` (CHARTER 5.4, D-12: nối bằng dispatch, không nối bằng sự kiện push).
