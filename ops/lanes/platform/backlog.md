@@ -4,6 +4,39 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-039 · Cổng merge đọc lần chạy `ci.yml` **đã bị huỷ** thành phán quyết, nên PR xanh kẹt vĩnh viễn — **ưu tiên CAO NHẤT**
+`ops/workflows/automerge.yml` hỏi `actions/workflows/ci.yml/runs?head_sha=$HEAD&status=completed&per_page=1` rồi lấy `.workflow_runs[0]`. Danh sách ấy xếp theo `created_at` giảm dần — không theo "lần chạy nào có thẩm quyền". `ci.yml` có `concurrency` huỷ lần chạy cũ, nên một SHA có nhiều lần chạy `completed`, và hai lần chạy có thể **trùng `created_at` tới từng giây**; khi đó phần tử đầu có thể là lần `cancelled`.
+
+Đo bằng chạy thật (lượt `automerge` `35943304619`, 2026-09-24 01:31Z): PR `#194` và `#208` đều mang nhãn `automerge`, cửa tính lại ra `open`, **12/12 check run xanh** trên đúng đầu nhánh — và cổng in `skip — CI chưa xanh (cancelled)` cho cả hai. `#194` kẹt ~11 giờ, `#208` ~3 giờ. Ba lần chạy thật trên `head_sha` `ed56e10f` của `#194`: `609` `cancelled` (`14:40:17Z`) · `610` `cancelled` (`14:40:41Z`) · `611` `success` (`14:40:41Z`) — `per_page=1` trả `610`.
+
+`created_at` không bao giờ đổi, nên đây **không** phải chậm một nhịp: PR kẹt như vậy chỉ thoát khi có commit mới lên nhánh, mà một PR đã xong thì không có lý do gì để push thêm.
+
+Nhóm **Z**, và là ca nhóm Z khoá hàng đợi: lần chạy `610` bị huỷ 7 giây sau khi tạo, trước khi có job nào, nên nó **không sinh check run nào**. Checks API — nguồn của mắt người, của giao diện PR và của job `fix-has-test` — không thấy nó. Cổng đọc Runs API. Hai lớp nhìn hai nguồn, không bên nào sai theo nguồn của mình, và không gì đỏ.
+
+- deps: —
+- risk: low — bản sửa chỉ bỏ các kết luận **không mang phán quyết** (`cancelled`, `skipped`, `stale`) rồi lấy lần mới nhất theo `run_number`. Chiều nguy hiểm (nuốt một lần `failure`) có bài khoá riêng.
+- status: review
+- nguồn: log lượt `automerge` [`35943304619`](https://github.com/HungQuach301/crux-studio/actions/runs/35943304619) và [`35938855691`](https://github.com/HungQuach301/crux-studio/actions/runs/35938855691); `actions/workflows/ci.yml/runs` của nhánh `claude/dreamy-ride-t9gnbd`; `ops/known-failures.md` `KF-024`
+- tiêu chí xong:
+  - ✅ Luật chọn tách khỏi YAML: `ops/scripts/pick-ci-run.ts`, hàm thuần `pickCiRun(runs, headSha?)`.
+  - ✅ Bài tái hiện lỗi (**I2**): `ops/test/pick-ci-run.test.ts`, 12 bài, bài đầu dựng lại **nguyên** ba lần chạy thật của `#194`.
+  - ✅ Khoá chiều lệch YAML ↔ TS: một bài đọc chính `ops/workflows/automerge.yml`, đỏ nếu chỗ gọi quay về `per_page=1` hoặc thôi gọi `pick-ci-run.ts`.
+  - ✅ Khoá chiều ngược — không nuốt đỏ: một lần `failure` mới hơn một lần `success` vẫn thắng.
+  - ✅ Phá thử **thật** bốn chỗ, số đỏ là số đo: bỏ luật bỏ-kết-luận-không-phán-quyết → 2 bài đỏ · luôn ưu tiên `success` → 1 · `per_page=1` trở lại → 1 · sắp theo `created_at` thay `run_number` → 1. Lần phá cuối lúc đầu ra **0 bài đỏ** (luật `run_number` chưa ai canh, vì mức dự phòng `updated_at` cứu bàn thua) — đã thêm bài thứ 12 bịt đúng chỗ đó rồi phá lại, đỏ.
+  - ✅ Ca "mọi lần chạy đều bị huỷ" giữ nguyên hành vi hôm nay (`skip`), nên bản sửa không mở thêm cửa nào.
+  - ⬜ **Chờ chủ dự án merge:** `ops/workflows/automerge.yml` thuộc vùng `owner-merge` (CHARTER mục 3), nên cơ chế chỉ có hiệu lực sau khi anh merge và `sync-workflows` chép xong. Tới lúc đó `#194` và `#208` vẫn kẹt. PR [#216](https://github.com/HungQuach301/crux-studio/pull/216), issue `🤖 [QĐ]` [#217](https://github.com/HungQuach301/crux-studio/issues/217).
+  - ⬜ Một phép đo sau khi áp: `#194` và `#208` có được merge ở lượt `automerge` kế tiếp không — nếu không thì chữ ký còn chỗ khác.
+- **vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) — 1 phát hiện chặn, đã sửa trong cùng PR:**
+  - **Chặn.** Lời gọi mới nằm ở **vị trí tham số** của `jq -n`, mà `set -euo pipefail` không bắt mã lỗi pipeline ở vị trí đó (đo: `true "$(exit 9)"` → thoát `0`; `X=$(exit 9)` → thoát `9`). Cộng với việc script lúc đầu hoá stdin rỗng thành `{}`, một lần `gh` chết sẽ thành `skip` im lặng với bước **vẫn xanh** — trước bản sửa ca đó làm `jq` chết và bước ĐỎ. Bản sửa suýt đổi một cổng từ ồn ào sang im lặng, đúng nhóm **Z** mà chính mục này chặn. Nay: phép gán `CI_RUN=$( … )`, và stdin rỗng → thoát `2` kèm stderr. Hai bài mới khoá cả hai vế, đã phá thật, cả hai đỏ.
+  - **Ngoài phạm vi, đã hoàn nguyên.** Dòng `MAIN_CI_RUN` (`automerge.yml:143`) bị đổi `per_page=1`→`per_page=100` **ngoài ý định**, lọt vào lúc khôi phục một phép phá thử (`s.replace` khớp cả dòng khác). Nó không đổi hành vi (`.workflow_runs[0]` giữ nguyên) nhưng là phạm vi ngoài khai của mục — đã trả lại `per_page=1`.
+  - **Bài khoá YAML ↔ TS xanh nhờ may.** `yaml.includes('…pick-ci-run.ts')` xét **cả file**, nên một dòng comment nhắc tên file là đủ để nó bỏ sót việc chỗ gọi mất lời gọi thật. Nay bài xét đúng dòng hỏi cộng hai dòng kế, và đòi thêm hình dạng phép gán. Đã phá thật: đỏ.
+  - **Tên bài nói quá.** Bài "hoà `created_at`" xanh nhờ mức dự phòng `updated_at`, không nhờ `run_number`; đã đổi tên và ghi rõ tầng `run_number` do bài cuối file khoá.
+  - **Đã nói nhẹ lại** câu "cây mã không đổi giữa hai lần chạy cùng SHA": `ci.yml` kích bằng `pull_request` nên chạy trên commit **gộp với `main`**, mà `main` di chuyển.
+  - **Còn để ngỏ có chủ ý:** `per_page=100` không phân trang. Trang 1 là 100 lần **mới nhất**, nên lần có thẩm quyền vẫn nằm trong đó; mất mát duy nhất là một lần `success` rất cũ khi cả 100 lần mới đều không mang phán quyết — rơi về `skip`, chiều an toàn.
+- **mã mục nhận lúc 2026-09-24 ~01:5x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên đầu cả 12 PR đang mở** — cao nhất là `P-038`, nên `P-039` không đụng ai.
+
+---
+
 ### P-029 · `automerge` 403 vì thiếu `checks: read` — hàng đợi merge đứng ~5,9 giờ — **ưu tiên CAO NHẤT**
 Mục `P-009` thêm lời gọi Checks API vào `ops/workflows/automerge.yml` mà không mở scope `checks`. Từ lúc `sync-workflows` chép bản mới sang `.github/` (`14:45:09Z` ngày 2026-09-22), **mọi** lượt `automerge` chết ở PR đầu hàng đợi với `403 Resource not accessible by integration`, và vì bước chạy dưới `set -euo pipefail` trong một vòng lặp duyệt cả hàng đợi nên **không PR nào phía sau được xét**.
 

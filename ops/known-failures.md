@@ -6,6 +6,37 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-024 · Cổng merge đọc một lần chạy `ci.yml` **đã bị huỷ** thành phán quyết của cây mã, nên PR xanh nằm im vĩnh viễn
+
+> Số **KF-024**: dò `## KF-` trên `main` **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-023`, nên `KF-024` không đụng ai.
+
+- **Lần gặp:** 1 — bản ghi đầu tiên. Phát hiện ở lượt `crux-worker-1` ~01:4xZ ngày 2026-09-24, khi soát vì sao hai PR mang nhãn `automerge` với CI xanh vẫn không được merge.
+- **Chữ ký:** `automerge.yml` in `skip — CI chưa xanh (\`cancelled\`)` cho một PR mà **mọi** check run trên đúng đầu nhánh ấy đều `success`. Không gì đỏ: CI của PR xanh, `main` xanh, job `automerge` xanh, nhãn đúng, không ai comment `dừng`. Nhóm **Z** thuần, và nó khoá hàng đợi merge chứ không chỉ làm chậm.
+- **Đo được (2026-09-24 01:31Z, lượt automerge `35943304619`):**
+
+  | PR | nhãn | cửa tính lại | check run trên đầu nhánh | kết luận của cổng | kẹt |
+  |---|---|---|---|---|---|
+  | `#194` | `automerge` | `open` | 12/12 `success` | `skip — CI chưa xanh (cancelled)` | ~11 giờ |
+  | `#208` | `automerge` | `open` | 12/12 `success` | `skip — CI chưa xanh (cancelled)` | ~3 giờ |
+
+- **Nguyên nhân gốc:** câu hỏi API của cổng là
+  `actions/workflows/ci.yml/runs?head_sha=$HEAD&status=completed&per_page=1` rồi lấy `.workflow_runs[0]`. Danh sách ấy xếp theo `created_at` **giảm dần**, không theo "lần chạy nào có thẩm quyền". `ci.yml` có `concurrency` huỷ lần chạy cũ, nên một SHA có nhiều lần chạy `completed`, và **hai lần chạy trùng `created_at` tới từng giây**. Ba lần chạy thật trên `head_sha` `ed56e10f` của `#194`:
+
+  | run | `created_at` | `run_number` | kết luận |
+  |---|---|---|---|
+  | `35875888124` | `14:40:17Z` | 609 | `cancelled` |
+  | `35875939060` | `14:40:41Z` | 610 | `cancelled` |
+  | `35875939096` | `14:40:41Z` | 611 | `success` |
+
+  `per_page=1` trả `35875939060`. `created_at` không bao giờ đổi, nên chỗ kẹt là **vĩnh viễn**, không phải chậm một nhịp — chỉ một commit mới lên nhánh mới gỡ được, mà không có lý do gì để ai push thêm vào một PR đã xong.
+
+- **Vì sao không lớp nào bắt được:** lần chạy `35875939060` bị huỷ 7 giây sau khi tạo, **trước khi có job nào**, nên nó không sinh check run. Checks API — thứ mà mắt người, giao diện PR và job `fix-has-test` đọc — không thấy nó. Cổng đọc Runs API. Hai lớp nhìn hai nguồn khác nhau và không bên nào sai theo nguồn của mình.
+- **Đã sửa ở:** `ops/scripts/pick-ci-run.ts` (`pickCiRun`) giữ luật chọn ở một chỗ thuần và có test; `ops/workflows/automerge.yml` hỏi `per_page=100` rồi đi qua hàm đó.
+- **Vòng soát ngữ cảnh sạch tìm ra một chỗ bản sửa tự mở, đã sửa trong cùng PR:** lời gọi mới đặt ở **vị trí tham số** của `jq -n` (`--argjson ci "$( … )"`), mà `set -euo pipefail` **không** thấy mã lỗi của một pipeline ở vị trí đó — đo được: `( set -euo pipefail; true "$(exit 9)"; echo SAU )` in `SAU` và thoát `0`, còn phép gán `X=$(exit 9)` thoát `9`. Cộng với việc `pick-ci-run.ts` lúc đầu chuẩn hoá stdin rỗng thành `{}`, một lần `gh` chết ở đây sẽ thành `skip — CI chưa xanh (chưa có lần chạy nào)` với bước **vẫn xanh**. Trước bản sửa, ca ấy làm `jq` chết và bước ĐỎ (chữ ký `KF-017`). Tức bản sửa suýt đổi một cổng từ ồn ào sang im lặng — đúng nhóm **Z** mà chính nó tồn tại để chặn. Nay lời gọi là phép gán `CI_RUN=$( … )`, và stdin rỗng làm script thoát `2` kèm stderr.
+- **Máy chặn từ nay:** `ops/test/pick-ci-run.test.ts` — 12 bài. Bài đầu dựng lại **nguyên** ba lần chạy thật của `#194` và đòi chọn lần `success`; một bài đối chứng khoá rằng dữ liệu ấy thật sự bẫy được cách đọc cũ; một bài đọc chính `ops/workflows/automerge.yml` và bắt lỗi nếu chỗ gọi quay về `per_page=1` hoặc thôi gọi `pick-ci-run.ts` (khoá chiều lệch YAML ↔ TS, cùng cách `ops/test/required-checks.test.ts` làm với ruleset); và một bài khoá chiều ngược — một lần `failure` mới hơn một lần `success` vẫn thắng, nên bản sửa **không** nuốt đỏ.
+
+---
+
 ## KF-020 · Bản sửa một `main` đỏ **tự nó** nằm trong vùng bảo vệ, nên `main` không thể xanh lại dưới 12 giờ
 
 > Số **KF-020**: dò `## KF-` trên `main` **và trên mọi nhánh PR đang mở** trước khi viết, đúng cách `KF-018` chỉ (`KF-005`). Trên `main` cao nhất là `KF-018` (`#166`, đã merge ở `fc24f75`; `KF-017` của `#162` cũng đã vào `main` ở `d36d424`). Còn mở chỉ có `KF-019`, thuộc PR `#167`.
