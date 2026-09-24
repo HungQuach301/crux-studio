@@ -645,7 +645,7 @@ test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, khô
 // --- Tiến độ (mục `platform/P-019`) ---
 
 function item(id: string, status: string): BacklogItem {
-  return { id, status, title: id, hasHoldMarker: status === 'parked', statusLine: 1 };
+  return { id, status, title: id, hasHoldMarker: status === 'parked', holdField: null, statusLine: 1 };
 }
 
 function step0Line(at: string): RunLogLine {

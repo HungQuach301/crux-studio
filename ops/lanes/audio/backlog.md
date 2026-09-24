@@ -10,6 +10,7 @@ Kiểm **giả định G7**. Mục này chặn mọi thứ phía sau nó, nhưng
 - deps: G7
 - risk: high
 - status: review
+- hold: chờ quyết định irreversible chọn nhà cung cấp giọng đọc (🤖 [QĐ]); commercialLicenseVerified giữ false tới khi issue đóng
 - nguồn: CHARTER 11.2 (G7), mục 8; rủi ro A6
 - tiêu chí xong:
   - ✅ Mỗi nhà cung cấp được xét có một dòng trong `ops/license-ledger.md`: nguồn, điều khoản, dùng thương mại được không, giao lại cho khách hàng B2B được không. — **ba nhà cung cấp TTS** (Amazon Polly, Google Cloud TTS, ElevenLabs) đã có dòng ở bảng đầu `ops/license-ledger.md`, mục backlog `AU-001`.
