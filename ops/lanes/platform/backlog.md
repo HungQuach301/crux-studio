@@ -24,7 +24,7 @@ Nhóm **Z**, và là ca nhóm Z khoá hàng đợi: lần chạy `610` bị hu�
   - ✅ Khoá chiều ngược — không nuốt đỏ: một lần `failure` mới hơn một lần `success` vẫn thắng.
   - ✅ Phá thử **thật** bốn chỗ, số đỏ là số đo: bỏ luật bỏ-kết-luận-không-phán-quyết → 2 bài đỏ · luôn ưu tiên `success` → 1 · `per_page=1` trở lại → 1 · sắp theo `created_at` thay `run_number` → 1. Lần phá cuối lúc đầu ra **0 bài đỏ** (luật `run_number` chưa ai canh, vì mức dự phòng `updated_at` cứu bàn thua) — đã thêm bài thứ 12 bịt đúng chỗ đó rồi phá lại, đỏ.
   - ✅ Ca "mọi lần chạy đều bị huỷ" giữ nguyên hành vi hôm nay (`skip`), nên bản sửa không mở thêm cửa nào.
-  - ⬜ **Chờ chủ dự án merge:** `ops/workflows/automerge.yml` thuộc vùng `owner-merge` (CHARTER mục 3), nên cơ chế chỉ có hiệu lực sau khi anh merge và `sync-workflows` chép xong. Tới lúc đó `#194` và `#208` vẫn kẹt.
+  - ⬜ **Chờ chủ dự án merge:** `ops/workflows/automerge.yml` thuộc vùng `owner-merge` (CHARTER mục 3), nên cơ chế chỉ có hiệu lực sau khi anh merge và `sync-workflows` chép xong. Tới lúc đó `#194` và `#208` vẫn kẹt. PR [#216](https://github.com/HungQuach301/crux-studio/pull/216), issue `🤖 [QĐ]` [#217](https://github.com/HungQuach301/crux-studio/issues/217).
   - ⬜ Một phép đo sau khi áp: `#194` và `#208` có được merge ở lượt `automerge` kế tiếp không — nếu không thì chữ ký còn chỗ khác.
 - **mã mục nhận lúc 2026-09-24 ~01:5x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên đầu cả 12 PR đang mở** — cao nhất là `P-038`, nên `P-039` không đụng ai.
 
