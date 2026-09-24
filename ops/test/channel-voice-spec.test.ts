@@ -46,6 +46,7 @@ function voiceSpec(): VoiceSpec {
 
 test('AU-006 · `voiceSpec` khớp đúng chữ của chủ dự án trên #193', () => {
   const v = voiceSpec();
+  assert.equal(v.character, 'Calm, precise, warm analyst');
   assert.equal(v.accent, 'General American');
   assert.equal(v.perceivedAgeRange, '30-45');
   assert.deepEqual([...v.genderCandidates].sort(), ['female', 'male']);
@@ -55,26 +56,22 @@ test('AU-006 · `voiceSpec` khớp đúng chữ của chủ dự án trên #193'
   assert.equal(v.changeIsIrreversible, true);
 });
 
-test('AU-006 · ba điều cấm của nhân vật có đủ, không rút bớt điều nào', () => {
-  const v = voiceSpec();
-  assert.equal(v.mustNot.length, 3, 'Chủ dự án nêu đúng ba điều cấm.');
-  for (const needle of ['hype', 'certified expertise', 'impersonation']) {
-    assert.ok(
-      v.mustNot.some((line) => line.includes(needle)),
-      `Thiếu điều cấm chứa "${needle}".`,
-    );
-  }
+test('AU-006 · ba điều cấm của nhân vật khớp NGUYÊN chuỗi, không khớp chuỗi con', () => {
+  // Khớp chuỗi con là chữ ký `KF-023`: "hype is fine, embrace hype" vẫn chứa
+  // chữ `hype`, nên một phủ định lật ngược vẫn lọt qua. `deepEqual` đóng lỗ đó.
+  assert.deepEqual(voiceSpec().mustNot, [
+    'no hype',
+    'no claim of certified expertise',
+    'no impersonation of a real person',
+  ]);
 });
 
-test('AU-006 · ba luật ngữ điệu có đủ', () => {
-  const v = voiceSpec();
-  assert.equal(v.prosody.length, 3);
-  for (const needle of ['falling intonation', 'stress the numbers', 'pause before']) {
-    assert.ok(
-      v.prosody.some((line) => line.includes(needle)),
-      `Thiếu luật ngữ điệu chứa "${needle}".`,
-    );
-  }
+test('AU-006 · ba luật ngữ điệu khớp NGUYÊN chuỗi, cùng lý do `KF-023`', () => {
+  assert.deepEqual(voiceSpec().prosody, [
+    'falling intonation at sentence end',
+    'stress the numbers',
+    'pause before the reveal number',
+  ]);
 });
 
 test('AU-006 · tốc độ ở số liệu chính CHẬM hơn tốc độ mặc định', () => {
@@ -99,5 +96,24 @@ test('AU-006 · `voice-spec.md` dẫn đúng nguồn, và nói ai giữ phần c
   assert.ok(doc.includes('issues/193'), 'Phải dẫn link issue bản tin #193.');
   for (const item of ['AU-007', 'AU-008', 'T-013']) {
     assert.ok(doc.includes(item), `Phần còn lại của chỉ dẫn phải có mục giữ: thiếu ${item}.`);
+  }
+  assert.ok(doc.includes('158'), 'Phải dẫn `[QĐ]` #158 — spec này là câu trả lời thay cho nó.');
+});
+
+test('AU-006 · bảng trong `voice-spec.md` KHÔNG trôi khỏi `voiceSpec` của `channel.json`', () => {
+  // File đó tự khai là "bản người đọc" của giá trị máy. Người đọc một bảng sai
+  // trong khi máy đọc giá trị đúng là đúng nhóm Z: hỏng mà không gì đỏ.
+  const doc = readFileSync(join(packDir, 'voice-spec.md'), 'utf8');
+  const v = voiceSpec();
+  const mustAppear = [
+    v.character,
+    v.accent,
+    v.perceivedAgeRange.replace('-', '–'),
+    v.originPreference,
+    `${v.paceWpm.default[0]}–${v.paceWpm.default[1]}`,
+    `${v.paceWpm.keyFigures[0]}–${v.paceWpm.keyFigures[1]}`,
+  ];
+  for (const value of mustAppear) {
+    assert.ok(doc.includes(value), `Bảng người đọc thiếu giá trị máy "${value}".`);
   }
 });

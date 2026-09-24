@@ -19,15 +19,17 @@
 | Giới tính ứng viên | thử **cả** nam và nữ | `voiceSpec.genderCandidates` |
 | Tốc độ | 150–160 từ/phút; **130–140** ở số liệu chính | `voiceSpec.paceWpm` |
 | Ngữ điệu | hạ giọng cuối câu · nhấn số · ngừng trước con số tiết lộ | `voiceSpec.prosody` |
-| Nguồn giọng | **ưu tiên** giọng thiết kế riêng, không dùng giọng thư viện | `voiceSpec.originPreference` |
+| Nguồn giọng | **ưu tiên** giọng thiết kế riêng (`designed`), không dùng giọng thư viện | `voiceSpec.originPreference` |
 | Đổi giọng | luôn là quyết định `irreversible` | `voiceSpec.changeIsIrreversible` |
 
 ## Ba chỗ dễ đọc sai, nói rõ ở đây
 
-1. **Spec này thay bảng ba nhà cung cấp của `AU-001`.** Chữ của chủ dự án: *"Thay cho bảng 3 nhà
-   cung cấp"*, *"không chốt theo 3 lựa chọn cũ"*. Khảo sát điều khoản của `AU-001` trong
-   `ops/license-ledger.md` **vẫn đúng và vẫn giữ** — thứ bị thay là **cách chọn**, không phải các
-   dòng đã đọc được.
+1. **Spec này là câu trả lời thay cho `🤖 [QĐ]` [#158](https://github.com/HungQuach301/crux-studio/issues/158)**
+   (chọn nhà cung cấp TTS trong ba lựa chọn). Hai câu, hai chỗ, đừng gộp: câu *"Thay cho bảng 3 nhà
+   cung cấp"* mở đầu khối GIỌNG ĐỌC; câu *"#158: xem khối GIỌNG ĐỌC dưới đây, không chốt theo 3 lựa
+   chọn cũ"* nằm ở dòng **ngay trên** khối và thuộc về **#158**. Khảo sát điều khoản của `AU-001`
+   trong `ops/license-ledger.md` **vẫn đúng và vẫn giữ** — thứ bị thay là **cách chọn**, không phải
+   các dòng đã đọc được.
 2. **Lưu spec không phải chọn giọng.** `ttsVoiceId` và `providers.tts` vẫn `null`. Chọn nhà cung
    cấp và chọn giọng là `irreversible` (CHARTER 2.3 nhóm 3) và phụ thuộc **giả định G7** (điều
    khoản thương mại của giọng đọc). Mục này không đụng vào hai ô đó.

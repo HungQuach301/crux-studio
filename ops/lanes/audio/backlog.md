@@ -19,6 +19,7 @@ Kiểm **giả định G7**. Mục này chặn mọi thứ phía sau nó, nhưng
   - ⬜ `voice.commercialLicenseVerified` chỉ được đặt `true` sau khi quyết định đó đóng. — giữ `false` (stub), chưa đụng.
 - **Vì sao `review` chứ không `done`:** phần đọc-điều-khoản đã xong và trích dẫn nằm trong `ops/license-ledger.md`, nhưng hai tiêu chí cuối chờ **quyết định `irreversible`** của chủ dự án (chọn provider) — không chờ một lượt worker. Chỉ chuyển `done` khi issue `[QĐ]` đóng và `commercialLicenseVerified` được xử lý. `deps: G7` cũ đọc "TTS không đọc được từ phiên cloud" đã lỗi thời cho **phiên này**: mạng egress không đồng nhất giữa các phiên (cùng quan sát `topic/T-001`), phiên này đọc được — bằng chứng ở khảo sát `AU-001`.
 - **cửa merge:** chạm `ops/license-ledger.md`, `ops/lanes/audio/**`, `ops/logs/**` — không chạm vùng `owner-merge`; chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+- ⚠️ **Hai tiêu chí ⬜ ở trên đã hết hiệu lực, và dòng `hold` cũng vậy** (`AU-006`, 2026-09-24): chủ dự án đã trả lời `🤖 [QĐ]` [#158](https://github.com/HungQuach301/crux-studio/issues/158) trên issue bản tin #193 — *"#158: xem khối GIỌNG ĐỌC dưới đây, **không chốt theo 3 lựa chọn cũ**"*. Không còn việc "chọn một trong ba nhà" để chờ. Đường mới: spec giọng nằm ở `voiceSpec` của Channel Pack (`AU-006`), vòng thử 5 nhà ở `AU-008`, và **lựa chọn cuối cùng** vẫn là `[QĐ]` `irreversible` — chữ của chủ dự án. Khảo sát điều khoản ba nhà trong `ops/license-ledger.md` **giữ nguyên**: thứ bị thay là cách chọn. Mục này chỉ chuyển `done` khi #158 được đóng và `voice.commercialLicenseVerified` được xử lý theo giọng thật của `AU-008`.
 
 ### AU-002 · Phụ đề và đo trôi
 - deps: AU-001
@@ -98,10 +99,11 @@ Chủ dự án khai sẵn trần chi phí: **tối đa 30 USD**. R1 tracer dùng
 - deps: AU-007
 - risk: high — đây là mục **đầu tiên của dự án tiêu tiền API thật**. CHARTER mục 8 và `CLAUDE.md` mục 15: điều tiết ở cửa vào.
 - status: ready
-- hold: chưa mở — trần 30 USD là chi tiền, tức CHARTER 2.3 nhóm 1 (`irreversible`). Chủ dự án đã khai trần trong cùng chỉ dẫn, nhưng **chưa** có `🤖 [QĐ]` nào đóng lại việc bật vòng thử; lượt nào nhận mục này phải mở `[QĐ]` trước, không tự chi.
+- hold: — **không treo.** Trần **30 USD** đã được chủ dự án duyệt thẳng trong cùng chỉ dẫn (*"Chi phí thử tối đa 30 USD"*), nên CHARTER 2.3 nhóm 1 đã có câu trả lời và không cần `[QĐ]` để bật vòng thử. Phần còn `irreversible` là thứ anh tách sẵn: *"**Lựa chọn cuối** là [QĐ] irreversible"* — mở `[QĐ]` ở cuối vòng thử, không phải ở đầu. Lượt nhận mục ghi chi phí thật vào `ops/logs/audio/AU-008.jsonl` và không vượt trần.
 - nguồn: chỉ dẫn chủ dự án trên `#193`, các việc (2) (3) (4) và kiến trúc (b)
 - tiêu chí xong:
   - 5 nhà cung cấp × 2 giọng gần spec `voiceSpec` nhất: ElevenLabs v3 và Multilingual v2, Gemini 3.1 Flash TTS, Cartesia Sonic 3.6, Inworld TTS-2, OpenAI `gpt-4o-mini-tts`.
   - Kiểm tự động: ASR nghe lại đúng **100%** số và viết tắt · có timestamp từng từ · đọc liền **12 phút** không trôi âm sắc · điều khoản thương mại và B2B có dòng trong `ops/license-ledger.md`.
-  - Gói nghe mù cho chủ dự án: tên file ngẫu nhiên, nghe được trên GitHub điện thoại, kèm phiếu chấm 5 tiêu chí.
+  - Gói nghe mù cho chủ dự án: tên file ngẫu nhiên, nghe được trên GitHub điện thoại, kèm phiếu chấm **đúng năm tiêu chí anh nêu**: đáng tin · rõ số · tự nhiên · nghe 12 phút không mệt · hợp kênh.
   - Chi phí thật của vòng thử ghi vào `ops/logs/audio/AU-008.jsonl` (`costUsd`, bất biến **I8**) và không vượt 30 USD.
+  - **Trả lời một căng thẳng có thật, đừng lặng lẽ bỏ qua nó:** chủ dự án viết *"ưu tiên giọng thiết kế riêng, **không dùng giọng thư viện**"* (`voiceSpec.$ownerWords`), nhưng chính anh cũng chỉ định 5 nhà cung cấp × 2 giọng gần spec nhất — tức toàn giọng thư viện. Vòng thử phải nói rõ nó đang thử giọng thư viện để **định mốc**, và nêu đường đi tới giọng thiết kế riêng (nhà nào cho, giá bao nhiêu, điều khoản B2B ra sao), chứ không im lặng coi vế sau là không tồn tại.
