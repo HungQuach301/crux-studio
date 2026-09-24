@@ -10,6 +10,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "contracts": "node ops/scripts/check-contracts.ts",
+    "check:visibility": "node ops/scripts/check-visibility.ts",
     "lint:deps": "node ops/scripts/lint-deps.ts",
     "lint:workflows": "node ops/scripts/check-workflows.ts",
     "check:tests": "node ops/scripts/check-test-coverage.ts",
@@ -23,9 +24,10 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\" \"spike/**/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",
+    "eval:prompt": "node ops/scripts/check-prompt-eval.ts",
     "run:episode": "node ops/scripts/run-episode.ts",
     "run:workshop": "node ops/scripts/run-workshop.ts",
-    "check": "pnpm contracts && pnpm lint:deps && pnpm lint:workflows && pnpm check:tests && pnpm assumptions && pnpm typecheck && pnpm test && pnpm replay"
+    "check": "pnpm contracts && pnpm check:visibility && pnpm lint:deps && pnpm lint:workflows && pnpm check:tests && pnpm assumptions && pnpm typecheck && pnpm test && pnpm replay && pnpm eval:prompt"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
