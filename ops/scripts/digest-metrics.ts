@@ -511,10 +511,22 @@ export interface LaneLogBalanceRow {
  * vào sẽ vừa thổi phồng `integration` vừa che đúng ca thiếu log của chính
  * làn đó.
  *
- * ⚠️ Giới hạn đã khai, không giấu: phép đếm là **số dòng**, nên nhiều lượt
- * của một mục có thể che một mục khác thiếu hẳn dòng log trong cùng làn +
- * cửa sổ. Đây là báo động (CHARTER mục 4), không phải cổng chặn: nó bắt ca
- * cả một làn im (merge có mà dòng log không), không hứa bắt mọi dòng lẻ.
+ * ⚠️ Giới hạn đã khai, không giấu — cả hai chiều:
+ * - **Che (thiếu, false-negative):** phép đếm là **số dòng**, gồm cả dòng
+ *   `kind: 'stage'` của lượt chạy tập, nên nhiều lượt hoặc nhiều stage của
+ *   một mục có thể che một mục khác thiếu hẳn dòng log trong cùng làn + cửa
+ *   sổ.
+ * - **Báo thừa (false-positive):** dòng log mang `at` lúc **việc chạy**, còn
+ *   `mergedAt` là lúc **merge** — và cơ chế merge của dự án tách hai mốc ra
+ *   xa (`automerge-delayed` chờ ≥12 giờ, `owner-merge` có thể nhiều ngày).
+ *   Một làn merge ≥2 PR trong cửa sổ mà dòng log của chúng đã rơi ra ngoài
+ *   cửa sổ sẽ bị báo nhầm dù mọi lượt đã ghi log đúng; ngưỡng chỉ hấp thụ
+ *   một ca như vậy mỗi làn.
+ *
+ * Cả hai chấp nhận được vì đây là **báo động** (CHARTER mục 4), không phải
+ * cổng chặn: nó bắt ca cả một làn im (merge có mà dòng log không), và báo
+ * thừa là chiều an toàn của nhóm Z. Chỗ đọc bản tin xem đây là gợi ý cần
+ * xác minh, không phải kết luận.
  */
 export function laneLogBalance(
   mergedPrs: readonly GhPr[],

@@ -844,6 +844,13 @@ test('laneLogBalance: log NHIỀU hơn merge không flagged; PR ngoài cửa s�
   assert.equal(topic.flagged, false);
 });
 
+test('laneLogBalance: biên cửa sổ — `at`/`mergedAt` ĐÚNG bằng `since` được tính (>= chứ không >)', () => {
+  const merged = [mergedLanePr(1, 'kernel', 'K-001', Z14_SINCE)];
+  const logsAtEdge = laneLogBalance(merged, [itemLog('kernel', 'K-001', Z14_SINCE)], Z14_SINCE).find((r) => r.lane === 'kernel')!;
+  assert.equal(logsAtEdge.mergedPrs, 1);
+  assert.equal(logsAtEdge.logLines, 1);
+});
+
 test('laneLogBalance: làn không hoạt động (0 merge, 0 log) bị bỏ khỏi bảng; đầu vào rỗng ra mảng rỗng', () => {
   assert.deepEqual(laneLogBalance([], [], Z14_SINCE), []);
   const rows = laneLogBalance([mergedLanePr(1, 'visual', 'V-001', '2026-09-21T08:00:00Z')], [], Z14_SINCE);
