@@ -266,3 +266,34 @@ test('Z7 · trên `ops/logs` thật: đủ mười làn, và không ô nào lấ
     );
   }
 });
+
+test('Z7 · trên `ops/logs` thật: KHÔNG làn nào ra `future` — mốc tương lai tắt báo động mà không gì đỏ', () => {
+  // TÁI HIỆN LỖI (bất biến I2), mục `I-021`. Bài `mốc Ở TƯƠNG LAI ra future`
+  // ở trên chạy trên log DỰNG, nên nó khoá *hàm*. Không bài nào khoá *dữ
+  // liệu thật* — và đó là chỗ thủng, đo được:
+  //
+  // Lượt `crux-worker-1` 2026-09-24 ghi tay `at: 2026-09-24T07:05:00.000Z`
+  // vào một commit tạo lúc `06:51:27Z`. Trong ~14 phút sau đó,
+  // `laneHeartbeats` trả cho làn `integration`:
+  //     {"verdict":"future","hoursSinceLastBeat":-0.1}
+  // Số âm nhỏ hơn MỌI ngưỡng, nên làn đó **không bao giờ `stale` được** —
+  // đúng dấu hiệu số 5 của CHARTER 2.4 bị tắt. `pnpm check` vẫn xanh
+  // (21/21 ở file này), `watchdog.yml` vẫn im. Nhóm **Z**: hỏng mà mọi chỉ
+  // báo đều xanh.
+  //
+  // Ca đó tự hết sau `07:05Z`, nên bài này KHÔNG bắt được nó hôm nay. Nó
+  // bắt lần sau — và lần sau là chuyện gần như chắc: ba mốc tròn trịa
+  // `04:05:00.000` / `04:35:00.000` / `07:05:00.000` trong cùng một file
+  // cho thấy đây là thói quen ghi tay, không phải một lần lỡ.
+  //
+  // Cách chữa khi bài này đỏ luôn là **ghi `at` bằng đồng hồ thật**, không
+  // phải nới dung sai: `FUTURE_TOLERANCE_HOURS` đã có sẵn cho lệch đồng hồ
+  // vài giây, nên một mốc vượt qua nó là mốc đặt tay.
+  const beats = laneHeartbeats(readRunLogs('ops/logs'), new Date().toISOString());
+  const future = beats.filter((beat) => beat.verdict === 'future');
+  assert.deepEqual(
+    future.map((beat) => `${beat.lane} ${beat.lastBeatAt}`),
+    [],
+    'có dòng log mang mốc Ở TƯƠNG LAI — làn đó không bao giờ stale được; sửa mốc `at`, đừng nới dung sai',
+  );
+});

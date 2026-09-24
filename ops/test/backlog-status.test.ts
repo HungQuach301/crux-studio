@@ -320,8 +320,14 @@ test('nợ lời văn của backlog THẬT phải ở 0 — máy canh, không ch
   // một mục còn treo mà quên `- hold:` thì CI đỏ, KÈM TÊN MỤC. Cách chữa luôn
   // là khai trường, không phải nới bài kiểm.
   //
-  // Chỉ soát mục ở `review` — cùng phạm vi `reviewFindings` — nên mục `ready`
-  // hay `done` không kéo bài này đỏ.
+  // Chỉ soát mục ở `review`, nên mục `ready` hay `done` không kéo bài này đỏ.
+  //
+  // KHÔNG hoàn toàn cùng phạm vi `reviewFindings` — nó lọc
+  // `status === 'review' || statusLine === null`, bài này bỏ qua vế thứ hai.
+  // Hiện vô hại và đo được vì sao: `classify` trả `unknown` cho
+  // `statusLine === null` nên mục đó không bao giờ vào nhóm `held`, và
+  // `applyFix` cũng đòi `statusLine !== null` nên không bao giờ lật nó.
+  // Khai ra chênh lệch thay vì viết "cùng phạm vi" cho gọn (`I-021`).
   const lanesRoot = join(import.meta.dirname, '..', 'lanes');
   const proseOnly: string[] = [];
   for (const lane of readdirSync(lanesRoot)) {
