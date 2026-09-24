@@ -28,6 +28,15 @@ export const envelopeSchema: JsonSchema = load('envelope.schema.json');
  */
 export const modelSchema: JsonSchema = load('model.schema.json');
 
+/**
+ * Contract của bảng đọc một kênh (mục `audio/AU-007`). Đứng ở `kernel` vì
+ * CẤU TRÚC một bảng đọc — danh sách luật `pattern`→`replacement` kèm ca kiểm
+ * — trung tính thể loại và kênh; NỘI DUNG (các luật thật) nằm trong
+ * `packs/channels/<slug>/reading-table.json`. Không phải payload envelope,
+ * nên không nằm trong `payloadSchemas`/`artifactSchemas`.
+ */
+export const readingTableSchema: JsonSchema = load('reading-table.schema.json');
+
 /** `kind` chuẩn của artifact mà mỗi xưởng sinh ra ở v0. */
 export const ARTIFACT_KIND: Readonly<Record<WorkshopName, string>> = {
   topic: 'topic.brief',

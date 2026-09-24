@@ -81,13 +81,14 @@ Cộng phần **(a)** của khối kiến trúc: công đoạn mỗi tập của
 
 - deps: AU-006
 - risk: medium — bảng đọc là dữ liệu của **kênh** (`packs/channels/`), bộ chuẩn hoá là mã của **xưởng**; trộn hai thứ là cách hằng số nội dung lọt vào `kernel` (`CLAUDE.md` mục 11).
-- status: ready
+- status: review
 - nguồn: chỉ dẫn chủ dự án trên `#193`, việc (1) và kiến trúc (a)
 - tiêu chí xong:
-  - Bảng đọc nằm trong Channel Pack, máy đọc được, mỗi dòng có ca kiểm.
-  - Bộ chuẩn hoá **không** gọi nhà cung cấp nào và chạy được khi `providers.tts` còn `null`.
-  - Bài kiểm đi từ văn bản thật của tập vàng, không từ ví dụ tự bịa.
-  - Thứ tự công đoạn (a) ghi vào contract của xưởng `audio`, không chỉ ghi trong tài liệu.
+  - ✅ Bảng đọc nằm trong Channel Pack, máy đọc được, mỗi dòng có ca kiểm. → `packs/channels/us-personal-finance/reading-table.json` (12 luật, gồm các ca chủ dự án nêu nguyên văn: `401(k)`, `S&P 500`, `APR`/`ETF`/`HSA`/`IRA`, `FICO`), contract `kernel/contracts/reading-table.schema.json`, loader `loadChannelReadingTable`/`readingRulesFor`, cổng `ops/scripts/check-reading-table.ts` (phần của `pnpm contracts`); mỗi luật mang trường `test` và xưởng chạy hết (`workshops/audio/test/normalize.test.ts`).
+  - ✅ Bộ chuẩn hoá **không** gọi nhà cung cấp nào và chạy được khi `providers.tts` còn `null`. → `workshops/audio/src/normalize.ts` (`normalizeForSpeech`), thuần văn bản, chỉ import kiểu của kernel; test khẳng định `providers.tts` null vẫn chạy.
+  - ✅ Bài kiểm đi từ văn bản thật của tập vàng, không từ ví dụ tự bịa. → test nạp `ops/golden/ep-0001-stub/snapshots/editorial.json` và chuẩn hoá lời thoại thật.
+  - ✅ Thứ tự công đoạn (a) ghi vào contract của xưởng `audio`, không chỉ ghi trong tài liệu. → `workshops/audio/contracts/pipeline.v0.schema.json` + dữ liệu `workshops/audio/pipeline.v0.json`, cổng `ops/scripts/check-audio-pipeline.ts`.
+- hold: còn treo — bộ chuẩn hoá CHƯA nối vào `produce()` của xưởng (làm vậy đổi tokens → đổi snapshot tập vàng, phải đi PR riêng theo CHARTER 6.1). Nối là việc của `AU` lên `impl: v1`, cùng lối `V-001`→`V-006` đã khai. Công đoạn `tts`/`retry` chờ nhà cung cấp (providers.tts null — G7, CHARTER 2.3 nhóm 3).
 
 ---
 
