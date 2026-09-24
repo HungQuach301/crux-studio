@@ -677,6 +677,16 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 
   **Còn thiếu, khai chứ không giấu:** chưa có lớp máy nào bắt một lượt bước 0 **quên** ghi trường `step0` — dòng đó vẫn hợp lệ và `misfiledLogLines` không đỏ. Tới khi có, lớp chặn là dòng này: **một dòng bước 0 báo có PR bị bỏ lại mà không mang trường `step0` là một dòng chưa viết xong.**
 
+## KF-016 · Hai khoá `env:` trong một step làm cả `smoke-workflows.yml` thành YAML không hợp lệ — đỏ ở mọi lần push, `pnpm lint:workflows` không bắt
+
+> Số **KF-016** chứ không phải KF-015: `KF-015` đã có chủ (mục `I-017`), `KF-014` đang ở PR `#142`. Nhận mã trước khi viết là cách hai worker không cùng lấy một số.
+
+- **Lần gặp:** 1 — phát hiện ở lượt `crux-worker-2` ~2026-09-22T19:18Z. `smoke-workflows.yml` chạy 8 lần (run #1–#8, từ 16:55Z tới 18:53Z, mọi lần `event: push`) đều `conclusion: failure`. Sáu PR đang mở mang một check đỏ vì nó: `#65`, `#154`, `#155`, `#156`, `#157`, `#159` — trong đó `#154`–`#159` chỉ là PR dòng-log, diff của chúng không đụng workflow nào.
+- **Chữ ký:** một lần chạy workflow ra `failure` với **0 job** (`get_job_logs` trả `total_jobs: 0`, `startup_failure`). File có hai khoá `env:` liền nhau trong cùng một step (step `Xác định commit và workflow vừa đổi`: một `env:` cho `EVENT_SHA`/`INPUT_SHA`, một `env:` thứ hai cho `EVENT_BEFORE`).
+- **Nguyên nhân gốc:** một mapping YAML không được có hai khoá cùng tên. GitHub từ chối **cả workflow** ở mức khởi động, nên nó đỏ ở **mọi** lần push mà không chạy tới một job nào. Lỗi chỉ hiện ra **sau khi merge** — agent không ghi được `.github/`, nên bản trong `ops/workflows/` không bao giờ chạy trước khi merge (đúng lý do `smoke-workflows.yml` tồn tại, mà chính nó lại dính). `pnpm lint:workflows` cũ không bắt: nó chạy `bash -n` trên khối `run:` và soát `permissions`, nhưng **không dựng cây YAML** nên không thấy khoá trùng — xanh ở chỗ rẻ, đỏ ở chỗ đắt (nhóm Z).
+- **Đã sửa ở đâu:** gộp hai khoá `env:` thành một trong `ops/workflows/smoke-workflows.yml` (sửa file cấu hình, không vá sản phẩm). Không đụng cơ chế nào của workflow — ba biến môi trường giữ nguyên, chỉ nằm chung một khối.
+- **Máy chặn từ nay:** `ops/scripts/check-workflows.ts` — hàm mới `duplicateMappingKeys(source, file)` dò khoá trùng trong cùng một mapping theo thụt lề (bỏ qua thân khối scalar `|`/`>`; mỗi phần tử `- ` là một mapping riêng nên hai `- name:` liền nhau không tính). Chạy trong `pnpm lint:workflows` (cổng `pnpm check`, job `check` của CI). Test ở `ops/test/check-workflows.test.ts`: ca âm hai `env:` trong một step phải đỏ, ca âm hai `on:` gốc phải đỏ, và ba ca dương (hai `- name:` liền nhau, nội dung trong `run: |`, cả cây `ops/workflows/` thật) phải sạch. Đo được là đỏ thật khi chạy trên bản `smoke-workflows.yml` trước khi sửa (dòng 98, lần đầu ở dòng 93).
+
 ---
 
 ## Cách thêm một mục
