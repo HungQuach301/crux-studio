@@ -76,7 +76,7 @@ PR đổi prompt không được auto-merge nếu eval không đạt ngưỡng k
 
 - deps: E-001
 - risk: low
-- status: ready
+- status: claimed
 - nguồn: CHARTER 6.3
 - tiêu chí xong:
   - Bộ mẫu chấm điểm chạy trong CI, ngưỡng nằm trong cấu hình.
