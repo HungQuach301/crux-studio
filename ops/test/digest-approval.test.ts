@@ -15,6 +15,8 @@ import assert from 'node:assert/strict';
 import {
   APPROVE_WORD,
   DRAFT_HEADING,
+  NEGATION_WORDS,
+  itemsFromIssues,
   type ApprovalItem,
   needsAnswer,
   parseApprovalReply,
@@ -90,7 +92,7 @@ test('renderApprovalDraft: irreversible liệt kê riêng KÈM hệ quả; rever
   ]);
 
   assert.match(block, new RegExp(`^${DRAFT_HEADING}`));
-  assert.match(block, /Cần anh quyết: 1 việc/);
+  assert.match(block, /Trả lời \*\*một\*\* trong ba dạng:/);
   assert.match(block, /#169 · \[QĐ\] lối đi nhanh hotfix/, 'tiền tố 🤖 bị bỏ — P-042');
   assert.match(block, /khuyến nghị \*\*A\*\* \(có: A\/B\)/);
   assert.match(block, /chưa trả lời thì: main đỏ chờ 12 giờ/);
@@ -125,7 +127,7 @@ test('`Duyệt` trần nhận khuyến nghị của MỌI mục cần trả lờ
   const reply = parseApprovalReply('Duyệt', items);
 
   assert.equal(reply.mode, 'approve-all');
-  assert.deepEqual(reply.choices, [{ number: 19, option: 'A' }, { number: 14, option: 'B' }]);
+  assert.deepEqual(reply.choices, [{ number: 14, option: 'B' }, { number: 19, option: 'A' }], 'choices xếp theo số issue — thứ tự phải tất định');
   assert.deepEqual(reply.unresolved, []);
   assert.deepEqual(reply.problems, []);
 });
@@ -148,7 +150,7 @@ test('hình dạng cũ `#19 A, #14 B` vẫn đọc được (CLAUDE.md mục 5)'
   const reply = parseApprovalReply('#19 A, #14 B', items);
 
   assert.equal(reply.mode, 'per-item');
-  assert.deepEqual(reply.choices, [{ number: 19, option: 'A' }, { number: 14, option: 'B' }]);
+  assert.deepEqual(reply.choices, [{ number: 14, option: 'B' }, { number: 19, option: 'A' }]);
   assert.deepEqual(reply.unresolved, []);
 });
 
@@ -199,7 +201,7 @@ test('LUẬT 3 — comment mở đầu bằng 🤖 không bao giờ là câu tr�
   assert.equal(reply.mode, 'not-an-answer');
   assert.deepEqual(reply.choices, []);
   assert.deepEqual(reply.vetoes, []);
-  assert.deepEqual(reply.unresolved, []);
+  assert.deepEqual(reply.unresolved, [14], 'vẫn phải nói ra mục đang chờ — bên gọi đọc comment mới nhất');
   assert.deepEqual(reply.problems, []);
 });
 
@@ -225,10 +227,10 @@ test('`Duyệt` mà issue thiếu khuyến nghị thì ồn, không nhận bừa
   assert.deepEqual(reply.problems, [{ number: 14, reason: '`Duyệt` nhưng issue không có khuyến nghị nào để nhận' }]);
 });
 
-test('`Duyệt` kèm #N mà KHÔNG có chữ `trừ` là câu mập mờ — không đoán hướng nào', () => {
+test('`Duyệt` kèm #N mà KHÔNG có chữ `trừ` là câu mập mờ — ra unresolved, KHÔNG đoán', () => {
   const reply = parseApprovalReply('Duyệt #14 B', [item({ number: 14, recommendation: 'A' })]);
-  assert.equal(reply.choices.length, 1);
-  assert.deepEqual(reply.choices, [{ number: 14, option: 'A' }], 'rơi về khuyến nghị, KHÔNG lấy B từ câu mập mờ');
+  assert.deepEqual(reply.choices, [], 'không lấy B, mà cũng không rơi về khuyến nghị A');
+  assert.deepEqual(reply.unresolved, [14]);
   assert.equal(reply.problems.length, 1);
   assert.match(reply.problems[0]!.reason, /không có chữ `trừ`/);
 });
@@ -260,4 +262,163 @@ test('đầu–cuối: dựng mục từ thân issue thật rồi đọc `Duyệ
   assert.match(renderApprovalDraft(items), /#213 · \[QĐ\] Bỏ PR log của bước 0 · khuyến nghị \*\*A\*\* \(có: A\/B\/C\)/);
   assert.deepEqual(parseApprovalReply('Duyệt', items).choices, [{ number: 213, option: 'A' }]);
   assert.deepEqual(parseApprovalReply('Duyệt, trừ #213 C', items).choices, [{ number: 213, option: 'C' }]);
+});
+
+
+// --- Ba luật do vòng soát ngữ cảnh sạch của chính PR này tìm ra ---
+
+test('LUẬT 4 — `Không duyệt` / `Chưa duyệt` KHÔNG BAO GIỜ thành approve-all', () => {
+  const items = [item({ number: 19, recommendation: 'A' }), item({ number: 14, recommendation: 'A' })];
+  for (const body of ['Không duyệt, để mai tính', 'Chưa duyệt nhé', 'Tôi chưa duyệt', 'khoan duyệt']) {
+    const reply = parseApprovalReply(body, items);
+    assert.notEqual(reply.mode, 'approve-all', body);
+    assert.deepEqual(reply.choices, [], body);
+    assert.deepEqual(reply.unresolved, [19, 14], body);
+    assert.equal(reply.problems.length, 1, body);
+    assert.match(reply.problems[0]!.reason, /phủ định/, body);
+  }
+});
+
+test('LUẬT 4 — phủ định xét theo CẢ CÂU, không chỉ từ đứng liền trước', () => {
+  const reply = parseApprovalReply('Không có gì để duyệt hôm nay', [item({ number: 19 })]);
+  assert.notEqual(reply.mode, 'approve-all');
+  assert.deepEqual(reply.choices, []);
+});
+
+test('LUẬT 4 — câu khẳng định bình thường vẫn duyệt được', () => {
+  for (const body of ['Duyệt', 'Tôi duyệt hết', 'ok, duyệt nhé']) {
+    assert.equal(parseApprovalReply(body, [item({ number: 19 })]).mode, 'approve-all', body);
+  }
+  assert.ok(NEGATION_WORDS.includes('không'));
+});
+
+test('LUẬT 5 — bấm "Quote reply" thì khối của agent KHÔNG trở thành câu trả lời', () => {
+  const items = [item({ number: 19, recommendation: 'A' }), item({ number: 14, recommendation: 'B' }), item({ number: 7, kind: 'reversible' })];
+  const quoted = renderApprovalDraft(items)
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
+
+  const reply = parseApprovalReply(`${quoted}\n\nTôi chưa quyết, để mai.`, items);
+
+  assert.deepEqual(reply.vetoes, [], '`hoàn tác #7` của chính khối KHÔNG được thành một phủ quyết thật');
+  assert.deepEqual(reply.choices, []);
+  assert.notEqual(reply.mode, 'approve-all');
+  assert.deepEqual(reply.unresolved, [19, 14]);
+});
+
+test('LUẬT 5 — khối dán vào KHÔNG kèm dấu `>` cũng không được phân tích', () => {
+  const items = [item({ number: 19 }), item({ number: 7, kind: 'reversible' })];
+  const reply = parseApprovalReply(`${renderApprovalDraft(items)}\nDuyệt`, items);
+
+  assert.equal(reply.mode, 'unrecognized');
+  assert.deepEqual(reply.choices, []);
+  assert.deepEqual(reply.vetoes, []);
+  assert.deepEqual(reply.unresolved, [19]);
+  assert.match(reply.problems[0]!.reason, /nguyên khối/);
+});
+
+test('LUẬT 5 — phần hướng dẫn của khối dùng `#N`, KHÔNG dùng số issue thật', () => {
+  const block = renderApprovalDraft([item({ number: 19 })]);
+  const guide = block.split('\n').filter((line) => line.startsWith('- `'));
+  assert.ok(guide.length >= 3);
+  for (const line of guide) assert.doesNotMatch(line, /#\d/, line);
+});
+
+test('LUẬT 6 — hai phương án ngược nhau cho cùng một mục thì ồn, không chốt cả hai', () => {
+  const reply = parseApprovalReply('#19 A, #19 B', [item({ number: 19 })]);
+  assert.deepEqual(reply.choices, []);
+  assert.deepEqual(reply.unresolved, [19]);
+  assert.equal(reply.problems.length, 1);
+  assert.match(reply.problems[0]!.reason, /hai phương án ngược nhau \(A, B\)/);
+});
+
+test('nhắc lại cùng MỘT phương án hai lần thì không phải mâu thuẫn', () => {
+  const reply = parseApprovalReply('#19 A, #19 A', [item({ number: 19 })]);
+  assert.deepEqual(reply.choices, [{ number: 19, option: 'A' }]);
+  assert.deepEqual(reply.problems, []);
+});
+
+// --- Các chỗ vòng soát nêu ở phần B ---
+
+test('`hoàn tác #7 và #8` bắt được CẢ HAI số', () => {
+  const items = [item({ number: 7, kind: 'reversible' }), item({ number: 8, kind: 'reversible' })];
+  for (const body of ['hoàn tác #7 và #8', 'hoàn tác #7, #8']) {
+    assert.deepEqual(parseApprovalReply(body, items).vetoes, [7, 8], body);
+  }
+});
+
+test('dạng NFD (dấu tổ hợp) đọc y như NFC', () => {
+  const items = [item({ number: 19, recommendation: 'A' }), item({ number: 14, recommendation: 'A' })];
+  assert.equal(parseApprovalReply('Duyệt'.normalize('NFD'), items).mode, 'approve-all');
+  assert.deepEqual(parseApprovalReply('Duyệt, trừ #14 B'.normalize('NFD'), items).choices, [
+    { number: 14, option: 'B' },
+    { number: 19, option: 'A' },
+  ]);
+});
+
+test('parseDecisionBody đọc được thân issue do MÁY sinh (formatDecisionIssue)', () => {
+  const machine = [
+    '🤖 Một giả định vừa đổi trạng thái.',
+    '',
+    '## Bối cảnh',
+    '',
+    '- Giả định **G10**, sổ ghi `suy luận`.',
+    '',
+    '### Phần bị ảnh hưởng',
+    '',
+    '- ops/workflows/ci.yml',
+    '- B - một file trông như một phương án',
+    '',
+    '## Phương án',
+    '',
+    '- **A.** Ghi `sai` vào sổ và chuyển sang dự phòng.',
+    '- **B.** Giữ nguyên sổ, coi là nhiễu một lần.',
+    '',
+    '## Khuyến nghị',
+    '',
+    '**A.** Luật 4 của CHARTER 11.1 nói ghi `sai` trước.',
+    '',
+    '## Nếu anh chưa trả lời thì điều gì xảy ra',
+    '',
+    'Không có gì dừng lại. Đây là quyết định `reversible`.',
+    '',
+    '## Cách trả lời',
+    '',
+    'Trả lời `A` hoặc `B`.',
+  ].join('\n');
+
+  const parsed = parseDecisionBody(machine);
+  assert.deepEqual(parsed.options, ['A', 'B'], 'không nhặt `B - một file` ở phần "Phần bị ảnh hưởng"');
+  assert.equal(parsed.recommendation, 'A');
+  assert.match(parsed.ifNoAnswer ?? '', /^Không có gì dừng lại/);
+});
+
+test('parseOptions chỉ đọc TRONG phần "Phương án"', () => {
+  const body = ['## Bối cảnh', '', '- C - một dòng ngoài phần phương án', '', '## Phương án', '', '- **A** — thật', ''].join('\n');
+  assert.deepEqual(parseDecisionBody(body).options, ['A']);
+});
+
+test('`**Khuyến nghị:** Phương án A, vì rẻ.` đọc ra A, không báo THIẾU', () => {
+  const body = ['## Phương án', '', '- **A** — rẻ', '- **B** — đắt', '', '## Khuyến nghị', '', '**Khuyến nghị:** Phương án A, vì rẻ.'].join('\n');
+  assert.equal(parseDecisionBody(body).recommendation, 'A');
+});
+
+test('`Khuyến nghị: Anh` KHÔNG đọc thành phương án A — lookahead sau chữ cái', () => {
+  const body = ['## Khuyến nghị', '', '**Khuyến nghị: Anh tự chọn giúp tôi.**'].join('\n');
+  assert.equal(parseDecisionBody(body).recommendation, null);
+});
+
+test('itemsFromIssues dựng mục thẳng từ issue, lọc theo nhãn `decision`', () => {
+  const items = itemsFromIssues([
+    { number: 213, title: '🤖 [QĐ] một', body: BODY_213, labels: ['decision', 'reversible'] },
+    { number: 9, title: '🤖 [Bản tin]', body: '', labels: ['digest'] },
+    { number: 5, title: '🤖 [QĐ] chưa phân loại', body: '', labels: ['decision'] },
+  ]);
+
+  assert.deepEqual(items.map((row) => row.number), [213, 5]);
+  assert.equal(items[0]!.kind, 'reversible');
+  assert.equal(items[0]!.recommendation, 'A');
+  assert.equal(items[1]!.kind, 'chưa phân loại');
+  assert.equal(items[1]!.recommendation, null);
 });

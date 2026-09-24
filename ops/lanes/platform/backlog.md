@@ -1062,11 +1062,22 @@ Ba cách đọc sai mà nửa đọc phải chặn bằng test, không phải b�
 
 - deps: —
 - risk: medium — không chặn merge, nhưng nó là hộp quyết định **duy nhất** (CHARTER 2.5): đọc sót một câu trả lời ở đây là chặn một nhánh việc mà không chỉ báo nào đỏ.
-- status: ready
-- nguồn: chỉ dẫn chủ dự án trên `#193` comment `2026-09-23T14:18:09Z` khối TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI mục (1); `CLAUDE.md` mục 5 và mục 14; CHARTER 2.5 và phụ lục P2
+- status: review
+- hold: còn lại, tách phạm vi — nối khối vào `pnpm digest:metrics` sau khi `#223` và `#112` merge; hai PR đó đang sửa `ops/scripts/digest-metrics.ts` (CHARTER mục 4)
+- nguồn: chỉ dẫn chủ dự án trên `#193` comment `2026-09-23T14:18:09Z` khối TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI mục (1); `CLAUDE.md` mục 5 và mục 14; CHARTER 2.5 và phụ lục P2; vòng soát ngữ cảnh sạch của PR [#238](https://github.com/HungQuach301/crux-studio/pull/238)
 - tiêu chí xong:
-  - Một module có test giữ **cả hai** nửa, tách khỏi `ops/scripts/digest-metrics.ts` — file đó đang bị `#223` và `#112` sửa, và CHARTER mục 4 cấm hai việc cùng sửa một file.
-  - Nửa viết: dựng khối "Sẵn sàng duyệt" đặt cuối bản tin. `reversible` đã tự làm **chỉ liệt kê**; `irreversible` liệt kê riêng, **mỗi mục ghi hệ quả nếu không trả lời**.
-  - Nửa đọc: phân tích được cả ba hình dạng (`Duyệt`, `Duyệt, trừ #N B`, `#19 A, #14 B`) cộng `hoàn tác #N`, và ba cách đọc sai ở trên mỗi cách một bài kiểm.
-  - Phụ lục P2 của CHARTER và `CLAUDE.md` mục 5 ghi hình dạng câu trả lời mới.
+  - ✅ `ops/scripts/digest-approval.ts` (mới) giữ **cả hai** nửa, tách khỏi `ops/scripts/digest-metrics.ts` — file đó đang bị `#223` và `#112` sửa, và CHARTER mục 4 cấm hai việc cùng sửa một file.
+  - ✅ Nửa viết (`renderApprovalDraft`): khối "Sẵn sàng duyệt" cuối bản tin. `reversible` đã tự làm **chỉ liệt kê** kèm lối `hoàn tác #N`; `irreversible` liệt kê riêng, **mỗi mục ghi hệ quả nếu không trả lời**; thiếu trường nào thì in `**THIẾU**`, không im.
+  - ✅ Nửa đọc (`parseApprovalReply`): cả ba hình dạng (`Duyệt`, `Duyệt, trừ #N B`, `#19 A, #14 B`) cộng `hoàn tác #N` (nhận cả `hoàn tác #7 và #8`), chuẩn hoá NFC, `choices` xếp theo số issue nên thứ tự tất định.
+  - ✅ `parseDecisionBody` đọc được **cả hai** hình dạng thân `[QĐ]` đang có thật: viết tay (`#213`) và máy sinh (`formatDecisionIssue` của `ops/scripts/recheck-assumptions.ts`). Vòng soát đo được bản đầu chỉ đọc được hình dạng viết tay — tức tính năng **không dùng được** cho nguồn `[QĐ]` duy nhất đang có máy sinh. `itemsFromIssues` dựng mục thẳng từ issue, nên câu "không chép tay" của phụ lục P2 là câu đúng chứ không phải lời dặn suông.
+  - ✅ **Sáu** luật đọc, mỗi luật một bài kiểm âm. Ba luật đầu có từ bản đầu; **ba luật sau do vòng soát ngữ cảnh sạch tìm ra**, cả ba tái hiện được bằng chạy thật trước khi sửa:
+    - **L4 · phủ định** — `Không duyệt, để mai tính` ra `approve-all` với `problems: []`, tức chốt trọn gói mọi `irreversible` trong khi chủ dự án vừa nói ngược lại. Nay phủ định xét theo **cả câu** (`không có gì để duyệt` cũng trượt) và không bao giờ thành `approve-all`.
+    - **L5 · trích dẫn (bất biến I7)** — bấm "Quote reply" thì chính khối agent in ra quay lại thành câu trả lời: câu thật *"Tôi chưa quyết, để mai."* cho ra `vetoes: [7]`, một hành động có hậu quả từ một câu nói là chưa quyết. Ba lớp: bóc dòng `>` trước khi phân tích · kiểm 🤖 **sau** khi bóc · phần hướng dẫn của khối dùng `#N`/`#M` chứ không dùng số issue thật. Lớp thứ tư cho ca dán không kèm `>`: thấy nguyên khối thì không phân tích, hỏi lại.
+    - **L6 · hai phương án ngược nhau** — `#19 A, #19 B` ra `choices` có **cả hai**, mà `CLAUDE.md` mục 5 dặn agent "làm theo `choices`". Nay vào `problems` và `unresolved`; nhắc lại cùng một phương án hai lần thì không tính là mâu thuẫn.
+  - ✅ Comment mở đầu 🤖 trả `unresolved` **đủ** danh sách, không trả rỗng: bên gọi chỉ đọc comment mới nhất không được hiểu nhầm "không còn gì chờ".
+  - ✅ `Duyệt #14 B` (thiếu chữ `trừ`) ra `unresolved`, **không** rơi về khuyến nghị — bản đầu đoán về khuyến nghị và có một bài kiểm **khoá đúng hành vi sai đó**; vòng soát chỉ ra nó tự mâu thuẫn với luật 2 của chính file. Bài kiểm đã sửa theo.
+  - ✅ CHARTER phụ lục **P2 bước 3** (nửa viết) **và P2 bước 1 + P1 bước 8** (nửa đọc — chỗ máy thật sự đọc câu trả lời), cộng `CLAUDE.md` mục 5. Vòng soát chỉ ra bản đầu chỉ sửa nửa viết, nên routine digest vẫn đọc bằng mắt: tiêu chí xong mới đạt một nửa.
+  - ✅ **Phá thử, mỗi phép đỏ đúng chỗ rồi khôi phục** (7 phép của lượt làm, cộng 11 phép đột biến độc lập của vòng soát): 10/11 bị bắt ngay ở bản đầu; phép lọt duy nhất là lookahead của `parseRecommendation` — nay đã có bài kiểm (`Khuyến nghị: Anh` không được đọc thành `A`).
+- ⬜ **còn lại, tách phạm vi:** khối này hiện là một lệnh riêng (`pnpm digest:approval`). Nối thẳng vào `pnpm digest:metrics` là việc của lượt sau `#223` và `#112` merge — CHARTER mục 4, hai việc cùng sửa một file.
+- **luật mềm ghi nhận (CHARTER mục 4):** diff vượt ngưỡng ~400 dòng, không tách được vì module và bộ test của cùng một tiêu chí xong gắn chặt nhau. Chạm `CHARTER.md`/`CLAUDE.md`/`package.json` — bốn nhánh đang mở cũng chạm, nhưng không trùng hunk nào (đo bằng `git merge-tree`, 13/13 PR gộp sạch ở bước 0 lượt này).
 - **mã mục nhận lúc 2026-09-24 ~12:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu cả 13 PR đang mở, cao nhất là `P-045` (`#233`), nên `P-046` không đụng ai.
