@@ -10,6 +10,7 @@ Làn nền. **Contract v0 cố ý để lỏng. Siết lại sau tập thật đ
 - deps: T-003
 - risk: low
 - status: review
+- hold: `kernel/contracts/snapshot.schema.json` và `thesis.schema.json` chưa mở, cố ý
 - nguồn: spec `snapshot.schema.json`, `model.schema.json`, `thesis.schema.json`
 - tiêu chí xong:
   - ✅ `model` có `verification` với đủ bốn cấp, và agent **không** đặt được `verified` (D-C02). `kernel/contracts/model.schema.json` (chuyển từ `workshops/topic/contracts/model.v0.schema.json`, `topic/T-005` đã xây `verification.tiers` bốn cấp và khoá `verified` ở tầng kiểu của `model-verify.ts` — không đổi khi chuyển chỗ). `pnpm contracts` việc số 8 nay validate cả 8 file `workshops/topic/data/models/*.json` của `T-006` theo contract này — trước đó chỉ có test riêng của xưởng `topic` canh.

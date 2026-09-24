@@ -23,6 +23,9 @@ import {
   OPEN_BOX,
   HOLD_MARKERS,
   hasHoldMarker,
+  parseHoldField,
+  normalizeForHold,
+  heldBy,
   hasRevertCommit,
   parseBacklog,
   hasCompletionCommit,
@@ -125,17 +128,17 @@ test('hasCompletionCommit: sai làn thì không khớp', () => {
 });
 
 test('classify: chưa merge thì luôn unmerged, kể cả khi thân mục sạch', () => {
-  const item = { id: 'D-003', title: 'Mục chưa merge', status: 'review', hasHoldMarker: false, statusLine: 2 };
+  const item = { id: 'D-003', title: 'Mục chưa merge', status: 'review', hold: null, hasHoldMarker: false, statusLine: 2 };
   assert.equal(classify(item, false), 'unmerged');
 });
 
 test('classify: đã merge mà còn ô ⬜ thì held, không stale', () => {
-  const item = { id: 'D-002', title: 'Mục còn treo một phần', status: 'review', hasHoldMarker: true, statusLine: 2 };
+  const item = { id: 'D-002', title: 'Mục còn treo một phần', status: 'review', hold: null, hasHoldMarker: true, statusLine: 2 };
   assert.equal(classify(item, true), 'held');
 });
 
 test('classify: đã merge và thân mục sạch thì stale', () => {
-  const item = { id: 'D-001', title: 'Mục đã xong hẳn', status: 'review', hasHoldMarker: false, statusLine: 2 };
+  const item = { id: 'D-001', title: 'Mục đã xong hẳn', status: 'review', hold: null, hasHoldMarker: false, statusLine: 2 };
   assert.equal(classify(item, true), 'stale');
 });
 
@@ -149,9 +152,11 @@ test('reviewFindings: chỉ soát mục đang review, và phân đúng các nhó
   ];
   assert.deepEqual(reviewFindings('demo', BACKLOG, subjects), [
     { lane: 'demo', id: 'D-001', verdict: 'stale' },
-    { lane: 'demo', id: 'D-002', verdict: 'held' },
+    // `heldBy` nói rõ cái gì đang giữ mục lại (mục `I-020`). Cả hai mục này
+    // giữ bằng LỜI VĂN — chúng là fixture viết trước khi có trường `- hold:`.
+    { lane: 'demo', id: 'D-002', verdict: 'held', heldBy: 'prose' },
     { lane: 'demo', id: 'D-003', verdict: 'unmerged' },
-    { lane: 'demo', id: 'D-005', verdict: 'held' },
+    { lane: 'demo', id: 'D-005', verdict: 'held', heldBy: 'prose' },
     { lane: 'demo', id: 'D-006', verdict: 'unmerged' },
   ]);
 });
@@ -201,21 +206,120 @@ test('HOLD_MARKERS: ba biến thể lời văn lọt lưới lần hai — E-001
   );
 });
 
-test('HOLD_MARKERS: giới hạn còn lại — một chữ chèn vào là lọt, và đó là lý do I-020 tồn tại', () => {
-  // Bài này KHÔNG mô tả hành vi mong muốn. Nó ghim **chỗ thủng đã biết** vào
-  // chỗ máy đọc được, thay vì để nó chỉ nằm trong văn xuôi của `KF-023`.
+test('HOLD_MARKERS: ba biến thể từng lọt lưới nay bị bắt — mục I-020 đã xong', () => {
+  // Ba `assert` này ĐÃ TỪNG là `false`, và chúng là thước đo của mục
+  // `integration/I-020`: chừng nào lưới còn dò **chuỗi con**, chèn đúng một
+  // chữ vào giữa là trượt. Nay lưới dò **mẫu trên văn bản đã chuẩn hoá**, nên
+  // cả ba bị bắt.
   //
-  // `HOLD_MARKERS` dò chuỗi con, nên nó bắt CÁCH VIẾT chứ không bắt Ý. Chèn
-  // đúng một chữ vào giữa là trượt — và cả hai lần vá tới nay đều chỉ bịt đúng
-  // câu vừa gặp. Danh sách chuỗi con KHÔNG hội tụ.
-  //
-  // Cách thoát nằm ở mục backlog `integration/I-020`: khai "còn treo" bằng một
-  // TRƯỜNG (`- hold:`) mà tool đọc như đọc `- status:`. Khi mục đó xong, ba
-  // `assert` dưới đây phải đổi thành `true` — và chính việc chúng đang là
-  // `false` là thước đo nợ còn lại.
-  assert.equal(hasHoldMarker('trước khi coi mục này là `done`'), false);
-  assert.equal(hasHoldMarker('mục này chỉ done khi có xác nhận'), false); // `done` viết trần
-  assert.equal(hasHoldMarker('mục này chưa đóng, dù PR đã merge'), false);
+  // ⚠️ Bắt được ba câu này KHÔNG có nghĩa lưới đã hội tụ — câu thứ tư viết
+  // bằng chữ khác nữa vẫn lọt, và đó là lý do nguồn quyết định nay là TRƯỜNG
+  // `- hold:` (xem bộ test ngay dưới), không phải lưới này.
+
+  // "là" chèn vào giữa: chuỗi con `coi mục này done` đòi hai chữ liền nhau.
+  assert.equal(hasHoldMarker('trước khi coi mục này là `done`'), true);
+  // `done` viết trần: chuỗi con `chỉ \`done\` khi` đòi đúng hai dấu nháy ngược.
+  assert.equal(hasHoldMarker('mục này chỉ done khi có xác nhận'), true);
+  // "chưa đóng": không có `done` nào để neo vào, không chuỗi con nào phủ.
+  assert.equal(hasHoldMarker('mục này chưa đóng, dù PR đã merge'), true);
+});
+
+test('normalizeForHold: dấu nhấn Markdown và ngắt dòng không còn che được câu treo', () => {
+  // Ca `P-007` lọt lưới lần hai chỉ vì hai dấu nháy ngược quanh `done`.
+  assert.equal(normalizeForHold('chỉ `done` khi'), 'chỉ done khi');
+  assert.equal(normalizeForHold('**Còn   treo**'), 'còn treo');
+  // Câu treo bị ngắt dòng giữa hai chữ — thân mục thật xuống dòng ở cột 100.
+  assert.equal(hasHoldMarker('mục này chỉ đóng\nkhi có xác nhận'), true);
+});
+
+test('parseHoldField: trường `- hold:` đọc được như `- status:`, kể cả viết lệch', () => {
+  assert.equal(parseHoldField('- hold: chờ một lần chạy thật'), 'chờ một lần chạy thật');
+  // Thụt lề lệch, `*` thay `-`, viết hoa — cả ba vẫn nhận. Một mục bị giữ lại
+  // vì viết `- Hold:` là đúng thứ hỏng im lặng mà mục này sinh ra để giết.
+  assert.equal(parseHoldField('   - Hold:   chờ xác nhận  '), 'chờ xác nhận');
+  assert.equal(parseHoldField('* HOLD: chờ G3'), 'chờ G3');
+  // Không khai thì `null`, không đoán.
+  assert.equal(parseHoldField('- deps: —\n- status: review'), null);
+  // `- hold:` TRẦN không tính là khai: nó không nói được vì sao mục còn treo.
+  assert.equal(parseHoldField('- hold:'), null);
+  assert.equal(parseHoldField('- hold:    '), null);
+  // Không ăn theo một chữ dài hơn.
+  assert.equal(parseHoldField('- holding: x'), null);
+  // Dòng `hold` ĐẦU TIÊN thắng — cùng luật với `- status:`.
+  assert.equal(parseHoldField('- hold: lý do một\n- hold: lý do hai'), 'lý do một');
+});
+
+test('parseBacklog: mục khai `- hold:` thì `hold` mang lý do, không chỉ một cờ', () => {
+  const items = parseBacklog(
+    '### D-010 · Mục khai trường\n- deps: —\n- status: review\n- hold: chờ một lần chạy thật của routine\n',
+  );
+  assert.equal(items[0]!.hold, 'chờ một lần chạy thật của routine');
+  // Lý do phải đọc được bằng máy, vì bản tin và người soát đều cần biết
+  // mục đang chờ CÁI GÌ, không chỉ biết là nó đang chờ.
+  assert.equal(items[0]!.hasHoldMarker, false);
+});
+
+test('heldBy: trường thắng lời văn, và mục sạch cả hai đường thì không bị giữ', () => {
+  assert.equal(heldBy({ hold: 'chờ xác nhận', hasHoldMarker: false }), 'field');
+  // Cả hai cùng có → `field`. Mục đã khai trường không còn là "nợ lời văn".
+  assert.equal(heldBy({ hold: 'chờ xác nhận', hasHoldMarker: true }), 'field');
+  assert.equal(heldBy({ hold: null, hasHoldMarker: true }), 'prose');
+  assert.equal(heldBy({ hold: null, hasHoldMarker: false }), null);
+});
+
+test('classify: trường `- hold:` giữ mục lại dù thân mục sạch trơn', () => {
+  const withField = {
+    id: 'D-010',
+    title: 'Mục khai trường',
+    status: 'review',
+    hold: 'chờ một lần chạy thật',
+    hasHoldMarker: false,
+    statusLine: 2,
+  };
+  assert.equal(classify(withField, true), 'held');
+
+  // Test ÂM: lớp thứ hai còn sống — không khai trường mà thân mục mang một câu
+  // treo thì vẫn không bị lật. Gỡ lưới đi là mở lại đúng lỗ vừa bịt.
+  const proseOnly = { ...withField, id: 'D-011', hold: null, hasHoldMarker: true };
+  assert.equal(classify(proseOnly, true), 'held');
+
+  // Sạch cả hai đường thì lật bình thường — mục này không được làm mọi thứ
+  // đứng lại.
+  const clean = { ...withField, id: 'D-012', hold: null, hasHoldMarker: false };
+  assert.equal(classify(clean, true), 'stale');
+});
+
+test('reviewFindings: nhóm held tách được "giữ bởi trường" và "chỉ giữ bởi lời văn"', () => {
+  // Con số thứ hai là NỢ phải trả dần, và nó phải nhìn thấy được thì mới trả
+  // được — đúng tiêu chí xong của `I-020`.
+  const backlog = [
+    '### D-020 · Khai bằng trường',
+    '- status: review',
+    '- hold: chờ một lần chạy thật',
+    '',
+    '### D-021 · Chỉ có lời văn',
+    '- status: review',
+    '- Mục này chỉ đóng khi có xác nhận.',
+    '',
+    '### D-022 · Sạch',
+    '- status: review',
+    '',
+  ].join('\n');
+  const subjects = ['[demo] D-020 — xong (#1)', '[demo] D-021 — xong (#2)', '[demo] D-022 — xong (#3)'];
+  assert.deepEqual(reviewFindings('demo', backlog, subjects), [
+    { lane: 'demo', id: 'D-020', verdict: 'held', heldBy: 'field' },
+    { lane: 'demo', id: 'D-021', verdict: 'held', heldBy: 'prose' },
+    { lane: 'demo', id: 'D-022', verdict: 'stale' },
+  ]);
+});
+
+test('applyFix: mục khai `- hold:` không bị lật, kể cả khi bên gọi nêu tên nó', () => {
+  // Luật "có trường thì không bao giờ bị lật" chỉ đúng khi nó cũng đúng ở chỗ
+  // THẬT SỰ ghi file, không chỉ ở `classify`.
+  const backlog = '### D-030 · Khai trường\n- status: review\n- hold: chờ xác nhận\n';
+  const { content, changed } = applyFix(backlog, ['D-030']);
+  assert.deepEqual(changed, []);
+  assert.equal(content, backlog);
 });
 
 test('HOLD_MARKERS: "Chưa làm, cố ý" KHÔNG phải dấu treo — đó là loại trừ phạm vi', () => {
@@ -226,6 +330,9 @@ test('HOLD_MARKERS: "Chưa làm, cố ý" KHÔNG phải dấu treo — đó là 
 test('HOLD_MARKERS: mục bình thường không dính dấu treo nào', () => {
   assert.equal(hasHoldMarker('- deps: —\n- status: review\n- tiêu chí xong: có test và CI xanh'), false);
   assert.ok(HOLD_MARKERS.length >= 5);
+  // Lưới nay là MẪU, không phải chuỗi con — ghim đúng hình dạng đó, vì một lần
+  // đổi ngược về chuỗi con là mở lại lỗ mà `I-020` vừa bịt.
+  assert.ok(HOLD_MARKERS.every((pattern) => pattern instanceof RegExp));
 });
 
 test('hasRevertCommit: mục bị revert thì không còn tính là đã xong', () => {
@@ -236,7 +343,7 @@ test('hasRevertCommit: mục bị revert thì không còn tính là đã xong', 
 
 test('classify: mục không đọc được status ra unknown, không bị lọc đi im lặng', () => {
   assert.equal(
-    classify({ id: 'D-009', title: 'Không có status', status: '', hasHoldMarker: false, statusLine: null }, true),
+    classify({ id: 'D-009', title: 'Không có status', status: '', hold: null, hasHoldMarker: false, statusLine: null }, true),
     'unknown',
   );
   const findings = reviewFindings('demo', '### D-009 · Không có status\n- deps: —\n', []);

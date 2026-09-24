@@ -53,6 +53,7 @@ Khi một chuỗi đã dùng trong tập đã phát hành bị điều chỉnh s
 - deps: T-003
 - risk: low
 - status: review
+- hold: `detect-changes.yml` và "một issue thật được mở" là việc của runtime, ngoài phạm vi Đợt 0
 - nguồn: spec WP-011, sổ rủi ro R6 và R7
 - tiêu chí xong:
   - ✅ So được hai `asOfDate` của cùng một chuỗi và liệt kê ô nào đổi (`diffSnapshots` tách `revised`/`added`/`removed`; đổi từ/đến ô thiếu `null` tính là `revised`).
@@ -78,6 +79,7 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
 - deps: T-005
 - risk: high
 - status: review
+- hold: chờ `platform/P-003` chạy được (cần secret `OPENAI_API_KEY`) để có cấp kiểm 4
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
   - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
@@ -115,6 +117,7 @@ Ba đại lượng thay thế cho trục nhu cầu của Topic Scoring, với **
 - deps: T-002
 - risk: high
 - status: review
+- hold: nửa "hạn mức được đo" cần người đọc Google Cloud Console — giả định `G19`, mục `verify/VF-G19`
 - nguồn: spec WP-014
 - tiêu chí xong:
   - ⬜ **Corpus xây trong hạn mức quota, và hạn mức được đo, không được đoán.** Nửa "trong hạn mức" đã
@@ -202,6 +205,7 @@ Nhân đây, một lệch luật có trước mục này: `additionalProperties:
 - deps: —
 - risk: low
 - status: review
+- hold: hai số Console thật chờ `#101` (`VF-G19` đang `parked`)
 - nguồn: vòng soát ngữ cảnh sạch của PR `#100`; issue `#101`; giả định **G19** (`docs/assumptions.md`); mục `verify/VF-G19`; `CLAUDE.md` mục 12 (contract-first, contract v0 để lỏng) và mục 13 (sửa ở chỗ sinh ra lỗi, không vá sản phẩm)
 - **cửa merge:** chạm `workshops/topic/contracts/**`, không chạm `kernel/contracts/**` — chạy `node ops/invariants.protected-area.ts`, đừng đoán
 - tiêu chí xong:

@@ -16,6 +16,7 @@ Nhóm **Z**, và là ca nhóm Z khoá hàng đợi: lần chạy `610` bị hu�
 - deps: —
 - risk: low — bản sửa chỉ bỏ các kết luận **không mang phán quyết** (`cancelled`, `skipped`, `stale`) rồi lấy lần mới nhất theo `run_number`. Chiều nguy hiểm (nuốt một lần `failure`) có bài khoá riêng.
 - status: review
+- hold: chờ chủ dự án merge `automerge.yml` (vùng `owner-merge`) rồi mới đo được `#194` và `#208`
 - nguồn: log lượt `automerge` [`35943304619`](https://github.com/HungQuach301/crux-studio/actions/runs/35943304619) và [`35938855691`](https://github.com/HungQuach301/crux-studio/actions/runs/35938855691); `actions/workflows/ci.yml/runs` của nhánh `claude/dreamy-ride-t9gnbd`; `ops/known-failures.md` `KF-024`
 - tiêu chí xong:
   - ✅ Luật chọn tách khỏi YAML: `ops/scripts/pick-ci-run.ts`, hàm thuần `pickCiRun(runs, headSha?)`.
@@ -47,6 +48,7 @@ Vì sao nó thuộc nhóm **Z**: `pnpm lint:workflows` xanh, `pnpm check` xanh, 
 - deps: —
 - risk: high
 - status: review
+- hold: một 403 còn giết cả hàng đợi, và luật quyền chưa phủ `gh api graphql` lẫn `curl` — mỗi phần một mục riêng
 - nguồn: log job `merge` run `35777803363`; `ops/known-failures.md` **KF-017** và nhóm **Z18**; mục `P-009` (PR #70)
 - **cửa merge: `owner-merge`** — mục này sửa `ops/workflows/automerge.yml`, tức chính workflow tự merge (CHARTER mục 3, bất biến I4). Chạy `node ops/invariants.protected-area.ts` để xác nhận, đừng đoán.
 - tiêu chí xong:
@@ -150,6 +152,7 @@ Chỉ dẫn 4 của chủ dự án trên issue bản tin #17 (2026-09-21).
 - deps: —
 - risk: low
 - status: review
+- hold: dấu hiệu số 5 chưa phân biệt được "routine lỗi ngay từ đầu" với "routine không được lên lịch chạy"
 - nguồn: issue #17, chỉ dẫn 4
 - **cửa merge: `automerge-delayed`** — chạm `CHARTER.md` mục 2 (ngoài mục 1 và 3) và `ops/workflows/watchdog.yml` (không dùng secret, không phát hành). Xác nhận bằng `node ops/invariants.protected-area.ts`, không đoán.
 - tiêu chí xong:
@@ -195,6 +198,7 @@ Chủ dự án chỉ xuất hiện tối đa **hai lần mỗi ngày, tổng kh�
 - deps: —
 - risk: medium
 - status: review
+- hold: chờ một PR `automerge-delayed` thật tự vào `main` sau 12 giờ, **và** `sync-workflows` chạy sau đó
 - nguồn: chỉ dẫn của chủ dự án trong phiên 2026-09-21; `docs/decisions/D-C06.md`
 - tiêu chí xong:
   - ✅ `docs/decisions/D-C06.md` ghi đủ bảy nhóm `irreversible`, ba nhóm `owner-merge`, và cách đảo ngược.
@@ -213,6 +217,7 @@ Chủ dự án cấp phép toàn bộ cho mọi phiên và routine, và chỉ nh
 - deps: —
 - risk: medium
 - status: review
+- hold: chờ một lượt routine đi trọn một mục backlog — mở được PR và gắn được nhãn
 - nguồn: chỉ dẫn của chủ dự án trong phiên 2026-09-21; giả định **G16**
 - tiêu chí xong:
   - Bỏ hẳn khối `ask` khỏi `.claude/settings.json`.
@@ -234,6 +239,7 @@ Dự phòng của KF-005 hiện đang ở dạng ghi chú ("giữ cả hai bên"
 - deps: —
 - risk: medium
 - status: review
+- hold: chờ routine chạy lại theo bản chỉ dẫn mới; trình bày giờ kẹt trong bản tin là việc của `P-005`/`P-007`
 - nguồn: giả định **G17** (`sai`); `ops/known-failures.md` KF-002 và KF-005; CHARTER mục 7
 - tiêu chí xong:
   - ✅ Cơ chế đối chiếu-và-giải viết thành tool chạy được, không phải chỉ dẫn bằng lời: `ops/scripts/integrator-resolve.ts`. Gộp `ontoRef` vào HEAD; xung đột thì đối chiếu bằng `git diff --numstat` với tổ tiên chung ở CẢ hai bên trước khi quyết, đúng luật KF-002 "đối chiếu, không đoán".
@@ -375,6 +381,7 @@ Mỗi xưởng gọi được độc lập bằng `workflow_dispatch` (CHARTER 5
 - deps: —
 - risk: low
 - status: review
+- hold: workflow chỉ có hiệu lực sau khi merge vào `main` và `sync-workflows` chép xong — chưa kiểm bằng chạy thật
 - nguồn: CHARTER 5.4; quyết định D-12
 - tiêu chí xong:
   - ✅ Sáu file trong `ops/workflows/`, mỗi file nhận `episode` và `impl` — `workshop-topic.yml`,
@@ -406,6 +413,7 @@ Routine `crux-digest` không nên tự tính số — nó nên đọc số đã 
 - deps: —
 - risk: low
 - status: review
+- hold: nối lệnh vào phụ lục P2 là việc của `P-019`; nhánh gọi `gh` thật chưa lần nào chạy xanh
 - nguồn: CHARTER 2.5, phụ lục P2
 - tiêu chí xong:
   - ✅ Một lệnh in ra: PR merged 24h theo làn, PR đang mở và trạng thái CI, mục `parked`, issue `[QĐ]` đang mở tách theo `reversible`/`irreversible`, chi phí 24h và tích luỹ so với ngân sách. — `pnpm digest:metrics` (`ops/scripts/digest-metrics.ts`), 18 test ở `ops/test/digest-metrics.test.ts` cộng 1 test `title` ở `ops/test/backlog-status.test.ts`.
@@ -447,6 +455,7 @@ Hệ quả đã xảy ra thật hai lần: `labels` run #1 hỏng vì thiếu `c
 - deps: —
 - risk: low
 - status: review
+- hold: chờ lượt worker sau đọc đúng lần chạy thật sau một merge chạm `ops/workflows/`
 - nguồn: `ops/known-failures.md` KF-003; CHARTER 3.2 (giả định G10); rủi ro B7
 - tiêu chí xong:
   - Một workflow mới, `smoke-workflows.yml`, chạy khi `main` đổi trong `ops/workflows/**` — **sau** khi `sync-workflows` chép xong, không chạy song song với nó.
@@ -490,6 +499,7 @@ DoD Đợt 0 đòi "một cảnh báo thử của watchdog tới được điệ
 - deps: —
 - risk: low
 - status: review
+- hold: chờ xác nhận thông báo `watchdog` **tới điện thoại** — không đóng khi PR merge
 - nguồn: `ops/known-failures.md` KF-004; CHARTER 2.4; giả định G2
 - tiêu chí xong:
   - `watchdog.yml` và `main-ci.yml` đặt `@HungQuach301` **ngay trong thân issue** chúng mở, không chờ `notify.yml`. Một `@nhắc` trong thân issue sinh thông báo của chính GitHub, không cần workflow thứ hai nào chạy.
@@ -519,6 +529,7 @@ Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với
 - deps: —
 - risk: low
 - status: review
+- hold: chờ bản tin **thật** in ra mục PR xung đột trong một lượt `crux-digest` chạy thật
 - nguồn: `ops/known-failures.md` KF-002; CHARTER 3.3, mục 7, 2.5
 - tiêu chí xong:
   - ✅ **Đã có từ trước lượt này** — `automerge.yml` đọc `mergeable` và `mergeable_state` của PR trước khi thử merge. Đang xung đột thì bỏ qua và in lý do ra log của lần chạy (`decideMerge` trả `skip`, bước "Xét từng PR" in mọi kết luận kể cả "không làm gì" — rà soát Z2), không thử merge rồi để API báo lỗi.
@@ -548,6 +559,7 @@ Mỗi lượt integrator và mỗi lượt worker ghi một dòng bước 0 vào
 - deps: —
 - risk: medium
 - status: review
+- hold: chưa có gì **chặn** một routine ghi lại theo hình dạng file log cũ
 - nguồn: `ops/known-failures.md` KF-009 và KF-005; `ops/logs/platform/P-016.jsonl` (dòng 20:12Z đề nghị việc này lần đầu, dòng 21:10Z đo được quy mô); quyết định `D-C04`; CHARTER mục 7
 - tiêu chí xong:
   - ✅ Dòng bước 0 ghi vào file **theo lượt chạy**, không theo mã mục — hình dạng đã dùng thật ở `ops/logs/integration/P3-run-<ngày>T<giờ>.jsonl`, nên cơ chế gần như có sẵn. Chốt một tên file và **một** chỗ sinh ra nó (hàm của kernel hoặc `ops/scripts/`), đừng để mỗi routine tự ghép.
@@ -583,6 +595,7 @@ Một bước đúng-đắn-bắt-buộc mà chỗ thực thi duy nhất là tr�
 - deps: —
 - risk: medium
 - status: review
+- hold: chờ người hoặc nền tảng đặt `CLAUDE_SESSION_URL` ở đầu lượt routine
 - nguồn: vòng soát ngữ cảnh sạch của PR `#93`; `ops/known-failures.md` KF-010; `CLAUDE.md` mục 6; giả định `G14`
 - tiêu chí xong:
   - ✅ `integrator-resolve.ts` tự ghi trailer vào commit gộp nó tạo, ở **một** chỗ (`trailerMessageArg`, gọi ở cả đường `clean` lẫn `resolved`), không để routine bù tay. Mã phiên đọc từ môi trường `CLAUDE_SESSION_URL`; không có thì commit vẫn mang `Co-Authored-By`, và thiếu mã phiên trả `sessionTrailerMissing: true` trong `ResolveResult` — bên gọi (bước 0 phụ lục P1/P3) nói ra trong ghi chú, không nuốt im.
@@ -687,6 +700,7 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
 - deps: —
 - risk: **high** — chặn mọi làn. Mục `ready` nào cũng nằm sau một PR không merge được; bước 3 của phụ lục P1 ra `idle` ở lượt này đúng vì lý do đó.
 - status: review
+- hold: hai tiêu chí cuối — bản sửa cơ chế A/B và bằng chứng chạy thật của nó — chờ `🤖 [QĐ] #116`
 - nguồn: đo ở lượt `crux-worker-1` 2026-09-22 12:4x giờ VN; `ops/known-failures.md` **KF-011** và KF-009; `ops/invariants.merge-gate.ts`; `ops/workflows/automerge.yml`; CHARTER mục 3 (bất biến I4) và 3.3; phụ lục P1 bước 0, P3 bước 0b–0c
 - **cần chủ dự án trước khi làm:** gỡ kẹt ngay là một lần merge tay (đề xuất `#85`, vì nó cắt nguyên nhân gốc), và bản sửa lâu dài chạm `ops/invariants.*` (cửa `owner-merge`) hoặc CHARTER mục 3 (`irreversible`, CLAUDE.md mục 14). Issue `🤖 [QĐ]` **#116** kèm theo mục này.
 - tiêu chí xong:
@@ -836,6 +850,7 @@ Hàng đợi merge đứng (`main` đỏ, `KF-020`) chỉ **làm lộ** lỗi n�
 - deps: —
 - risk: medium
 - status: review
+- hold: còn thiếu lớp máy bắt dòng bước 0 quên trường `step0`, và bản tin chưa gọi thẳng `step0Streaks`
 - nguồn: `ops/known-failures.md` KF-021; CHARTER phụ lục P3 bước 0b; `ops/scripts/pr-triage.ts` (`pickPrToHandle`, `stuckStreak`, `shouldAlertStreak`); dòng log bước 0 của bảy lượt `23:33Z` → `02:51Z` ngày 2026-09-23
 - tiêu chí xong:
   - ✅ `RunLogLine` có trường tuỳ chọn `step0` — mỗi PR bị bỏ lại là **một bản ghi có cấu trúc** (`pr`, `outcome`, `signature`, `hoursStuck`, `lane`), không còn chỉ là một câu trong `note`. `formatLogLine` ghi nó ra.
@@ -859,6 +874,7 @@ Hệ quả đo được, không phải suy đoán: **17 PR đang mở, CI xanh c
 - deps: —
 - risk: **high** — `main` đỏ chặn mọi làn; mọi PR đang mở đỏ ngay khi gộp `main`.
 - status: review
+- hold: chưa đo được vì sao CI của `#42` xanh trong khi `lint:workflows` bắt bốn chỗ — giả thuyết `KF-002`, chưa xác nhận
 - nguồn: đo ở lượt `crux-worker-1` 2026-09-22 23:3x–23:5xZ; `ops/known-failures.md` **KF-019** (và KF-013, KF-002); CLAUDE.md mục 13 (`main` đỏ thì sửa ngay), CHARTER phụ lục P3 bước 1
 - tiêu chí xong:
   - ✅ `ops/workflows/spike-canvas.yml` hết bốn vi phạm: `set -euo pipefail` vào ba khối `run: |`, một chú thích tại chỗ cho `"$found" --version || true`. **Không** nới luật, **không** thêm ngoại lệ — luật đúng, file sai.

@@ -21,6 +21,7 @@ Trả lời **bằng số đo thật**: canvas liên tục với máy quay di ch
 - deps: —
 - risk: high
 - status: review
+- hold: chi phí phút Actions chờ `spike-canvas` chạy được trên `main`; chỉ số 4–6 chờ mắt chủ dự án
 - nguồn: spec WP-003, quyết định D-04; giả định G5
 - tiêu chí xong:
   - ✅ **Số đo thật, 2026-09-21** — thời gian mỗi khung và bộ nhớ đỉnh đo bằng chạy thật trên bốn cấu hình (30fps không mờ · đối chứng máy quay đứng yên · 30fps có mờ · 60fps không mờ), 27.000 khung. Bảng sáu chỉ số ở `spike/canvas/RESULT.md`, sinh từ `measurements.json` chứ không gõ tay.
