@@ -113,7 +113,7 @@ Thân issue gồm năm phần:
 4. **Nếu anh chưa trả lời:** nêu rõ việc gì sẽ xảy ra.
 5. **Cách trả lời:** comment một chữ cái, hoặc một câu ngắn.
 
-**Phân loại (D-C06).** Chỉ **bảy nhóm** sau là `irreversible` — agent chờ trả lời trước khi làm:
+**Phân loại (D-C06, cộng nhóm 8 theo chỉ dẫn của chủ dự án trên issue bản tin `#50`).** Chỉ **tám nhóm** sau là `irreversible` — agent chờ trả lời trước khi làm:
 
 1. Chi tiền, hoặc cam kết chi định kỳ.
 2. Mọi thứ công khai ra ngoài.
@@ -122,6 +122,9 @@ Thân issue gồm năm phần:
 5. Nới lớp chặn: phần `deny` trong `.claude/settings.json`, hoặc `.claude/hooks/guard.mjs`.
 6. Xoá dữ liệu không có bản sao.
 7. Cổng Mốc 3, và cổng gu hình.
+8. **Đổi tên, gộp hoặc xoá một trong năm job mà ruleset `protect-main` đòi** — `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn`. Ruleset nằm ở Settings của GitHub, **ngoài** repo, và chỉ chủ dự án sửa được. Mở `🤖 [QĐ]` để chủ dự án đổi ruleset **trước**, rồi mới đổi `ops/workflows/ci.yml`. Danh sách và máy canh: `ops/scripts/required-checks.ts`, `ops/test/required-checks.test.ts` (giả định **G12**).
+
+Nhóm 8 là nhóm duy nhất **không** nằm ở đây vì hậu quả không revert được — một commit đổi tên job revert được bình thường. Nó ở đây vì *cái chặn nằm ngoài git*: từ lúc đổi tên tới lúc có người vào Settings sửa lại, ruleset chờ một tên check không còn ai sinh ra, nên **không PR nào** vào được `main` — kể cả PR revert. Mọi chỉ báo vẫn xanh suốt thời gian đó (nhóm Z).
 
 **Mọi thứ khác là `reversible`.** Agent làm theo khuyến nghị **ngay**, ghi một dòng vào bản tin sáng, và không đứng chờ. Chủ dự án phủ quyết trong **24 giờ** bằng comment `hoàn tác #N` trên issue bản tin; agent hoàn tác ở lượt chạy kế tiếp.
 
@@ -455,7 +458,7 @@ Khi tách, làm ba bước:
 
 **Việc của chủ dự án:**
 - Merge các PR `owner-merge` (mục 3, ba nhóm sau D-C06). Các PR vùng bảo vệ còn lại tự vào `main` sau 12 giờ.
-- Bật ruleset nếu có GitHub Pro.
+- ~~Bật ruleset nếu có GitHub Pro.~~ **Xong 2026-09-21:** ruleset `protect-main` đã bật, năm check bắt buộc. Kết quả đo ở `docs/assumptions.md` mục **G12**.
 - Xác nhận các mặc định ở mục 12.
 
 ### Đợt 1 · Các làn song song
@@ -530,7 +533,7 @@ Ngoài ra, routine integrator chạy lại các kiểm tra tự động của s�
 | G9 | Thuê được người soát bản địa và giao việc cho họ qua link | Chưa biết | Mở [QĐ] |
 | G10 | Phiên cloud không ghi được `.github/workflows` | Có báo lỗi công khai | Nếu thực tế ghi được: có thể gỡ bỏ cơ chế sync |
 | G11 | Hook và luật deny trong `.claude/settings.json` có hiệu lực trong routine và thread | Tài liệu nói vậy (khi dùng một repo) | Bổ sung kiểm tra phía CI |
-| G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | Tài liệu nói vậy | Không bật ruleset; dựa vào `automerge.yml` và hook |
+| G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | **Đã kiểm 2026-09-21** — ruleset `protect-main` đang bật, `main` trả `protected: true` | Dự phòng không phải dùng, và **không gỡ**: không có ruleset thì I2 vẫn còn `automerge.yml` và hook. Đổi lại, năm tên check nay chịu tải (2.3 nhóm 8) |
 | G13 | GitHub Actions gọi được API trigger (`/fire`) của routine | Tài liệu nói vậy (API đang beta) | Giữ độ trễ bằng một nhịp worker |
 | G14 | Commit của routine và thread có trailer `Claude-Session` | Tài liệu nói vậy | Dựa vào quy ước 🤖 và log làn |
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | Theo từng mục | Theo từng mục |
@@ -559,7 +562,7 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
   - **(d)** Mô hình nào không tìm được ca kiểm độc lập thì mở [QĐ] với hai lựa chọn: thuê chuyên gia viết (theo D-18 điểm 4), hoặc bỏ mô hình đó.
 
 - **M8 · Chế độ vận hành 1–2 lần mỗi ngày, tổng không quá 15 phút** (D-C06). Chủ dự án xuất hiện tối đa hai lần mỗi ngày, và mọi việc cần anh nằm trong **một** chỗ: bản tin sáng. Ba cơ chế giữ mặc định này:
-  - danh sách `irreversible` thu về bảy nhóm (2.3);
+  - danh sách `irreversible` thu về tám nhóm hẹp (2.3);
   - vùng bảo vệ chia hai mức, phần lớn thành `automerge-delayed` (mục 3);
   - `notify.yml` chỉ @nhắc cho bản tin và bốn loại cảnh báo khẩn (2.4).
 
@@ -610,6 +613,12 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 - **Phụ lục P3 bước 0b · nhánh ĐỎ nay phải ghi đủ ba số** (giờ kẹt · làn sở hữu · số lượt liên tiếp), y như nhánh `aborted-ineligible` đã đòi từ `P-022`. Không có ba số đó thì `pickPrToHandle` không có nguồn để đếm, và hàng mới của bảng lý do thành hàng chết.
 - **Phụ lục P2 · bản tin đếm cả hai cách kẹt**, qua một hàm duy nhất `stuckStreak` thay vì bắt bản tin nhớ hai trường.
 - **Số hiệu C7, không phải C6:** `C6` đã bị PR #79 (`verify/VF-G12`) nhận và PR đó còn đang mở. Ghi ra đây để lượt sau không tưởng là thiếu một mục.
+
+**C6 · 2026-09-21 · chỉ dẫn của chủ dự án trên issue bản tin `#50`, mục `VF-G12`.** Ruleset `protect-main` đã bật thật, nên năm **tên** status check trở thành hợp đồng giữa một cấu hình ngoài repo và `ops/workflows/ci.yml`.
+- **2.3 · Thêm nhóm `irreversible` thứ tám.** Đổi tên, gộp hoặc xoá một trong năm job đó phải mở `🤖 [QĐ]` trước, vì chỉ chủ dự án vào được trang Settings. Bảy nhóm cũ không đổi một chữ.
+- **11.2 · G12 chuyển sang `đã kiểm`.** Đo từ phía agent chứ không đọc lại lời chủ dự án: `main` trả `protected: true`, và `automerge.yml` vẫn merge được bằng `GITHUB_TOKEN` sau khi ruleset bật (17 PR trong 6 giờ, `merged_by: github-actions[bot]`). Dự phòng "không bật ruleset" **không gỡ**.
+- **Máy canh, không chỉ lời.** `ops/scripts/required-checks.ts` cộng `ops/test/required-checks.test.ts` đỏ khi `ci.yml` thôi sinh ra một trong năm tên. Đo bằng phá thật, không suy.
+- **Mục 3 không đổi.** Bất biến I2 và cách thực thi của nó giữ nguyên; ruleset vẫn là lớp thứ hai, không phải lớp duy nhất.
 
 **C5 · 2026-09-21 · quyết định `D-C04`.** Bất biến **I8** phân vùng log tới mức **mục**: `ops/logs/<lane>/<id>.jsonl` thay cho `ops/logs/<lane>.jsonl`. Chủ dự án trả lời **B** trên issue #14. Chi tiết và lý do ở `docs/decisions/D-C04.md`.
 - **Mục 3 · dòng I8.** Một file cho mỗi mục backlog hoặc mỗi tập, nên hai PR trong cùng một làn không bao giờ chạm cùng một file. `KF-005` hết nguyên nhân gốc thay vì được vá.
@@ -729,7 +738,7 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    Các cửa:
    open → automerge · automerge-delayed → automerge-delayed · owner-merge → owner-merge cộng issue 🤖 [QĐ].
    CI gắn lại nhãn theo đúng luật đó, nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
-8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn bảy nhóm; mọi thứ khác làm ngay theo khuyến nghị.
+8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn tám nhóm; mọi thứ khác làm ngay theo khuyến nghị.
    Câu trả lời của chủ dự án có thể nằm trên issue [QĐ] HOẶC trên issue bản tin, dạng "#19 A, #14 B" — đọc cả hai chỗ.
    Cùng một chữ ký lỗi gặp lần thứ 3: gắn parked, mở [QĐ], kết thúc.
 9. Kết thúc bằng tóm tắt 5 dòng: mục; đã làm; kiểm tra (dán kết quả thật); link PR; rủi ro và chi phí.
@@ -774,6 +783,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
      Mỗi reversible đã làm theo khuyến nghị một dòng. Phủ quyết bằng "hoàn tác #N" trong 24 giờ.
 
    Đang chờ merge
+     Số giờ lấy từ `pnpm digest:metrics` (mục "Đang chờ merge", dựng trên `ops/scripts/gate-flow.ts`
+     của mục P-027), ĐỪNG tự tính: đồng hồ 12 giờ đếm từ lần CI xanh
+     trên ĐẦU NHÁNH HIỆN TẠI, nên mỗi commit gộp của bước 0 đặt nó về 0. Giờ kể từ lúc gắn nhãn là
+     con số sai, và nó làm một PR kẹt vĩnh viễn trông giống một PR sắp tới hạn (KF-011).
+     PR đang xung đột: dòng ở đây THAY số giờ bằng lời nói về xung đột, vì đồng hồ không chạy khi
+     đang xung đột — số giờ kẹt nằm ở mục "PR đang xung đột" ngay trên, không lặp lại ở đây.
      Mỗi PR automerge-delayed một dòng: link · còn mấy giờ · chạm gì trong vùng bảo vệ.
      Nói rõ: không làm gì thì nó tự vào main; muốn giữ lại thì comment "dừng" ngay trên PR đó.
      PR nào đang kẹt ở hàng đợi merge — xung đột (mục P-022), HOẶC gộp sạch rồi đỏ (mục P-025, PR loại
@@ -843,7 +858,13 @@ Làn integration của Crux Studio.
         không phải khi PR "hết xung đột": PR kẹt kiểu này vốn đã gộp sạch, và bước 0a chỉ liệt kê PR đang xung đột
         nên nó không bao giờ được đo lại ở đây. Thiếu luật về 0 thì PR đã chữa xong vẫn bị chọn lại mỗi lượt mà
         không gì đỏ.
-      - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên — không tự giải được. KHÔNG thử `--ours`,
+      - `outcome: "aborted-ineligible"`: có xoá/sửa dòng ở ít nhất một bên, **hoặc** cây sau khi union không còn
+        đọc được (mục `I-018`, `KF-016`: union làm việc theo dòng, không theo cú pháp — nó giữ một dòng đóng khối
+        chung đúng một lần, nên hai bên cùng thêm sau dòng đó cho ra mã hỏng mà không bên nào xoá dòng nào). Ca cú
+        pháp này là `aborted-ineligible`, **không** phải "PR đỏ": hai ca đi hai đường khác nhau ở lượt sau (phụ lục
+        P1 bước 2), và tool trả nó ra ngay chứ không để `pnpm check` phía sau bắt — `check` dừng ở lỗi ĐẦU TIÊN nên
+        nó có thể đỏ ở một cổng khác trước khi tới `typecheck`, đúng cách cây hỏng của PR `#71` đi qua hai lượt bước 0.
+        Không tự giải được. KHÔNG thử `--ours`,
         `--theirs`, rebase hay tự viết lại file bằng tay. Đưa PR vào ghi chú kèm **số giờ đã kẹt**, tên file gây
         vướng (có sẵn trong `reason` của kết quả), **làn sở hữu** (suy từ tên nhánh bằng `laneFromBranch`,
         `ops/scripts/pr-triage.ts`), và **số lượt `aborted-ineligible` liên tiếp cùng chữ ký** tính cả lượt này

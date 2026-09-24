@@ -167,6 +167,59 @@ test('HOLD_MARKERS: bắt các câu chặn bằng LỜI, không chỉ ô ⬜', (
   assert.equal(hasHoldMarker(`còn ô ${OPEN_BOX} thôi`), true);
 });
 
+test('HOLD_MARKERS: ba biến thể lời văn lọt lưới lần hai — E-001, P-010, P-007', () => {
+  // Ba ca THẬT trên `main` ở 402444b. Lượt `crux-worker-1` ~21:48Z chạy
+  // `--fix` và lật cả ba sang `done` trong khi thân mục cấm đúng việc đó;
+  // vòng soát chéo bắt lại. Đây là LẦN THỨ HAI cùng một chữ ký lỗi (lần một:
+  // P-011, P-013, P-016, I-002 ở test ngay trên), nên CLAUDE.md mục 13 đòi
+  // sửa cơ chế chứ không sửa tay ba dòng `status`.
+  //
+  // Vì sao ba câu này lọt: danh sách cũ có `'chỉ chuyển \`done\`'` và
+  // `'chỉ đóng khi'`, nhưng cả ba câu dưới đây nói cùng một ý bằng chữ khác.
+
+  // `editorial/E-001` — và đây là ca ĐẮT nhất: nó là `deps` của E-003, E-004,
+  // rồi E-005, nên lật nhầm nó mở khoá cả một nhánh việc chưa được phép chạy.
+  assert.equal(
+    hasHoldMarker('Đó là khác biệt so với bản ghi trước — nhưng mục này vẫn **không** tự chuyển `done`.'),
+    true,
+  );
+
+  // `platform/P-010` — hẹn một bằng chứng chưa tồn tại (lần `ops/workflows/**`
+  // đổi kế tiếp). Lật sang `done` là xoá luôn mốc hẹn, không ai quay lại.
+  assert.equal(
+    hasHoldMarker('**Lượt worker sau phải đọc đúng lần chạy thật đó trước khi coi mục này `done`**'),
+    true,
+  );
+  // Chuỗi cho ca này cố ý BỎ hai chữ "trước khi" của câu gốc, nên biến thể sát
+  // nghĩa dưới đây cũng bắt được. Vòng soát ngữ cảnh sạch nêu đúng chỗ này:
+  // giữ nguyên cả câu là vá đúng một ca.
+  assert.equal(hasHoldMarker('đừng coi mục này `done` khi PR merge'), true);
+
+  // `platform/P-007` — nêu thẳng lý do giữ `review`, chỉ khác chữ: `done` thay
+  // cho `đóng`.
+  assert.equal(
+    hasHoldMarker('vì sao `review` chứ không `done`: mục này chỉ `done` khi bản tin **thật** in ra mục xung đột'),
+    true,
+  );
+});
+
+test('HOLD_MARKERS: giới hạn còn lại — một chữ chèn vào là lọt, và đó là lý do I-020 tồn tại', () => {
+  // Bài này KHÔNG mô tả hành vi mong muốn. Nó ghim **chỗ thủng đã biết** vào
+  // chỗ máy đọc được, thay vì để nó chỉ nằm trong văn xuôi của `KF-023`.
+  //
+  // `HOLD_MARKERS` dò chuỗi con, nên nó bắt CÁCH VIẾT chứ không bắt Ý. Chèn
+  // đúng một chữ vào giữa là trượt — và cả hai lần vá tới nay đều chỉ bịt đúng
+  // câu vừa gặp. Danh sách chuỗi con KHÔNG hội tụ.
+  //
+  // Cách thoát nằm ở mục backlog `integration/I-020`: khai "còn treo" bằng một
+  // TRƯỜNG (`- hold:`) mà tool đọc như đọc `- status:`. Khi mục đó xong, ba
+  // `assert` dưới đây phải đổi thành `true` — và chính việc chúng đang là
+  // `false` là thước đo nợ còn lại.
+  assert.equal(hasHoldMarker('trước khi coi mục này là `done`'), false);
+  assert.equal(hasHoldMarker('mục này chỉ done khi có xác nhận'), false); // `done` viết trần
+  assert.equal(hasHoldMarker('mục này chưa đóng, dù PR đã merge'), false);
+});
+
 test('HOLD_MARKERS: "Chưa làm, cố ý" KHÔNG phải dấu treo — đó là loại trừ phạm vi', () => {
   // Ca thật: `I-003` đóng được dù có câu này.
   assert.equal(hasHoldMarker('**Chưa làm, cố ý:** lệnh không nằm trong `pnpm check`.'), false);

@@ -43,14 +43,14 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G2 | `automerge.yml` merge được bằng `GITHUB_TOKEN` và gọi được `main-ci` | **`đã kiểm một phần`** | lõi DoD đã kiểm, `labels`/`sync-workflows` chưa | DoD Đợt 0, `VF-G2` |
 | G3 | Trần số lần chạy routine mỗi ngày đủ cho 2–3 worker cộng 2 routine | `suy luận` | giao làn `verify` | `VF-G3` |
 | G4 | Hạn mức gói Claude chịu được 3 worker song song | `suy luận` | giao làn `verify` | `VF-G4` |
-| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | **`đã kiểm một phần`** | hiệu năng và dung lượng đã đo; phút Actions chưa | `VF-G5`, `V-002` |
+| G5 | Quota phút Actions và dung lượng artifact đủ cho việc render | **`đã kiểm một phần`** — nửa **dựng** (`A-001`) và nửa **sinh khung** (`V-002`) đều đã đo; phút Actions **tính tiền** thì chưa | số đo ở `docs/assembly/render-trial.md` và `spike/canvas/RESULT.md`; chờ chạy `render-trial.yml` và `spike-canvas.yml` sau merge | `VF-G5`, `A-001`, `V-002` |
 | G6 | App YouTube API chưa qua kiểm tuân thủ thì video tải lên bị khoá riêng tư | `tài liệu nói vậy` | không cần đổi gì | `VF-G6` |
 | G7 | Điều khoản TTS, stock, font, bản đồ cho phép dùng thương mại và B2B | **`đã kiểm một phần`** — xong cho giấy phép font `OFL-1.1`; TTS, stock, bản đồ **không đọc được từ phiên cloud** | `VF-G7` `parked` · **vẫn chặn** làn `audio` | `VF-G7`, `AU-001` |
 | G8 | Có đường nhận tiền và nộp thuế cho người ở Việt Nam | **`tài liệu nói vậy`** — đọc trang của bên có thẩm quyền ở cả hai đầu; chưa chạy thật đường tiền nào | đường đi **có** trên giấy · còn treo 4 chỗ · chặn ở Mốc 8 · Mỹ giữ **30%** vì chưa có hiệp định **đang có hiệu lực** | `VF-G8` |
 | G9 | Thuê được người soát bản địa và giao việc qua link | **`đã kiểm một phần`** — nửa "giao việc qua link" chạy thật; nửa "thuê được người" chưa | hai kênh tuyển có thật, **trang của chính họ ghi là miễn phí cho bên thuê** (EFA, ACES) · link tới repo private **không** dùng được · xuất bản ra ngoài là `irreversible` | `VF-G9` |
 | G10 | Phiên cloud **không** ghi được `.github/workflows` | `tài liệu nói vậy` | đang dựa vào, có sync | `VF-G10` |
 | G11 | Hook và luật deny có hiệu lực trong routine và thread | **`đã kiểm`** phần routine; thread chưa | lớp thứ hai vẫn giữ | `VF-G11` |
-| G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | `tài liệu nói vậy` | dự phòng đã viết sẵn | `VF-G12` |
+| G12 | Ruleset bảo vệ nhánh trên repo private cần gói GitHub Pro | **`đã kiểm`** — ruleset `protect-main` đang bật thật trên repo này | **dự phòng không cần dùng** · 5 tên check nay chịu tải | `VF-G12` |
 | G13 | GitHub Actions gọi được API trigger `/fire` của routine | `tài liệu nói vậy` | hoãn tới Đợt 1 | `VF-G13` |
 | G14 | Commit của routine và thread có trailer `Claude-Session` | **`đã kiểm một phần`** | CI chỉ cảnh báo | `VF-G14` |
 | G15 | Các mục 1–19 trong Phần L của spec tham chiếu | theo từng mục | `parked` | `VF-G15` |
@@ -58,6 +58,8 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 | G17 | `merge=union` làm xung đột file log biến mất trong vận hành thật | **`sai`** | **đã chuyển dự phòng** | `VF-G17` |
 | G18 | `pnpm install --lockfile-only` giữ nguyên phép phân giải cũ của lockfile bản mồi | **`đã kiểm`** | đang dùng | `VF-G18` |
 | G19 | `search.list` của YouTube Data API cho 100 lần gọi mỗi ngày, bucket riêng với `videos.insert` | `tài liệu nói vậy` | dự phòng đã viết sẵn · chặn phần XÂY corpus, không chặn phần đã làm của `T-008` | `VF-G19` |
+
+**`G12` đã kiểm xong ngày 2026-09-21** (mục `VF-G12`): ruleset `protect-main` đang bật thật, `main` trả `protected: true`, và `automerge.yml` vẫn merge được bằng `GITHUB_TOKEN` sau khi bật. Dự phòng không phải dùng, nhưng **không gỡ**. Đổi lại, năm **tên** status check nay chịu tải — xem mục `G12`.
 
 **Một giả định đang ở trạng thái `sai`: G17.** Đã chuyển sang dự phòng, chi tiết ở mục của nó. Ba giả định khác (`G2`, `G7`, `G14`) đã kiểm được một phần — cũng ở dưới; `G2` và `G14` ngay trong Đợt 0. `G7` là ca đáng chú ý nhất: phần chưa kiểm không phải vì chưa ai làm, mà vì **phiên cloud không ra được các trang điều khoản** (mục `VF-G7`). `G11` đã kiểm **xong** phần routine ngày 2026-09-21, mục `VF-G11`.
 
@@ -121,7 +123,7 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 - **Nội dung:** trần số lần chạy routine mỗi ngày đủ cho 2–3 worker theo phụ lục P1, cộng hai routine `crux-digest` và `crux-integrator`.
 - **Nguồn:** chưa có con số.
 - **Độ tin cậy:** `suy luận`
-- **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · CHARTER phụ lục P1 · mặc định M5
+- **Phần phụ thuộc:** `ops/lanes/verify/backlog.md` · `CLAUDE.md` mục 16 · CHARTER phụ lục P1 · mặc định M5
 - **Cách kiểm:** sau lượt chạy đầu tiên, mở `claude.ai/code/routines` và **đọc số lượt còn lại trong ngày**. Chỉ chủ dự án làm được.
 - **Dự phòng:** giãn nhịp chạy, hoặc giảm số worker. Backlog không đổi, chỉ chậm lại.
 - **Trạng thái:** giao làn `verify`, mục `VF-G3`.
@@ -138,18 +140,28 @@ Lệnh này chạy lại **bài kiểm** của những giả định tự khai `
 ## G5 · Quota phút Actions và dung lượng artifact đủ cho việc render
 
 - **Nội dung:** quota phút Actions và dung lượng lưu artifact của gói hiện tại đủ để render một tập ~36.000 khung, cộng proof render.
-- **Độ tin cậy:** `đã kiểm một phần`
-- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md` · `spike/canvas/RESULT.md` · `ops/workflows/spike-canvas.yml`
-- **Cách kiểm:** spike canvas (`V-002`) và thử nghiệm engine dựng (`A-001`) đều **đo phút Actions thật** cho một đoạn mẫu, rồi ngoại suy. Không tốn tiền API, chỉ tốn phút Actions của chính lần đo.
+- **Độ tin cậy:** **`đã kiểm một phần`** — **cả hai** nửa đã chạy thật trên container phiên cloud: nửa **dựng** (2026-09-21, mục `A-001`) và nửa **sinh khung** (2026-09-21, mục `V-002`). Con số phút Actions **tính tiền** trên runner thật thì chưa.
+- **Phần phụ thuộc:** `ops/lanes/visual/backlog.md` (V-002) · `ops/lanes/assembly/backlog.md` (A-001) · `ops/lanes/priority.md` · `spike/canvas/RESULT.md` · `ops/workflows/spike-canvas.yml` · `ops/scripts/render-trial.ts` · `ops/workflows/render-trial.yml` · `docs/assembly/render-trial.md`
+- **Cách kiểm:** spike canvas (`V-002`, một đoạn mẫu rồi ngoại suy) và thử nghiệm engine dựng (`A-001`, một tập đầy đủ) đều **đo phút Actions thật**. Không tốn tiền API, chỉ tốn phút Actions của chính lần đo.
 - **Dự phòng:** đưa chi phí vào ngân sách học, hoặc chuyển sang runner khác. Nếu sai nặng, chốt 30fps thay vì 60fps ở `A-001`.
 - ✅ **Đã kiểm bằng chạy thật, 2026-09-21 (mục `V-002`) — phần hiệu năng và dung lượng.** 27.000 khung, bốn cấu hình, canvas 6000×3400, trên container 4 nhân / 16 GB (trùng cấu hình `ubuntu-latest` hiện hành về nhân và RAM). Bảng đầy đủ ở `spike/canvas/RESULT.md`, sinh từ `measurements.json` chứ không gõ tay.
   - **Thời gian:** 5.400 khung ở 30fps mất **6,4 phút** một worker, ngưỡng WP-003 là ≤25 phút. 60fps (10.800 khung) mất 12,2 phút. 30fps có mờ chuyển động 4 mẫu mất 8,9 phút.
   - **Bộ nhớ:** đỉnh RSS cả cây tiến trình trình duyệt **565 MB** trên 16 GB — không gần trần, ở mọi cấu hình.
   - **Dung lượng artifact:** đoạn 3 phút ở 30fps nặng **46,0 MB** (H.264 CRF 20), tức ~15,3 MB mỗi phút → **~307 MB cho một tập 20 phút**. Đây là con số cho vế "dung lượng artifact" của giả định này. Đối chứng: cùng số khung nhưng máy quay đứng yên chỉ cho 1,6 MB — chênh lệch đó là cái giá có thật của quy tắc "không khung nào đứng yên".
   - **Chi phí của kiến trúc `D-04` rất nhỏ:** vẽ một khung mất 3,2 ms, tức 4,4% thời gian mỗi khung; 67,8 ms còn lại là lấy khung ra khỏi trình duyệt. Nếu sau này đụng ngưỡng thì chỗ phải tối ưu là đường ống xuất khung, **không** phải ngữ pháp chuyển động.
-- ⬜ **Chưa kiểm — phút Actions tính tiền.** Số trên đo ở container phiên cloud, không phải runner Actions. Workflow đo nó là `ops/workflows/spike-canvas.yml`, và theo CHARTER 3.2 nó chỉ chạy được **sau khi PR của `V-002` merge vào `main`** rồi `sync-workflows` chép sang `.github/workflows/`. Lượt worker sau chạy nó bằng `workflow_dispatch` và điền nốt. Cho tới lúc đó vế "quota phút Actions" của giả định này vẫn là `suy luận`.
+- ⬜ **Chưa kiểm — phút Actions tính tiền.** Số trên đo ở container phiên cloud, không phải runner Actions. Hai workflow đo nó là `ops/workflows/spike-canvas.yml` (nửa sinh khung) và `ops/workflows/render-trial.yml` (nửa dựng), và theo CHARTER 3.2 mỗi cái chỉ chạy được **sau khi PR mang nó merge vào `main`** rồi `sync-workflows` chép sang `.github/workflows/`. Lượt worker sau chạy nó bằng `workflow_dispatch` và điền nốt. Cho tới lúc đó vế "quota phút Actions" của giả định này vẫn là `suy luận`.
 - ⚠️ **Số đo là cận dưới, không phải số của thư viện dựng hình.** Spike đo canvas 2D trần, không thêm phụ thuộc nào: chọn thư viện dựng hình React mà spec WP-003 mục 5 nêu là **chọn nhà cung cấp** kèm điều khoản thương mại (`irreversible` nhóm 3, CHARTER 2.3), và mục 7c đòi ghi điều khoản giấy phép — thứ mà bức tường mạng (issue #36) không cho đọc. Một thư viện có vòng đời React mỗi khung sẽ cộng vào đúng cột đang chiếm 4,4%. Việc chốt thư viện thuộc `A-001`.
-- **Trạng thái:** `đã kiểm một phần` — hiệu năng và dung lượng đã đo bằng chạy thật; phút Actions còn treo. **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh — và phần đắt nhất của nó (kiến trúc canvas liên tục có khả thi không) nay đã có câu trả lời: **có**, còn rất xa ngưỡng.
+- **Trạng thái:** **Đây là giả định đắt nhất nếu sai**, vì nó ràng buộc cả kiến trúc hình ảnh — và phần đắt nhất của nó (kiến trúc canvas liên tục có khả thi không) nay đã có câu trả lời: **có**, còn rất xa ngưỡng. Ba mảnh, đo riêng:
+
+  | Mảnh | Ai đo | Trạng thái |
+  |---|---|---|
+  | Chi phí **dựng** một tập đầy đủ (21 phút, cả hai fps) | `A-001` | ✅ đo xong 2026-09-21 — `docs/assembly/render-trial.md` |
+  | Chi phí **sinh khung** (đoạn mẫu 27.000 khung, rồi ngoại suy) | `V-002` | ✅ đo xong 2026-09-21 — `spike/canvas/RESULT.md` |
+  | **Phút Actions tính tiền** trên runner thật | `ops/workflows/render-trial.yml` · `ops/workflows/spike-canvas.yml` | ⬜ `spike-canvas.yml` **chạy được rồi** (PR của `V-002` đã merge, `sync-workflows` đã chép sang `.github/`); `render-trial.yml` chỉ chạy được sau khi PR này merge (G10) |
+
+  **Số đã có, phần dựng, container 4 nhân / 16 GB cùng cấu hình `ubuntu-latest`:** một bản master cộng một bản proof mất **1.024 giây tường** ở 30fps và **1.440 giây** ở 60fps, tức **18** và **25** phút Actions sau khi làm tròn lên (đừng lẫn hai đơn vị — 18 và 25 là *phút hoá đơn*, không phải giây tường quy ra phút). Bản master nặng **311 MB** (30fps) và **393 MB** (60fps). Ở nhịp trần mà channel pack khai (`cadencePerMonth.phase2` = 10 tập/tháng): **180** so với **250** phút Actions mỗi tháng. Gấp đôi số khung chỉ làm chi phí dựng tăng **1,48×** (riêng phần master — hai con số 1.024 và 1.440 giây ở trên là master **cộng** proof, tỷ lệ 1,41×), không phải 2×.
+
+  ⚠️ **Hai con số trên chưa cộng thẳng vào nhau được.** Số của `A-001` là một tập đầy đủ dựng từ clip có sẵn; số của `V-002` là một đoạn mẫu sinh khung rồi ngoại suy, và cảnh mẫu của cả hai đều là proxy — sáu xưởng còn `impl: stub`. Ngân sách G5 **tính tiền** chỉ chốt được sau khi hai workflow ở bảng trên chạy trên runner thật.
 
 ## G6 · YouTube khoá video riêng tư khi app chưa qua kiểm tuân thủ
 
@@ -351,11 +363,34 @@ Dòng Fact-checking còn có cột `PAGES/HR` = **25,0 trang/giờ**; đó là *
 
 - **Nội dung:** bật ruleset bảo vệ nhánh trên repo private cần gói trả phí.
 - **Nguồn:** tài liệu GitHub về gói. Chính sách này đã thay đổi vài lần, nên **cần kiểm lại bằng chạy thật** chứ không đọc lại tài liệu.
-- **Độ tin cậy:** `tài liệu nói vậy`
-- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/lanes/platform/backlog.md` (P-006) · `ops/lanes/verify/backlog.md`
-- **Cách kiểm:** thử bật ruleset trên chính repo này với 4 status check `check`, `secret-scan`, `fix-has-test`, `protected-area`, và xem GitHub đòi gì. Miễn phí. Chỉ chủ dự án làm được.
-- **Dự phòng — đã viết sẵn:** không bật ruleset; dựa vào `automerge.yml` cộng hook. **Ruleset là lớp thứ hai của I2, không phải lớp duy nhất** — `automerge.yml` đã chỉ merge khi CI xanh, và nó chạy theo định nghĩa trên `main`.
-- **Trạng thái:** giao làn `verify` mục `VF-G12`. Hỏi trong issue `🤖 [QĐ]`.
+- **Độ tin cậy:** **`đã kiểm`** (2026-09-21, mục `VF-G12`).
+- **Phần phụ thuộc:** `ops/workflows/README.md` · `ops/lanes/platform/backlog.md` (P-006) · `ops/lanes/verify/backlog.md` · `ops/scripts/required-checks.ts` · `ops/test/required-checks.test.ts` · `ops/workflows/ci.yml`
+- **Cách kiểm:** thử bật ruleset trên chính repo này với 4 status check `check`, `secret-scan`, `fix-has-test`, `protected-area`, và xem GitHub đòi gì. Miễn phí. Chỉ chủ dự án làm được. **Đã thực hiện** — chủ dự án bật và báo kết quả trên issue bản tin `#50` lúc `2026-09-21T14:01:21Z`.
+
+  **Bằng chứng, 2026-09-21 20:16Z. Cột "nguồn" là phần quan trọng nhất của bảng này** — trang Settings → Rules nằm ngoài tầm nhìn của agent, nên không phải dòng nào ở đây cũng là phép đo, và trộn hai loại vào một nhãn "đo từ phía agent" là đúng thứ bất biến **I6** cấm:
+
+  | Khẳng định | Nguồn | Kết quả |
+  |---|---|---|
+  | `main` được bảo vệ | **đo được** — liệt kê nhánh qua API GitHub, đọc cờ `protected` | `main` → **`protected: true`**; mọi nhánh `claude/*` → `false` (52 nhánh tại thời điểm đo) |
+  | Ruleset tên **`protect-main`**, và nó đòi **đúng năm tên** `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` | **lời chủ dự án, có nguồn** — issue bản tin `#50`, comment `2026-09-21T14:01:21Z`, mục 3 | Không xác minh lại được từ phía agent. Cờ `protected` bật cả với branch protection cổ điển, nên nó **không** chứng minh có một ruleset tên đó với đúng danh sách đó |
+  | `ci.yml` **sinh ra** đủ năm job mang đúng năm tên đó | **đo được** — số check run trên head của mọi PR đang mở | **5/5**, đúng năm tên. Đây là bằng chứng về `ci.yml`, **không** phải bằng chứng về ruleset: hai mệnh đề độc lập nhau, và chỗ nối chúng là lời chủ dự án ở hàng trên |
+  | `automerge.yml` còn merge được bằng `GITHUB_TOKEN` sau khi bật ruleset | **đo được** | **Có.** PR `#52` merge lúc `14:44:01Z` với `merged_by: github-actions[bot]` — sau mốc bật. Từ mốc đó tới `20:15Z` có **17** PR vào `main`, tất cả qua `automerge.yml`, không lần nào chủ dự án phải bấm |
+
+- **Kết luận, tách làm hai vế đúng theo bảng trên:**
+  - *`main` được bảo vệ, và lớp bảo vệ đó không cản `automerge.yml`* — **đo được**. Đây là điều mục `VF-G12` thật sự cần, và nó đủ để thôi dựa vào phương án dự phòng.
+  - *Lớp bảo vệ đó là ruleset `protect-main` đòi đúng năm tên* — **lời chủ dự án, nguồn `#50`**. Đủ để hành động theo (chủ dự án là người duy nhất thấy trang đó), nhưng ghi đúng là lời chứ không phải phép đo.
+
+  Vế "cần gói GitHub Pro" **không đo được từ phía agent** (trang thanh toán nằm ngoài tầm nhìn) và **không còn chịu tải**: nó chỉ dùng để quyết định có dựa vào ruleset hay không, mà câu đó nay đã trả lời được bằng vế thứ nhất.
+- **Dự phòng — đã viết sẵn, nay không cần dùng:** không bật ruleset; dựa vào `automerge.yml` cộng hook. Giữ nguyên, không gỡ: **ruleset là lớp thứ hai của I2, không phải lớp duy nhất** — `automerge.yml` đã chỉ merge khi CI xanh, và nó chạy theo định nghĩa trên `main`. Ruleset tắt đi thì I2 vẫn còn lớp dưới.
+- **Điều mới chịu tải kể từ khi ruleset bật — và nó nặng hơn chính giả định gốc:** năm **tên** status check nay là hợp đồng giữa một cấu hình **ngoài repo** (Settings → Rules) và `ops/workflows/ci.yml` **trong repo**. Đổi tên, gộp hay xoá một trong năm job đó là một thay đổi mà `pnpm check` vẫn xanh, CI của chính PR đó vẫn xanh, PR merge đẹp — rồi ruleset đứng chờ một tên không còn ai sinh ra, nên **mọi** PR sau đó kẹt ở `mergeable_state: "blocked"` và `automerge.yml` không merge được gì. Nhóm lỗi **Z**, và là ca nhóm Z khoá được cả nhà máy.
+
+  Hai lớp giữ chỗ đó, theo đúng luật "kiểm ở chỗ rẻ nhất":
+
+  1. **Máy chặn:** `ops/scripts/required-checks.ts` giữ danh sách năm tên, `ops/test/required-checks.test.ts` đối chiếu với tên job thật trong `ci.yml`. Đo bằng phá thật: đổi `name: protected-area` thành `name: protected` → **đúng một bài đỏ**, chỉ tên đó; khôi phục → xanh. Bài kiểm **không** sửa được ruleset, nó chỉ bảo đảm hỏng hóc lộ ra **trước** khi PR merge.
+  2. **Luật:** đổi danh sách đó là quyết định **`irreversible`** — CHARTER 2.3 **nhóm 8**, theo chỉ dẫn của chủ dự án trên issue `#50`. Phải mở `🤖 [QĐ]` để chủ dự án cập nhật ruleset **trước**, vì chỉ chủ dự án vào được trang Settings.
+
+  Một điểm dễ hiểu nhầm, đã kiểm: `trailer-warn` là **luật mềm** (CHARTER mục 4, `CLAUDE.md` mục 6) mà nay nằm trong danh sách check bắt buộc. Nó **không** vì thế thành luật cứng — bước chạy của job khai `continue-on-error: true` nên job luôn kết luận `success` dù có bao nhiêu commit thiếu trailer. Cái ruleset đòi là *job có chạy và có kết luận*, không phải *không có cảnh báo nào*. Nên mục 6 của `CLAUDE.md` vẫn đúng nguyên văn.
+- **Trạng thái:** **đã kiểm**, mục `VF-G12` đóng. Không mở `🤖 [QĐ]` — không có gì để hỏi: câu hỏi đã có câu trả lời, và hệ quả của nó là `reversible` nên làm ngay theo CHARTER 2.3.
 
 ## G13 · Actions gọi được API trigger `/fire` của routine
 

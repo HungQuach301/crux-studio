@@ -28,13 +28,14 @@ import {
   needOwnerCount,
   openPrRows,
   parkedItems,
+  probeDelayedHeadChanges,
   probeOrigins,
   renderDigestMetrics,
   rollupState,
   type GhPr,
 } from '../scripts/digest-metrics.ts';
 import type { BacklogItem } from '../scripts/backlog-status.ts';
-import type { LaneName, RunLogLine } from '@crux/kernel';
+import { step0LogRef, type LaneName, type RunLogLine } from '@crux/kernel';
 import { conflictRows } from '../scripts/conflict-watch.ts';
 
 const NOW = new Date('2026-09-21T18:00:00.000Z');
@@ -244,6 +245,7 @@ function baseMetrics(over: Partial<Parameters<typeof renderDigestMetrics>[0]> = 
     merged: [],
     openPrs: [],
     conflicts: [],
+    delayed: [],
     parked: [],
     decisions: [],
     cost: { cost24h: 0, total: 0, budget: 600, percent: 0 },
@@ -474,6 +476,172 @@ test('P-007 · dò xung đột hỏng thì bản tin rơi về CHƯA DÒ, KHÔNG
   }
 });
 
+// --- Mục `P-027`: "Đang chờ merge" nói số giờ theo đồng hồ đã bị đặt lại ---
+
+/** Kho tạm tối thiểu mà `collectMetrics` cần: một backlog và một thư mục log. */
+function ROOT_WITH_BACKLOG(): string {
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-delayed-'));
+  mkdirSync(join(root, 'ops', 'lanes', 'platform'), { recursive: true });
+  writeFileSync(join(root, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · x\n- status: ready\n');
+  return root;
+}
+
+test('P-027 · chưa đo thì bản tin nói CHƯA ĐO, không nói 0', () => {
+  // Cùng lý do với `CHƯA DÒ` của P-007: "0 PR đang chờ" trong khi 14 PR
+  // nằm kẹt là nhóm Z — sai mà không gì đỏ.
+  const text = renderDigestMetrics(baseMetrics({ delayed: null }));
+  assert.match(text, /^Đang chờ merge: CHƯA ĐO/m);
+  assert.doesNotMatch(text, /^Đang chờ merge: 0$/m);
+});
+
+test('P-027 · mỗi PR delayed một dòng, gần tới hạn trước, kèm số giờ còn thiếu thật', () => {
+  const root = ROOT_WITH_BACKLOG();
+  try {
+  const metrics = collectMetrics(
+    root,
+    {
+      mergedPrs: [],
+      openPrs: [
+        pr(39, 'claude/visual/V-001', { labels: [{ name: 'automerge-delayed' }] }),
+        pr(42, 'claude/visual/V-002', { labels: [{ name: 'automerge-delayed' }] }),
+      ],
+      decisionIssues: [],
+    },
+    NOW,
+    null,
+    new Map([
+      // #39: đầu nhánh vừa đổi 20 phút trước — đồng hồ về 0.
+      [39, ['2026-09-21T17:40:00Z']],
+      // #42: đứng yên 14 giờ — đã qua ngưỡng, nên dòng dặn là câu bình thường.
+      [42, ['2026-09-21T04:00:00Z']],
+    ]),
+  );
+
+  assert.deepEqual(metrics.delayed?.map((row) => row.number), [42, 39]);
+  assert.equal(metrics.delayed?.[1]!.hoursShort, 11.67);
+  assert.equal(metrics.delayed?.[1]!.everReachedThreshold, false);
+
+  const text = renderDigestMetrics(metrics);
+  assert.match(text, /^Đang chờ merge: 2$/m);
+  assert.match(text, /#39 · .*còn thiếu 11\.67/m);
+  // #42 đã từng đạt ngưỡng, nên dòng dặn là câu bình thường.
+  assert.match(text, /comment `dừng` ngay trên PR đó/m);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · không truyền kết quả đo thì delayed là null, KHÔNG phải mảng rỗng', () => {
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, NOW);
+    assert.equal(metrics.delayed, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · hàng đợi delayed RỖNG ra map rỗng, không ra null — hai chuyện khác nhau', () => {
+  const root = mkdtempSync(join(tmpdir(), 'crux-digest-delayed-'));
+  try {
+    // Không PR nào mang nhãn: trả lời thật, và không đi qua git lần nào
+    // (thư mục này không phải kho git, nên một lần `git fetch` sẽ ném).
+    const empty = probeDelayedHeadChanges(root, { mergedPrs: [], openPrs: [pr(1, 'claude/platform/P-001')], decisionIssues: [] }, []);
+    assert.deepEqual(empty, new Map());
+
+    // Có PR delayed nhưng git hỏng → `null`, và bản tin in CHƯA ĐO thay vì
+    // kéo cả lượt chạy xuống theo.
+    const broken = probeDelayedHeadChanges(
+      root,
+      { mergedPrs: [], openPrs: [pr(2, 'claude/platform/P-002', { labels: [{ name: 'automerge-delayed' }] })], decisionIssues: [] },
+      [],
+    );
+    assert.equal(broken, null);
+    assert.equal(probeDelayedHeadChanges(root, { mergedPrs: [], openPrs: [], decisionIssues: [] }, ['--no-delayed']), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · bản tin KHÔNG khuyên "không làm gì thì nó tự vào main" khi không PR nào đủ ngưỡng', () => {
+  // Đây là chỗ câu chữ sai gây thiệt hại trực tiếp nhất: chủ dự án đọc bản
+  // tin đúng để quyết định *không làm gì*, và KF-011 nói máy chưa một lần
+  // merge được PR delayed nào.
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(
+      root,
+      {
+        mergedPrs: [],
+        openPrs: [pr(39, 'claude/visual/V-001', { labels: [{ name: 'automerge-delayed' }] })],
+        decisionIssues: [],
+      },
+      NOW,
+      null,
+      new Map([[39, ['2026-09-21T17:40:00Z']]]),
+    );
+    const text = renderDigestMetrics(metrics);
+    assert.match(text, /Cửa delayed hiện CHƯA CHẢY/);
+    assert.doesNotMatch(text, /Không làm gì thì PR đủ giờ tự vào/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · PR đang xung đột KHÔNG hiện hai câu trái nhau trong bản tin', () => {
+  // Phụ lục P2: đồng hồ 12 giờ không chạy khi đang xung đột, nên dòng
+  // "Đang chờ merge" phải THAY số giờ, không in song song với mục P-007.
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(
+      root,
+      {
+        mergedPrs: [],
+        openPrs: [pr(109, 'claude/platform/P-025', { labels: [{ name: 'automerge-delayed' }] })],
+        decisionIssues: [],
+      },
+      NOW,
+      new Map([[109, { sha: 'a', committedAt: '2026-09-21T15:00:00Z', exact: true }]]),
+      new Map([[109, ['2026-09-21T17:40:00Z']]]),
+    );
+    const text = renderDigestMetrics(metrics);
+    assert.match(text, /^- #109 · xung đột — đồng hồ 12 giờ KHÔNG chạy/m);
+    // Dòng "Đang chờ merge" của PR đó KHÔNG được kèm số giờ song song với
+    // mục "PR đang xung đột" ngay trên.
+    assert.doesNotMatch(text, /^- #109 · đổi đầu nhánh/m);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, không biến mất khỏi đếm', () => {
+  const root = ROOT_WITH_BACKLOG();
+  try {
+    const metrics = collectMetrics(
+      root,
+      {
+        mergedPrs: [],
+        openPrs: [
+          pr(39, 'claude/visual/V-001', { labels: [{ name: 'automerge-delayed' }] }),
+          pr(42, 'claude/visual/V-002', { labels: [{ name: 'automerge-delayed' }] }),
+        ],
+        decisionIssues: [],
+      },
+      NOW,
+      null,
+      // #42 thiếu hẳn khoá.
+      new Map([[39, ['2026-09-21T17:40:00Z']]]),
+    );
+    assert.equal(metrics.delayed?.length, 2, 'PR thiếu trong map đo vẫn phải được đếm');
+    const missing = metrics.delayed!.find((row) => row.number === 42)!;
+    assert.equal(missing.headChanges, 0);
+    assert.equal(missing.hoursShort, null);
+    assert.match(renderDigestMetrics(metrics), /#42 · không đọc được lần đổi đầu nhánh nào/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // --- Tiến độ (mục `platform/P-019`) ---
 
 function item(id: string, status: string): BacklogItem {
@@ -563,6 +731,24 @@ test('computeProgress: nút thắt người đứng trước máy; đếm đúng
   assert.equal(computeProgress(new Map(), [], [], 2, 5, now).bottleneck, 'người'); // người thắng máy
   assert.equal(computeProgress(new Map(), [], [], 0, 3, now).bottleneck, 'máy');
   assert.equal(computeProgress(new Map(), [], [], 0, 0, now).bottleneck, 'không tắc');
+});
+
+test('P-036 · đếm cả dòng bước 0 hình dạng P-023 (`integration/step0-…`), không chỉ file phẳng cũ', () => {
+  // Tái hiện lỗi nhóm Z ở bản tin #193: sau khi P-023 vào `main`, mọi dòng
+  // bước 0 mang `ref` do `step0LogRef` sinh (`integration/step0-…`). `isStep0Line`
+  // cũ chỉ khớp `platform/P-016`, nên số lượt routine tụt về 0 im lặng. Trước
+  // bản vá dòng này ra 0; sau bản vá ra 3 (không đếm dòng `kind: stage` và dòng
+  // mục thường trùng cửa sổ thời gian).
+  const now = new Date('2026-09-23T14:00:00.000Z');
+  const logs: RunLogLine[] = [
+    { at: '2026-09-23T12:26:03.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-23T12:26:03.000Z', 'crux-worker-2'), status: 'ok', durationMs: 0, costUsd: 0 },
+    { at: '2026-09-23T12:38:30.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-23T12:38:30.000Z', 'crux-worker-1'), status: 'ok', durationMs: 0, costUsd: 0 },
+    step0Line('2026-09-23T06:00:00.000Z'), // hình dạng cũ `platform/P-016`, vẫn phải đếm
+    { at: '2026-09-21T06:00:00.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-21T06:00:00.000Z', 'crux-worker-3'), status: 'ok', durationMs: 0, costUsd: 0 }, // ngoài 24h
+    { at: '2026-09-23T12:00:00.000Z', lane: 'integration', kind: 'stage', ref: step0LogRef('2026-09-23T12:00:00.000Z', 'crux-worker-1'), status: 'ok', durationMs: 0, costUsd: 0 }, // kind stage → không tính
+    { at: '2026-09-23T12:00:00.000Z', lane: 'platform', kind: 'lane', ref: 'platform/P-019', status: 'ok', durationMs: 0, costUsd: 0 }, // dòng mục thường → không tính
+  ];
+  assert.equal(computeProgress(new Map(), [], logs, 0, 0, now).routineRuns24h, 3);
 });
 
 test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí xong của P-019', () => {

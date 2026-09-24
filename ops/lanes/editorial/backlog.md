@@ -63,11 +63,13 @@ Bất biến I6 được thực thi ở đây: mọi con số hiển thị đề
 
 - deps: E-001, T-003
 - risk: high
-- status: ready
+- status: done
 - nguồn: CHARTER bất biến I6; spec KHỐI B
 - tiêu chí xong:
-  - Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo.
-  - Phản biện tối thiểu theo genre pack (`counterClaimsMin`) được kiểm bằng máy.
+  - ✅ Con số trong kịch bản không truy được về `claimId` thì chặn, không cảnh báo — `factRiskProblems` (`ops/scripts/check-fact-risk.ts`) so mọi token số của `script.text` với các token số trong `statement` của claim mà kịch bản trích (`script.claimIds`); số lạc ra mã `untraceable-number`. `check-contracts.ts` (việc số 9, phần của `pnpm contracts`) **chặn** khi `producer.impl !== 'stub'`, **ghi nhận** ở stub — cùng khuôn stub-aware để tập vàng không đổi (CHARTER 6.1). Nghiệm thu S05 "gieo 3 con số sai bắt cả 3" có test.
+  - ✅ Phản biện tối thiểu theo genre pack (`counterClaimsMin`) được kiểm bằng máy — đếm `topic.payload.counterClaims`, so với `limits.counterClaimsMin` của genre pack, mã `counterclaims-short`.
+- ✅ **Xong (review), 2026-09-23** (lượt `crux-worker-2`): `ops/scripts/check-fact-risk.ts` (logic thuần `factRiskProblems`/`scanGoldenFactRisk`, trung tính thể loại) + `ops/test/check-fact-risk.test.ts` (14 bài, gồm bài tái hiện lỗi I2, nghiệm thu S05, và bài canh khâu định tuyến chặn/ghi-nhận) + việc số 9 của `check-contracts.ts`. Tập vàng stub hiện ghi nhận `counterclaims-short` (0 < 2) và **không** con số lạc nào — không đụng snapshot. Chặn thật tự bật khi xưởng biên tập lên `v1`.
+- ⚠️ **Việc cho E-004/E-005 khi xưởng lên `v1`** (vòng soát chéo nêu, ghi ra để không rơi): phép truy số hiện là **so token số thuần**, nên ở chế độ chặn (`impl != stub`) mọi số tu từ / số thứ tự trong lời thoại (`option 1`, năm, số đếm) sẽ báo sai làm đứng pipeline — ngược thiên lệch của chính cổng. Trước khi bật chặn thật cần siết: chỉ soi số trong beat có `claimId`, và chuẩn hoá đơn vị (`4.3 nghìn` ↔ `4300`, `12%` ↔ `12`). Ngoài ra `topic.payload.counterClaims` hiện **chưa** có trong contract nào (payload v0 để lỏng cho qua) — siết cùng lúc contract topic được siết.
 
 ### E-003 · Bộ eval cho prompt
 PR đổi prompt không được auto-merge nếu eval không đạt ngưỡng khai trong cấu hình.

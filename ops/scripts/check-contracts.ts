@@ -42,9 +42,12 @@ import { fixtureInputCount, fixtureInputProblems } from './check-fixtures.ts';
 import { scanWorkshopContracts } from './check-workshop-contracts.ts';
 import { scanSchemaScope } from './check-schema-scope.ts';
 import { modelDataFiles, modelDataProblems } from './check-models.ts';
+import { scanGoldenFactRisk } from './check-fact-risk.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
+/** Ghi nhận không chặn (chỉ ở `impl: stub`) — in ra cuối, tách khỏi `problems`. */
+const notes: string[] = [];
 
 // 2 · Từ khoá schema
 for (const [name, schema] of [
@@ -141,6 +144,15 @@ problems.push(...schemaScope.problems);
 const modelFiles = modelDataFiles(root);
 problems.push(...modelDataProblems(root));
 
+// 9 · Fact & Risk Pass (editorial/E-002, bất biến I6): mọi con số trong lời
+// thoại truy được về claimId, và số phản biện đạt ngưỡng genre pack. Chặn thật
+// khi artifact do lượt chạy `impl != stub` sinh ra; ở stub chỉ GHI NHẬN, để
+// tập vàng stub giữ nguyên (CHARTER 6.1). Khâu định tuyến chặn/ghi-nhận nằm
+// trong `scanGoldenFactRisk` để có test đứng độc lập.
+const factRisk = scanGoldenFactRisk(root);
+problems.push(...factRisk.blocking);
+notes.push(...factRisk.notes);
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
@@ -151,5 +163,10 @@ process.stdout.write(
     `${schemaScope.files.length} schema ngoài contracts/ (workshops+packs) qua phép kiểm từ khoá, ` +
     `${checked} artifact hợp lệ, ` +
     `${fixtureInputCount(root)} fixture --input nạp pack từ packs/ và artifact đầu vào từ tập vàng, ` +
-    `${modelFiles.length} file mô hình định lượng hợp model.schema.json.\n`,
+    `${modelFiles.length} file mô hình định lượng hợp model.schema.json, ` +
+    `Fact & Risk Pass qua ${factRisk.episodes} tập vàng.\n`,
 );
+
+if (notes.length > 0) {
+  process.stdout.write(`${notes.join('\n')}\n`);
+}

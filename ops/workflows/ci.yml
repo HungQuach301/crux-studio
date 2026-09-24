@@ -5,6 +5,13 @@
 # main. Agent không ghi .github/ (CHARTER 3.2, giả định G10).
 #
 # Tên các job dưới đây LÀ tên status check dùng để bật ruleset.
+#
+# Giả định G12: ruleset `protect-main` đang bật thật và đòi ĐÚNG năm tên
+# job dưới đây — `check`, `secret-scan`, `fix-has-test`, `protected-area`,
+# `trailer-warn`. Đổi tên, gộp hay xoá một trong năm job đó khoá `main`
+# mà không gì đỏ, nên nó là quyết định `irreversible` (CHARTER 2.3 nhóm 8)
+# và `ops/test/required-checks.test.ts` canh chiều lệch giữa file này với
+# danh sách trong `ops/scripts/required-checks.ts`.
 name: ci
 
 on:
@@ -331,3 +338,47 @@ jobs:
           git -c core.quotePath=false diff --name-only \
             "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
             | node ops/scripts/check-golden-pr.ts
+
+  # KF-014: tên model lọt vào khối trailer của commit message. Khác
+  # `trailer-warn` ngay phía trên ở hai điểm, và cả hai đều có chủ đích:
+  #
+  # 1. Job này CHẶN, không cảnh báo. `trailer-warn` mềm vì nó kiểm một giả
+  #    định về nền tảng (G14 — nền tảng có ghi trailer hay không); nền tảng
+  #    đổi cách ghi thì luật cứng ở đó sẽ chặn toàn bộ công việc. Còn ở đây
+  #    luật không phụ thuộc nền tảng: CLAUDE.md mục 6 cấm tên model trong
+  #    bất cứ thứ gì đẩy lên repo, và bên viết commit luôn sửa được.
+  # 2. Nó đọc NỘI DUNG trailer, không chỉ đếm trailer thiếu.
+  #
+  # Chỉ quét khoảng `base..HEAD` của PR, KHÔNG quét cả lịch sử: 12 trong 53
+  # commit của `main` đã mang tên model trước khi job này tồn tại (đo
+  # 2026-09-22), và quét cả lịch sử sẽ đỏ mọi PR vì lỗi của người khác. Vá
+  # lịch sử thì phải rewrite `main` — không làm. Luật này chặn từ đây về sau.
+  #
+  # Và trong khoảng đó, script còn bỏ qua commit tạo TRƯỚC `GRACE_CUTOFF`
+  # (`2026-09-22T22:00:00Z`) — quyết định `🤖 [QĐ] #165` phương án B. Cùng một
+  # lý do, ở quy mô các nhánh đang mở: 30 commit trên 13 / 29 PR đã mang tên
+  # model trước khi luật này bật, và không lượt agent nào sửa được chúng
+  # (`git push --force` bị `.claude/settings.json` chặn ở `deny`). Số commit
+  # được ân hạn LUÔN in ra ở đầu ra của job, kể cả khi sạch.
+  #
+  # Ân hạn chỉ khi CẢ HAI mốc (`%cI` và `%aI`) đều trước cutoff — mỗi mốc một
+  # mình đều có đường lách, xem `scanRange`. Và ân hạn bám vào mốc commit nên
+  # nó DỄ VỠ: cập nhật nhánh bằng `merge` thì giữ, bằng `rebase` thì mất.
+  no-model-name:
+    name: no-model-name
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Chặn tên model trong khối trailer của commit
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          node ops/scripts/check-commit-trailers.ts "origin/$BASE_REF..HEAD"
