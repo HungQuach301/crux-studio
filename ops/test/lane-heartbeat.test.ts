@@ -15,6 +15,7 @@ import type { RunLogLine } from '../../kernel/src/log.ts';
 import { readRunLogs } from '../../kernel/src/log.ts';
 import { LANES } from '../../kernel/src/envelope.ts';
 import {
+  FUTURE_TOLERANCE_HOURS,
   LANE_THRESHOLD_HOURS,
   LaneHeartbeatUnreadable,
   STEP0_LEGACY_REF,
@@ -265,4 +266,58 @@ test('Z7 · trên `ops/logs` thật: đủ mười làn, và không ô nào lấ
       `mốc của làn ${beat.lane} tới từ một dòng bước 0 — luật loại dòng bước 0 đã hỏng`,
     );
   }
+});
+
+test('Z7 · trên `ops/logs` thật: KHÔNG làn nào ra `future` — mốc tương lai tắt báo động mà không gì đỏ', () => {
+  // TÁI HIỆN LỖI (bất biến I2), mục `I-021`. Bài `mốc Ở TƯƠNG LAI ra future`
+  // ở trên chạy trên log DỰNG, nên nó khoá *hàm*. Không bài nào khoá *dữ
+  // liệu thật* — và đó là chỗ thủng, đo được:
+  //
+  // Lượt `crux-worker-1` 2026-09-24 ghi tay `at: 2026-09-24T07:05:00.000Z`
+  // vào một commit tạo lúc `06:51:27Z`. Trong ~14 phút sau đó,
+  // `laneHeartbeats` trả cho làn `integration`:
+  //     {"verdict":"future","hoursSinceLastBeat":-0.1}
+  // Số âm nhỏ hơn MỌI ngưỡng, nên làn đó **không bao giờ `stale` được** —
+  // đúng dấu hiệu số 5 của CHARTER 2.4 bị tắt. `pnpm check` vẫn xanh
+  // (21/21 ở file này), `watchdog.yml` vẫn im. Nhóm **Z**: hỏng mà mọi chỉ
+  // báo đều xanh.
+  //
+  // Ca đó tự hết sau `07:05Z`, nên bài này KHÔNG bắt được nó hôm nay. Nó
+  // bắt lần sau — và lần sau là chuyện gần như chắc: ba mốc tròn trịa
+  // `04:05:00.000` / `04:35:00.000` / `07:05:00.000` trong cùng một file
+  // cho thấy đây là thói quen ghi tay, không phải một lần lỡ.
+  //
+  // Cách chữa khi bài này đỏ luôn là **ghi `at` bằng đồng hồ thật**, không
+  // phải nới dung sai: `FUTURE_TOLERANCE_HOURS` đã có sẵn cho lệch đồng hồ
+  // vài giây, nên một mốc vượt qua nó là mốc đặt tay.
+  const lines = readRunLogs('ops/logs');
+  const now = new Date().toISOString();
+
+  const future = laneHeartbeats(lines, now).filter((beat) => beat.verdict === 'future');
+  assert.deepEqual(
+    future.map((beat) => `${beat.lane} ${beat.lastBeatAt}`),
+    [],
+    'có dòng log mang mốc Ở TƯƠNG LAI — làn đó không bao giờ stale được; sửa mốc `at`, đừng nới dung sai',
+  );
+
+  // `laneHeartbeats` cố ý LOẠI dòng bước 0 (luật thiết kế 1), nên phép khẳng
+  // định trên KHÔNG phủ chúng — và chỗ tiêu thụ mốc bước 0 có ĐÚNG cùng lỗ,
+  // ở nhánh sát bên: `ops/workflows/watchdog.yml` dấu hiệu 5 tính
+  // `AGE_MIN=$(( (NOW - LAST_BEAT) / 60 ))` **không kẹp sàn**, rồi hỏi
+  // `-gt 180`. Một mốc bước 0 ở tương lai cho `AGE_MIN` âm, phép so sai, và
+  // dấu hiệu 5 của CHARTER 2.4 im VĨNH VIỄN.
+  //
+  // Nên phủ cả dòng bước 0 ở đây. Khẳng định trên `laneHeartbeats` một mình
+  // là một phép đo khai phạm vi rộng hơn phạm vi thật — đúng lỗi `S6` mà
+  // cùng mục này đang sửa ở `ops/test/backlog-status.test.ts`.
+  const toleranceMs = FUTURE_TOLERANCE_HOURS * 3_600_000;
+  const futureStep0 = lines
+    .filter((line) => isStep0Ref(line.ref))
+    .filter((line) => Date.parse(line.at) - Date.parse(now) > toleranceMs)
+    .map((line) => `${line.ref} ${line.at}`);
+  assert.deepEqual(
+    futureStep0,
+    [],
+    'dòng BƯỚC 0 mang mốc Ở TƯƠNG LAI — `AGE_MIN` của watchdog.yml không kẹp sàn nên dấu hiệu 5 im vĩnh viễn',
+  );
 });

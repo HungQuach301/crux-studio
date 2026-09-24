@@ -41,6 +41,29 @@ export function loadGenrePack(root: string, genre: string): GenrePack {
   return pack;
 }
 
+/**
+ * Danh sách khuôn tiêu đề của một kênh (mục `release/R-001`). File này KHÔNG
+ * có trong spec gốc — thêm để `titles[].formula` của xưởng `release` đối
+ * chiếu được với một danh sách thật, thay vì chấp nhận mọi chuỗi.
+ */
+export interface TitleFormulasPack {
+  channel: string;
+  formulas: { id: string; name: string }[];
+}
+
+export function loadChannelTitleFormulas(root: string, slug: string): TitleFormulasPack {
+  const path = join(root, 'packs', 'channels', slug, 'title-formulas.json');
+  const pack = JSON.parse(readFileSync(path, 'utf8')) as TitleFormulasPack;
+  if (pack.channel !== slug) {
+    throw new Error(`title-formulas.json khai channel "${pack.channel}" nhưng nằm ở thư mục "${slug}".`);
+  }
+  return pack;
+}
+
+export function titleFormulaIdsFor(pack: TitleFormulasPack): Set<string> {
+  return new Set(pack.formulas.map((f) => f.id));
+}
+
 /** Một luật đọc: cặp `pattern`→`replacement` kèm một ca kiểm (mục `audio/AU-007`). */
 export interface ReadingRule {
   id: string;

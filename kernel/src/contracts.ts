@@ -20,6 +20,14 @@ function load(name: string): JsonSchema {
 export const envelopeSchema: JsonSchema = load('envelope.schema.json');
 
 /**
+ * Schema của `packs/channels/<slug>/title-formulas.json` (mục `release/R-001`).
+ * KHÔNG phải một trong sáu payload v0 — kernel chỉ biết cách nạp, không biết
+ * nội dung (CHARTER 5.1); `ops/scripts/check-title-formulas.ts` dùng schema
+ * này để kiểm mọi file `title-formulas.json` tìm thấy dưới `packs/channels/`.
+ */
+export const titleFormulasSchema: JsonSchema = load('title-formulas.schema.json');
+
+/**
  * Contract của một mô hình định lượng tái dùng (mục `kernel/K-002`, nguồn
  * `topic/T-005`/`T-006`). Đứng ở `kernel` vì cấu trúc của một "mô hình" —
  * assumptions/parameters/formula/verification bốn cấp — trung tính với thể
