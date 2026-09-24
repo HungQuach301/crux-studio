@@ -53,6 +53,27 @@
  * Nên phép quét bỏ qua commit **tạo trước** `GRACE_CUTOFF`. Vết cũ còn lại
  * nguyên và đã khai ở `KF-014`; luật vẫn chặn mọi vi phạm **mới**, tức đúng cái
  * nó sinh ra để chặn.
+ *
+ * ## Mốc phải là lúc luật LÊN `main`, không phải lúc ai đó đo danh sách
+ *
+ * Bản đầu đặt mốc ở `2026-09-22T22:00:00Z` — thời điểm **đo** 30 commit vi
+ * phạm. Nhưng job `no-model-name` chỉ vào `main` lúc `2026-09-24T02:02:41Z`
+ * (commit `dca3564`, PR `#142`), tức **~28 giờ sau**. Trong khoảng hở đó các
+ * lượt chạy vẫn sinh thêm commit mang tên model, vì chỉ dẫn attribution của
+ * nền tảng vẫn đặt tên model vào dòng `Co-Authored-By` và chưa có gì đỏ để
+ * bắt. Đo ngày 2026-09-24 trên 8 PR đang mở: **6 commit** nữa rơi vào khoảng
+ * hở, trải trên 4 PR (`#112` 1, `#198` 3, `#84` 1, `#66` 1).
+ *
+ * Chúng cũng **không sửa được từ phía agent**, đúng cùng lý do đã viết ở trên.
+ * Nên bốn PR đó đỏ vĩnh viễn ở một job mà không lượt nào vá nổi — đúng chữ ký
+ * mà chính đoạn này cảnh báo hai lần. Mốc nay đặt ở **lúc luật lên `main`**:
+ * luật không cắn được trước khi nó ở trên `main`, nên đó mới là ranh giới
+ * "vi phạm mới". Sau mốc, phép quét chặn y nguyên.
+ *
+ * `🤖 [QĐ] #219`, phương án A (`reversible`, CHARTER 2.3 — làm ngay theo
+ * khuyến nghị). Đây **không** phải nới luật để CI xanh (`CLAUDE.md` mục 13):
+ * không commit nào tạo từ `02:02:41Z` trở đi được ân hạn, kể cả commit của
+ * chính bản vá này.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -68,17 +89,21 @@ export const MODEL_NAME_PATTERN = /\b(opus|sonnet|haiku)\b/i;
 /**
  * Mốc ân hạn: commit **tạo trước** thời điểm này không bị quét.
  *
- * Con số chọn bằng đo, không bằng cảm tính: commit vi phạm **muộn nhất** trong
- * 30 commit đo được ngày 2026-09-22 là `80d65f0` của PR #164, `2026-09-22T21:26:04Z`.
- * Mốc đặt ở `22:00Z` — sau commit đó, và **trước** chính các commit của bản vá
- * này, nên bản vá phải tự tuân thủ luật nó cài. Đó là ràng buộc có chủ đích:
- * một mốc đặt ở tương lai sẽ ân xá luôn cho lượt viết ra nó.
+ * Con số chọn bằng đo, không bằng cảm tính: đây là `%cI` của commit `dca3564`
+ * — lần merge đưa job `no-model-name` vào `main` (PR `#142`). Trước giây đó
+ * repo không có gì chặn tên model trong trailer, nên không lượt chạy nào có
+ * cách biết mình đang vi phạm; từ giây đó trở đi thì có. Xem khối chú thích
+ * đầu file, mục "Mốc phải là lúc luật LÊN `main`".
+ *
+ * Mốc vẫn **trước** mọi commit của bản vá đổi nó, nên bản vá phải tự tuân thủ
+ * luật nó cài — ràng buộc có chủ đích, giữ nguyên từ bản đầu: một mốc đặt ở
+ * tương lai sẽ ân xá luôn cho lượt viết ra nó.
  *
  * Mốc là một **hằng số**, không phải "lúc chạy": lấy giờ chạy làm mốc thì mọi
  * commit đều được ân hạn và luật thành vô nghĩa — hỏng mà không gì đỏ, đúng
  * nhóm **Z**.
  */
-export const GRACE_CUTOFF = '2026-09-22T22:00:00Z';
+export const GRACE_CUTOFF = '2026-09-24T02:02:41Z';
 
 /**
  * Commit này có nằm trong phạm vi quét không — tức **tạo từ mốc ân hạn trở đi**.
