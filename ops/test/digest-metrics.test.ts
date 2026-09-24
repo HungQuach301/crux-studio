@@ -683,9 +683,16 @@ test('laneFromTitle: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố �
   assert.equal(laneFromTitle('🤖 Gộp origin/main (integrator, không xung đột)'), null);
 });
 
-test('laneFromTitle: PR mang tiền tố 🤖 được tính vào số mục done của bản tin', () => {
-  // Phép đo đầu-cuối: trước bản sửa, hai PR này không được đếm và `computeProgress`
-  // báo 0 mục done — con số sai mà không gì đỏ.
+/**
+ * Phép đo ĐẦU–CUỐI, gọi thẳng `computeProgress` — thứ thật sự sinh con số
+ * gửi tới chủ dự án (bất biến I6). Gọi hàm thật chứ không chép lại phép lọc
+ * bằng tay: một bài chép lại luật thì xanh cả khi `computeProgress` tự neo
+ * `^` lần nữa, và vòng soát ngữ cảnh sạch đã bắt đúng lỗ đó ở bản đầu.
+ *
+ * Trước bản sửa `P-042`, hai PR thật dưới đây không được đếm và bản tin báo
+ * **0** mục done — thông lượng thấp hơn thật, ngày dự kiến xong muộn hơn thật.
+ */
+test('computeProgress: PR mang tiền tố 🤖 được tính vào số mục done của bản tin', () => {
   const now = new Date('2026-09-24T12:00:00.000Z');
   const merged: GhPr[] = [
     {
@@ -696,21 +703,21 @@ test('laneFromTitle: PR mang tiền tố 🤖 được tính vào số mục don
     },
     {
       number: 227,
-      title: '🤖 [integration] I-020 — a',
+      title: '🤖 [integration] I-020 — a (#227)',
       headRefName: 'y',
       mergedAt: '2026-09-24T07:00:00Z',
     },
+    // Vẫn KHÔNG đếm: commit gộp mang tiền tố cũng không phải một mục done.
+    { number: 9, title: '🤖 Gộp origin/main', headRefName: 'z', mergedAt: '2026-09-24T08:00:00Z' },
   ];
-  const lanes = merged.map((pr) => laneFromTitle(pr.title));
-  assert.deepEqual(lanes, ['platform', 'integration']);
-  assert.equal(
-    merged.filter(
-      (pr) =>
-        laneFromTitle(pr.title) !== null &&
-        now.getTime() - new Date(pr.mergedAt!).getTime() <= 24 * 3_600_000,
-    ).length,
-    2,
-  );
+  const p = computeProgress(new Map(), merged, [], 0, 0, now);
+  assert.equal(p.doneLast24h, 2);
+  assert.equal(p.done3d, 2);
+});
+
+test('laneFromTitle: neo `^` vẫn phải giữ — dạng đúng nằm GIỮA câu không tính', () => {
+  assert.equal(laneFromTitle('🤖 abc [platform] P-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Revert "[platform] P-1 — y"'), null);
 });
 
 test('computeProgress: đếm mục done 24h/3d và thông lượng, chỉ tính PR mang mã mục', () => {

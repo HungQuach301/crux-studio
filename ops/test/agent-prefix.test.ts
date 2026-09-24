@@ -15,6 +15,9 @@ import { AGENT_PREFIX, stripAgentPrefix } from '../scripts/agent-prefix.ts';
 test('AGENT_PREFIX đúng là ký tự 🤖 của CLAUDE.md mục 5', () => {
   assert.equal(AGENT_PREFIX, '🤖');
   assert.equal(AGENT_PREFIX.codePointAt(0), 0x1f916);
+  // Ngoài BMP: hai đơn vị mã UTF-16. Bài này khoá con số mà `slice` dựa vào —
+  // một lần "dọn" thay 🤖 bằng ký tự trông giống trong BMP sẽ đỏ ở đây.
+  assert.equal(AGENT_PREFIX.length, 2);
 });
 
 test('bỏ tiền tố 🤖 cùng khoảng trắng theo sau', () => {

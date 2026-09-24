@@ -298,9 +298,21 @@ export function hasCompletionCommit(lane: string, id: string, subjects: readonly
  * `hasCompletionCommit` một mình sẽ nói "đã xong". CLAUDE.md mục 13 ("`main`
  * đỏ thì revert ngay") làm ca này có thật, không phải giả định.
  *
- * Hàm này **không** cần `stripAgentPrefix` (mục `P-042`): nó tìm mã mục ở
- * GIỮA chuỗi (`includes`), nên `Revert "🤖 [platform] P-038 — …"` vẫn khớp.
- * Chỉ bộ đọc neo `^` mới mù trước tiền tố — đó là toàn bộ hình dạng của lỗi.
+ * ⚠️ Hàm này **cũng** cần `stripAgentPrefix` (mục `P-042`), và lý do đáng
+ * đọc kỹ vì nó suýt bị bỏ sót: phép tìm **mã mục** dùng `includes` nên đúng
+ * là miễn nhiễm với tiền tố, nhưng phép nhận diện **chữ `Revert`** lại neo ở
+ * vị trí 0. Hai hình dạng revert có thật, và trước bản sửa chỉ một trong hai
+ * được bắt:
+ *
+ * - `Revert "🤖 [platform] P-038 — …"` — GitHub bọc tiêu đề gốc, khớp.
+ * - `🤖 Revert "[platform] P-038 — …"` — agent tự viết tiêu đề PR revert,
+ *   mà `CLAUDE.md` mục 5 bắt buộc mở đầu bằng 🤖, nên **không** khớp.
+ *
+ * Bỏ sót ca thứ hai là fail-open **nguy hiểm hơn** chính lỗi mà `P-042` sửa:
+ * `hasCompletionCommit` nay nhận tiêu đề có tiền tố, nên một mục đã bị revert
+ * khỏi `main` sẽ được lật sang `done` và mở khoá mọi `deps` trỏ vào code
+ * không còn tồn tại. Đúng chỗ hỏng mà khối chú thích trên vừa nói nó sinh ra
+ * để chặn.
  *
  * Luật cố ý thô và lệch về hướng an toàn: thấy **bất cứ** commit `Revert`
  * nào nhắc tới tiêu đề của mục thì coi như chưa xong, không xét thứ tự thời
@@ -310,7 +322,9 @@ export function hasCompletionCommit(lane: string, id: string, subjects: readonly
  */
 export function hasRevertCommit(lane: string, id: string, subjects: readonly string[]): boolean {
   const marker = `[${lane}] ${id} `;
-  return subjects.some((subject) => subject.startsWith('Revert ') && subject.includes(marker));
+  return subjects.some(
+    (subject) => stripAgentPrefix(subject).startsWith('Revert ') && subject.includes(marker),
+  );
 }
 
 /** Vì sao một mục đang được giữ `review`: bằng trường `- hold:` hay chỉ bằng lời văn. */

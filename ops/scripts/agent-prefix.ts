@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Mục `platform/P-042` — tiền tố 🤖 mà `CLAUDE.md` mục 5 **bắt buộc** làm mù
  * mọi bộ đọc tiêu đề neo vào đầu dòng.
@@ -33,11 +32,13 @@
  */
 
 /**
- * Tiền tố agent của `CLAUDE.md` mục 5.
+ * Tiền tố agent của `CLAUDE.md` mục 5 — ký tự 🤖, U+1F916.
  *
- * `🤖` là cặp surrogate của 🤖 (U+1F916) — viết bằng mã thay vì ký
- * tự thật để dòng này không phụ thuộc vào bộ mã của trình soạn thảo nào đọc
- * nó; ký tự thật vẫn nằm đầy trong khối chú thích trên.
+ * Một ký tự **ngoài BMP**, nên nó dài **hai** đơn vị mã UTF-16: phép cắt bên
+ * dưới phải dùng `AGENT_PREFIX.length` (= 2), không phải 1. Đó là lý do hằng
+ * số này tồn tại thay vì viết thẳng ký tự vào mỗi chỗ dùng — và `agent-prefix.test.ts`
+ * khoá cả `codePointAt(0) === 0x1f916` lẫn độ dài, để một lần "dọn" sau này
+ * không âm thầm thay nó bằng một ký tự trông giống.
  */
 export const AGENT_PREFIX = '🤖';
 
