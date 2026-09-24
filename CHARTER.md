@@ -732,14 +732,18 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    "có worker khác của đúng làn này rảnh ở lượt kế tiếp không" để mà nhường. Phần việc mà bullet gốc của
    mục `P-022` thật sự cần — không giải mù, phải biết PR định làm gì — đã giữ nguyên trong câu ngay trên;
    phần "làn sở hữu đi trước" bị bỏ vì không có gì để gắn nó vào.
-3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
-   mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
-   coi như đã bỏ). Phép hỏi "đã có ai giữ mục này chưa" chạy bằng `claimCheck` của `ops/scripts/claim-collision.ts`,
-   đừng đọc bằng mắt: nó đọc chữ ký từ TIÊU ĐỀ PR (`[<lane>] <id> — …`), vì nền tảng gán nhánh ngẫu nhiên nên
-   tên nhánh không nói được gì (mục `P-041`). Bốn phán quyết: `open-pr` → đi mục khác; `abandoned-draft` →
-   PR nháp bỏ quá 24 giờ, nhận được (đó là ngoại lệ ngay trên, nay máy đọc chứ không phải mắt); `recently-merged`
-   → đọc lại backlog, mục có thể vừa xong; `free` → nhận. Tool NÉM khi đầu vào thiếu, và "ném" không bao giờ
-   được đọc thành `free`. Không có mục nào thì in "idle" và kết thúc, không commit gì.
+3. Nếu không: chạy `pnpm backlog:status` và lấy trường `readyNow` — ĐỪNG đối chiếu `deps` bằng mắt (mục `I-015`).
+   `readyNow` đã tính cả mục còn `status: review` mà PR của nó đã vào `main` thật, nên một `deps` "trông như chưa
+   xong" không chặn oan; trường `blocked` nói rõ mục nào còn chờ ai. Duyệt các làn theo thứ tự ưu tiên trong
+   ops/lanes/priority.md và nhận mục `readyNow` đầu tiên gặp được mà chưa có nhánh claude/<lane>/<id> và chưa có PR
+   mở (PR nháp không có commit mới quá 24 giờ coi như đã bỏ). Phép hỏi "đã có ai giữ mục này chưa" chạy bằng
+   `claimCheck` của `ops/scripts/claim-collision.ts`, đừng đọc bằng mắt: nó đọc chữ ký từ TIÊU ĐỀ PR
+   (`[<lane>] <id> — …`), vì nền tảng gán nhánh ngẫu nhiên nên tên nhánh không nói được gì (mục `P-041`).
+   Bốn phán quyết: `open-pr` → đi mục khác; `abandoned-draft` → PR nháp bỏ quá 24 giờ, nhận được (đó là ngoại lệ
+   ngay trên, nay máy đọc chứ không phải mắt); `recently-merged` → đọc lại backlog, mục có thể vừa xong; `free`
+   → nhận. Tool NÉM khi đầu vào thiếu, và "ném" không bao giờ được đọc thành `free`. Chỉ in "idle" khi `readyNow`
+   rỗng, hoặc mọi mục trong đó đều đã có nhánh hay PR — và khi in `idle`, dán luôn `readyNow` để lượt sau biết đó
+   là hàng đợi thật chứ không phải một phép đọc sai. Không có mục nào thì kết thúc, không commit gì.
 4. Nhận mục: tạo nhánh claude/<lane>/<id>, push, mở PR nháp tiêu đề "[<lane>] <id> …", mô tả PR bắt đầu bằng 🤖.
    Chạy `claimCheck` LẠI ngay trước khi push commit đầu tiên, trên danh sách PR vừa liệt kê lại — và chạy lần
    nữa ở bước 6, trước khi bỏ nháp. Bước 3 và bước 4 cách nhau cả một lượt làm việc, và đúng khoảng trống đó
@@ -752,7 +756,11 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
 7. Trong cùng PR: cập nhật backlog (status: review) và ops/logs/<lane>/<id>.jsonl (có costUsd). Chuyển PR khỏi trạng thái nháp.
    Gắn nhãn theo cửa merge (CHARTER mục 3, D-C06). Không đoán: chạy
    `git diff --name-only origin/main...HEAD > /tmp/changed.txt` rồi
-   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`:
+   `node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head .` và lấy trường `gate`.
+   PR có chạm `CHARTER.md` thì thêm `--base-charter <bản CHARTER.md trên main>` (`git show origin/main:CHARTER.md`):
+   thiếu nó tool không biết mục nào đổi nên trả `owner-merge` cho mọi thay đổi CHARTER — an toàn nhưng sai, và cả
+   `ci.yml` lẫn `automerge.yml` đều truyền tham số này.
+   Các cửa:
    open → automerge · automerge-delayed → automerge-delayed · owner-merge → owner-merge cộng issue 🤖 [QĐ].
    CI gắn lại nhãn theo đúng luật đó, nên gắn sai chỉ làm chậm một nhịp, không làm thủng gì.
 8. Cần quyết định: làm theo CHARTER 2.3. Quyết định irreversible chỉ còn tám nhóm; mọi thứ khác làm ngay theo khuyến nghị.
@@ -926,7 +934,10 @@ mỗi ngày, như trước khi đổi nhịp):
    ("nhãn automerge") là một chỗ CHARTER nói ngược với chính lớp chặn của nó (`D-C07`, `KF-020`). Nếu PR revert chỉ
    chạm đúng các file trong khối `crux-hotfix-scope` của issue cảnh báo thì gắn THÊM nhãn `hotfix`: lối đi nhanh của
    `D-C07` (mục 3.3) bỏ khoảng chờ 12 giờ cho đúng ca này.
-2. Dọn dẹp: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
+2. Dọn dẹp: chạy `pnpm backlog:status --fix` — mục đã vào `main` mà còn `status: review` được chuyển `done`, để
+   `deps` của các mục sau không đứng chờ một mục đã xong (mục `I-010`, `I-015`). Tool chỉ chuyển mục ở nhóm `stale`
+   và tự giữ lại mọi mục còn dấu treo, nên không cần phán đoán tay; đưa thay đổi đó vào PR của lượt chạy này.
+   Rồi: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
 3. Cập nhật ops/metrics.md: số file code so với số mục done, số lần revert, tỷ lệ main xanh.
 4. Nếu hôm nay là thứ Hai: chạy lại các kiểm tra tự động trong docs/assumptions.md. Giả định nào đổi trạng thái thì mở [QĐ]
    kèm danh sách phần bị ảnh hưởng (CHARTER 11.1).

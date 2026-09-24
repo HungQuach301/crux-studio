@@ -41,14 +41,39 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 ### R-002 · Tải lên YouTube ở chế độ riêng tư
 **Bất biến I5.** Máy tải lên riêng tư; chủ dự án tự bấm công khai trong YouTube Studio.
 
-- deps: R-001, G6
+- deps: R-001
 - risk: high
 - status: ready
+- **vì sao `deps` KHÔNG còn `G6`** (mục `I-019`): `G6` trỏ tới `verify/VF-G6`, mà `VF-G6` ghi `deps: R-002`
+  — hai mục chờ nhau vĩnh viễn, một vòng phụ thuộc thật nằm trên `main`. Chiều đúng là chiều `VF-G6` đang
+  ghi: thân `VF-G6` nói rõ *"kiểm: lần tải lên đầu tiên ở mục `R-002`"*, tức giả định G6 được kiểm **bằng**
+  mục này, không phải là nền móng của nó. Nên cắt ở đây. Quan hệ vẫn còn nguyên ở dòng `nguồn` ngay dưới,
+  chỗ nó thuộc về.
+- **mục này nay nằm trong `readyNow`, và lượt nhận nó phải biết trước** (vòng soát ngữ cảnh sạch của
+  `I-019`): cắt vòng làm `R-002` thôi bị khoá oan — `R-001` đã vào `main` thật — nhưng nó vẫn cần một
+  đường xác thực YouTube mà **repo chưa ghi ở đâu cả**: không `docs/assumptions.md`, không backlog, không
+  workflow nào nhắc tới một secret hay app OAuth cho việc tải lên. Nên đây **không** phải ca `parked` như
+  `topic/T-011` (mục đó nêu đích danh secret còn thiếu); chỗ thiếu ở đây là chính **mảnh tài liệu** đó.
+  Việc đầu tiên của lượt nhận `R-002` là chốt đường xác thực rồi ghi nó vào sổ giả định — chọn nhà cung
+  cấp và ký điều khoản là nhóm `irreversible` số 3 của CHARTER 2.3, nên nếu nó cần một tài khoản hay một
+  điều khoản mới thì mở `🤖 [QĐ]` trước, đừng tự chọn.
 - nguồn: CHARTER bất biến I5; giả định G6
+- **mục này làm theo sóng, và `status` giữ `ready` cho tới sóng cuối** (cùng lối `platform/P-014`): tiêu
+  chí 2 không phụ thuộc quyết định nào nên làm xong trước; tiêu chí 1 chờ đường xác thực, là nhóm
+  `irreversible` số 3 của CHARTER 2.3.
 - tiêu chí xong:
-  - Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng.
-  - Không có đường nào trong code đặt `visibility` khác `private`. Contract đã khoá; test phải chứng minh code cũng không thử.
-  - Nới I5 cần đủ ba điều kiện ở CHARTER mục 3 **và** một quyết định `irreversible`. Không nằm trong phạm vi mục này.
+  - ⬜ Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng. **Chờ `🤖 [QĐ]` đường
+    xác thực YouTube** — không đo được quota thật khi chưa có đường gọi API. Không ước lượng thay, vì
+    chính tiêu chí này cấm.
+  - ✅ Không có đường nào trong code đặt `visibility` khác `private`. Contract đã khoá; test phải chứng
+    minh code cũng không thử. → cổng `pnpm check:visibility` (`ops/scripts/check-visibility.ts`), nối vào
+    `pnpm check`; 25 bài ở `ops/test/check-visibility.test.ts`. Cổng soát **hai** chiều mà contract một
+    mình không soát được: khoá `privacyStatus` của YouTube API (contract không nhìn thấy khoá này), và
+    chính chỗ khoá của contract bị nới. Đo được lỗ cũ: nới thành `enum: ["private","unlisted"]` thì
+    **11/11 bài trước mục này vẫn xanh** trong khi I5 đã mất.
+  - ✅ Nới I5 cần đủ ba điều kiện ở CHARTER mục 3 **và** một quyết định `irreversible`. Không nằm trong
+    phạm vi mục này. → cổng trên in thẳng câu đó vào thông báo khi phát hiện chỗ khoá bị nới, nên lượt
+    sau không phải tra lại luật mới biết mình đang chạm vào cái gì.
 
 ### R-003 · Thu chỉ số 48h / 7d / 28d
 - deps: R-002
