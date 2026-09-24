@@ -124,16 +124,31 @@ export interface ClosureInput {
  * dưới đây đều dựa vào điều đó, và `main-ci.yml` bảo đảm nó bằng
  * `if: success()`.
  *
- * **Hướng an toàn là `keep`.** Hai chiều hỏng ở đây KHÔNG cân nhau, nên
- * chúng không được xử như nhau:
+ * **Hướng an toàn là `keep`** — nhưng KHÔNG phải vì lý do dễ viết nhất, và
+ * vòng soát ngữ cảnh sạch bắt được bản đầu của đoạn này viết sai. Bản sai
+ * nói đóng nhầm là "mất tiếng gọi, im lặng". Không đúng: nếu `main` còn đỏ
+ * thì lượt `main-ci` kế tiếp (lịch mỗi giờ) thấy `--state open` rỗng, đi
+ * nhánh TẠO issue, và thân issue mới mang sẵn @nhắc (`P-034`). Đóng nhầm
+ * tốn **một lần gọi thừa trong vòng một giờ**, chứ không nuốt tiếng gọi.
  *
- * - Giữ nhầm một cảnh báo đã xong: lặp lại đúng chỗ hỏng mục này chữa, và
- *   nó **chỉ** cắn khi có một sự cố mới trong vòng 4 giờ. Tốn một nhịp.
- * - Đóng nhầm một cảnh báo chưa xong: cảnh báo khẩn biến mất khỏi danh
- *   sách `--state open`, và lần đỏ sau mở issue mới nên **không ai thấy**
- *   nó đã bị đóng oan. Mất tiếng gọi, im lặng, không gì đỏ.
+ * Chiều ngược lại nặng hơn, và đó mới là lý do:
  *
- * Nên mọi ca không chắc đều ra `keep`, kèm một câu nói rõ vì sao.
+ * - Giữ nhầm một cảnh báo đã xong: sự cố đỏ KẾ TIẾP rơi vào issue cũ và
+ *   nhịp 4 giờ của sự cố cũ làm nó ra `quiet` — **im 4 giờ trên một `main`
+ *   đỏ**, đúng chỗ hỏng mục này chữa.
+ * - Đóng nhầm một cảnh báo chưa xong: một lần gọi thừa trong vòng một giờ,
+ *   cộng một câu SAI ("`main` đã xanh lại") viết đè lên một sự cố còn sống
+ *   — người đọc issue bị dẫn sai, dù máy tự chữa ở lượt sau.
+ *
+ * Vậy vì sao vẫn `keep`? Vì cả ba ca `keep` dưới đây đều có chung một hình
+ * dạng: **job này không nhận ra cảnh báo đó nói về cái gì.** Một bên không
+ * đọc được `sha`, hay không nối được `sha` đó với commit xanh, thì không có
+ * tư cách tuyên bố sự cố đã xong — kể cả khi tuyên bố ấy rẻ. Ba ca đó không
+ * trùng với ca "cảnh báo đã xong" ở trên, nên chọn `keep` ở đây KHÔNG mua
+ * lại chỗ im 4 giờ: chỗ đó được chữa bằng ca `close`, ca duy nhất job này
+ * nhận ra đủ để nói.
+ *
+ * Mọi ca `keep` đều kèm một câu nói rõ vì sao. Cấm im lặng (rà soát Z2).
  */
 export function decideClosure(input: ClosureInput): ClosureDecision {
   if (!input.title.includes(MAIN_RED_TITLE_MARKER)) {

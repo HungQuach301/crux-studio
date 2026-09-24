@@ -285,7 +285,12 @@ jobs:
   resolve-alert:
     name: resolve-alert
     needs: check
-    if: success()
+    # `github.ref` KHÔNG thừa: `workflow_dispatch` ở đầu file không giới hạn
+    # nhánh, nên một lần gọi tay trên nhánh làm việc cho `GREEN_SHA` = đầu
+    # nhánh đó — và `sha` sự cố trên `main` vẫn là tổ tiên của nó, nên job
+    # này sẽ ĐÓNG cảnh báo kèm câu "`main` đã xanh lại" trong khi `main` còn
+    # đỏ. Vòng soát ngữ cảnh sạch tái hiện được đúng ca đó.
+    if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       # `fetch-depth: 0` là BẮT BUỘC, không phải cho chắc: `git merge-base
@@ -308,7 +313,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          # `--limit` tường minh: mặc định của `gh` là 30, và một danh sách
+          # bị cắt ở đây chỉ làm vài cảnh báo cũ không bao giờ được đóng —
+          # im lặng, đúng hình dạng mục này đang chữa.
           if ! OPEN=$(gh issue list --repo "$REPO" --label alert --state open \
+            --limit 100 \
             --search "main đỏ in:title" --json number,title \
             --jq '.[] | "\(.number)\t\(.title)"'); then
             echo "Không liệt kê được cảnh báo đang mở (gh lỗi) — không đóng gì."
@@ -346,6 +355,11 @@ jobs:
             # của chúng là DỮ LIỆU, không phải lỗi giết `set -e`.
             ANCESTRY=unknown
             if [ -n "$SHA_I" ] && git cat-file -e "${SHA_I}^{commit}" 2>/dev/null; then
+              # THỨ TỰ THAM SỐ LÀ CƠ CHẾ, không phải văn phong: `--is-ancestor
+              # <tổ tiên> <hậu duệ>`. Đảo hai biến thì `main` luôn chạy tới nên
+              # phép thử luôn sai, mọi cảnh báo ra `keep`, và job này chạy xanh
+              # mà KHÔNG BAO GIỜ đóng gì — đúng nhóm Z nó sinh ra để chữa.
+              # `ops/test/alert-resolution-workflow.test.ts` canh đúng thứ tự này.
               if git merge-base --is-ancestor "$SHA_I" "$GREEN_SHA"; then
                 ANCESTRY=ancestor
               else
@@ -372,6 +386,17 @@ jobs:
               continue
             fi
 
-            gh issue close "$NUM" --repo "$REPO" --reason completed --comment "$BODY"
+            # Z9 · bọc y như `gh issue list` và `gh issue view` ở trên. Không
+            # bọc thì một lỗi vặt của `gh` giết cả bước dưới `set -euo
+            # pipefail`, và hậu quả KHÔNG phải "một issue chưa đóng": lượt
+            # `main-ci` này thành ĐỎ trong khi `pnpm check` XANH, job `alert`
+            # (`if: failure()`, `needs: check`) không chạy vì `check` xanh —
+            # nên có một lần chạy đỏ mà KHÔNG có cảnh báo nào, cộng một
+            # `mainCiRed` giả cho điều kiện 1 của `D-C07`. Cùng luật mà job
+            # `alert` đã chốt cho `alert-escalation.ts`.
+            if ! gh issue close "$NUM" --repo "$REPO" --reason completed --comment "$BODY"; then
+              echo "#$NUM: đóng không thành công (gh lỗi) — bỏ qua, lượt sau đóng lại."
+              continue
+            fi
             echo "Đã đóng #$NUM."
           done 3<<< "$OPEN"

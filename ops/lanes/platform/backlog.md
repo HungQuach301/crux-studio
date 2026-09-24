@@ -1042,12 +1042,16 @@ Hệ quả không phải "một issue thừa trong danh sách". Nó là một l�
 
 - deps: —
 - risk: high — chiều hỏng là **im lặng trên một `main` đỏ**, tức đúng chiều mà CHARTER 2.4 xếp vào bốn cảnh báo khẩn.
-- status: ready
+- status: review
+- hold: kiểm bằng chạy thật — `ops/workflows/**` chỉ có hiệu lực sau khi merge và `sync-workflows` chép sang `.github/`, nên job `resolve-alert` chưa từng chạy thật lần nào. Chỉ đóng khi một lượt sau dispatch `main-ci` (`dry_run = true`) và dán kết quả; không đóng khi PR merge
 - nguồn: đo bằng chạy thật ở lượt `crux-worker-1` `2026-09-24 ~09:38Z` (bước 3 phụ lục P1); CHARTER 2.4 luật 1 và 2; `ops/scripts/alert-escalation.ts`; `ops/workflows/main-ci.yml` (job `alert`, bước dùng lại issue); `#131` còn mở
 - tiêu chí xong:
-  - ⬜ `ops/scripts/alert-resolution.ts` (mới): phần **quyết định** nằm trong TypeScript chứ không trong khối `run:` — cùng lý do `P-034` đã chốt, để `pnpm test` kiểm được mà không cần để `main` đỏ thật.
-  - ⬜ `main-ci.yml` có một job đóng cảnh báo khi `check` **xanh**, tôn trọng `dry_run` (`P-010`) và lọc tác giả `github-actions[bot]` (bất biến **I7**).
-  - ⬜ Bài **tái hiện lỗi** (bất biến I2): dựng đúng cảnh "sự cố A nhắc lúc T, `main` xanh, sự cố B đỏ lúc T+1 giờ trên issue dùng lại" và đòi `decideMention` ra `quiet` — rồi đòi `decideClosure` ra `close` để sự cố B có issue mới.
-  - ⬜ Bài khoá hình dạng workflow, kiểu `ops/test/alert-escalation-workflows.test.ts`.
-  - ⬜ Phạm vi **chỉ** cảnh báo `main` đỏ. Ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) có điều kiện kết thúc khác nhau — một mục, một mục tiêu (`CLAUDE.md` mục 11).
+  - ✅ `ops/scripts/alert-resolution.ts` (mới): `incidentSha` (khối máy đọc `crux-hotfix-scope` trước, tiêu đề `main đỏ tại <sha>` là lưới dự phòng cho cảnh báo mở trước `D-C07` như `#131`) và `decideClosure`. Phần **quyết định** nằm trong TypeScript chứ không trong khối `run:` — cùng lý do `P-034` đã chốt.
+  - ✅ `main-ci.yml` job `resolve-alert`: `if: success()` cộng chốt `github.ref == 'refs/heads/main'`, `fetch-depth: 0`, lọc tác giả `github-actions[bot]` (bất biến **I7**), tôn trọng `dry_run` (`P-010`), đọc danh sách qua fd 3, `--limit 100`, và **mọi** lệnh `gh` đều được bọc.
+  - ✅ Bài **tái hiện lỗi** (bất biến I2) dựng đúng cảnh hai sự cố cách nhau 1 giờ bằng hàm thật: `quiet` khi cảnh báo cũ còn mở, `mention` khi nó đã đóng.
+  - ✅ Ba tầng bài kiểm, và tầng thứ ba chỉ có vì vòng soát đo được hai tầng đầu **không đủ** — xem bảng ở `ops/known-failures.md` **KF-028**. 33 bài mới.
+  - ✅ **Phá thật, mỗi phép đỏ đúng chỗ rồi khôi phục** (15 phép): gỡ `fetch-depth: 0` · gỡ lọc tác giả · `success()`→`always()` · gỡ chốt `github.ref` · `unknown`→close · `not-ancestor`→close · đóng cả cảnh báo khác loại · `sha` null vẫn đóng · bỏ lưới tiêu đề · `parseScope` lấy khối ĐẦU · `decideClosure` luôn `keep` · **CLI biến `ancestry` lạ thành `ancestor`** · **đảo thứ tự tham số `merge-base`** · **đổi tên trường JSON `jq` đọc** · **đổi định dạng tiêu đề**. Bốn phép in đậm cho **20/20 xanh** trước vòng soát; phép `fetch-depth` cũng xanh ở bản đầu vì bài kiểm khớp cả chữ trong chú thích.
+  - ✅ Phạm vi **chỉ** cảnh báo `main` đỏ. Ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) có điều kiện kết thúc khác nhau — một mục, một mục tiêu (`CLAUDE.md` mục 11). Có bài canh, không phải một thiếu sót.
+  - ⬜ **Kiểm bằng chạy thật, chưa làm được ở lượt này:** `ops/workflows/**` chỉ có hiệu lực sau khi PR merge và `sync-workflows` chép sang `.github/`. Lượt worker sau khi PR này vào `main` dispatch `main-ci` với `dry_run = true` và dán kết quả — đó mới là bằng chứng job chạy thật, chứ không phải bằng chứng về logic. **Không** tự chuyển `done` trước khi có nó.
+  - ⬜ Còn một chỗ mà bản sửa này **không** che: mắt xích "đóng issue → sự cố sau thấy danh sách rỗng → `mention`" nằm trong `gh issue list --state open` của bash, không trong code — bài kiểm phải đặt danh sách rỗng bằng tay. Khai ở `KF-028`.
 - **mã mục nhận lúc 2026-09-24 ~09:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của các PR đang mở, cao nhất là `P-043` (`#229`), nên `P-044` không đụng ai.

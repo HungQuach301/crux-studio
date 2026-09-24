@@ -843,4 +843,17 @@ Nên `main` đỏ 10:00 → @nhắc → xanh 10:30 → **đỏ lại vì commit 
 
 **Chữ ký chung, đáng nhớ hơn ca cụ thể:** mọi trạng thái "đang có sự cố" mà **chỉ có đường vào, không có đường ra** sẽ rò sang lần sau. Ở đây trạng thái là "issue `alert` đang mở", và nhịp chống spam 4 giờ chính là thứ biến sự rò đó thành im lặng. Thêm một cảnh báo mới thì hỏi luôn: ai đóng nó, và hỏng thế nào nếu không ai đóng.
 
-**Đã chặn:** `platform/P-044` — job `resolve-alert` của `ops/workflows/main-ci.yml` đóng cảnh báo `main` đỏ khi `check` xanh; phần quyết định ở `ops/scripts/alert-resolution.ts` (hướng an toàn luôn là **giữ**), bài kiểm ở `ops/test/alert-resolution.test.ts` và `ops/test/alert-resolution-workflow.test.ts`. **Chưa** phủ ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) — điều kiện kết thúc của chúng khác nhau và `main-ci.yml` không đo được; khai ra ở đây chứ không để nó trông như đã xong.
+**Đã chặn tới đâu, nói đúng tới đó** (`platform/P-044`). Job `resolve-alert` của `ops/workflows/main-ci.yml` đóng cảnh báo `main` đỏ khi `check` xanh; phần quyết định ở `ops/scripts/alert-resolution.ts`, hướng an toàn luôn là **giữ**. Máy canh ba tầng, và tầng thứ ba chỉ có vì vòng soát ngữ cảnh sạch đo được rằng hai tầng đầu **không** đủ:
+
+| Tầng | Bài kiểm | Canh cái gì |
+|---|---|---|
+| Hàm thuần | `ops/test/alert-resolution.test.ts` | `incidentSha`, `decideClosure` — mọi ca không nhận ra được đều ra `keep` |
+| Hình dạng YAML | `ops/test/alert-resolution-workflow.test.ts` | job tồn tại · `if: success()` cộng chốt `github.ref` · `fetch-depth: 0` · lọc `github-actions[bot]` (I7) · cổng `dry_run` · fd 3 · **mọi** lệnh `gh` đều được bọc |
+| Hợp đồng bash↔TS | `ops/test/alert-resolution-cli.test.ts` | tầng CLI (một `ancestry` lạ phải ra `keep`) · tên trường `jq` đọc · vị trí argv · **thứ tự tham số** `merge-base --is-ancestor`, đo bằng `git` thật · định dạng tiêu đề mà bốn chỗ cùng dùng |
+
+Tầng thứ ba là bài học riêng: bốn chỗ hỏng NGỮ NGHĨA — CLI biến `ancestry` lạ thành `ancestor`, đảo hai tham số của `merge-base`, đổi tên trường JSON, đổi định dạng tiêu đề — mỗi chỗ đều làm job chạy xanh mà đóng nhầm hoặc không bao giờ đóng, và **cả bốn đều cho 20/20 bài xanh** trước khi có tầng này. Kiểm hình dạng một workflow không phải là kiểm nó chạy đúng.
+
+**Chưa phủ, khai ra chứ không để trông như đã xong:**
+
+- Ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật). Điều kiện kết thúc của chúng khác nhau và `main-ci.yml` không đo được. `decideClosure` vì vậy trả `keep` cho mọi tiêu đề không khớp `main đỏ` — một luật, có bài canh, không phải một thiếu sót.
+- Mắt xích **"đóng issue → sự cố sau thấy danh sách rỗng → `mention`"** nằm trong `gh issue list --state open` của bash, không trong code. Không dòng nào nối `decideClosure` với `decideMention`, nên các bài phải đặt danh sách rỗng bằng tay.

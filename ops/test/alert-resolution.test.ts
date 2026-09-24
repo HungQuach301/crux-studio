@@ -22,12 +22,24 @@ const at = (base: string, hours: number): string =>
 
 // ── Bài TÁI HIỆN LỖI (bất biến I2) ───────────────────────────────────────
 //
-// Dựng đúng cảnh mục `P-044` mô tả, bằng hai hàm THẬT chứ không bằng lời:
-// sự cố A được @nhắc, `main` xanh lại, sự cố B đỏ vì một commit KHÁC trong
-// vòng 4 giờ, và vì cảnh báo A chưa bao giờ đóng thì B rơi vào đúng issue
-// đó.
+// Dựng đúng cảnh mục `P-044` mô tả, bằng hàm THẬT chứ không bằng lời: sự cố
+// A được @nhắc, `main` xanh lại, sự cố B đỏ vì một commit KHÁC trong vòng 4
+// giờ, và vì cảnh báo A chưa bao giờ đóng thì B rơi vào đúng issue đó.
+//
+// ⚠️ **Giới hạn đã khai, vòng soát ngữ cảnh sạch chỉ ra:** bài đầu tiên chỉ
+// gọi `decideMention` — hàm mà PR này KHÔNG đụng — nên nó đúng cả trước lẫn
+// sau bản sửa. Nó là bài *dựng hiện trường*, không phải bài đỏ-khi-lỗi-quay-
+// lại; tên cũ của nó nói quá. Bài đỏ khi cơ chế mất là bài `BẢN SỬA` ngay
+// dưới (ép `decideClosure` luôn `keep` → đỏ) và
+// `ops/test/alert-resolution-workflow.test.ts` (xoá job `resolve-alert` → đỏ).
+//
+// Mắt xích "đóng issue → sự cố sau thấy danh sách RỖNG → `mention`" nằm
+// trong `gh issue list --state open` của bash, KHÔNG trong code TypeScript.
+// Không dòng nào nối `decideClosure` với `decideMention`, nên hai bài dưới
+// đây đặt danh sách rỗng bằng tay. Đó là giới hạn thật của mặt bằng, khai ra
+// chứ không để nó trông như đã che.
 
-test('TÁI HIỆN LỖI · cảnh báo không đóng → sự cố đỏ MỚI trong 4 giờ ra `quiet`, không ai được gọi', () => {
+test('HIỆN TRƯỜNG · cảnh báo không đóng → sự cố đỏ MỚI trong 4 giờ ra `quiet`, không ai được gọi', () => {
   const aRed = '2026-09-24T10:00:00Z';
   const bRed = at(aRed, 1); // đỏ lại sau 1 giờ, commit khác
 

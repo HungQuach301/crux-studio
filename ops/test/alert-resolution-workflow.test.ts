@@ -40,40 +40,53 @@ function job(source: string, name: string): string {
 
 const RESOLVE = job(MAIN_CI, 'resolve-alert');
 
-test('job `resolve-alert` tồn tại và chỉ chạy khi `check` XANH', () => {
-  assert.match(RESOLVE, /needs: check/);
-  assert.match(RESOLVE, /if: success\(\)/);
+/**
+ * Cùng thân job nhưng **bỏ mọi dòng chú thích**.
+ *
+ * Mọi khẳng định về CẤU TRÚC phải đọc bản này. Chú thích trong job mô tả cả
+ * những thứ job KHÔNG làm (`if: failure()` là của job `alert`, và `fetch-depth:
+ * 0` được giải thích ngay phía trên dòng thật) — bản đầu của bài này khớp cả
+ * chú thích, nên gỡ khoá thật mà bài vẫn xanh. Đúng hai lần liên tiếp, nên
+ * luật thành một biến chứ không còn là một lời dặn.
+ */
+const RESOLVE_YAML = RESOLVE.split('\n')
+  .filter((line) => !line.trimStart().startsWith('#'))
+  .join('\n');
+
+test('job `resolve-alert` tồn tại và chỉ chạy khi `check` XANH, trên `main`', () => {
+  assert.match(RESOLVE_YAML, /needs: check/);
+  assert.match(RESOLVE_YAML, /if: success\(\)/);
   // Nó KHÔNG được mang `failure()` — đó là job `alert`, việc ngược lại.
-  assert.doesNotMatch(RESOLVE, /if: failure\(\)/);
+  assert.doesNotMatch(RESOLVE_YAML, /if: failure\(\)/);
+  // `workflow_dispatch` ở đầu file không giới hạn nhánh, nên thiếu chốt này
+  // là một lần gọi tay trên nhánh làm việc ĐÓNG được cảnh báo `main` đỏ kèm
+  // câu "`main` đã xanh lại" trong khi `main` còn đỏ.
+  assert.match(RESOLVE_YAML, /github\.ref == 'refs\/heads\/main'/);
 });
 
 test('checkout lấy ĐỦ lịch sử — thiếu là mọi verdict ra `keep` mà job vẫn xanh', () => {
-  // Khớp DÒNG YAML thật, không khớp chữ `fetch-depth: 0` nằm trong chú
-  // thích ngay phía trên nó: bản đầu của bài này khớp cả hai, nên gỡ khoá
-  // thật mà bài vẫn xanh — chính chỗ hỏng nó sinh ra để chặn.
-  const yaml = RESOLVE.split('\n').filter((line) => !line.trimStart().startsWith('#'));
   assert.ok(
-    yaml.some((line) => line === '          fetch-depth: 0'),
+    RESOLVE_YAML.split('\n').some((line) => line === '          fetch-depth: 0'),
     '`resolve-alert` phải checkout với `fetch-depth: 0`',
   );
 });
 
 test('I7 · chỉ đọc thân issue và comment của `github-actions[bot]`', () => {
-  const selects = RESOLVE.match(/select\(\.author\.login == "github-actions\[bot\]"\)/g) ?? [];
+  const selects = RESOLVE_YAML.match(/select\(\.author\.login == "github-actions\[bot\]"\)/g) ?? [];
   // Hai chỗ: thân issue, và từng comment. Bỏ một trong hai là thủng một nửa.
   assert.equal(selects.length, 2, 'phải lọc tác giả ở CẢ thân issue lẫn comment');
 });
 
 test('phần quyết định gọi `alert-resolution.ts`, không tự so trong bash', () => {
-  assert.match(RESOLVE, /node ops\/scripts\/alert-resolution\.ts sha /);
-  assert.match(RESOLVE, /node ops\/scripts\/alert-resolution\.ts verdict /);
+  assert.match(RESOLVE_YAML, /node ops\/scripts\/alert-resolution\.ts sha /);
+  assert.match(RESOLVE_YAML, /node ops\/scripts\/alert-resolution\.ts verdict /);
   // Không có phép so `ancestor` nào bằng tay ngoài ba chỗ gán biến.
-  const assigns = RESOLVE.match(/ANCESTRY=(ancestor|not-ancestor|unknown)/g) ?? [];
+  const assigns = RESOLVE_YAML.match(/ANCESTRY=(ancestor|not-ancestor|unknown)/g) ?? [];
   assert.equal(assigns.length, 3);
 });
 
 test('P-010 · `dry_run` chặn `gh issue close`, và nhánh chạy thử in ra thân THẬT', () => {
-  const lines = RESOLVE.split('\n');
+  const lines = RESOLVE_YAML.split('\n');
   const guard = lines.findIndex((line) => line.includes('"$DRY_RUN" = "true"'));
   const close = lines.findIndex((line) => line.includes('gh issue close'));
   assert.notEqual(guard, -1, 'thiếu cổng dry_run');
@@ -85,10 +98,27 @@ test('P-010 · `dry_run` chặn `gh issue close`, và nhánh chạy thử in ra 
 });
 
 test('đọc danh sách qua fd 3 — `gh`/`node` trong thân vòng lặp không nuốt được nó', () => {
-  assert.match(RESOLVE, /read -r -u 3/);
-  assert.match(RESOLVE, /done 3<<< "\$OPEN"/);
+  assert.match(RESOLVE_YAML, /read -r -u 3/);
+  assert.match(RESOLVE_YAML, /done 3<<< "\$OPEN"/);
 });
 
 test('bình luận đóng mở đầu bằng 🤖 (CLAUDE.md mục 5)', () => {
-  assert.match(RESOLVE, /"🤖 \\`main\\` đã xanh lại/);
+  assert.match(RESOLVE_YAML, /"🤖 \\`main\\` đã xanh lại/);
+});
+
+test('MỌI lệnh `gh` trong job đều được bọc — một lỗi vặt không được làm `main-ci` ĐỎ', () => {
+  // Chỗ hỏng thật, vòng soát ngữ cảnh sạch tái hiện được: `gh issue close`
+  // trần dưới `set -euo pipefail` giết cả bước khi `gh` lỗi. Hậu quả KHÔNG
+  // phải "một issue chưa đóng" — lượt `main-ci` này thành ĐỎ trong khi
+  // `pnpm check` XANH, và job `alert` (`needs: check` + `if: failure()`)
+  // không chạy vì `check` xanh. Tức một lần chạy đỏ mà KHÔNG có cảnh báo
+  // nào, cộng một `mainCiRed` giả cho điều kiện 1 của `D-C07`.
+  const bare = RESOLVE_YAML.split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('gh ') && !line.startsWith('gh issue close'));
+  assert.deepEqual(bare, [], `lệnh gh chưa bọc: ${bare.join(' | ')}`);
+
+  const close = RESOLVE_YAML.split('\n').find((line) => line.includes('gh issue close'));
+  assert.ok(close !== undefined, 'thiếu lệnh đóng');
+  assert.match(close, /^\s*if ! gh issue close /, '`gh issue close` phải nằm trong `if !`');
 });
