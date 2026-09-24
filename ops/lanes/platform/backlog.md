@@ -995,3 +995,34 @@ Con số này là số để kiểm giả định `G3` (trần lượt chạy ro
   - ✅ Comment doc của `isStep0Line` cập nhật: hết "khi P-023 vào `main` thì mở rộng", nay nói thẳng đã nhận cả hai hình dạng.
   - ✅ Ghi `ops/known-failures.md` KF-022.
 - **mã mục nhận lúc 2026-09-23 ~14:3x giờ UTC** (`KF-005`): dò `### P-` trên `main` và mọi nhánh PR đang mở, cao nhất là `P-035`, nên `P-036` không đụng ai.
+
+### P-040 · Hai worker nhận cùng một mục trong cùng một phút, và không gì đỏ
+Phụ lục P1 bước 3 đòi mục `ready`, `deps` đã xong, *"chưa có nhánh `claude/<lane>/<id>` và chưa có PR mở"*. Phép hỏi đó chạy **một lần**, lúc lượt chạy bắt đầu duyệt backlog — rồi lượt chạy làm việc cả giờ đồng hồ và push. Khoảng trống giữa hai mốc ấy không có cổng nào.
+
+Đo được ngày 2026-09-24, mục `integration/I-020`:
+
+| PR | Routine | Tạo lúc | Kết cục |
+|---|---|---|---|
+| [#221](https://github.com/HungQuach301/crux-studio/pull/221) | `crux-worker-2` | 03:40:00Z | merge 03:44:45Z |
+| [#222](https://github.com/HungQuach301/crux-studio/pull/222) | `crux-worker-1` | 03:41:29Z | còn mở, xung đột với `main` ở `ops/known-failures.md` |
+
+Cách nhau **89 giây**. Cả hai lượt làm đúng luật như nó được viết. Cái giá: trọn một lượt worker (giả định **G3** — trần số lần chạy routine mỗi ngày) cộng một PR mà bước 0 trả `aborted-ineligible` ở mọi lượt kể từ đó, vì mục của nó đã nằm trên `main` rồi. Mọi chỉ báo đều xanh — nhóm **Z**.
+
+Hai tín hiệu nhận việc đang có đều không bắt được ca này. Tên nhánh thì đã chết: phiên cloud được nền tảng gán nhánh ngẫu nhiên (`claude/dreamy-ride-oh9k8r`), nên `laneFromBranch` trả `null` cho **5 trên 7** PR đang mở lúc viết mục này. Trạng thái `claimed` thì có trong bảng của `ops/lanes/README.md` và dòng *"Nhận xong đổi thành `claimed` ngay trong PR nháp"* — nhưng CHARTER phụ lục P1 bước 4 không nhắc tới nó, chưa lượt nào ghi nó, và không phép kiểm nào đọc nó. Một trạng thái không ai ghi và không ai đọc là một luật không tồn tại.
+
+- deps: —
+- risk: medium
+- status: review
+- nguồn: `ops/known-failures.md` KF-025; CHARTER phụ lục P1 bước 3 và bước 4; `ops/lanes/README.md`; PR [#221](https://github.com/HungQuach301/crux-studio/pull/221) và [#222](https://github.com/HungQuach301/crux-studio/pull/222)
+- tiêu chí xong:
+  - ✅ Chữ ký nhận việc đọc từ **tiêu đề PR** (`[<lane>] <id> — …`), không đọc từ tên nhánh — `claimKeyFromTitle` của `ops/scripts/claim-collision.ts`, cùng hình dạng mà `hasCompletionCommit` đã đọc.
+  - ✅ `claimCheck(prs, lane, id, now)` trả `open-pr` · `recently-merged` · `free`. Phụ lục P1 bước 3 và bước 4 gọi nó, và gọi **lại** ngay trước khi push commit đầu tiên — khoảng trống giữa hai mốc đó chính là 89 giây đã sinh ra `#222`.
+  - ✅ `duplicateClaims(prs)` bắt mọi cặp PR cùng mục có **thời gian sống chồng nhau**, tính cả PR đã merge: ca `#221`/`#222` là bằng chứng rằng một phép dò chỉ nhìn PR đang mở sẽ tắt tiếng đúng vào lúc chỗ hỏng thành vĩnh viễn.
+  - ✅ Sóng nối tiếp **không** bị báo: `platform/P-014` cố ý làm theo sóng (`#62`, `#196`, `#223`), và một bộ dò kêu sai vài lần là một bộ dò bị tắt. Phép phân biệt là thời gian sống, không phải mã mục.
+  - ✅ PR có tiêu đề không đọc được thành mã mục được **đếm và in ra**, không biến mất khỏi phép đo (bài học `Z15`).
+  - ✅ `pnpm claims <file.json>` in bảng người đọc; `--json` cho máy. Thoát 0 kể cả khi có va chạm — đây là phép **đo**, cổng chặn duy nhất là người nhận việc đọc `verdict` rồi đi mục khác.
+  - ✅ `ops/test/claim-collision.test.ts` — 17 bài, mở đầu bằng **ba bài tái hiện lỗi** dựng lại đúng mốc thật của `#221`/`#222` (bất biến I2).
+  - ✅ Chạy thật trên ảnh chụp 25 PR (7 mở + 18 merge gần nhất) lúc 2026-09-24T05:40Z: **đúng 1 va chạm** — `integration/I-020` `#221`/`#222` — và **0 báo giả** trên hai sóng của `P-014`.
+  - ⬜ **Còn lại, tách phạm vi:** đưa `duplicateClaims` vào bản tin ngày (`ops/scripts/digest-metrics.ts`) để va chạm nổi lên hộp quyết định duy nhất. Không làm ở PR này vì `digest-metrics.ts` đang bị `#223` sửa — hai PR cùng chạm một file là đúng thứ luật mềm CHARTER mục 4 bảo tránh.
+  - ⬜ **Còn lại:** trạng thái `claimed` của `ops/lanes/README.md` vẫn chưa ai ghi. Hoặc phụ lục P1 bước 4 ghi nó, hoặc bảng trong README bỏ nó đi — hai nguồn nói hai chuyện là chỗ sinh ra lỗi tiếp theo.
+- **mã mục nhận lúc 2026-09-24 ~05:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và trên nhánh của cả 7 PR đang mở**, cao nhất là `P-039`, nên `P-040` không đụng ai. Mã `KF-025` dò cùng cách, cao nhất là `KF-024`.

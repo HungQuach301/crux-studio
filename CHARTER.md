@@ -734,8 +734,14 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    phần "làn sở hữu đi trước" bị bỏ vì không có gì để gắn nó vào.
 3. Nếu không: duyệt các làn theo thứ tự ưu tiên. Trong ops/lanes/<lane>/backlog.md, chọn mục đầu tiên có status ready,
    mọi deps đã done, chưa có nhánh claude/<lane>/<id> và chưa có PR mở (PR nháp không có commit mới quá 24 giờ
-   coi như đã bỏ). Không có mục nào thì in "idle" và kết thúc, không commit gì.
+   coi như đã bỏ). Phép hỏi "đã có ai giữ mục này chưa" chạy bằng `claimCheck` của `ops/scripts/claim-collision.ts`,
+   đừng đọc bằng mắt: nó đọc chữ ký từ TIÊU ĐỀ PR (`[<lane>] <id> — …`), vì nền tảng gán nhánh ngẫu nhiên nên
+   tên nhánh không nói được gì (mục `P-040`). `open-pr` → đi mục khác; `recently-merged` → đọc lại backlog,
+   mục có thể vừa xong. Không có mục nào thì in "idle" và kết thúc, không commit gì.
 4. Nhận mục: tạo nhánh claude/<lane>/<id>, push, mở PR nháp tiêu đề "[<lane>] <id> …", mô tả PR bắt đầu bằng 🤖.
+   Chạy `claimCheck` LẠI ngay trước khi push commit đầu tiên, trên danh sách PR vừa liệt kê lại. Bước 3 và bước 4
+   cách nhau cả một lượt làm việc, và đúng khoảng trống đó đã cho hai worker nhận cùng mục `I-020` cách nhau
+   89 giây ngày 2026-09-24 (`KF-025`): PR trước merge, PR sau kẹt xung đột vĩnh viễn, và không gì đỏ.
 5. Làm theo tiêu chí xong của mục. Commit và push sau mỗi bước có ý nghĩa. Chạy `pnpm check` và tập vàng replay.
    PR sửa lỗi phải có test tái hiện lỗi.
 6. Gọi subagent reviewer (ngữ cảnh sạch) soát diff theo CHARTER mục 3 đến 6; sửa các điểm nó nêu.

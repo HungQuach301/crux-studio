@@ -68,6 +68,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 - Tên nhánh: `claude/<lane>/<id>` — ví dụ `claude/visual/V-003`. Làn là một trong: `kernel`, `platform`, `verify`, `integration`, `topic`, `editorial`, `visual`, `audio`, `assembly`, `release`.
 - Nhận việc: tạo nhánh và **PR nháp** ngay từ đầu, tiêu đề `[<lane>] <id> — <tóm tắt>`. Đó là cách báo cho các worker khác biết mục đã có người nhận.
 - Thấy PR đang mở cho một mục thì **không nhận lại** mục đó. Ngoại lệ: PR nháp không có commit mới quá 24 giờ thì coi như bỏ.
+- **Đừng đọc bằng mắt, chạy `claimCheck`** (`ops/scripts/claim-collision.ts`, lệnh `pnpm claims`). Nó đọc chữ ký nhận việc từ **tiêu đề PR**, không từ tên nhánh — phiên cloud được gán nhánh ngẫu nhiên nên tên nhánh không nói được gì. Và chạy **hai lần**: lúc chọn mục, rồi lại ngay trước khi push commit đầu tiên. Hai mốc đó cách nhau cả một lượt làm việc; đúng khoảng trống ấy đã cho hai worker nhận cùng mục `I-020` cách nhau 89 giây (`KF-025`, mục `P-040`).
 - Commit sớm và thường xuyên, push sau mỗi bước có ý nghĩa. Phiên có thể dừng bất cứ lúc nào; việc đã push thì lần chạy sau làm tiếp được.
 - `git push -u origin <branch>`. Lỗi mạng thì thử lại tối đa 4 lần, giãn 2s/4s/8s/16s.
 - Xong việc: chạy `pnpm check`, cập nhật backlog (`status: review`) và `ops/logs/<lane>/<id>.jsonl` **trong cùng PR đó**, rồi chuyển PR khỏi trạng thái nháp.
