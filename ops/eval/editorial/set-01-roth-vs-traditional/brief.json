@@ -1,0 +1,11 @@
+{
+  "selected": {
+    "question": "when does a Roth 401(k) beat a Traditional 401(k)?"
+  },
+  "claims": [
+    { "id": "C1", "statement": "The break-even hinges on your marginal tax rate today versus in retirement, not on account balance." },
+    { "id": "C2", "statement": "At a 22% rate now and 24% later, the Roth wins by roughly 3% of ending balance over 30 years." },
+    { "id": "C3", "statement": "The crossover flips once expected retirement income drops two brackets below working income." }
+  ],
+  "targetDurationMs": 720000
+}
