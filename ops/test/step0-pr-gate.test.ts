@@ -21,8 +21,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
+  HEARTBEAT_FUTURE_TOLERANCE_MINUTES,
   HEARTBEAT_OPEN_AT_MINUTES,
   HEARTBEAT_SAFETY_MARGIN_MINUTES,
   HEARTBEAT_STALE_MINUTES,
@@ -54,8 +56,20 @@ function minutesAgo(minutes: number): string {
 
 // ── Hằng số: ngưỡng phải khớp CHARTER 2.4, và khoảng an toàn phải thật sự trừ ──
 
-test('ngưỡng nhịp tim là 180 phút — cùng con số CHARTER 2.4 giao cho watchdog.yml', () => {
-  assert.equal(HEARTBEAT_STALE_MINUTES, 180);
+test('ngưỡng nhịp tim KHỚP con số thật trong ops/workflows/watchdog.yml', () => {
+  // Ca âm của chính bản sao hằng số: bản đầu của bài này là
+  // `assert.equal(HEARTBEAT_STALE_MINUTES, 180)` — một phép so hằng-với-hằng,
+  // vẫn xanh nguyên nếu ai đổi `watchdog.yml` thành `-gt 240`. Vòng soát của
+  // PR #212 chỉ ra chỗ đó. Nay đọc chính file YAML, cùng cách
+  // `ops/test/required-checks.test.ts` khoá chiều lệch TS ↔ YAML.
+  const yaml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
+  const matches = [...yaml.matchAll(/"\$AGE_MIN"\s+-gt\s+(\d+)/g)];
+  assert.equal(matches.length, 1, 'phải có đúng một phép so ngưỡng nhịp tim trong watchdog.yml');
+  assert.equal(
+    Number(matches[0]![1]),
+    HEARTBEAT_STALE_MINUTES,
+    'ngưỡng trong watchdog.yml và HEARTBEAT_STALE_MINUTES đã lệch nhau',
+  );
 });
 
 test('mốc mở PR nằm TRƯỚC ngưỡng watchdog, không phải trùng ngưỡng', () => {
@@ -81,10 +95,27 @@ test('heartbeatAgeMinutes: null khi không có mốc, và null khi mốc không 
   assert.equal(heartbeatAgeMinutes(minutesAgo(10), 'không phải ngày'), null);
 });
 
-test('heartbeatAgeMinutes: mốc ở TƯƠNG LAI kẹp về 0, không trả số âm', () => {
-  // Đã xảy ra thật: dòng log của PR #89 ghi `at` lệch về tương lai. Số âm ở
-  // đây sẽ lặng lẽ thành "nhịp tim còn mới" mãi mãi — nhóm Z.
-  assert.equal(heartbeatAgeMinutes(minutesAgo(-120), NOW), 0);
+test('heartbeatAgeMinutes: tương lai TRONG dung sai kẹp về 0, không trả số âm', () => {
+  assert.equal(heartbeatAgeMinutes(minutesAgo(-1), NOW), 0);
+  assert.equal(heartbeatAgeMinutes(minutesAgo(-HEARTBEAT_FUTURE_TOLERANCE_MINUTES), NOW), 0);
+});
+
+test('heartbeatAgeMinutes: tương lai NGOÀI dung sai là null, KHÔNG phải 0', () => {
+  // Đã xảy ra thật: dòng log của PR #89 ghi `at` lệch về tương lai. Kẹp về 0
+  // KHÔNG chữa được gì — `0 >= 150` cũng false, nên cổng vẫn nói "còn mới" và
+  // vẫn không mở PR, mà `watchdog.yml` cũng không nổ (`AGE_MIN` âm, `-gt 180`
+  // false). Không lớp nào bắt được: nhóm Z thuần. Nên phải là `null`.
+  assert.equal(heartbeatAgeMinutes(minutesAgo(-120), NOW), null);
+  assert.equal(heartbeatAgeMinutes(minutesAgo(-(HEARTBEAT_FUTURE_TOLERANCE_MINUTES + 1)), NOW), null);
+});
+
+test('step0PrGate: mốc nhịp tim ở tương lai xa → MỞ PR, không im lặng nhường lượt', () => {
+  // Đây là bài khoá hệ quả thật của chỗ trên. Nếu `heartbeatAgeMinutes` quay
+  // về kẹp 0 thì bài này đỏ, vì quyết định sẽ là `log-only-run`.
+  const decision = step0PrGate(input({ lastHeartbeatOnMainAt: minutesAgo(-120) }));
+  assert.equal(decision.openPr, true);
+  assert.equal(decision.reason, 'heartbeat-unreadable');
+  assert.equal(decision.heartbeatAgeMinutes, null);
 });
 
 // ── Chiều tốn tiền: lượt log-only, nhịp tim còn mới → KHÔNG mở PR ──

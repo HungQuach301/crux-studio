@@ -60,6 +60,14 @@
  * Quyết định này là `reversible` (CHARTER 2.3): nó nằm trong git nên revert
  * được. Ghi ở `🤖 [QĐ]` kèm trong bản tin; chủ dự án phủ quyết bằng
  * `hoàn tác #N` trong 24 giờ.
+ *
+ * ## Chỗ chưa che, khai ra thay vì giả vờ đã che
+ *
+ * Hai worker chạy **chồng nhau** (CHARTER 2.1) có thể cùng thấy nhịp tim quá
+ * mốc và cùng mở một PR log. Hệ quả là mất một phần khoản tiết kiệm, không
+ * phải sai về đúng-sai, nên ở đây không có khoá chống đua: một khoá như vậy
+ * cần trạng thái dùng chung, mà đó đúng là thứ `D-C04` đã bỏ tiền ra tránh.
+ * Thấy nó xảy ra thật thì mở mục backlog, đừng đoán trước ở đây.
  */
 
 /** Ngưỡng nhịp tim của `watchdog.yml`, CHARTER 2.4 dấu hiệu số 5. */
@@ -76,6 +84,13 @@ export const HEARTBEAT_SAFETY_MARGIN_MINUTES = 30;
 
 /** Quá mốc này thì lượt log-only vẫn phải mở PR để nuôi nhịp tim. */
 export const HEARTBEAT_OPEN_AT_MINUTES = HEARTBEAT_STALE_MINUTES - HEARTBEAT_SAFETY_MARGIN_MINUTES;
+
+/**
+ * Mốc nhịp tim được phép ở **tương lai** bao nhiêu phút mà vẫn coi là lệch
+ * đồng hồ bình thường. Quá ngần này thì coi là **không đọc được**, không
+ * phải "còn mới" — xem `heartbeatAgeMinutes`.
+ */
+export const HEARTBEAT_FUTURE_TOLERANCE_MINUTES = 5;
 
 export interface Step0PrGateInput {
   /**
@@ -122,17 +137,36 @@ export interface Step0PrGateDecision {
 }
 
 /**
- * Tuổi nhịp tim tính bằng phút, hoặc `null` nếu một trong hai mốc không đọc
- * được. Mốc ở **tương lai** kẹp về `0` thay vì trả số âm: một dòng log ghi
- * `at` lệch giờ từng xảy ra thật (PR `#89`, `ops/logs/assembly/A-001.jsonl`),
- * và số âm ở đây sẽ lặng lẽ thành "nhịp tim còn mới" mãi mãi.
+ * Tuổi nhịp tim tính bằng phút, hoặc `null` khi **không đọc được**.
+ *
+ * ## Vì sao mốc ở tương lai là `null`, không phải `0`
+ *
+ * Một dòng log ghi `at` lệch về tương lai đã xảy ra thật (PR `#89`,
+ * `ops/logs/assembly/A-001.jsonl`). Bản đầu của hàm này kẹp số âm về `0` —
+ * nhưng kẹp về `0` **không** xoá được chỗ hỏng, nó chỉ làm con số báo cáo
+ * đẹp: `0 >= HEARTBEAT_OPEN_AT_MINUTES` cũng `false`, nên quyết định vẫn y
+ * hệt là `log-only-run` và vẫn không mở PR. Nghĩa là một mốc lệch giờ vẫn
+ * làm cổng tưởng nhịp tim còn mới — đúng cái mà chú thích cũ tự nhận là đã
+ * chặn. Vòng soát ngữ cảnh sạch của PR `#212` bắt được chỗ này.
+ *
+ * Tệ hơn: `watchdog.yml` cũng không nổ trong ca đó (`AGE_MIN` âm, phép so
+ * `-gt 180` là `false`), nên **không lớp nào** bắt được — nhóm **Z** thuần,
+ * tự lành nhưng chỉ sau khi giờ thật vượt qua mốc lệch.
+ *
+ * Nên tương lai quá `HEARTBEAT_FUTURE_TOLERANCE_MINUTES` trả `null`, và
+ * `null` đi vào nhánh `heartbeat-unreadable` của `step0PrGate` — tức **mở
+ * PR**, cùng hướng an toàn mà hàm đó đã dùng cho hai ca không đo được khác.
+ * Lệch trong khoảng dung sai vẫn kẹp về `0`: lệch vài giây giữa hai máy là
+ * chuyện thường, và bắt nó mở PR thì mất đúng khoản tiết kiệm của mục này.
  */
 export function heartbeatAgeMinutes(lastAt: string | null, now: string): number | null {
   if (lastAt === null) return null;
   const last = Date.parse(lastAt);
   const current = Date.parse(now);
   if (Number.isNaN(last) || Number.isNaN(current)) return null;
-  return Math.max(0, (current - last) / 60_000);
+  const minutes = (current - last) / 60_000;
+  if (minutes < -HEARTBEAT_FUTURE_TOLERANCE_MINUTES) return null;
+  return Math.max(0, minutes);
 }
 
 /**
