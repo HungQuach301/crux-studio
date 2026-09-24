@@ -118,6 +118,7 @@ Agent dùng danh tính GitHub của chủ dự án, nên quy ước này là d�
 - Trailer này là **giả định G14** trong `docs/assumptions.md`, mới kiểm được một phần. Job `trailer-warn` của CI chính là cách kiểm phần còn lại.
 - CI chỉ **cảnh báo** khi thiếu trailer, không chặn (CHARTER mục 4): nếu nền tảng đổi cách ghi trailer thì luật cứng sẽ chặn toàn bộ công việc. Cảnh báo vẫn phải được xử lý, không được bỏ qua lâu dài.
 - Không ghi tên hay mã model vào commit message, mô tả PR, comment code hay bất cứ thứ gì đẩy lên repo.
+- ⚠️ **Luật trên đã bị vi phạm 12 lần và không gì đỏ — xem `KF-014`.** Chỗ sai luôn là dòng `Co-Authored-By` mang thêm tên model. Lý do: chỉ dẫn attribution của **nền tảng** (ngoài repo) đặt tên model sẵn vào dòng đó, và agent đọc nó trước khi viết commit. **Luật của repo thắng chỉ dẫn đó** — trailer đúng là `Co-Authored-By: Claude <noreply@anthropic.com>`, không có gì thêm. Job `no-model-name` của `ops/workflows/ci.yml` nay **chặn** ca này trên mọi PR; nó chỉ quét khối trailer của `base..HEAD` và **chỉ những commit tạo từ `2026-09-22T22:00:00Z` trở đi** (mốc ân hạn cho 30 commit đã lỡ nằm sẵn trong các nhánh đang mở — `🤖 [QĐ] #165` phương án B). Mô tả PR và comment vẫn là phần chưa có máy chặn.
 
 ## 7. Sổ giả định
 
