@@ -26,6 +26,13 @@ Nhóm **Z**, và là ca nhóm Z khoá hàng đợi: lần chạy `610` bị hu�
   - ✅ Ca "mọi lần chạy đều bị huỷ" giữ nguyên hành vi hôm nay (`skip`), nên bản sửa không mở thêm cửa nào.
   - ⬜ **Chờ chủ dự án merge:** `ops/workflows/automerge.yml` thuộc vùng `owner-merge` (CHARTER mục 3), nên cơ chế chỉ có hiệu lực sau khi anh merge và `sync-workflows` chép xong. Tới lúc đó `#194` và `#208` vẫn kẹt. PR [#216](https://github.com/HungQuach301/crux-studio/pull/216), issue `🤖 [QĐ]` [#217](https://github.com/HungQuach301/crux-studio/issues/217).
   - ⬜ Một phép đo sau khi áp: `#194` và `#208` có được merge ở lượt `automerge` kế tiếp không — nếu không thì chữ ký còn chỗ khác.
+- **vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) — 1 phát hiện chặn, đã sửa trong cùng PR:**
+  - **Chặn.** Lời gọi mới nằm ở **vị trí tham số** của `jq -n`, mà `set -euo pipefail` không bắt mã lỗi pipeline ở vị trí đó (đo: `true "$(exit 9)"` → thoát `0`; `X=$(exit 9)` → thoát `9`). Cộng với việc script lúc đầu hoá stdin rỗng thành `{}`, một lần `gh` chết sẽ thành `skip` im lặng với bước **vẫn xanh** — trước bản sửa ca đó làm `jq` chết và bước ĐỎ. Bản sửa suýt đổi một cổng từ ồn ào sang im lặng, đúng nhóm **Z** mà chính mục này chặn. Nay: phép gán `CI_RUN=$( … )`, và stdin rỗng → thoát `2` kèm stderr. Hai bài mới khoá cả hai vế, đã phá thật, cả hai đỏ.
+  - **Ngoài phạm vi, đã hoàn nguyên.** Dòng `MAIN_CI_RUN` (`automerge.yml:143`) bị đổi `per_page=1`→`per_page=100` **ngoài ý định**, lọt vào lúc khôi phục một phép phá thử (`s.replace` khớp cả dòng khác). Nó không đổi hành vi (`.workflow_runs[0]` giữ nguyên) nhưng là phạm vi ngoài khai của mục — đã trả lại `per_page=1`.
+  - **Bài khoá YAML ↔ TS xanh nhờ may.** `yaml.includes('…pick-ci-run.ts')` xét **cả file**, nên một dòng comment nhắc tên file là đủ để nó bỏ sót việc chỗ gọi mất lời gọi thật. Nay bài xét đúng dòng hỏi cộng hai dòng kế, và đòi thêm hình dạng phép gán. Đã phá thật: đỏ.
+  - **Tên bài nói quá.** Bài "hoà `created_at`" xanh nhờ mức dự phòng `updated_at`, không nhờ `run_number`; đã đổi tên và ghi rõ tầng `run_number` do bài cuối file khoá.
+  - **Đã nói nhẹ lại** câu "cây mã không đổi giữa hai lần chạy cùng SHA": `ci.yml` kích bằng `pull_request` nên chạy trên commit **gộp với `main`**, mà `main` di chuyển.
+  - **Còn để ngỏ có chủ ý:** `per_page=100` không phân trang. Trang 1 là 100 lần **mới nhất**, nên lần có thẩm quyền vẫn nằm trong đó; mất mát duy nhất là một lần `success` rất cũ khi cả 100 lần mới đều không mang phán quyết — rơi về `skip`, chiều an toàn.
 - **mã mục nhận lúc 2026-09-24 ~01:5x giờ UTC** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `main` **và trên đầu cả 12 PR đang mở** — cao nhất là `P-038`, nên `P-039` không đụng ai.
 
 ---

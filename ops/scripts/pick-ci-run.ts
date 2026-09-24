@@ -54,8 +54,12 @@
  * lần chạy BỊ HUỶ không còn giả làm phán quyết của cây mã.
  *
  * Vì sao chấp nhận một lần `success` cũ hơn: `success` đó chạy trên ĐÚNG
- * `head_sha` này. Cây mã không đổi giữa hai lần chạy cùng SHA, nên phán quyết
- * của nó vẫn đúng.
+ * `head_sha` này, nên nó là phán quyết gần nhất mà ta có cho đầu nhánh ấy.
+ * Nó KHÔNG phải một phán quyết tuyệt đối: `ci.yml` kích bằng `pull_request`
+ * nên chạy trên commit **gộp với `main`**, mà `main` di chuyển — một lần
+ * `success` cũ có thể đã kiểm một kết quả gộp khác. Cách đọc cũ cũng vậy, nên
+ * đây không phải chỗ thoái hoá; và hai lớp sau vẫn che: `mergeable` của PR,
+ * cùng `main-ci` trên chính `main`.
  */
 
 /** Các trường của một lần chạy workflow mà luật chọn cần tới. */
@@ -117,19 +121,34 @@ if (isMain) {
   // mà không cần file tạm. Đầu vào là `.workflow_runs` của API, đầu ra là
   // MỘT object (hoặc `{}`) — đúng hình dạng mà `--argjson ci` của
   // `automerge.yml` chờ, nên chỗ gọi không phải tự bóc mảng.
+  // `F7` của vòng soát: không có pipe thì `for await` treo vô hạn. Đường dùng
+  // thật luôn có pipe, nhưng chạy tay để dò thì treo là chết im.
+  if (process.stdin.isTTY === true) {
+    process.stderr.write('cách dùng: gh api "…/ci.yml/runs?…" --jq \'.workflow_runs // []\' | node ops/scripts/pick-ci-run.ts [headSha]\n');
+    process.exit(2);
+  }
+
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   const raw = Buffer.concat(chunks).toString('utf8').trim();
 
-  let runs: CiRun[] = [];
-  if (raw !== '') {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      process.stderr.write('pick-ci-run: đầu vào phải là MẢNG workflow run (JSON).\n');
-      process.exit(2);
-    }
-    runs = parsed as CiRun[];
+  // `F1` của vòng soát: đầu vào RỖNG không phải "không có lần chạy nào" — nó là
+  // dấu hiệu lệnh phía trước đã chết. `gh api --jq '.workflow_runs // []'` in
+  // ít nhất `[]`, nên rỗng nghĩa là `gh` không in được gì. In `{}` ở đây biến
+  // một sự cố API thành `skip — CI chưa xanh (chưa có lần chạy nào)` với bước
+  // VẪN XANH, tức đúng nhóm Z mà file này tồn tại để chặn. Thoát khác 0 để
+  // bên gọi đỏ.
+  if (raw === '') {
+    process.stderr.write('pick-ci-run: đầu vào rỗng — lệnh phía trước (gh api) không in được gì, không phải "không có lần chạy nào".\n');
+    process.exit(2);
   }
+
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) {
+    process.stderr.write('pick-ci-run: đầu vào phải là MẢNG workflow run (JSON).\n');
+    process.exit(2);
+  }
+  const runs: CiRun[] = parsed as CiRun[];
 
   const headSha = process.argv[2];
   process.stdout.write(`${JSON.stringify(pickCiRun(runs, headSha) ?? {})}\n`);

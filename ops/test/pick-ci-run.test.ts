@@ -131,7 +131,11 @@ test('lọc theo headSha: lần chạy của SHA khác không lọt vào', () =>
   assert.equal(pickCiRun(runs, 'a')?.id, 1);
 });
 
-test('hoà `created_at` tới từng giây thì `run_number` quyết định', () => {
+test('hoà `created_at` tới từng giây thì lần chạy có phán quyết mới hơn thắng', () => {
+  // ⚠️ Bài này KHÔNG khoá tầng `run_number` (`F4` của vòng soát): dữ liệu có
+  // `updated_at` lệch nhau nên mức dự phòng một mình đã đủ. Tầng `run_number`
+  // do bài cuối file khoá. Giữ bài này vì nó dựng lại đúng hình dạng dữ liệu
+  // thật của #194 ở dạng tối giản.
   const runs: CiRun[] = [
     { id: 1, run_number: 610, head_sha: 'a', status: 'completed', conclusion: 'failure', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:10Z' },
     { id: 2, run_number: 611, head_sha: 'a', status: 'completed', conclusion: 'success', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:02:00Z' },
@@ -154,14 +158,36 @@ test('`automerge.yml` hỏi cả danh sách chứ không còn `per_page=1`, và 
   // lấy một phần tử. Đọc chính file workflow, đúng cách
   // `ops/test/required-checks.test.ts` khoá ruleset.
   const yaml = readFileSync('ops/workflows/automerge.yml', 'utf8');
-  const ciQuery = yaml.split('\n').filter((line) => line.includes('workflows/ci.yml/runs'));
+  const lines = yaml.split('\n');
+  const ciQuery = lines.filter((line) => line.includes('workflows/ci.yml/runs'));
   assert.ok(ciQuery.length > 0, 'không còn dòng nào hỏi ci.yml/runs — chỗ gọi đã đổi hình dạng, sửa bài này');
   for (const line of ciQuery) {
-    assert.ok(!line.includes('per_page=1&') && !/per_page=1\b/.test(line), `vẫn còn per_page=1: ${line.trim()}`);
+    assert.ok(!/per_page=1\b/.test(line), `vẫn còn per_page=1: ${line.trim()}`);
   }
+
+  // `F2` của vòng soát: `yaml.includes('…pick-ci-run.ts')` trên CẢ FILE xanh
+  // nhờ may — thêm một dòng comment nhắc tên file là đủ để nó không bắt được
+  // việc chỗ gọi bỏ mất lời gọi thật. Đã mô phỏng: bỏ `| node …` rồi thêm một
+  // comment → bài này VẪN XANH. Nên phải đòi trên CHÍNH dòng gọi.
+  // Lời gọi trải trên hai dòng (`\` cuối dòng), nên xét đúng dòng hỏi cộng
+  // hai dòng kế — không phải cả file.
+  const queryIndex = lines.findIndex((line) => line.includes('workflows/ci.yml/runs'));
+  const callSite = lines.slice(queryIndex, queryIndex + 3).join(' ');
   assert.ok(
-    yaml.includes('ops/scripts/pick-ci-run.ts'),
-    'automerge.yml không gọi pick-ci-run.ts — cơ chế có mà không ai dùng',
+    callSite.includes('| node ops/scripts/pick-ci-run.ts'),
+    `dòng hỏi ci.yml/runs không nối qua pick-ci-run.ts — cơ chế có mà không ai dùng: ${callSite.trim()}`,
+  );
+
+  // `F1` của vòng soát: lời gọi phải là một PHÉP GÁN. `$( … )` ở vị trí tham
+  // số thì `set -euo pipefail` không thấy mã lỗi, nên `gh` chết thành `skip`
+  // im lặng với bước vẫn xanh.
+  assert.ok(
+    /^\s*CI_RUN=\$\(gh api/m.test(yaml),
+    'lời gọi ci.yml/runs không còn là phép gán CI_RUN= — set -e sẽ không bắt được lỗi gh',
+  );
+  assert.ok(
+    /--argjson ci "\$CI_RUN"/.test(yaml),
+    'jq không còn nhận $CI_RUN — hai bên đã lệch',
   );
 });
 
