@@ -698,7 +698,7 @@ nhánh việc.
 
 ---
 
-### I-021 · fix · Nhãn tự merge phải hết hiệu lực khi đầu nhánh đổi, và sáu chỗ sót của vòng soát `I-020`
+### I-021 · fix · Ghi `KF-026` và dọn sáu chỗ sót của vòng soát `I-020` — phần luật tách PR riêng
 Vòng soát ngữ cảnh sạch (bước 6) của PR `#222` chạy **sau khi** PR đó đã merge: nhãn `automerge` gắn từ vòng
 soát trước — cho một bản 16 file — sống sót qua một lần push đổi nội dung thực chất, và `automerge.yml` merge
 76 giây sau push. Toàn bộ lần giải xung đột 14 file vào `main` mà **không vòng soát nào nhìn thấy nó**. Chi
@@ -720,16 +720,35 @@ nhưng không còn PR nào để sửa vào.
     có cửa nào tụt lại.
   - ⬜ Test cho hàm quyết định đó, tách khỏi YAML như `ops/scripts/alert-escalation.ts` đã làm.
   - ⬜ CHARTER 6.4 nói rõ vòng soát gắn với **một phiên bản**, không với một PR.
-  - ✅ **Máy canh mốc `at` ở tương lai trên log THẬT** (`S2`). Bài `Z7 · trên ops/logs thật: KHÔNG làn nào ra
+  - ⬜ `ops/workflows/watchdog.yml` dấu hiệu 5 **kẹp sàn `AGE_MIN`**. Hiện nó tính
+    `AGE_MIN=$(( (NOW - LAST_BEAT) / 60 ))` rồi hỏi `-gt 180`, **không kẹp sàn** — nên một mốc bước 0 ở
+    tương lai cho `AGE_MIN` âm, phép so sai, và dấu hiệu 5 của CHARTER 2.4 **im vĩnh viễn**. Cùng hình dạng
+    Z với `S2`, ở nhánh sát bên. Tách khỏi PR này vì `ops/workflows/**` kéo cửa sang `automerge-delayed`,
+    trong khi phần còn lại của mục ở cửa `open`; bài kiểm phía TS đã phủ dữ liệu (xem `S2`), còn đây là
+    phần bash.
+  - ✅ **Máy canh mốc `at` ở tương lai trên log THẬT** (`S2`) — phủ **cả** dòng thường **và** dòng bước 0. Bài `Z7 · trên ops/logs thật: KHÔNG làn nào ra
     future`. Đo được chỗ thủng: lượt `crux-worker-1` ghi tay `at: 07:05:00.000Z` vào commit tạo lúc `06:51:27Z`,
     nên trong ~14 phút làn `integration` ra `{"verdict":"future","hoursSinceLastBeat":-0.1}` — số âm nhỏ hơn
     mọi ngưỡng, tức làn đó **không bao giờ `stale` được**, mà `pnpm check` vẫn xanh (nhóm **Z**). Bài cũ chỉ
     khoá *hàm* trên log dựng; bài mới khoá *dữ liệu thật*. Phá thử: đặt một mốc tương lai vào log thật →
     `not ok 22`; khôi phục → 22/22 xanh.
+    **Phạm vi đã sửa sau vòng soát:** bản đầu chỉ khẳng định trên `laneHeartbeats`, mà hàm đó cố ý **loại**
+    dòng bước 0 (luật thiết kế 1) — nên tiêu chí này lúc đầu khai phạm vi **rộng hơn phạm vi thật**, đúng lỗi
+    `S6` mà chính mục này đang sửa ở chỗ khác. Đo được: đặt mốc tương lai vào dòng bước 0 → **22/22 vẫn
+    xanh**. Nay bài có thêm một phép khẳng định chạy thẳng trên các dòng bước 0, dùng
+    `FUTURE_TOLERANCE_HOURS` làm dung sai; phá thử lại → `not ok 22`.
+    **Đường thoát khi một mốc tương lai ĐÃ vào `main`** (khai vì nó cắn `D-C04`): thêm một dòng đính chính
+    **không** chữa được — `laneHeartbeats` lấy `max` theo làn, nên `pnpm check` (cổng cứng) đỏ cho **mọi** PR
+    tới khi thời gian thật vượt qua mốc đó. Cách chữa duy nhất là sửa hoặc xoá dòng, tức phá append-only. Nên
+    luật thật của chỗ này là **ghi `at` bằng đồng hồ thật ngay từ đầu**; dung sai một phút là ngân sách lệch
+    đồng hồ **giữa hai máy** (phiên agent ghi, runner GitHub khẳng định), không phải chỗ để nới.
   - ✅ **Gỡ mẫu chết** (`S4`): `/không đóng khi pr merge/u` bị `/(?:không|chưa|chỉ) đóng/u` bao trọn
     (`.test('không đóng khi pr merge')` → `true`), và gỡ nó làm **0** bài đỏ — không bài nào ghim nó. Lưới đi
     từ 8 mẫu xuống **7**, ca gốc vẫn bắt được. Một mẫu không ai canh là chỗ lần sau có người sửa mà không
-    biết mình sửa gì.
+    biết mình sửa gì. Vòng soát đo thêm một bậc và kết quả mạnh hơn mức mục dám khai: gỡ **từng** mẫu một
+    trong tám mẫu cũ thì mẫu bị gỡ ở đây là mẫu **DUY NHẤT** không bài nào ghim (7 mẫu kia đều làm ít nhất
+    một bài đỏ). Sau khi gỡ, **cả 7 mẫu còn lại đều có bài ghim** — tức "không mẫu chết" nay là một tính
+    chất đo được của cả lưới, không chỉ một nhận xét về một mẫu.
   - ✅ **`KF-023` không còn nói sai hiện trạng** (`S5`): dòng mô tả lưới của `#221` ghi rõ nó là mô tả **đã bị
     `#222` thay**, thay vì để hai mô tả trái nhau cùng ở thể hiện tại cạnh nhau.
   - ✅ **Chú thích bài máy canh khai đúng phạm vi của chính nó** (`S6`): nó viết "cùng phạm vi

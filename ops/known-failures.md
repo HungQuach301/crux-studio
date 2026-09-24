@@ -6,6 +6,35 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
+
+> Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: CI xanh, nhãn đúng luật, cửa merge đúng, và vẫn có nội dung chưa qua vòng soát nào vào `main`.
+
+> Ba con số đếm file dưới đây đo **ba thứ khác nhau**, đừng đọc lẫn: **16** và **8** là số file *đã đổi* của hai phiên bản PR, **14** là số file *xung đột* khi gộp `main` vào.
+
+**Quan sát được, PR `#222`, 2026-09-24** (lượt `crux-worker-1`; chính vòng soát bước 6 của lượt đó tìm ra, sau khi PR đã merge):
+
+| Mốc | Việc |
+|---|---|
+| `04:07:46Z` | `e9bc573` — vòng soát #1 xong cho bản **16 file đã đổi** |
+| `04:09:07Z` | nhãn `automerge` gắn (mốc `labeled` của timeline, 81 giây sau commit — **không** phải mốc commit; bản sửa đề xuất dưới đây đọc đúng mốc này, nên đừng lẫn hai thứ) |
+| `06:51:27Z` | `9c7486e` — push bản giải **14 file xung đột**, nội dung khác hẳn bản đã soát |
+| `06:51:52Z` | CI khởi động trên `9c7486e` |
+| `06:52:21Z` | 8 job đều `success` |
+| `06:52:43Z` | `automerge.yml` squash-merge — **76 giây sau push**; PR vào `main` với **8 file đã đổi** |
+| `~06:57Z` | vòng soát #2 (bước 6 của lượt) mới bắt đầu chạy `pnpm check` |
+
+Máy **không** làm sai luật của nó: cửa `open` chỉ đòi "CI xanh trên đầu nhánh" (CHARTER 3.3), và CI đã xanh trên đúng `9c7486e`. Không có lời `dừng` nào (cả hai comment trên PR đều mở đầu 🤖).
+
+**Chỗ thủng là ở luật, không ở máy.** CHARTER 6.4 đòi mỗi PR có subagent ngữ cảnh sạch soát **trước khi gắn** nhãn tự merge — luật viết cho thời điểm *gắn nhãn*, không cho thời điểm *merge*. Với `automerge-delayed`, CHARTER 3.3 có sẵn cơ chế bù: *"Một lần push mới đặt lại đồng hồ, nên khoảng chờ luôn áp lên đúng nội dung sắp vào `main`"*. Cửa `open` **không có gì tương đương**, nên một PR `automerge` chỉ cần được soát **một lần, ở bất kỳ phiên bản nào**, rồi mọi lần push sau đó đi thẳng vào `main` không qua soát.
+
+Đây là **lần thứ hai trong một ngày** cùng một họ sự cố quanh mục `I-020` (lần một: `KF-025`, hai worker cùng nhận một mục). `CLAUDE.md` mục 13 đòi sửa **luật** ở lần thứ hai, không vá sản phẩm.
+
+- **Máy chặn từ nay:** *chưa có* — và đây là chỗ khai thẳng thay vì để trống im lặng. Bản sửa đề xuất nằm ở mục backlog `integration/I-021`: `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn được gắn (đọc từ timeline của label event), lệch thì **gỡ nhãn** và đòi soát lại thay vì merge. Việc đó chạm `ops/workflows/automerge.yml` — vùng **`owner-merge`** (CHARTER mục 3), nên nó phải đi bằng một PR riêng mà chủ dự án merge; ghi ở đây để nó không rơi mất trong lúc chờ.
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "automerge nguy hiểm". Đọc thành: *một nhãn tự merge là lời khẳng định về MỘT phiên bản cụ thể, nên nó phải hết hiệu lực khi phiên bản đó đổi.*
+
 ## KF-024 · Cổng merge đọc một lần chạy `ci.yml` **đã bị huỷ** thành phán quyết của cây mã, nên PR xanh nằm im vĩnh viễn
 
 > Số **KF-024**: dò `## KF-` trên `main` **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-023`, nên `KF-024` không đụng ai.
@@ -777,32 +806,6 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
 ## Cách thêm một mục
 
 ```markdown
-
-## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
-
-> Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.
-
-**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: CI xanh, nhãn đúng luật, cửa merge đúng, và vẫn có nội dung chưa qua vòng soát nào vào `main`.
-
-**Quan sát được, PR `#222`, 2026-09-24** (lượt `crux-worker-1`; chính vòng soát bước 6 của lượt đó tìm ra, sau khi PR đã merge):
-
-| Mốc | Việc |
-|---|---|
-| `04:07:46Z` | `e9bc573` — vòng soát #1 xong cho bản **16 file**; nhãn `automerge` gắn ở đây |
-| `06:51:27Z` | `9c7486e` — push bản **giải xung đột 14 file**, nội dung khác hẳn bản đã soát |
-| `06:51:52Z` | CI khởi động trên `9c7486e` |
-| `06:52:21Z` | 8 job đều `success` |
-| `06:52:43Z` | `automerge.yml` squash-merge — **76 giây sau push** |
-| `~06:57Z` | vòng soát #2 (bước 6 của lượt) mới bắt đầu chạy `pnpm check` |
-
-Máy **không** làm sai luật của nó: cửa `open` chỉ đòi "CI xanh trên đầu nhánh" (CHARTER 3.3), và CI đã xanh trên đúng `9c7486e`. Không có lời `dừng` nào (cả hai comment trên PR đều mở đầu 🤖).
-
-**Chỗ thủng là ở luật, không ở máy.** CHARTER 6.4 đòi mỗi PR có subagent ngữ cảnh sạch soát **trước khi gắn** nhãn tự merge — luật viết cho thời điểm *gắn nhãn*, không cho thời điểm *merge*. Với `automerge-delayed`, CHARTER 3.3 có sẵn cơ chế bù: *"Một lần push mới đặt lại đồng hồ, nên khoảng chờ luôn áp lên đúng nội dung sắp vào `main`"*. Cửa `open` **không có gì tương đương**, nên một PR `automerge` chỉ cần được soát **một lần, ở bất kỳ phiên bản nào**, rồi mọi lần push sau đó đi thẳng vào `main` không qua soát.
-
-Đây là **lần thứ hai trong một ngày** cùng một họ sự cố quanh mục `I-020` (lần một: `KF-025`, hai worker cùng nhận một mục). `CLAUDE.md` mục 13 đòi sửa **luật** ở lần thứ hai, không vá sản phẩm.
-
-- **Máy chặn từ nay:** *chưa có* — và đây là chỗ khai thẳng thay vì để trống im lặng. Bản sửa đề xuất nằm ở mục backlog `integration/I-021`: `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn được gắn (đọc từ timeline của label event), lệch thì **gỡ nhãn** và đòi soát lại thay vì merge. Việc đó chạm `ops/workflows/automerge.yml` — vùng **`owner-merge`** (CHARTER mục 3), nên nó phải đi bằng một PR riêng mà chủ dự án merge; ghi ở đây để nó không rơi mất trong lúc chờ.
-- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "automerge nguy hiểm". Đọc thành: *một nhãn tự merge là lời khẳng định về MỘT phiên bản cụ thể, nên nó phải hết hiệu lực khi phiên bản đó đổi.*
 
 ## KF-00N · <chữ ký lỗi, một dòng>
 
