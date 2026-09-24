@@ -659,6 +659,67 @@ test('laneFromTitle: lấy làn từ tiêu đề `[lane] id`, null khi không th
   assert.equal(laneFromTitle('[bogus] X-1 — y'), null);
 });
 
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`, vế thứ hai của cùng
+ * một lỗ.
+ *
+ * Ở đây cái giá là một con số gửi thẳng tới chủ dự án: PR không được tính
+ * vào "số mục done 24 giờ" thì mục **Tiến độ** của bản tin báo thông lượng
+ * thấp hơn thật và ngày dự kiến xong muộn hơn thật (bất biến I6).
+ *
+ * Hai tiêu đề dưới đây là PR THẬT đã merge vào `main`.
+ */
+test('laneFromTitle: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố 🤖 vẫn lấy được làn', () => {
+  assert.equal(
+    laneFromTitle('🤖 [platform] P-038 — cổng quyết định: lượt bước 0 không gỡ được gì (#212)'),
+    'platform',
+  );
+  assert.equal(
+    laneFromTitle('🤖 [integration] dòng log bước 0 lượt crux-worker-2 ~07:23Z (I8) (#227)'),
+    'integration',
+  );
+  // Bỏ tiền tố KHÔNG nới luật: làn lạ vẫn `null`, không theo mẫu vẫn `null`.
+  assert.equal(laneFromTitle('🤖 [bogus] X-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Gộp origin/main (integrator, không xung đột)'), null);
+});
+
+/**
+ * Phép đo ĐẦU–CUỐI, gọi thẳng `computeProgress` — thứ thật sự sinh con số
+ * gửi tới chủ dự án (bất biến I6). Gọi hàm thật chứ không chép lại phép lọc
+ * bằng tay: một bài chép lại luật thì xanh cả khi `computeProgress` tự neo
+ * `^` lần nữa, và vòng soát ngữ cảnh sạch đã bắt đúng lỗ đó ở bản đầu.
+ *
+ * Trước bản sửa `P-042`, hai PR thật dưới đây không được đếm và bản tin báo
+ * **0** mục done — thông lượng thấp hơn thật, ngày dự kiến xong muộn hơn thật.
+ */
+test('computeProgress: PR mang tiền tố 🤖 được tính vào số mục done của bản tin', () => {
+  const now = new Date('2026-09-24T12:00:00.000Z');
+  const merged: GhPr[] = [
+    {
+      number: 212,
+      title: '🤖 [platform] P-038 — cổng quyết định (#212)',
+      headRefName: 'x',
+      mergedAt: '2026-09-24T06:00:00Z',
+    },
+    {
+      number: 227,
+      title: '🤖 [integration] I-020 — a (#227)',
+      headRefName: 'y',
+      mergedAt: '2026-09-24T07:00:00Z',
+    },
+    // Vẫn KHÔNG đếm: commit gộp mang tiền tố cũng không phải một mục done.
+    { number: 9, title: '🤖 Gộp origin/main', headRefName: 'z', mergedAt: '2026-09-24T08:00:00Z' },
+  ];
+  const p = computeProgress(new Map(), merged, [], 0, 0, now);
+  assert.equal(p.doneLast24h, 2);
+  assert.equal(p.done3d, 2);
+});
+
+test('laneFromTitle: neo `^` vẫn phải giữ — dạng đúng nằm GIỮA câu không tính', () => {
+  assert.equal(laneFromTitle('🤖 abc [platform] P-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Revert "[platform] P-1 — y"'), null);
+});
+
 test('computeProgress: đếm mục done 24h/3d và thông lượng, chỉ tính PR mang mã mục', () => {
   const now = new Date('2026-09-22T12:00:00.000Z');
   const merged: GhPr[] = [
