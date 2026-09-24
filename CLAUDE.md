@@ -58,6 +58,7 @@ node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head . \
 # File JSON: {labels, changed, deleted, alertBody, incidentSha, mainCiRed, otherHotfixPrs, number}
 # `alertBody` = thân issue cảnh báo NỐI với comment của `github-actions[bot]` — KHÔNG nối comment của agent.
 node ops/invariants.hotfix-lane.ts /tmp/hotfix.json
+# → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
 
 # Mục này đã có ai nhận chưa (P-041, KF-025)? Chạy ở bước 3 VÀ lại ở bước 4, đừng đoán.
 # File JSON: {prs:[{number,title,createdAt,closedAt,mergedAt,isDraft,updatedAt}], lane?, id?, now?}
@@ -67,7 +68,6 @@ pnpm claims /tmp/prs.json
 # → {"verdict":"open-pr"} ĐI MỤC KHÁC · {"verdict":"recently-merged"} đọc lại backlog, mục có thể vừa xong
 # → {"verdict":"abandoned-draft"} PR nháp bỏ quá 24 giờ, nhận được · {"verdict":"free"} rảnh
 # Trường `unreadable` khác rỗng = ảnh chụp có PR vô hình với phép đếm; một `free` khi đó là `free` chưa chắc.
-# → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
 
 # Phạm vi sự cố của một `main` đỏ, dạng máy đọc (nguồn duy nhất cho điều kiện 2):
 pnpm check > /tmp/check.txt 2>&1; node ops/scripts/main-red-scope.ts /tmp/check.txt "$(git rev-parse HEAD)"
