@@ -302,6 +302,29 @@ test('ownerWaitingRows: nêu cả hai loại, và xếp làn giữ cổng Mốc 
   assert.equal(rows[1]!.link, 'ops/lanes/platform/backlog.md · #900');
 });
 
+test('ownerWaitingRows: mốc "đã chờ bao lâu" khớp `ref` BẰNG NHAU, không bằng tiền tố', () => {
+  // Ca thật: `ops/lanes/visual/backlog.md` có CẢ `V-004` và `V-004b`. Khớp
+  // bằng tiền tố thì dòng log của `V-004b` trả lời hộ `V-004`, và con số "đã
+  // chờ" của mục chờ mắt chủ dự án thành con số của một mục khác — sai mà
+  // không gì đỏ. Phá thử bản đầu cho **0 bài đỏ**, nên bài này là lưới đó.
+  const backlogs = [
+    {
+      lane: 'visual',
+      content: ['### V-004 · a', '- deps: —', '- hold: chờ mắt chủ dự án', '', '### V-004b · b', '- deps: —', ''].join('\n'),
+    },
+  ];
+  const rows = ownerWaitingRows({
+    backlogs,
+    decisions: [],
+    logs: [{ ref: 'visual/V-004b', at: '2026-09-24T06:00:00.000Z' }],
+    now: NOW,
+    issueRefsOf: linkedPrNumbers,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.key, 'visual/V-004');
+  assert.equal(rows[0]!.waitingDays, null);
+});
+
 test('ownerWaitingRows: mục chưa có dòng log nào ra `null`, KHÔNG lặng lẽ thành 0', () => {
   const rows = ownerWaitingRows({
     backlogs: GRAPH_FILES,

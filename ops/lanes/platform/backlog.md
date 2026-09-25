@@ -20,13 +20,16 @@ Nhóm **Z** đúng định nghĩa: `pnpm check` xanh, CI xanh, `main` xanh, bả
 - hold: chưa **quan sát** bản tin thật in mục *"Việc đang chờ anh"* — routine `crux-digest` (20:30, phụ lục P2) chưa chạy sau khi mục này vào `main`; lượt `crux-digest` kế tiếp là quan sát đầu tiên (cùng hình dạng hold của `P-051`/`P-052`). Mục **không** tự chuyển `done` tới khi có quan sát đó. Cộng hai vế **ngoài phạm vi, đã tách**: `C2` (@nhắc riêng khi quá 48 giờ — chạm `notify.yml`) và `C3` (`[QĐ] reversible` cần đầu vào của anh thì hoặc chuyển mục này, hoặc máy tự quyết theo khuyến nghị).
 - nguồn: `#251` C1–C4 · thân và nhãn của 15 issue `decision` đang mở (đọc bằng API, không đọc bằng mắt) · 31 trường `- hold:` trong `ops/lanes/*/backlog.md` · `ops/lanes/priority.md` (làn giữ cổng Mốc 3)
 - tiêu chí xong:
-  - ⬜ `ops/scripts/owner-waiting.ts`: hàm thuần `ownerHoldWait`, `decisionNeedsOwnerHand`, `blockedCounts`, `ownerWaitingRows`, `renderOwnerWaitingLines`.
-  - ⬜ `ops/scripts/digest-metrics.ts`: `DigestMetrics.ownerWaiting`, và `renderDigestMetrics` in mục *"Việc đang chờ anh"* **ngay sau** khối *"Cần anh quyết"*.
-  - ⬜ `CHARTER.md` phụ lục P2: khối *"Việc đang chờ anh"* thành phần **bắt buộc** của bản tin, đặt đúng vị trí thứ hai.
-  - ⬜ `ops/known-failures.md`: `KF-037` cho ca nhóm Z này (vế **C4**).
-  - ⬜ `ops/test/owner-waiting.test.ts`: bài kiểm hai chiều cho từng luật con, fixture lấy **nguyên văn** từ `#5`, `#101`, `#92`, `#213`, `#36` (ca dương) và `#107`, `#45`, `#96`, `#254` (ca âm).
-  - ⬜ **Bài kiểm tác động** (`A3` của `#251`): chạy bộ dò trên **toàn bộ** 15 issue `decision` đang mở và 31 trường `- hold:` thật, dán số ra.
-  - ⬜ `pnpm check` và `pnpm replay` xanh, số thật dán vào PR.
+  - ✅ `ops/scripts/owner-waiting.ts`: hàm thuần `ownerHoldWait`, `decisionNeedsOwnerHand`, `backlogGraph`, `blockedCounts`, `waitingDaysFrom`, `ownerWaitingRows`, `renderOwnerWaitRow`, `renderOwnerWaitingLines`. Không đọc đĩa, không gọi `gh` — `digest-metrics.ts` đưa dữ liệu vào, nên mỗi luật con khoá được bằng một bài kiểm. Luật đọc `#N` **không** có bản thứ hai: `issueRefsOf` nhận `linkedPrNumbers` từ bên gọi.
+  - ✅ `ops/scripts/digest-metrics.ts`: `DigestMetrics.ownerWaiting` (mảng rỗng **là** một câu trả lời, nên không có ca `null` như `conflicts`/`delayed`), `collectMetrics` giữ lại nội dung từng file backlog để dựng đồ thị `deps`, và `renderDigestMetrics` in mục *"Việc đang chờ anh"* **ngay sau** khối *"Cần anh quyết"*, **trước** *"Quyết định reversible đang mở"*.
+  - ✅ `CHARTER.md`: một hàng mới trong bảng mục **2.5** (năm thứ → **sáu** thứ) và khối *"Việc đang chờ anh: N việc"* trong **phụ lục P2** bước 3, cộng một câu ở bước 2 dặn gọi `ownerWaitingRows` chứ đừng đọc `- hold:` bằng mắt.
+  - ✅ `ops/known-failures.md`: **KF-037** cho ca nhóm Z này (vế **C4**) — hai lớp nguyên nhân gốc, bốn ca chủ dự án dẫn, và phần *"còn hở"* khai thẳng rằng phép đọc dựa vào lời văn.
+  - ✅ `ops/test/owner-waiting.test.ts`: **22 bài**, mỗi luật con một bài **dương** và một bài **âm**, fixture **trích nguyên văn** từ `#5` `#36` `#63` `#67` `#92` `#101` `#213` (ca dương) và `#45` `#96` `#107` `#254` (ca âm), cộng bốn trường `- hold:` thật mỗi chiều. Cộng một bài chạy trên **dữ liệu thật của repo** giữ tính chất *"khai `không treo` ⇒ không nêu"* (bài **tính chất**, không ghim con số — số mục đổi mỗi PR).
+  - ✅ `ops/test/digest-metrics.test.ts`: 2 bài khoá **vị trí** của khối trong bản tin và một dòng in đầy đủ bốn thứ `C1` đòi.
+  - ✅ **Bài kiểm tác động** (`A3` của `#251`) chạy **trước** khi merge: **46** trường `- hold:` thật → **11 nêu / 35 không nêu**, và 11 hàng đó gồm đúng bốn ca chủ dự án dẫn (`T-008` khoá YouTube · `V-002` xem clip · `VF-G1` trang cấu hình · `A-001` chấm fps). Nó bắt được **một dương tính giả** — lời giữ của **chính `P-053`** *nhắc* `[QĐ]` khi kể hai vế C2/C3 đã tách — nên dấu hiệu `[QĐ]` bị siết thành `chờ … [QĐ]` **trong cùng một câu**, và ca đó thành một bài kiểm âm.
+  - ✅ **Phá thử 14 phép**, mỗi phép đỏ đúng chỗ rồi khôi phục, cây sạch sau mỗi vòng. Vòng đầu để lại **một phép 0 đỏ** — `newestLogAt` khớp `ref` bằng **tiền tố** thay vì bằng nhau, mà `ops/lanes/visual/backlog.md` có **cả** `V-004` **và** `V-004b` nên dòng log của mục sau trả lời hộ mục trước; đã thêm bài khoá, nay 14/14 đỏ.
+  - ✅ `pnpm check` EXIT=0 · **1318 test / 1318 pass / 0 fail / 0 skipped / 0 todo** (nền `origin/main` đo lại bằng worktree riêng: **1294** → **+24**, đúng bằng số bài mới). `pnpm replay` EXIT=0 · tập vàng khớp snapshot 6/6 — mục này **không** đổi snapshot.
+  - ⬜ Cập nhật trạng thái C1/C4 trên `#251` (làm khi chuyển PR khỏi nháp) và **quan sát bản tin thật** (xem `- hold:`).
 
 ---
 
