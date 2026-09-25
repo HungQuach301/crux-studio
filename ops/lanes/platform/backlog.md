@@ -4,6 +4,28 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-052 · Bản tin phát hiện `[QĐ]` có điều kiện đã đủ nhưng vẫn mở, và KF cho ca `#127` (D6)
+
+Chỉ dẫn **D6** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn `#131` lúc `2026-09-24T23:54:32Z`): *"Ghi KF: `#127` nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy. Bản tin phải phát hiện được `[QĐ]` có điều kiện đã đủ nhưng vẫn mở."*
+
+Ca thật, đo bằng API chứ không đọc bằng mắt: `#127` là `[QĐ]` (nhãn `decision` + `irreversible`) mở `2026-09-22T09:16Z`, phương án A nêu điều kiện *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**"*. **`#66` đã merge `2026-09-24T04:31:51Z`** — điều kiện dạng-PR đã đủ — nhưng `#127` **vẫn mở** tới giờ. Không chỉ báo nào đỏ; nó chỉ nằm trong danh sách *"Cần anh quyết"* của bản tin như thể còn chờ người. Đúng nhóm **Z**, và cùng họ với `platform/P-050` (`decision-close.ts`, `#256`) đang chờ merge — chỉ ngược dấu: `P-050` **đóng** `[QĐ]` đã có bằng chứng mạnh; mục này **nêu lên** `[QĐ]` mà điều kiện dạng-PR đã đủ để chủ dự án soát và hành động, chứ không tự đóng (một `[QĐ]` `irreversible` như `#127` vẫn cần người quyết dù `#66` đã merge).
+
+- deps: —
+- risk: low — chỉ **thêm** một mục vào bản tin (`renderDigestMetrics`) và các hàm thuần đọc-thêm; không đổi số đếm *"Cần anh quyết"* đang có, không tự đóng issue nào, không chạm vùng bảo vệ. Hướng lệch an toàn: bản tin là mặt người đọc, nên nêu thừa một dòng thấy ngay và bỏ qua được; nuốt mất một `[QĐ]` đã đủ điều kiện mới là chiều đắt.
+- status: review
+- hold: chưa **quan sát** bản tin thật nêu `#127` — bộ dò đã có mã và test khoá, nhưng routine `crux-digest` (20:30, phụ lục P2) chưa chạy sau khi mục này vào `main`; lượt `crux-digest` kế tiếp là quan sát đầu tiên (cùng hình dạng hold của D5/`P-051`). Mục **không** tự chuyển `done` tới khi có quan sát đó.
+- nguồn: `#251` D6 · `#127` (thân + trạng thái) · `#66` `merged_at 2026-09-24T04:31:51Z` · `ops/known-failures.md`
+- tiêu chí xong:
+  - ✅ `ops/known-failures.md`: mục **KF-035** cho ca `#127` — `[QĐ]` có điều kiện đã đủ (PR gate `#66` đã merge) nhưng vẫn mở, agent tin sai là còn bị chặn, nằm 3 ngày, mọi chỉ báo xanh (nhóm Z), kèm chữ ký.
+  - ✅ `ops/scripts/digest-metrics.ts`: hàm thuần `linkedPrNumbers` (đọc `#N` từ tiêu đề + thân), `decisionDeclaresBlocked` (ba dấu hiệu "chặn"/"chưa có"/"đang chờ" lấy nguyên văn từ `#127` — vòng soát bước 6 bỏ một `/chờ\s/` trần vì nó rộng hơn ca thật), `decisionAgeDays`, và `conditionMetButOpen` (mở + khai chặn + có PR gate đã merge). `DecisionRow` mang thêm `conditionMetPrs`/`ageDays` **chỉ khi** bên gọi xin (giữ hình dạng cũ cho `decisionRows(issues)`). Không đổi `needOwnerCount`.
+  - ✅ `renderDigestMetrics`: mục mới *"Quyết định điều kiện đã đủ nhưng còn mở"* liệt kê từng `[QĐ]` kèm PR gate đã merge và số ngày đã mở. Dòng đầu bản tin vẫn là *"Cần anh quyết: N việc"*.
+  - ✅ `collectMetrics`/`fetchSnapshot`: lấy thêm `body,createdAt` của issue `decision`, dựng tập số PR đã merge, truyền vào `decisionRows`.
+  - ✅ `ops/test/digest-metrics.test.ts`: 6 bài mới, gồm fixture hình dạng `#127` (khai chặn + `#66` merged → nêu) và ca âm (PR gate chưa merge → không nêu; không khai chặn → không nêu; không nêu PR → không nêu; `decisionRows(issues)` không opts giữ nguyên hình dạng).
+  - ✅ `pnpm check` EXIT=0 · 1283 test/1283 pass · `pnpm replay` khớp tập vàng 6/6.
+  - ⬜ Cập nhật trạng thái D6 trên `#251` (làm khi chuyển PR khỏi nháp) và **quan sát bản tin thật** (xem `- hold:`).
+
+---
+
 ### P-045 · fix · Một PR không merge được **giết cả hàng đợi**, nên mọi PR xếp sau không bao giờ được xét
 
 `ops/workflows/automerge.yml` duyệt cả hàng đợi trong một vòng `for` dưới `set -euo pipefail`, và lời gọi merge nằm **trần**. Một PR mà GitHub từ chối merge làm `gh` thoát khác 0, `set -e` giết cả bước, và mọi PR xếp sau **không có một dòng log nào**.
@@ -1165,3 +1187,24 @@ Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQu
 - giới hạn và việc kế tiếp, khai trước (mục KHÔNG bị treo — bản sửa đã xong, sẵn sàng merge):
   - Hiệu lực runtime (comment thành danh sách phát hiện) chỉ quan sát được ở **lần chạy `gpt-review` kế tiếp SAU khi PR merge** và `sync-workflows` chép `ops/workflows/` sang `.github/` (`CLAUDE.md` mục 4) — bản thân nhánh này không chạy được lần gọi GPT có tính phí.
   - **B14b** (worker sở hữu PR phải ĐỌC comment `gpt-review` và ghi xử lý từng điểm) là một mục **tách riêng**, ngoài phạm vi PR này — một mục = một PR.
+
+---
+
+### P-054 · fix · Soát chéo GPT ra văn tóm tắt PR, không ra phát hiện có mức
+
+Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251): *"Soát chéo GPT: đầu ra **bắt buộc** là danh sách phát hiện (**CHẶN** / **NÊN SỬA** / **không phát hiện**), **cấm** tóm tắt lại nội dung PR."* Đo được lúc nhận mục (đếm lại bằng API GitHub trong vòng soát ngữ cảnh sạch): **6/6** comment `gpt-review` trên `#249` là văn tóm tắt PR, **0 phát hiện có mức**; cùng hình dạng trên `#242`, `#223`, `#224`, `#39`. Chi tiết: `ops/known-failures.md` `KF-034`.
+
+- deps: —
+- risk: low — chỉ chạm `ops/scripts/gpt-review.ts` và bộ test của nó. **Không** chạm `ops/workflows/gpt-review.yml` (workflow dùng secret → `owner-merge`, CHARTER mục 3): luật D5 nằm trọn trong prompt và trong phép đọc lại đầu ra, cả hai đều ở script, nên bản sửa không kéo PR sang cửa tay của chủ dự án. Job vẫn **advisory** (`continue-on-error`) — một đầu ra sai dạng không làm CI đỏ.
+- status: review
+- nguồn: chỉ dẫn D5 `#251`; comment `gpt-review` thật trên `#242` (`5816275628` — bài tái hiện lỗi dựng nguyên văn từ comment này), `#249` (6 comment), `#223`, `#224`, `#39`; chuẩn "thành bài kiểm máy khoá được, không phải lời dặn" của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649)
+- tiêu chí xong:
+  - ✅ **Prompt đòi đúng ba hình dạng đầu ra** — `CHẶN` / `NÊN SỬA` / `không phát hiện`, kèm ví dụ mỗi mức, cộng câu **CẤM** tóm tắt, cấm kể lại PR đã đổi gì, cấm khen. Luật **I7** (diff là dữ liệu) giữ nguyên trong cùng prompt, có bài khoá để một luật không bị đánh đổi lấy luật kia.
+  - ✅ **Máy đọc lại đầu ra thật, không dừng ở lời dặn** — `parseReviewFindings` là **hàm thuần**: trả `findings` (mức + nội dung), `noFindings`, `conforms`, và `problems` nêu **từng** dòng sai. Chuẩn hoá NFC nên dấu tiếng Việt dạng tổ hợp không báo oan; bỏ qua dấu đầu dòng markdown và dòng kẻ ngang; một câu dẫn tự do **vẫn** là sai dạng — đó là nơi văn tóm tắt quay lại.
+  - ✅ **Comment không bao giờ giả làm một lượt soát chéo** — `formatComment` đăng đầu ra sai dạng **kèm nhãn sai dạng và lý do**, đầu ra thô nằm trong khối `<details>` đóng khung là dữ liệu (**I7**). Không nuốt (người đọc tưởng job không chạy), không đăng trơn (một bản tóm tắt trông y hệt một lượt soát đã xong — nhóm **Z**).
+  - ✅ **Đếm được theo thời gian** — dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`. Thiếu nó thì *"job chạy đều mà chưa bao giờ ra một phát hiện nào"* chỉ thấy được bằng cách mở từng comment bằng mắt — đúng cách ca này nằm im nhiều ngày.
+  - ✅ **Bài TÁI HIỆN LỖI** (bất biến **I2**, nhãn `fix`) — dựng lại **nguyên văn** comment `gpt-review` thật `5816275628` trên `#242`: `conforms: false`, 0 phát hiện, 5 vi phạm nêu đích danh từng dòng, và `formatComment` gắn nhãn sai dạng. Cộng bài khoá từng nhánh: danh sách đúng dạng, `không phát hiện`, trang trí markdown, NFD, câu dẫn, mâu thuẫn `không phát hiện` + phát hiện, đầu ra rỗng, vượt trần.
+  - ✅ **Phá thử 13 phép**, mỗi phép đỏ đúng chỗ rồi khôi phục — xem mô tả PR. Bảy phép đầu là của lượt làm; sáu phép còn lại do **vòng soát ngữ cảnh sạch** nghĩ ra, và **ba trong số đó sống sót** trên bản đầu (neo `^`, dấu phân cách bắt buộc, `không phát hiện` trọn dòng) — nay mỗi luật con có một bài âm giữ.
+  - ⬜ **Chưa kiểm bằng một lần gọi GPT THẬT.** `OPENAI_API_KEY` chỉ sống trong Actions, phiên agent không đọc được nó, nên *"mô hình có theo luật mới không"* hiện là **thiết kế**, chưa phải **quan sát**. Đây đúng là chỗ mà bản sửa này KHÔNG dựa vào lời hứa của mô hình: sai dạng thì máy nói ra, nên lượt đầu tiên sau merge tự cho câu trả lời. Đọc bằng dòng log `P-003.jsonl` của PR kế tiếp.
+- hold: chờ lượt `gpt-review` thật đầu tiên sau khi PR này vào `main` — nếu dòng log ra `SAI DẠNG D5` nhiều lượt liên tiếp thì luật cần siết ở tầng gọi (yêu cầu lại một lần), không phải nới phép đọc. Mục **không** tự chuyển `done` trước lần đo đó.
+- mã mục: nhận `P-051` lúc 2026-09-25 ~03:4x UTC, **đổi thành `P-054`** lúc ~06:4x UTC khi gộp `main` ở bước 2 của phụ lục P1. Lúc nhận, `P-050` (`#256`) là mã cao nhất dò được trên `main` và trên đầu nhánh cả 10 PR đang mở — nhưng PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257) của `crux-worker-2` **đã mở trước đó và merge lúc `03:46:04Z`**, tức 4 phút sau khi PR này mở, mang đúng mã `P-051` cho cùng chỉ dẫn **D5**. Phép dò của `KF-005` chỉ thấy được nhánh và `main` **tại thời điểm dò**, nên nó không bao giờ thấy một PR merge xen vào sau đó — xem `KF-036`. `P-054` là mã trống kế tiếp, dò lại trên `main` và đầu nhánh cả 11 PR đang mở (cao nhất `P-053`, `#260`).
