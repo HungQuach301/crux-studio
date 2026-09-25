@@ -1052,6 +1052,27 @@ test('KF-032 · thiếu nhiều nhánh thì báo nhiều lỗi cùng lúc', () =
   assert.equal(found.length, 2, found.join(' | '));
 });
 
+test('KF-032 · nhánh `*)` gắn NHẦM `automerge-delayed` thay vì `automerge` thì vẫn đỏ (không lọt vì tiền tố)', () => {
+  // `automerge` là tiền tố của `automerge-delayed`; một regex neo bằng `\b`
+  // sẽ coi `--add-label automerge-delayed` là đã gắn `automerge`. Cửa `open`
+  // gắn nhầm nhãn của cửa khác thì PR vẫn không vào đúng chỗ.
+  const wrong = `          case "$GATE" in
+            owner-merge)
+              gh pr edit "$PR" --add-label owner-merge
+              ;;
+            automerge-delayed)
+              gh pr edit "$PR" --add-label automerge-delayed
+              ;;
+            *)
+              gh pr edit "$PR" --add-label automerge-delayed
+              ;;
+          esac
+`;
+  const found = mergeGateLabelProblems(wrong, 'ci.yml');
+  assert.equal(found.length, 1, found.join(' | '));
+  assert.match(found[0]!, /cửa `open`/);
+});
+
 test('KF-032 · thiếu hẳn nhánh cửa `open` (không có `*)`) thì đỏ', () => {
   const noOpen = `          case "$GATE" in
             owner-merge)

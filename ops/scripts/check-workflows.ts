@@ -659,7 +659,12 @@ export function mergeGateLabelProblems(source: string, file: string): string[] {
       );
       continue;
     }
-    if (!new RegExp(`--add-label\\s+${label}(\\b|$)`).test(branch)) {
+    // `(?![-\\w])` chứ không phải `\\b`: `automerge` là tiền tố của
+    // `automerge-delayed`, và `\\b` khớp ranh giới giữa `automerge` và `-`,
+    // nên `--add-label automerge-delayed` sẽ được coi là đã gắn `automerge`.
+    // Lookahead âm loại cả `-` lẫn ký tự từ ngay sau nhãn, nên một cửa gắn
+    // NHẦM nhãn của cửa khác vẫn bị bắt (không chỉ ca thiếu hẳn nhãn).
+    if (!new RegExp(`--add-label\\s+${label}(?![-\\w])`).test(branch)) {
       problems.push(
         `${file} — nhánh cửa \`${gate}\` của \`case "$GATE"\` không \`--add-label ${label}\`. ` +
           '`automerge.yml` lọc hàng đợi merge theo NHÃN, nên cửa nào không tự gắn nhãn của mình thì ' +
