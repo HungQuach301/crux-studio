@@ -1,0 +1,42 @@
+{
+  "$schemaRef": "visual-tokens.schema.json",
+  "channel": "us-personal-finance",
+  "version": "1.0",
+  "note": "Ánh xạ vai trò màu (khai trong genres/data-explainer/visual-system.md) sang giá trị. Layout chỉ tham chiếu vai trò, không tham chiếu giá trị.",
+  "colors": {
+    "bg": "#0E1116",
+    "surface": "#171B22",
+    "ink": "#F2F4F7",
+    "ink-muted": "#9AA4B2",
+    "accent": "#4C8DFF",
+    "warn": "#F2B441",
+    "positive": "#3FBF7F",
+    "negative": "#E5484D",
+    "grid": "#2A303B"
+  },
+  "typography": {
+    "family": "Inter",
+    "numericFamily": "Inter",
+    "tabularNumbers": true,
+    "sizes": {
+      "level1": 128,
+      "level2": 48,
+      "level3": 28,
+      "minReadable": 24
+    },
+    "weights": { "level1": 700, "level2": 600, "level3": 400 }
+  },
+  "grid": {
+    "columns": 12,
+    "gutter": 32,
+    "safeMargin": 96
+  },
+  "motion": {
+    "driftPxPerSec": [8, 20],
+    "staggerMs": [40, 80],
+    "overshootPct": [3, 5],
+    "parallax": { "layer1": 0.3, "layer2": 1.0, "layer3": 1.3 }
+  },
+  "imagePromptSuffix": "<ĐIỀN sau khi chốt phong cách ở Mốc 4>",
+  "$note": "🤖 Chép từ docs/spec/CRUX-REFERENCE-SPEC.md (không có dấu ⚠️ Crux, nên còn hiệu lực). Đường dẫn chuyển theo bảng ở đầu spec: channels/ → packs/channels/. `imagePromptSuffix` còn để trống — chốt ở Mốc 4 (spec). Hai trường KHÔNG có trong khối spec gốc, thêm cho khớp quy ước của các file pack khác: `$schemaRef` (như `layouts.json` và `format-spec.json` đã có) và chính `$note` này."
+}

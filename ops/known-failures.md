@@ -46,6 +46,33 @@ Hai tín hiệu nhận việc đang có đều không bắt được:
 - `ops/test/claim-collision.test.ts`, **29 bài**, mở đầu bằng bốn bài tái hiện đúng mốc thật của `#221`/`#222` và `#224`/`#225` (bất biến I2). Chạy thật trên ảnh chụp PR thật: đúng **2** va chạm, cả hai thật, **0** báo giả trên hai sóng của `platform/P-014`.
 
 **Còn thiếu, khai ra:** va chạm chưa nổi lên bản tin ngày (`digest-metrics.ts` đang bị `#223` sửa, để PR sau nối), và mâu thuẫn `claimed` giữa `ops/lanes/README.md` và phụ lục P1 bước 4 vẫn còn nguyên.
+## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
+
+> Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Cái thiếu là thứ không chỉ báo nào đo: một câu hỏi đã hết cần hỏi vẫn nằm trong danh sách *"Cần anh quyết"* của bản tin.
+
+**Chữ ký:** một issue `[QĐ]` khai một điều kiện (một secret, một PR gate) → agent tin điều kiện **chưa đủ** → không đẩy nhánh việc đi tiếp và không nêu lại → issue nằm mở trong khi điều kiện **đã đủ từ lâu**. Mọi chỉ báo xanh vì bản thân "một issue mở" không làm gì đỏ.
+
+**Quan sát được, `#127`, đo bằng API 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-22T09:16Z` | `#127` mở — `[QĐ]` (nhãn `decision` + `irreversible`), tiêu đề *"…cấp kiểm 4 **chặn** ở một secret **chưa có**"*. Phương án A: *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**."* |
+| `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
+| `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
+| lúc viết mục này | `#127` **vẫn mở**. |
+
+**Nguyên nhân gốc — hai lớp:**
+
+1. **Agent đọc một trạng thái tồn kho bằng trí nhớ, không bằng chạy thật.** Câu *"`OPENAI_API_KEY` chưa có trên repo"* trong thân `#127` là đúng **lúc viết** (2026-09-22) và **sai** sau đó, nhưng không lượt nào đo lại. Đây là biến thể của chính luật CHARTER 11.1 *"kiểm bằng chạy thật, không bằng đọc tài liệu"* — một dòng văn trong thân issue cũng là "tài liệu".
+2. **Bản tin không có bộ dò cho hình dạng này.** Nó chỉ tách `[QĐ]` đang mở theo nhãn `reversible`/`irreversible` (mục "Cần anh quyết"), không hỏi *"điều kiện của nó đã đủ chưa"*. Nên một `[QĐ]` đã đủ điều kiện trông giống hệt một `[QĐ]` còn chờ người thật.
+
+**Chỗ đã sửa (mục `platform/P-052`, chỉ dẫn D6 của `#251`):** `renderDigestMetrics` thêm mục *"Quyết định điều kiện đã đủ nhưng còn mở"* — một `[QĐ]` khai chặn (`decisionDeclaresBlocked`, dấu hiệu lấy nguyên văn từ `#127`) mà có PR gate đã merge (`linkedPrNumbers` giao với tập PR đã merge) được **nêu lên** kèm số ngày đã mở. Bài kiểm `ops/test/digest-metrics.test.ts` khoá bằng fixture hình dạng `#127`.
+
+**Vì sao nêu lên chứ không tự đóng:** `#127` là `[QĐ]` `irreversible` (chi tiền + chọn nhà cung cấp) — nó **vẫn cần chủ dự án quyết** dù `#66` đã merge; điều kiện dạng-PR đủ chỉ nghĩa "hết cớ để nằm im", không nghĩa "đã quyết". Việc **đóng** một `[QĐ]` khi có bằng chứng mạnh thuộc `decision-close.ts` (`platform/P-050`); mục này ngược dấu — kéo một `[QĐ]` đã đủ điều kiện ra khỏi im lặng để chủ dự án soát. Hai mục cùng họ, không đè nhau.
+
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "đừng dùng điều kiện trong `[QĐ]`". Đọc thành: *một điều kiện đã khai thì phải có máy đo lại nó, nếu không nó thành một lời khẳng định đóng băng ở thời điểm viết.*
 
 ---
 
@@ -965,3 +992,18 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
   Và một lỗ **dữ liệu** mà bản sửa đầu tự mở ra: `platform/P-037` chuyển sang `ready` với dòng `- deps: \`P-034\` (PR \`#198\`) vào \`main\` trước, để hai bản CHARTER không đá nhau`. `parseDeps` cắt theo **dấu phẩy**, nên vế hai thành một phần phụ thuộc **không tra được** và mục kẹt ở `blocked` **vĩnh viễn**, kể cả sau khi `P-034` merge — đúng nhóm Z đang chữa, chỉ đổi chỗ. Đã tách lời giải thích xuống dòng `- ghi chú:`; dòng `deps` chỉ chứa mã mục.
 - **Còn hở, ghi rõ (2):** khi hai mục dùng chung một mã, `indexItems` chỉ giữ mục **gặp trước**; mục **thứ hai không bao giờ vào chỉ mục**, nên `deps` của chính nó không sinh cạnh nào và một vòng đi qua nó sẽ im lặng. Mạnh hơn luật "mã trùng bị loại khỏi cạnh" đang khai, nên nói riêng ở đây và trong chú thích của `dependencyCycles`. Chỗ chặn đúng là dẹp mã trùng, không phải nới luật dò vòng.
 - **Còn hở, ghi rõ (1):** `duplicateIds` đang báo `platform/P-028 ↔ platform/P-028` — **hai** mục khác nhau dùng chung một mã trong cùng một làn, có sẵn trên `main` trước PR này (kiểm bằng `git stash`). Nó **không** im lặng (đã có nhóm riêng in ra), nên không thuộc chữ ký ở trên và không nống phạm vi mục này; đáng một mục backlog riêng. `dependencyCycles` cũng cố ý không liệt kê đủ mọi vòng con khi hai vòng chung cạnh — nó chỉ ra chỗ phải cắt, cắt rồi chạy lại sẽ lộ vòng còn lại.
+
+---
+
+## KF-033 · PR sửa `ops/workflows/**` gây **báo động giả** trong cửa sổ chờ `sync-workflows` — @nhắc chủ dự án dù nhà máy chạy đúng
+
+> Số **KF-033**: dò `## KF-` trên `main` (cao nhất `KF-030`) **và trên đầu các PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-033` không đụng ai.
+
+- **Lần gặp:** 1 (chỉ dẫn **D2** của chủ dự án trên `#251`, sự cố `2026-09-24T22:26Z`).
+- **Đây KHÔNG phải nhóm Z — nó là chiều ngược lại.** Nhóm Z là *hỏng mà mọi chỉ báo xanh*; đây là *khoẻ mà một chỉ báo kêu* — một `@nhắc` gọi chủ dự án trong khi `main` thật ra đang xanh. Cùng một cái giá (thời gian của anh, thước đo CHARTER 1.3), nên đáng một KF, nhưng đừng dán nhãn nhóm Z cho nó.
+- **Chữ ký:** một cảnh báo khẩn (CHARTER 2.4) `@nhắc` chủ dự án ngay sau khi một PR sửa `ops/workflows/**` vào `main`, rồi **tự tắt trong vài chục giây** khi `sync-workflows` chép bản mới sang `.github/`. Cảnh báo trỏ vào một `main` mà `pnpm check` cho `EXIT=0`.
+- **Nguyên nhân gốc:** workflow đang chạy nằm ở `.github/workflows/`, chỉ được `sync-workflows.yml` chép từ `ops/workflows/` bằng một commit **đứng sau** (D-C01: agent không ghi `.github/`). Một merge chạm `ops/workflows/**` vì thế mở một cửa sổ vài chục giây mà **bản đang chạy lệch bản nguồn**. `main-ci.yml` đã biết chỗ này và tự tránh cho bước `check-workflows-synced` (`if: github.event_name != 'push'`, Z3), nhưng **tầng cảnh báo/@nhắc không có nhận thức "đang chờ sync"** — nó đọc trạng thái ngay trong cửa sổ và escalate.
+  - Đo được, `2026-09-24`: `#229` (`a642919`, chạm `watchdog.yml`) vào `main` `22:25:53Z`; `843bbd4` (`chore: sync workflows`) chép sau **33 giây** (`22:26:26Z`). Cảnh báo `22:26Z` nằm trọn trong cửa sổ 33 giây đó.
+- **Một lỗi RIÊNG bị trộn vào cùng cảnh báo, đừng gộp:** con số "60 giờ" của cảnh báo đó **không** đo cửa sổ sync — nó đếm từ một cảnh báo cũ (`a44d265`) **chưa bao giờ được đóng**. Đó là chữ ký của `KF-028` và đang được `#231`/`P-044` chữa (đóng cảnh báo khi `main` xanh lại). Hai lỗi cộng lại thành một cảnh báo trông tệ hơn từng lỗi — tách ra thì mỗi lỗi có một đường sửa riêng.
+- **Chưa sửa — chờ quyết định `#254`:** cách chặn phải **không nới** dấu hiệu 3 của `watchdog` (bắt `sync-workflows` chạy **hỏng** thật), nên nó là một lựa chọn thiết kế, không phải bản vá hiển nhiên. `🤖 [QĐ] #254` mở ba phương án; khuyến nghị A (thêm bộ phân loại "đang chờ sync" hạ cấp @nhắc, giữ nguyên dấu hiệu 3). Mục `platform/P-049` giữ chỗ, `status: parked`.
+- **Máy chặn từ nay:** chưa có — cửa này để mở tới khi `#254` chốt phương án. KF này là lưới đỡ tạm: lượt worker/integrator gặp một cảnh báo `main` đỏ **ngay sau** một merge `ops/workflows/**` mà `pnpm check` trên `main` lại xanh thì đối chiếu mốc `sync-workflows` gần nhất trước khi coi là sự cố thật — **đừng revert một `main` vốn đang xanh**.
