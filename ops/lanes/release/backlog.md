@@ -57,14 +57,54 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
   Việc đầu tiên của lượt nhận `R-002` là chốt đường xác thực rồi ghi nó vào sổ giả định — chọn nhà cung
   cấp và ký điều khoản là nhóm `irreversible` số 3 của CHARTER 2.3, nên nếu nó cần một tài khoản hay một
   điều khoản mới thì mở `🤖 [QĐ]` trước, đừng tự chọn.
-- nguồn: CHARTER bất biến I5; giả định G6
+- nguồn: CHARTER bất biến I5; giả định G6; giả định **G21** (đường xác thực và hạn mức tải lên)
+- **ĐÃ CÓ CÂU TRẢ LỜI cho `🤖 [QĐ]` #248** — comment của chủ dự án `2026-09-24T23:50:04Z`, không mở đầu
+  bằng 🤖 trên issue nhãn `decision`, tức là **chỉ dẫn** theo `CLAUDE.md` mục 5. Nguyên văn: *"#248 A, với
+  ba điều kiện: (1) tôi tạo kênh YouTube trước, và anh viết hướng dẫn tạo OAuth client (scope
+  youtube.upload) cùng refresh token vào issue này; (2) app phải ở chế độ In production, vì Testing làm
+  refresh token hết hạn sau 7 ngày; (3) đo quota thật, vì Console ngày 24/09 ghi riêng "Video Uploads per
+  day 100", khác với ước tính 6 video/ngày."*
+
+  Ba điều kiện đó chia làm **hai phần có chủ khác nhau**, và trộn chúng là cách mục này kẹt tiếp:
+
+  | Điều kiện | Ai làm | Trạng thái |
+  |---|---|---|
+  | (1) hướng dẫn tạo OAuth client + refresh token, viết vào `#248` | **agent** | ✅ đã viết, comment trên `#248` |
+  | (1) tạo kênh YouTube, chạy hướng dẫn, đặt secret | **chủ dự án** | ⬜ chưa |
+  | (2) app ở chế độ **In production** | **chủ dự án** | ⬜ chưa — đã ghi thành một bước bắt buộc trong hướng dẫn, kèm lý do 7 ngày |
+  | (3) đo quota thật | **agent**, nhưng **chỉ sau** khi có secret | ⬜ chưa đo được — không có đường gọi API |
+
+  Vì vậy `#248` **giữ mở**: câu trả lời có rồi nhưng điều kiện chưa xong, và đóng nó bây giờ là giấu ba
+  ô ⬜ ở trên khỏi bản tin (bản tin chỉ đọc issue đang mở — xem `KF` của `P-050`).
+- **con số hạn mức: trần thật là 100 video/ngày; ước tính "~6 video/ngày" của `#248` là SAI** (giả định
+  `G21`, có trích nguyên văn và ngày đọc). Tài liệu nhà cung cấp, đọc `2026-09-25`: cấp mặc định gồm
+  **100 lần `search.list`**, **100 lần `videos.insert`**, và **10.000 đơn vị/ngày cho *các endpoint còn
+  lại*** — `videos.insert` **không** tiêu vào bể 10.000 đó, nó tốn **1 đơn vị trong bucket
+  `Video Uploads`**. Nên trần tải lên là **100/ngày**, trùng đúng con số Console mà chủ dự án đọc.
+  Ước tính ~6/ngày suy từ `10.000 ÷ ~1.600`, tức áp mô hình quota của endpoint khác cho `videos.insert` —
+  phép chia đó không có cơ sở.
+- **⚠️ một lượt agent đã khai ngược lại chỗ này, ghi ra để không lặp.** Lượt `crux-worker-1` ~08:5xZ
+  `2026-09-25` viết trên `#248` rằng hai con số "không mâu thuẫn nhau, là hai bucket khác nhau" và rằng
+  chủ dự án chỉ cần đo để biết "con số nào có hiệu lực". **Sai, và chủ dự án đúng.** Chuỗi nhân quả:
+  lượt đó khai (chưa đo) rằng phiên cloud không đọc được tài liệu Google → thay một lần đọc 30 giây bằng
+  một suy luận → trình bày suy luận như sự thật → dùng nó để bác lời chủ dự án. Vòng soát ngữ cảnh sạch
+  của bước 6 bắt được, và bản đính chính đã đăng trên `#248`. Bài học thuộc về luật 3 của
+  `docs/assumptions.md`: đọc tài liệu trước, đừng suy.
+- **điều kiện (3) vẫn còn nguyên giá trị sau khi con số đã đúng:** tài liệu và Console mới chỉ nói về
+  **cấp mặc định**; phép đo thật xác nhận project này đúng là đang ở cấp đó. Không lượt nào được ghi các
+  số này thành hằng số trong code — chúng là **dữ liệu** kèm `source`, theo đúng khuôn `G19`/`G20`.
+- **khi ba điều kiện của `#248` xong thì còn một bước cuối** (`CLAUDE.md` mục 14): ghi quyết định lâu dài
+  vào `docs/decisions/D-C09.md` (mã trống kế tiếp — `main` đang có `D-C04`, `D-C06`, `D-C07`, `D-C08`)
+  rồi mới đóng `#248`. Ghi ở đây để lượt đó không phải tra lại.
 - **mục này làm theo sóng, và `status` giữ `ready` cho tới sóng cuối** (cùng lối `platform/P-014`): tiêu
   chí 2 không phụ thuộc quyết định nào nên làm xong trước; tiêu chí 1 chờ đường xác thực, là nhóm
   `irreversible` số 3 của CHARTER 2.3.
 - tiêu chí xong:
-  - ⬜ Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng. **Chờ `🤖 [QĐ]` đường
-    xác thực YouTube** — không đo được quota thật khi chưa có đường gọi API. Không ước lượng thay, vì
-    chính tiêu chí này cấm.
+  - ⬜ Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng. `🤖 [QĐ]` #248 **đã
+    được trả lời** (A, ba điều kiện), nhưng tiêu chí này vẫn ⬜: nó chờ **secret**, không chờ quyết định.
+    Không đo được quota thật khi chưa có đường gọi API, và không ước lượng thay vì chính tiêu chí này cấm.
+    Cách đo đã chốt ở `VF-G21`: hiệu số đơn vị trước/sau đúng **một** lần `videos.insert`, không suy từ
+    con số cả ngày.
   - ✅ Không có đường nào trong code đặt `visibility` khác `private`. Contract đã khoá; test phải chứng
     minh code cũng không thử. → cổng `pnpm check:visibility` (`ops/scripts/check-visibility.ts`), nối vào
     `pnpm check`; 25 bài ở `ops/test/check-visibility.test.ts`. Cổng soát **hai** chiều mà contract một
