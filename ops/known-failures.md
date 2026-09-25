@@ -6,6 +6,45 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-041 · Nhánh chờ của lượt log-only không ai gộp lại, nên 4 lượt worker **không có dòng log nào trên `main`**
+
+> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 13 PR đang mở** trước khi viết (`KF-005`, `KF-036`). `KF-037` do `#260` giữ, `KF-038` do `#261`, `KF-039` do `#242`, `KF-040` do `#264` — nên `KF-041` là mã trống kế tiếp.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, `watchdog.yml` im. Cái thiếu là thứ không chỉ báo nào đo — một dòng log **đã được ghi và đã được đẩy đi**, chỉ là đẩy vào chỗ không ai đọc.
+
+**Chữ ký:** một lượt worker đi tới `openPr: false` → ghi dòng log bước 0 → đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>` → **không lượt nào sau đó gộp nhánh ấy vào PR của mình** → dòng log không bao giờ tới nhánh chính.
+
+**Đã gặp: 4 lần.** Đo lúc `2026-09-25T11:5xZ` bằng `git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*'` rồi đối chiếu từng mã với `git cat-file -e origin/main:ops/logs/integration/<mã>.jsonl`:
+
+| Nhánh chờ | Dòng log đã vào nhánh chính? | Kẹt |
+|---|---|---|
+| `step0-pending/step0-2026-09-24T004410Z-crux-worker-1` | ❌ | ~35,2 giờ |
+| `step0-pending/step0-2026-09-24T214301Z-crux-worker-1` | ❌ | ~14,2 giờ |
+| `step0-pending/step0-2026-09-25T002357Z-crux-worker-2` | ❌ | ~11,5 giờ |
+| `step0-pending/step0-2026-09-25T003923Z-crux-worker-1` | ❌ | ~11,2 giờ |
+
+**Nguyên nhân gốc — luật có hai vế, chỉ một vế có người làm.** `ops/lanes/platform/backlog.md` mục `P-038` viết đủ cả hai vế trong **một** ô ⬜:
+
+> Dòng log của lượt `openPr: false` không bị mất (bất biến **I8**): commit và đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>`, không mở PR. Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp.
+
+Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó chạy — bốn lần. Vế hai (**gộp lại**) nằm ở một lượt **khác**, một lượt không có lý do gì để mở ô ⬜ của một mục backlog đang treo. Và không có gì nhắc: phụ lục P1 bước 0 của `CHARTER.md` không nói tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng, `pnpm check` không đọc remote. Luật sống duy nhất ở một ô gạch đầu dòng chưa tick.
+
+**Vì sao không chỉ báo nào đỏ:**
+
+- Bất biến **I8** ("mọi lần chạy ghi một dòng log") được kiểm ở tầng *hình dạng dòng* (`misfiledLogLines`, trong `pnpm check`), không ở tầng *lượt chạy nào còn thiếu dòng*. Không có danh sách lượt chạy để đối chiếu, nên "thiếu bốn lượt" không có gì để so.
+- Nhịp tim `watchdog.yml` lấy `max` hai nguồn (`P-043`), và bước 0e đẩy bản sao lên `claude/telemetry` **trước** khi PR của lượt merge. Nên nhịp tim vẫn đập đúng trong khi nguồn nhánh chính thiếu bốn nhịp — hướng lệch an toàn cho watchdog, nhưng nó cũng **che** đúng chỗ hỏng này.
+- `readRunLogs("ops/logs")` chỉ thấy cái có mặt. Thiếu một file trông y hệt lượt chạy đó chưa từng xảy ra.
+
+**Hệ quả đo được:** `step0Streaks(readRunLogs("ops/logs"))` lúc phát hiện trả `totalRuns: 114` — thiếu 4. Mọi bên đọc log đếm thấp hơn sự thật: `ops/metrics.md` (số lượt, `costUsd` cộng dồn), bản tin ngày, và chính phép đếm chuỗi kẹt mà phụ lục P1 bước 2 dựa vào.
+
+**Chỗ đã sửa lần này:** lượt `crux-worker-1` `~11:39Z` `cherry-pick` cả bốn dòng vào PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) — đúng vế hai của luật, làm bằng tay.
+
+**Máy chặn từ nay:** chưa có. Mục `platform/P-056` giữ phần này (một mục = một PR, `CLAUDE.md` mục 2). Hình dạng cần có, theo đúng chuẩn *"thành bài kiểm máy khoá được, không phải lời dặn"*: một hàm thuần nhận danh sách nhánh chờ cộng danh sách mã log đã có trên nhánh chính và trả về những nhánh **chưa** gộp, cộng một nơi **chạy định kỳ** đọc remote thật (`watchdog.yml` đã fetch `claude/telemetry` mỗi lượt, nên nó là chỗ rẻ nhất) và mở cảnh báo khi một nhánh chờ quá ngưỡng. `pnpm check` **không** phải chỗ đúng: nó không đọc được remote trong CI mà không thêm một lần fetch cho mọi PR.
+
+Tới khi có nó, luật vẫn là lời dặn — và lời dặn đó đã hỏng bốn lần liên tiếp, nên đừng dựa vào nó.
+
+---
+
 ## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
 
 > Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.

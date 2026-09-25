@@ -4,6 +4,27 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-056 · Nhánh chờ `step0-pending` không có máy nào canh, nên 4 lượt worker mất dòng log mà không gì đỏ
+
+Tìm ra ở bước 0 lượt `crux-worker-1` `~11:39Z` `2026-09-25`, đo được chứ không suy: bốn nhánh `claude/integration/step0-pending/*` còn trên remote mà dòng log của chúng **chưa bao giờ** tới nhánh chính, nhánh cũ nhất kẹt **~35,2 giờ**. Bất biến **I8** thủng bốn lượt, và `step0Streaks(readRunLogs("ops/logs"))` đếm `totalRuns: 114` — thiếu đúng bốn. Chi tiết đầy đủ, kèm bảng bốn nhánh và lý do từng chỉ báo im: `ops/known-failures.md` `KF-041`.
+
+Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp"*. Cái thiếu là **người hoặc máy đọc nó**: luật nằm trong một ô ⬜ của một mục đang treo, phụ lục P1 bước 0 không nhắc tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng. Mục này biến vế hai thành thứ máy nói ra, đúng chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649): *thành bài kiểm máy khoá được, không phải lời dặn*.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
+- status: ready
+- nguồn: bước 0 lượt `crux-worker-1` `2026-09-25T11:39Z`; PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) (chỗ bốn dòng log được cứu bằng tay); `ops/known-failures.md` `KF-041`; ô ⬜ thứ tư của mục `P-038`
+- tiêu chí xong:
+  - ⬜ **Hàm thuần, không đụng mạng** — nhận danh sách tên nhánh chờ cộng danh sách mã log đã có ở nhánh chính, trả về những nhánh **chưa** gộp kèm tuổi từng nhánh. Dùng lại `isStep0PendingBranch` và `STEP0_PENDING_BRANCH_PREFIX` đã có ở `ops/scripts/step0-pr-gate.ts`, và `step0LogId` của kernel để tách mã ra khỏi tên nhánh — một chỗ sinh ra tên thì một chỗ đọc ngược lại, không tự cắt chuỗi.
+  - ⬜ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng bốn nhánh quan sát được ở `KF-041` cộng danh sách mã log của nhánh chính tại `0926b38` → hàm phải trả đủ bốn. Ca âm: cùng bốn nhánh nhưng mã đã có ở nhánh chính → trả rỗng. Ca biên: một nhánh không phải nhánh chờ, một tên nhánh chờ không có mã hợp lệ (phải **nêu vấn đề**, không im lặng bỏ qua — đúng cách `heartbeat-source.ts` khai `problems`).
+  - ⬜ **Một nơi chạy định kỳ đọc remote thật** — `watchdog.yml` là chỗ rẻ nhất: nó đã `git fetch` nhánh `claude/telemetry` mỗi lượt, nên thêm một `git ls-remote --heads` cho tiền tố nhánh chờ không thêm job nào. Quá ngưỡng thì mở cảnh báo, cùng đường đi với các dấu hiệu sẵn có của CHARTER 2.4.
+  - ⬜ **Ngưỡng khai thành hằng số có tên**, không phải số trần trong YAML, và có bài khoá nó — cùng hình dạng `HEARTBEAT_STALE_MINUTES`/`HEARTBEAT_SAFETY_MARGIN_MINUTES` của `step0-pr-gate.ts`.
+  - ⬜ **`pnpm check` KHÔNG phải chỗ đặt.** Khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên mọi PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy — trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần.
+  - ⬜ **Ô ⬜ thứ tư của `P-038` trỏ sang mục này** khi làm xong, để hai mục không nói hai chuyện.
+- mã mục: dò `### P-` trên nhánh chính **và trên đầu cả 13 PR đang mở** lúc `2026-09-25T11:5xZ` (`KF-005`, `KF-036`) — cao nhất `P-055` (`#261`), nên `P-056` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
+
+---
+
 ### P-052 · Bản tin phát hiện `[QĐ]` có điều kiện đã đủ nhưng vẫn mở, và KF cho ca `#127` (D6)
 
 Chỉ dẫn **D6** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn `#131` lúc `2026-09-24T23:54:32Z`): *"Ghi KF: `#127` nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy. Bản tin phải phát hiện được `[QĐ]` có điều kiện đã đủ nhưng vẫn mở."*
