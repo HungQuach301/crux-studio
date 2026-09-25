@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 0,
+  "vendor": "openai",
+  "source": "vendor-docs",
+  "asOf": "2026-09-25",
+  "assumption": "G20",
+  "models": [
+    {
+      "model": "text-embedding-3-small",
+      "usdPerMillionTokens": 0.02,
+      "dimensions": 1536,
+      "note": "Rẻ nhất trong ba bản. Ứng viên mặc định của phép chọn `cheapestAdequateModel`."
+    },
+    {
+      "model": "text-embedding-3-large",
+      "usdPerMillionTokens": 0.13,
+      "dimensions": 3072,
+      "note": "Đắt hơn ~6,5 lần. Chỉ chọn khi bản `small` trượt bài kiểm tách cặp."
+    },
+    {
+      "model": "text-embedding-ada-002",
+      "usdPerMillionTokens": 0.1,
+      "dimensions": 1536,
+      "note": "Bản cũ. Giữ trong bảng để phép chọn có ứng viên bị loại vì đắt hơn mà không tốt hơn."
+    }
+  ]
+}

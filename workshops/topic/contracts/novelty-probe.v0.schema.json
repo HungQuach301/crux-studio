@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crux.studio/contracts/topic/novelty-probe.v0.schema.json",
+  "title": "Tập thăm dò có nhãn — dùng để đo một model embeddings có `đủ chất lượng` không",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "probeId", "corpusId", "labelledBy", "theses", "pairs"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 0 },
+    "probeId": { "type": "string", "minLength": 1 },
+    "corpusId": {
+      "description": "Corpus mà mọi `videoId` dưới đây phải thuộc về. Lệch corpusId là nhãn nói về một tập video khác.",
+      "type": "string",
+      "minLength": 1
+    },
+    "labelledBy": {
+      "description": "Nhãn do ai đặt. `hand-built` nghĩa là người đọc tiêu đề rồi gán, và đó là chỗ duy nhất trong phép đo có phán đoán của người.",
+      "type": "string",
+      "enum": ["hand-built"]
+    },
+    "theses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "statement"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "statement": { "type": "string", "minLength": 1 },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "pairs": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["thesisId", "videoId", "sameTopic"],
+        "properties": {
+          "thesisId": { "type": "string", "minLength": 1 },
+          "videoId": { "type": "string", "minLength": 1 },
+          "sameTopic": { "type": "boolean" },
+          "why": { "type": "string" }
+        }
+      }
+    }
+  }
+}

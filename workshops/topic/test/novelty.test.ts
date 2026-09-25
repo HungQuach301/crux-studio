@@ -198,3 +198,115 @@ test('kiểm mới lạ chạy lại cho ra đúng kết quả cũ — không đ
   const b = checkNovelty(THESIS, loadCorpus(), CHECKED_AT);
   assert.deepEqual(a, b);
 });
+
+/* ==================================================================== *
+ * Mục `topic/T-014` — nhánh so NGỮ NGHĨA
+ *
+ * Mọi bài dưới đây dựng bảng điểm bằng tay. Đó là chủ đích: bảng điểm là
+ * một tham số, nên `checkNovelty` vẫn thuần và bộ test không cần mạng.
+ * ==================================================================== */
+
+/** Bảng điểm cho toàn corpus: mặc định `base`, và ghi đè cho những video kể tên. */
+function scoreTable(corpus: Corpus, base: number, overrides: Record<string, number> = {}): Record<string, number> {
+  const scores: Record<string, number> = {};
+  for (const video of corpus.videos) scores[video.videoId] = overrides[video.videoId] ?? base;
+  return scores;
+}
+
+test('T-014: so ngữ nghĩa bắt được video nói cùng chuyện mà so từ vựng bỏ sót', () => {
+  const corpus = loadCorpus();
+  // Câu này nói đúng chuyện của yt-0001..yt-0003 nhưng KHÔNG chung từ khoá:
+  // không `credit card`, không `emergency fund`, không `debt`.
+  const paraphrase: Thesis = {
+    id: 'TH-PARA',
+    statement: 'Clearing revolving balances should wait until a household has one month of expenses set aside.',
+  };
+
+  const lexical = checkNovelty(paraphrase, corpus, CHECKED_AT);
+  assert.equal(lexical.similarCount, 0, 'so từ vựng không thấy gì — đúng chỗ hỏng mà T-014 chữa');
+  assert.equal(lexical.verdict, 'novel-in-corpus');
+
+  const semantic = checkNovelty(paraphrase, corpus, CHECKED_AT, undefined, {
+    model: 'fake-small',
+    threshold: 0.45,
+    scores: scoreTable(corpus, 0.1, { 'yt-0001': 0.82, 'yt-0002': 0.79, 'yt-0003': 0.77 }),
+  });
+  assert.equal(semantic.similarCount, 3);
+  assert.deepEqual(
+    semantic.matches?.map((m) => m.videoId),
+    ['yt-0001', 'yt-0002', 'yt-0003'],
+  );
+});
+
+test('T-014: đủ đông theo ngữ nghĩa thì hạ verdict xuống `crowded-in-corpus`', () => {
+  const corpus = loadCorpus();
+  const overrides: Record<string, number> = {};
+  for (let i = 1; i <= DEFAULT_THRESHOLDS.crowdedAt; i += 1) {
+    overrides[`yt-${String(i).padStart(4, '0')}`] = 0.9;
+  }
+  const semantic = checkNovelty(THESIS, corpus, CHECKED_AT, undefined, {
+    model: 'fake-small',
+    threshold: 0.45,
+    scores: scoreTable(corpus, 0.1, overrides),
+  });
+  assert.equal(semantic.similarCount, DEFAULT_THRESHOLDS.crowdedAt);
+  assert.equal(semantic.verdict, 'crowded-in-corpus');
+});
+
+test('T-014: ngưỡng cosine dùng `similarity.threshold`, KHÔNG dùng `thresholds.similarOverlap`', () => {
+  const corpus = loadCorpus();
+  const scores = scoreTable(corpus, 0.1, { 'yt-0001': 0.48 });
+  // 0.48 nằm GIỮA hai ngưỡng: dưới `similarOverlap` (0.5), trên `threshold` (0.45).
+  assert.ok(0.48 < DEFAULT_THRESHOLDS.similarOverlap && 0.48 > 0.45);
+  const semantic = checkNovelty(THESIS, corpus, CHECKED_AT, undefined, {
+    model: 'fake-small',
+    threshold: 0.45,
+    scores,
+  });
+  assert.equal(semantic.similarCount, 1, 'ngưỡng của phép so từ vựng không được đội lên phép so cosine');
+});
+
+test('T-014: thiếu điểm của một video thì NÉM — không im lặng coi là 0', () => {
+  const corpus = loadCorpus();
+  const scores = scoreTable(corpus, 0.1);
+  delete scores['yt-0020'];
+  assert.throws(
+    () =>
+      checkNovelty(THESIS, corpus, CHECKED_AT, undefined, {
+        model: 'fake-small',
+        threshold: 0.45,
+        scores,
+      }),
+    /thiếu điểm cho video `yt-0020`/,
+  );
+});
+
+test('T-014: `limitation` nói đúng phép so ĐÃ dùng và gọi tên model', () => {
+  const corpus = loadCorpus();
+  const lexical = checkNovelty(THESIS, corpus, CHECKED_AT);
+  assert.match(lexical.limitation, /so từ vựng/);
+  assert.doesNotMatch(lexical.limitation, /embeddings/);
+
+  const semantic = checkNovelty(THESIS, corpus, CHECKED_AT, undefined, {
+    model: 'text-embedding-3-small',
+    threshold: 0.45,
+    scores: scoreTable(corpus, 0.1),
+  });
+  assert.match(semantic.limitation, /so ngữ nghĩa bằng embeddings/);
+  assert.match(semantic.limitation, /text-embedding-3-small/);
+  assert.doesNotMatch(semantic.limitation, /chệch về phía "mới lạ"/);
+  // Câu cấm của WP-014 mục 5 vẫn đứng ở nhánh mới.
+  assert.doesNotThrow(() => assertNoUniversalClaim(semantic.limitation, 'limitation'));
+  assert.equal(validateNoveltyCheck(semantic).valid, true);
+});
+
+test('T-014: nhánh `insufficient-corpus` thắng cả điểm ngữ nghĩa cao', () => {
+  const corpus = loadCorpus();
+  const few = withVideos(corpus, corpus.videos.slice(0, MIN_CORPUS_VIDEOS - 1));
+  const semantic = checkNovelty(THESIS, few, CHECKED_AT, undefined, {
+    model: 'fake-small',
+    threshold: 0.45,
+    scores: scoreTable(few, 0.99),
+  });
+  assert.equal(semantic.verdict, 'insufficient-corpus');
+});
