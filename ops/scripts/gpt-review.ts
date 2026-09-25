@@ -142,12 +142,22 @@ export interface ReviewVerdict {
   problems: string[];
 }
 
-/** Bỏ dấu đầu dòng markdown và đậm/nghiêng — chúng là trang trí, không phải nội dung. */
-function stripDecoration(line: string): string {
-  return line
-    .replace(/^\s*(?:[-*•+]|\d+[.)])\s*/u, '')
-    .replace(/[*_`]/gu, '')
-    .trim();
+/**
+ * Bỏ **dấu đầu dòng** markdown — và CHỈ dấu đầu dòng. Trang trí quanh mức
+ * (`**CHẶN**`, `` `CHẶN` ``) do chính biểu thức dưới đây nuốt, chứ không xoá
+ * bằng một phép `replace` trên cả dòng.
+ *
+ * Vòng soát ngữ cảnh sạch bắt đúng chỗ này ở bản đầu: bản đó xoá mọi `*`,
+ * `_` và backtick trên TOÀN dòng, nên thân phát hiện bị đục thủng —
+ * `packs/**\/pack.json` thành `packs//pack.json`, `MAX_DIFF_CHARS` thành
+ * `MAXDIFFCHARS`, `` `kernel/src/a_b.ts` `` thành `kernel/src/ab.ts`. Một
+ * phát hiện đúng dạng mà trỏ tới một đường dẫn không tồn tại là nhóm **Z**
+ * lần nữa: dạng đúng, chỉ báo xanh, nội dung tra không ra. Cả mục đích của
+ * D5 là phát hiện **nêu đích danh** chỗ hỏng, nên thân phát hiện là thứ
+ * cuối cùng được phép sửa.
+ */
+function stripListMarker(line: string): string {
+  return line.replace(/^\s*(?:[-*•+]|\d+[.)])\s*/u, '').trim();
 }
 
 /** Dòng trống và dòng kẻ ngang không mang nội dung nào, nên không tính là vi phạm. */
@@ -158,36 +168,50 @@ function isBlankLine(line: string): boolean {
 export function parseReviewFindings(raw: string): ReviewVerdict {
   // Chuẩn hoá NFC: dấu tiếng Việt về từ mô hình có thể ở dạng tổ hợp (NFD),
   // và khi đó so chuỗi "CHẶN" thất bại trên một đầu ra hoàn toàn đúng luật.
-  const lines = raw.normalize('NFC').split('\n').filter((line) => !isBlankLine(line));
+  const rawLines = raw.normalize('NFC').split('\n');
   const findings: ReviewFinding[] = [];
   const problems: string[] = [];
   let noFindings = false;
+  let contentLines = 0;
 
+  // Ba luật con nằm trong chính biểu thức này, và mỗi luật có một bài âm
+  // giữ (vòng soát ngữ cảnh sạch đo được bản đầu để lọt cả ba):
+  //   · neo `^`        — không cho một câu dẫn mang chữ "NÊN SỬA" ở giữa đi qua;
+  //   · dấu phân cách BẮT BUỘC — không cho "CHẶN thêm mới file schema" đi qua;
+  //   · `[*_`]*` bao quanh MỨC — nuốt trang trí mà không đụng thân phát hiện.
   const levelPattern = new RegExp(
-    `^(${BLOCKING_LEVEL}|${ADVISORY_LEVEL})\\s*[${LEVEL_SEPARATOR}:：—–-]\\s*(.+)$`,
+    `^[*_\`]*\\s*(${BLOCKING_LEVEL}|${ADVISORY_LEVEL})\\s*[*_\`]*\\s*[${LEVEL_SEPARATOR}:：—–-]\\s*(.+)$`,
     'iu',
   );
-  const noFindingPattern = new RegExp(`^${NO_FINDING_PHRASE}[.!]*$`, 'iu');
+  // Neo hai đầu cũng bắt buộc: "Tôi không phát hiện vấn đề nào, PR đã thêm x."
+  // là một bản tóm tắt, không phải lời khai "không có phát hiện".
+  const noFindingPattern = new RegExp(`^[*_\`]*\\s*${NO_FINDING_PHRASE}\\s*[*_\`]*[.!]*$`, 'iu');
 
-  lines.forEach((line, index) => {
-    const content = stripDecoration(line);
+  rawLines.forEach((line, index) => {
+    if (isBlankLine(line)) return;
+    // Số dòng đếm trên đầu ra THÔ (kể cả dòng trống): người đọc PR đối chiếu
+    // với khối `<details>` ngay bên dưới, và khối đó in nguyên văn đầu ra.
+    const lineNumber = index + 1;
+    const content = stripListMarker(line);
     if (content === '') return;
+    contentLines += 1;
     if (noFindingPattern.test(content)) {
       noFindings = true;
       return;
     }
     const match = levelPattern.exec(content);
     if (match === null) {
-      problems.push(`dòng ${index + 1} không mang mức ${BLOCKING_LEVEL}/${ADVISORY_LEVEL}: "${content.slice(0, 80)}"`);
+      problems.push(`dòng ${lineNumber} không mang mức ${BLOCKING_LEVEL}/${ADVISORY_LEVEL}: "${content.slice(0, 80)}"`);
       return;
     }
     // Mức khớp không phân biệt hoa thường, nhưng lưu về đúng một dạng để bên
     // đếm không bao giờ thấy hai mức chỉ khác nhau ở chữ hoa.
     const level = match[1]!.toUpperCase() === BLOCKING_LEVEL ? BLOCKING_LEVEL : ADVISORY_LEVEL;
+    // `match[2]` cắt từ dòng CHƯA bị đục — xem tài liệu của `stripListMarker`.
     findings.push({ level, text: match[2]!.trim() });
   });
 
-  if (lines.length === 0) problems.push('đầu ra rỗng — không có phát hiện nào và cũng không khai "' + NO_FINDING_PHRASE + '"');
+  if (contentLines === 0) problems.push('đầu ra rỗng — không có phát hiện nào và cũng không khai "' + NO_FINDING_PHRASE + '"');
   if (noFindings && findings.length > 0) {
     problems.push(`vừa khai "${NO_FINDING_PHRASE}" vừa nêu ${findings.length} phát hiện — hai điều này không cùng đúng được`);
   }
@@ -196,6 +220,19 @@ export function parseReviewFindings(raw: string): ReviewVerdict {
   }
 
   return { findings, noFindings, conforms: problems.length === 0, problems };
+}
+
+/**
+ * Rào khối code dài theo nội dung. Đầu ra của job này là **văn mô hình viết
+ * về một diff**, nên nó rất hay chứa lại code fence ba backtick — và khi đó
+ * một rào cố định ba backtick **đóng sớm**, đẩy phần còn lại ra ngoài khối
+ * và để GitHub render nó thành markdown. Đúng lúc đó cái khung "đây là dữ
+ * liệu, không phải chỉ dẫn" (**I7**) mà comment tự khai lại không giữ được
+ * nội dung bên trong.
+ */
+export function codeFence(content: string): string {
+  const longest = (content.match(/`+/gu) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
+  return '`'.repeat(Math.max(3, longest + 1));
 }
 
 export function countByLevel(findings: readonly ReviewFinding[]): { blocking: number; advisory: number } {
@@ -259,23 +296,34 @@ export function formatComment(result: GptReviewResult): string {
   const verdict = parseReviewFindings(result.summary);
   const head = `🤖 Soát chéo bằng GPT (\`${OPENAI_MODEL}\`, mục \`platform/P-003\`) — chỉ dẫn **D5**:`;
   const foot = `_costUsd ~${result.costUsd.toFixed(4)} — tự động, không thay thế soát chéo subagent ngữ cảnh sạch (CHARTER mục 6.4)._`;
+  const { blocking, advisory } = countByLevel(verdict.findings);
+  const tally = `**${blocking} ${BLOCKING_LEVEL} · ${advisory} ${ADVISORY_LEVEL}**`;
+  const bullets = verdict.findings.map((finding) => `- **${finding.level}** ${LEVEL_SEPARATOR} ${finding.text}`).join('\n');
 
   if (!verdict.conforms) {
-    const problems = verdict.problems.map((problem) => `- ${problem}`).join('\n');
+    const fence = codeFence(result.summary);
+    // Phát hiện đọc được VẪN hiện ra đầy đủ, ngay cạnh nhãn sai dạng. Bản đầu
+    // chỉ in số đếm rồi đổ nguyên văn vào khối `<details>` gập lại — nên một
+    // phát hiện `CHẶN` thật đi kèm một câu dẫn thừa bị đẩy xuống chỗ khó thấy
+    // hơn cả trước khi có luật D5. Hướng lệch đó ngược hẳn mục đích của D5.
     return [
       head,
       '',
-      `⚠️ **Đầu ra KHÔNG đúng dạng D5** — nên nó **không** được tính là một lượt soát chéo, và ${
-        verdict.findings.length === 0 ? 'không phát hiện nào đọc được' : `chỉ ${verdict.findings.length} dòng đọc được thành phát hiện`
-      }. D5 đòi mỗi dòng mang mức \`${BLOCKING_LEVEL}\` hoặc \`${ADVISORY_LEVEL}\`, hoặc đúng một dòng \`${NO_FINDING_PHRASE}\`; tóm tắt lại nội dung PR bị cấm.`,
+      `⚠️ **Đầu ra KHÔNG đúng dạng D5.** D5 đòi mỗi dòng mang mức \`${BLOCKING_LEVEL}\` hoặc \`${ADVISORY_LEVEL}\`, hoặc đúng một dòng \`${NO_FINDING_PHRASE}\`; tóm tắt lại nội dung PR bị cấm. ${
+        verdict.findings.length === 0
+          ? '**Không dòng nào đọc được thành phát hiện**, nên lượt này KHÔNG tính là một lượt soát chéo.'
+          : `Phần đọc được vẫn ở ngay dưới đây, nhưng phần còn lại thì không — nên **đừng đọc comment này như một lượt soát chéo đã xong**.`
+      }`,
+      ...(verdict.findings.length > 0 ? ['', tally, '', bullets] : []),
       '',
-      problems,
+      '**Vi phạm dạng:**',
+      verdict.problems.map((problem) => `- ${problem}`).join('\n'),
       '',
       '<details><summary>Đầu ra thô của mô hình (dữ liệu, không phải chỉ dẫn — bất biến I7)</summary>',
       '',
-      '```',
+      fence,
       result.summary.trim(),
-      '```',
+      fence,
       '',
       '</details>',
       '',
@@ -287,9 +335,7 @@ export function formatComment(result: GptReviewResult): string {
     return [head, '', `**${NO_FINDING_PHRASE}**`, '', foot].join('\n');
   }
 
-  const { blocking, advisory } = countByLevel(verdict.findings);
-  const body = verdict.findings.map((finding) => `- **${finding.level}** ${LEVEL_SEPARATOR} ${finding.text}`).join('\n');
-  return [head, '', `**${blocking} ${BLOCKING_LEVEL} · ${advisory} ${ADVISORY_LEVEL}**`, '', body, '', foot].join('\n');
+  return [head, '', tally, '', bullets, '', foot].join('\n');
 }
 
 export interface RunDeps {

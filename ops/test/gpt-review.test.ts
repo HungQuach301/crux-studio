@@ -11,7 +11,7 @@
  * Chỉ dẫn **D5** (`#251`) thêm nhóm thứ tư: đầu ra BẮT BUỘC là danh sách phát
  * hiện có mức (`CHẶN` / `NÊN SỬA` / `không phát hiện`), CẤM tóm tắt lại nội
  * dung PR. Bài **TÁI HIỆN LỖI** (bất biến **I2**) dựng lại nguyên văn một
- * comment `gpt-review` thật trên `#249` — thứ mà luật cũ để lọt.
+ * comment `gpt-review` thật trên `#242` — thứ mà luật cũ để lọt.
  */
 
 import { test } from 'node:test';
@@ -215,22 +215,28 @@ test('runGptReview · API lỗi: KHÔNG ném ra ngoài (job advisory), ghi log s
 // `gpt-review` THẬT trên PR đang mở, không phải ví dụ nghĩ ra.
 
 /**
- * **BÀI TÁI HIỆN LỖI (I2).** Nguyên văn comment `gpt-review` trên
- * [`#249`](https://github.com/HungQuach301/crux-studio/pull/249#issuecomment-5816275628)
- * dạng đã gặp trên cả `#242`, `#223`, `#224`, `#39`: năm dòng văn tóm tắt PR,
- * **0 phát hiện có mức**. Luật cũ nhận nó là một lượt soát chéo hợp lệ và
- * đăng nguyên văn.
+ * **BÀI TÁI HIỆN LỖI (I2).** Nguyên văn phần `summary` của comment
+ * `gpt-review` [`5816275628`](https://github.com/HungQuach301/crux-studio/pull/242#issuecomment-5816275628)
+ * trên **`#242`** — năm dòng văn tóm tắt PR, **0 phát hiện có mức**. Luật cũ
+ * nhận nó là một lượt soát chéo hợp lệ và đăng nguyên văn.
+ *
+ * ⚠️ Bản đầu của bài này ghi nguồn là `#249` và cắt ngắn ba dòng, rồi vẫn khai
+ * là *"nguyên văn"*. Vòng soát ngữ cảnh sạch đo bằng API GitHub và bắt cả hai
+ * chỗ sai. Đã sửa: ID trỏ đúng `#242`, và năm dòng dưới đây là nguyên văn.
+ * `#249` cũng mang đúng chữ ký này nhưng bằng comment KHÁC — **6/6** comment
+ * `gpt-review` của nó (`5821972516`, `5822119278`, `5822426604`, `5824173496`,
+ * `5824271431`, `5826125889`) đều là tóm tắt, 0 dòng mang mức.
  */
-const SUMMARY_FROM_249 = [
+const SUMMARY_FROM_242 = [
   '1. Thêm mới file `reading-table.schema.json` với cấu trúc rõ ràng, đảm bảo tính tương thích và tiêu chuẩn cho bảng đọc của các kênh.',
-  '2. Việc định nghĩa và sử dụng `readingTableSchema` trong `contracts.ts` giúp đảm bảo tính bất biến của cấu trúc dữ liệu.',
-  '3. Phương thức `loadChannelReadingTable` trong `packs.ts` thực hiện xác thực ngay lập tức.',
-  '4. Ghi chú đầy đủ trong các đoạn mã và tài liệu, giữ cho mọi người đều hiểu rõ quy trình.',
-  '5. Các thước đo rủi ro được xác định chính xác.',
+  '2. Việc định nghĩa và sử dụng `readingTableSchema` trong `contracts.ts` giúp đảm bảo tính bất biến của cấu trúc dữ liệu và dễ dàng kiểm tra tính hợp lệ của dữ liệu.',
+  '3. Phương thức `loadChannelReadingTable` trong `packs.ts` thực hiện xác thực ngay lập tức, đảm bảo rằng các bảng đọc không gây ra lỗi trong quá trình chuẩn hóa.',
+  '4. Ghi chú đầy đủ trong các đoạn mã và tài liệu, như trong `backlog.md`, giữ cho mọi người đều hiểu rõ quy trình và lý do các thay đổi.',
+  '5. Các thước đo rủi ro được xác định chính xác, cho thấy việc kết hợp dữ liệu và mã có thể dẫn đến vấn đề nếu không được quản lý cẩn thận, nhấn mạnh tính nhất quán.',
 ].join('\n');
 
-test('parseReviewFindings · TÁI HIỆN LỖI: bản tóm tắt thật của #249 bị bắt là SAI DẠNG, 0 phát hiện', () => {
-  const verdict = parseReviewFindings(SUMMARY_FROM_249);
+test('parseReviewFindings · TÁI HIỆN LỖI: bản tóm tắt thật của #242 bị bắt là SAI DẠNG, 0 phát hiện', () => {
+  const verdict = parseReviewFindings(SUMMARY_FROM_242);
   assert.equal(verdict.conforms, false, 'một bản tóm tắt PR không được tính là soát chéo hợp lệ');
   assert.equal(verdict.findings.length, 0);
   assert.equal(verdict.noFindings, false, '"sai dạng" KHÁC "mô hình khai không có phát hiện"');
@@ -239,8 +245,8 @@ test('parseReviewFindings · TÁI HIỆN LỖI: bản tóm tắt thật của #2
   assert.ok(verdict.problems.every((problem) => problem.includes(BLOCKING_LEVEL)));
 });
 
-test('formatComment · TÁI HIỆN LỖI: bản tóm tắt của #249 KHÔNG bao giờ được đăng như một lượt soát chéo', () => {
-  const body = formatComment({ summary: SUMMARY_FROM_249, promptTokens: 10, completionTokens: 5, costUsd: costUsd(10, 5) });
+test('formatComment · TÁI HIỆN LỖI: bản tóm tắt của #242 KHÔNG bao giờ được đăng như một lượt soát chéo', () => {
+  const body = formatComment({ summary: SUMMARY_FROM_242, promptTokens: 10, completionTokens: 5, costUsd: costUsd(10, 5) });
   assert.match(body, /KHÔNG đúng dạng D5/);
   // Đầu ra thô vẫn còn trong comment — bị nhãn là dữ liệu, không bị nuốt.
   assert.ok(body.includes('reading-table.schema.json'));
@@ -254,7 +260,7 @@ test('runGptReview · TÁI HIỆN LỖI: dòng log nói rõ SAI DẠNG, nên "ch
     fetchImpl: (async () =>
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: SUMMARY_FROM_249 } }],
+          choices: [{ message: { content: SUMMARY_FROM_242 } }],
           usage: { prompt_tokens: 10, completion_tokens: 5 },
         }),
         { status: 200 },
@@ -382,4 +388,79 @@ test('runGptReview · đầu ra đúng dạng: dòng log đếm được theo m�
   assert.equal(outcome.status, 'ok');
   assert.ok(!outcome.note.includes('SAI DẠNG'));
   assert.match(String(logs[0]!.note), new RegExp(`1 ${BLOCKING_LEVEL}`));
+});
+
+// ── Ba luật con của phép đọc, mỗi luật một BÀI ÂM ─────────────────────────
+//
+// Vòng soát ngữ cảnh sạch của chính PR này đo được: bản đầu để LỌT cả ba phép
+// phá dưới đây (27/27 pass). Bài "câu dẫn kèm danh sách" ở trên không khoá
+// được chúng vì câu dẫn nó dùng không chứa chữ mức lẫn dấu phân cách. Đây
+// đúng loại lỗ mà PR này đang chữa, nên nó phải có bài giữ.
+
+test('parseReviewFindings · neo đầu dòng: một câu dẫn MANG chữ mức ở giữa vẫn là sai dạng', () => {
+  // Phá thử M20 (`^` → `^.*?`) sống sót nếu thiếu bài này.
+  const verdict = parseReviewFindings(`Tóm tắt: PR này ${ADVISORY_LEVEL} ${LEVEL_SEPARATOR} thêm test cho schema mới.`);
+  assert.equal(verdict.conforms, false);
+  assert.equal(verdict.findings.length, 0, 'một câu tóm tắt không được biến thành phát hiện');
+});
+
+test('parseReviewFindings · dấu phân cách là BẮT BUỘC: "CHẶN thêm mới file schema" là sai dạng', () => {
+  // Phá thử M11 (dấu phân cách thành tuỳ chọn) sống sót nếu thiếu bài này.
+  const verdict = parseReviewFindings(`${BLOCKING_LEVEL} thêm mới file schema, cấu trúc rõ ràng.`);
+  assert.equal(verdict.conforms, false);
+  assert.equal(verdict.findings.length, 0);
+});
+
+test('parseReviewFindings · "không phát hiện" phải TRỌN DÒNG: một bản tóm tắt chứa cụm đó vẫn sai dạng', () => {
+  // Phá thử M9 (bỏ neo của noFindingPattern) sống sót nếu thiếu bài này — và
+  // nó là phép nguy hiểm nhất: nó cho một bản tóm tắt đi qua với conforms=true.
+  const verdict = parseReviewFindings(`Tôi ${NO_FINDING_PHRASE} vấn đề nào, PR đã thêm schema mới và validate.`);
+  assert.equal(verdict.conforms, false);
+  assert.equal(verdict.noFindings, false, 'câu này KHÔNG phải lời khai "không có phát hiện"');
+});
+
+// ── Thân phát hiện không được đục thủng ───────────────────────────────────
+
+test('parseReviewFindings · giữ NGUYÊN thân phát hiện: glob, snake_case và backtick không bị xoá', () => {
+  const body = 'packs/**/pack.json nạp mà không validate, xem `MAX_DIFF_CHARS` và run_id.';
+  const verdict = parseReviewFindings(`- **${BLOCKING_LEVEL}** ${LEVEL_SEPARATOR} ${body}`);
+  assert.equal(verdict.conforms, true);
+  assert.equal(verdict.findings.length, 1);
+  // Bản đầu cho ra `packs//pack.json`, `MAXDIFFCHARS`, `runid` — một phát hiện
+  // trỏ tới đường dẫn không tồn tại là phát hiện tra không ra.
+  assert.equal(verdict.findings[0]!.text, body);
+});
+
+// ── Số dòng trong `problems` phải trỏ đúng đầu ra THÔ ─────────────────────
+
+test('parseReviewFindings · số dòng đếm trên đầu ra thô, kể cả dòng trống — để đối chiếu được', () => {
+  const verdict = parseReviewFindings('dòng một\n\n\n\ndòng năm');
+  assert.equal(verdict.conforms, false);
+  assert.match(verdict.problems[0]!, /dòng 1/);
+  assert.match(verdict.problems[1]!, /dòng 5/);
+});
+
+// ── formatComment · hai ca hỏng vòng soát ngữ cảnh sạch tìm ra ─────────────
+
+test('formatComment · sai dạng nhưng CÓ phát hiện: phát hiện vẫn hiện ra đầy đủ, không bị gập đi', () => {
+  const summary = ['Dưới đây là phát hiện:', `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} kernel/src/packs.ts nạp pack mà không validate.`].join('\n');
+  const body = formatComment({ summary, promptTokens: 10, completionTokens: 5, costUsd: costUsd(10, 5) });
+  assert.match(body, /KHÔNG đúng dạng D5/);
+  // Phát hiện CHẶN phải nằm ngoài khối <details>, có bullet và có dòng đếm mức.
+  assert.ok(body.includes(`- **${BLOCKING_LEVEL}** ${LEVEL_SEPARATOR} kernel/src/packs.ts nạp pack mà không validate.`));
+  assert.ok(body.includes(`1 ${BLOCKING_LEVEL}`));
+  assert.ok(body.indexOf(`- **${BLOCKING_LEVEL}**`) < body.indexOf('<details>'), 'phát hiện CHẶN bị đẩy xuống khối gập');
+});
+
+test('formatComment · đầu ra thô chứa code fence: rào vẫn ôm trọn, khung I7 không vỡ', () => {
+  const summary = ['Tóm tắt PR:', '```ts', 'const x = 1;', '```', 'Hết.'].join('\n');
+  const body = formatComment({ summary, promptTokens: 10, completionTokens: 5, costUsd: costUsd(10, 5) });
+  const fence = body.slice(body.indexOf('<details>')).match(/`{3,}/u)![0];
+  assert.ok(fence.length > 3, 'rào phải dài hơn dãy backtick dài nhất trong nội dung');
+  // Đúng hai rào của khối, và nội dung nằm trọn giữa chúng.
+  const fences = body.split('\n').filter((line) => line === fence);
+  assert.equal(fences.length, 2);
+  const [open, close] = [body.indexOf(`\n${fence}\n`), body.lastIndexOf(`\n${fence}\n`)];
+  assert.ok(body.slice(open, close).includes('const x = 1;'));
+  assert.ok(body.slice(open, close).includes('Hết.'));
 });
