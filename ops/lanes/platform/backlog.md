@@ -1149,3 +1149,19 @@ Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQu
   - ✅ **Ghi KF** — `ops/known-failures.md` `KF-033` (chữ ký, nguyên nhân gốc, và lưới đỡ tạm cho lượt sau).
   - ✅ **Mở `🤖 [QĐ]`** — `#254`, năm phần theo `CLAUDE.md` mục 14, ba phương án kèm hệ quả, khuyến nghị A.
   - ⬜ **Bản sửa** — chờ `#254`. Bộ phân loại "đang chờ sync" tách khỏi YAML, có bài khoá **hai chiều** (một red thật vẫn @nhắc; một cửa sổ sync không @nhắc); dấu hiệu 3 (`sync` chạy hỏng) giữ nguyên, có bài âm. Bài tái hiện lỗi bắt buộc (**I2**) khi lên bản sửa mang nhãn `fix`.
+
+### P-051 · fix · Soát chéo GPT ra bản tóm tắt PR thay vì danh sách phát hiện có mức
+
+Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). `ops/scripts/gpt-review.ts` (`buildReviewPrompt`) dặn model *"nêu tối đa 5 phát hiện đáng chú ý"*, nên mọi comment `gpt-review` là **tóm tắt lại nội dung PR** — năm gạch đầu dòng mô tả PR làm gì — với **0 phát hiện có mức**. Vô dụng cho người soát và cho worker sở hữu PR: không phân biệt được "phải sửa trước khi merge" với "nên sửa". Đo được: 5 comment `gpt-review` trên `#249`, cùng dạng trên `#242`/`#223`/`#238`/`#231`, đều là tóm tắt.
+
+- deps: —
+- risk: low — chỉ đổi prompt hệ thống và bài kiểm; không đụng đường gọi API, không đụng secret (vẫn ở header `Authorization`), giữ nguyên khung I7 (đóng khung DIFF là DỮ LIỆU, bỏ qua chỉ dẫn nằm trong nội dung soát).
+- status: review
+- nguồn: chỉ dẫn D5 `#251`; `ops/scripts/gpt-review.ts` `buildReviewPrompt`; mục gốc `platform/P-003`
+- tiêu chí xong:
+  - ✅ Prompt đòi đầu ra là **DANH SÁCH PHÁT HIỆN** có nhãn mức `[CHẶN]` / `[NÊN SỬA]`; không có phát hiện thì đúng một dòng `"không phát hiện"`.
+  - ✅ Prompt **CẤM** tóm tắt lại nội dung PR, mô tả PR làm gì, liệt kê thay đổi hay khen ngợi.
+  - ✅ Bài **tái hiện lỗi** (**I2**) trong `ops/test/gpt-review.test.ts`: khẳng định prompt mang `[CHẶN]`/`[NÊN SỬA]`/`"không phát hiện"`/`CẤM tóm tắt` và KHÔNG còn `"đáng chú ý"`. Chứng minh bằng chạy thật: đỏ (`not ok`, fail 1) trên prompt cũ, xanh (14/14) trên prompt mới.
+- giới hạn và việc kế tiếp, khai trước (mục KHÔNG bị treo — bản sửa đã xong, sẵn sàng merge):
+  - Hiệu lực runtime (comment thành danh sách phát hiện) chỉ quan sát được ở **lần chạy `gpt-review` kế tiếp SAU khi PR merge** và `sync-workflows` chép `ops/workflows/` sang `.github/` (`CLAUDE.md` mục 4) — bản thân nhánh này không chạy được lần gọi GPT có tính phí.
+  - **B14b** (worker sở hữu PR phải ĐỌC comment `gpt-review` và ghi xử lý từng điểm) là một mục **tách riêng**, ngoài phạm vi PR này — một mục = một PR.
