@@ -46,6 +46,43 @@ Hai tín hiệu nhận việc đang có đều không bắt được:
 - `ops/test/claim-collision.test.ts`, **29 bài**, mở đầu bằng bốn bài tái hiện đúng mốc thật của `#221`/`#222` và `#224`/`#225` (bất biến I2). Chạy thật trên ảnh chụp PR thật: đúng **2** va chạm, cả hai thật, **0** báo giả trên hai sóng của `platform/P-014`.
 
 **Còn thiếu, khai ra:** va chạm chưa nổi lên bản tin ngày (`digest-metrics.ts` đang bị `#223` sửa, để PR sau nối), và mâu thuẫn `claimed` giữa `ops/lanes/README.md` và phụ lục P1 bước 4 vẫn còn nguyên.
+## KF-041 · Trường máy đọc `- hold:` bị đọc **cắt giữa câu** khi lý do xuống dòng, và chữ bị mất đi thẳng tới mắt chủ dự án
+
+> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất tìm được là `KF-040` (PR `#264`), nên số trống kế tiếp là `KF-041`.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` **EXIT=0** với cả hai ca dưới đây, CI xanh, `main` xanh. Không phép đo nào trong kho nhìn vào chỗ này.
+
+**Chữ ký:** `HOLD_FIELD` của `ops/scripts/backlog-status.ts` là một mẫu RegExp **một dòng** (`^\s*-\s*hold:\s*(\S.*?)\s*$`), và `ops/lanes/README.md` khai hình dạng đúng là *"**Một dòng** `- hold: <lý do>`"*. Nhưng lý do là văn xuôi tiếng Việt dài, nên người viết **xuống dòng** — và bên đọc lặng lẽ giữ đúng dòng đầu, bỏ phần còn lại. Không có gì phân biệt "lý do ngắn thật" với "lý do bị cắt".
+
+**Vì sao nó đắt hơn một chỗ đọc thiếu:** từ mục `platform/P-053` (`ops/scripts/owner-waiting.ts`, PR `#260`), chính chuỗi này là **chữ in trong khối "Việc đang chờ anh" của bản tin ngày**. Nên phần bị bỏ không nằm im trong file — nó là phần chủ dự án cần để hành động, và nó biến mất khỏi đúng cái hộp quyết định duy nhất mà `D-C06` dựng lên. Vòng soát ngữ cảnh sạch chạy `owner-waiting.ts` của `#260` trên bản sửa và thấy `release/R-002` hiện ra **với câu cụt**.
+
+**Lần gặp: 2**, hai lượt khác nhau, cùng một chữ ký:
+
+| # | Mục | Mẫu cũ cắt ở đâu | Mất bao nhiêu | Phần mất là gì |
+|---|---|---|---|---|
+| 1 | `topic/T-014` (đã trên `main`) | ``…`EMBEDDINGS_API_KEY` (secret chỉ sống trong`` | **142** ký tự | điều kiện gỡ treo, và câu *"mục **không** tự chuyển `done`"* — cắt để lại một dấu ngoặc chưa đóng |
+| 2 | `release/R-002` (lượt `2026-09-25` ~10:5xZ) | `…tạo kênh YouTube, tạo OAuth client scope` | **243** ký tự | tên scope, *"đặt refresh token vào Secrets"*, chế độ **In production**, điều kiện mở lại |
+
+Phép đo: dựng lại giá trị của mẫu một dòng rồi so với `parseBacklog` trên cả **47** trường `- hold:` thật của kho → đúng **2** mục lệch.
+
+**Nguyên nhân gốc:** luật *"giữ một dòng"* là **lời dặn cho người viết**, không có máy nào giữ. Nó đã bị vi phạm hai lần bởi hai lượt khác nhau, và cả hai lần đều không do cẩu thả — xuống dòng là phản xạ đúng khi câu dài hơn chiều rộng file.
+
+**Chỗ đã sửa (tầng luật, không vá sản phẩm — `CLAUDE.md` mục 13):** sửa **bên đọc**, không sửa hai mục backlog. `joinHoldLines` của `ops/scripts/backlog-status.ts` nối lý do với các dòng nối tiếp của nó, và **dừng** ở mọi thứ mở một khối Markdown mới (`-` `*` `+` gạch đầu dòng · `>` trích dẫn · `|` hàng bảng · dòng trống · dòng không thụt lề). Hệ quả: `topic/T-014` đọc đủ **không cần sửa một chữ nào** trong làn `topic`.
+
+Vì sao chọn *đọc đủ* chứ không *báo đỏ khi xuống dòng*: báo đỏ chỉ **phát hiện** lớp lỗi và để lại một cái bẫy người viết phải nhớ; đọc đủ **xoá hẳn lớp lỗi**. Cùng lối lập luận mà docblock của `HOLD_MARKERS` đã ghi cho lưới lời văn: *"danh sách chuỗi con KHÔNG hội tụ … Đó **không** phải chỗ để vá tiếp"*.
+
+**Máy chặn từ nay:** ba bài ở `ops/test/backlog-status.test.ts`, bài thứ ba chạy trên **backlog thật** nên nó bắt cả ca tương lai:
+
+1. `joinHoldLines` — nối đúng một khoảng trắng, và **dừng** đúng ở tám hình dạng biên (mỗi hình dạng một `assert` riêng, gộp lại thì một mẫu hỏng vẫn xanh nhờ mẫu khác).
+2. `parseBacklog` trên hai hình dạng thật (2 dòng nối và 1 dòng), kèm phép đòi dấu ngoặc `(secret …)` phải được đóng trong chính lý do.
+3. **Trên `ops/lanes/*/backlog.md` thật:** với mọi trường `- hold:`, `holdField` phải bằng bản **nối đủ**, không bằng bản một dòng.
+
+Phá thử, mỗi phép đúng số bài đỏ rồi khôi phục: bỏ `joinHoldLines` khỏi `parseBacklog` → **2 đỏ** (gồm bài trên backlog thật) · bỏ cổng loại gạch con/trích dẫn/bảng → **1 đỏ** · nối không khoảng trắng → **2 đỏ** · khôi phục → **77/77**.
+
+**Hình dạng khuyến nghị vẫn là một dòng** (`ops/lanes/README.md`), vì dòng bản tin phải đọc được trong khoảng 60 giây trên màn hình điện thoại (`CLAUDE.md` mục 9). `joinHoldLines` là lưới an toàn cho lúc nó bị vi phạm, không phải lời mời viết dài.
+
+---
+
 ## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
 
 > Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.
@@ -1059,3 +1096,42 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
   - Dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`, nên chuỗi "chưa bao giờ ra phát hiện" đếm được bằng `readRunLogs` thay vì bằng mắt.
 - **Hướng lệch đã chọn, và vì sao:** không đối xứng. Nuốt một đầu ra sai dạng thì comment biến mất và người đọc PR tưởng job không chạy; đăng trơn thì nhóm Z quay lại nguyên vẹn. Nên **đăng kèm nhãn**. Cùng lẽ đó, phép đọc cố ý **chặt** — một câu dẫn tự do cũng là sai dạng, vì đó đúng là nơi văn tóm tắt quay lại.
 - **Còn hở, khai chứ không giấu:** phép đọc bắt được *"không đúng dạng"*, **không** bắt được *"đúng dạng mà nội dung rỗng nghĩa"* — một dòng `NÊN SỬA · nên xem lại phần test` hợp dạng nhưng không nêu chỗ hỏng nào. Chưa có ca thật nào, nên chưa thêm luật (đúng **A10** của `#251`: chỉ thêm luật khi có một lỗi đã thật sự xảy ra). Thấy lần đầu thì mở mục backlog, đừng đoán trước.
+
+---
+
+## KF-041 · Nhánh chờ của lượt log-only không ai gộp lại, nên 4 lượt worker **không có dòng log nào trên `main`**
+
+> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 13 PR đang mở** trước khi viết (`KF-005`, `KF-036`). `KF-037` do `#260` giữ, `KF-038` do `#261`, `KF-039` do `#242`, `KF-040` do `#264` — nên `KF-041` là mã trống kế tiếp.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, `watchdog.yml` im. Cái thiếu là thứ không chỉ báo nào đo — một dòng log **đã được ghi và đã được đẩy đi**, chỉ là đẩy vào chỗ không ai đọc.
+
+**Chữ ký:** một lượt worker đi tới `openPr: false` → ghi dòng log bước 0 → đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>` → **không lượt nào sau đó gộp nhánh ấy vào PR của mình** → dòng log không bao giờ tới nhánh chính.
+
+**Đã gặp: 4 lần.** Đo tại mốc `2026-09-25T11:39:23Z` (chính mốc `at` của dòng log lượt này, nên số kiểm lại được) bằng `git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*'` rồi đối chiếu từng mã với `git cat-file -e origin/main:ops/logs/integration/<mã>.jsonl`:
+
+| Nhánh chờ | Dòng log đã vào nhánh chính? | Kẹt |
+|---|---|---|
+| `step0-pending/step0-2026-09-24T004410Z-crux-worker-1` | ❌ | ~34,9 giờ |
+| `step0-pending/step0-2026-09-24T214301Z-crux-worker-1` | ❌ | ~13,9 giờ |
+| `step0-pending/step0-2026-09-25T002357Z-crux-worker-2` | ❌ | ~11,3 giờ |
+| `step0-pending/step0-2026-09-25T003923Z-crux-worker-1` | ❌ | ~11,0 giờ |
+
+**Nguyên nhân gốc — luật có hai vế, chỉ một vế có người làm.** `ops/lanes/platform/backlog.md` mục `P-038` viết đủ cả hai vế trong **một** ô ⬜:
+
+> Dòng log của lượt `openPr: false` không bị mất (bất biến **I8**): commit và đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>`, không mở PR. Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp.
+
+Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó chạy — bốn lần. Vế hai (**gộp lại**) nằm ở một lượt **khác**, một lượt không có lý do gì để mở ô ⬜ của một mục backlog đang treo. Và không có gì nhắc: phụ lục P1 bước 0 của `CHARTER.md` không nói tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng, `pnpm check` không đọc remote. Luật sống duy nhất ở một ô gạch đầu dòng chưa tick.
+
+**Vì sao không chỉ báo nào đỏ:**
+
+- Bất biến **I8** ("mọi lần chạy ghi một dòng log") được kiểm ở tầng *hình dạng dòng* (`misfiledLogLines`, trong `pnpm check`), không ở tầng *lượt chạy nào còn thiếu dòng*. Không có danh sách lượt chạy để đối chiếu, nên "thiếu bốn lượt" không có gì để so.
+- Nhịp tim `watchdog.yml` lấy `max` hai nguồn (`P-043`), và bước 0e đẩy bản sao lên `claude/telemetry` **trước** khi PR của lượt merge. Nên nhịp tim vẫn đập đúng trong khi nguồn nhánh chính thiếu bốn nhịp — hướng lệch an toàn cho watchdog, nhưng nó cũng **che** đúng chỗ hỏng này.
+- `readRunLogs("ops/logs")` chỉ thấy cái có mặt. Thiếu một file trông y hệt lượt chạy đó chưa từng xảy ra.
+
+**Hệ quả đo được:** `step0Streaks(readRunLogs("ops/logs"))` lúc phát hiện trả `totalRuns: 114` — thiếu 4. Mọi bên đọc log đếm thấp hơn sự thật: `ops/metrics.md` (số lượt, `costUsd` cộng dồn), bản tin ngày, và chính phép đếm chuỗi kẹt mà phụ lục P1 bước 2 dựa vào.
+
+**Chỗ đã sửa lần này:** lượt `crux-worker-1` `~11:39Z` `cherry-pick` cả bốn dòng vào PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) — đúng vế hai của luật, làm bằng tay.
+
+**Máy chặn từ nay:** chưa có. Mục `platform/P-056` giữ phần này (một mục = một PR, `CLAUDE.md` mục 2). Hình dạng cần có, theo đúng chuẩn *"thành bài kiểm máy khoá được, không phải lời dặn"*: một hàm thuần nhận danh sách nhánh chờ cộng danh sách mã log đã có trên nhánh chính và trả về những nhánh **chưa** gộp, cộng một nơi **chạy định kỳ** đọc remote thật (`watchdog.yml` đã fetch `claude/telemetry` mỗi lượt, nên nó là chỗ rẻ nhất) và mở cảnh báo khi một nhánh chờ quá ngưỡng. `pnpm check` **không** phải chỗ đúng: nó không đọc được remote trong CI mà không thêm một lần fetch cho mọi PR.
+
+Tới khi có nó, luật vẫn là lời dặn — và lời dặn đó đã hỏng bốn lần liên tiếp, nên đừng dựa vào nó.

@@ -60,7 +60,7 @@ Chỉ dẫn nằm đó **~21,6 giờ** mà không mục backlog nào giữ. Đo 
 
 - deps: —
 - risk: low — lưu spec không tốn tiền, không khoá dự án vào nhà cung cấp nào, và revert được bằng git.
-- status: review
+- status: done
 - nguồn: chỉ dẫn chủ dự án trên `#193`; `packs/channels/us-personal-finance/persona.md` ("Giọng đọc | Một giọng duy nhất, không đổi. Xem `channel.json`"); giả định **G7**
 - tiêu chí xong:
   - ✅ Giá trị máy đọc: khoá `voiceSpec` trong `packs/channels/us-personal-finance/channel.json` — nhân vật, ba điều cấm, giọng vùng, tuổi cảm nhận, hai giới tính ứng viên, hai dải tốc độ, ba luật ngữ điệu, ưu tiên nguồn giọng, cờ `changeIsIrreversible`.

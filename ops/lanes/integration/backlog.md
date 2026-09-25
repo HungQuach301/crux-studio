@@ -555,7 +555,7 @@ nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu ti
 - deps: —
 - risk: low
 - nguồn: `I-010` (hai phần chưa đánh dấu xong của nó); CHARTER phụ lục P1 bước 3, P3 bước 2; `ops/known-failures.md` nhóm Z
-- status: review
+- status: done
 - **cửa merge: `automerge-delayed`** — chạm `CHARTER.md` (mục phụ lục) và `CLAUDE.md`, không chạm mục 1 hay mục 3.
   Đo bằng `node ops/invariants.protected-area.ts --changed … --base-charter …`, đừng đoán.
 - tiêu chí xong:
@@ -705,7 +705,7 @@ Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi v
 
 - deps: I-015
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z, nay là `KF-030`
 - **Số hiệu I-019:** mục này mở ra trong PR `#112` với số `I-016`, rồi lùi sang `I-017` (lúc `11:32Z`,
   khi `I-016` vào `main` qua PR `#132`) và sang `I-018` (lúc `14:45Z`, khi `I-017` vào `main` qua PR
@@ -769,7 +769,7 @@ nhánh việc.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - **Số hiệu I-020:** `I-019` do PR `#112` giữ (nhánh `claude/hopeful-dirac-ekbass`); dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã (`KF-005`).
 - nguồn: `ops/known-failures.md` `KF-023`; mục `integration/I-010`; `ops/lanes/README.md` (định nghĩa `deps`)
 - tiêu chí xong:
