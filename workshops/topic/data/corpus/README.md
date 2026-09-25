@@ -30,3 +30,17 @@ tới khi có người đọc Cloud Console (giả định **G19**).
 Hai trong 38 video (`yt-0037`, `yt-0038`) mang dấu hiệu **nói ngược**, trên đề tài khác với thesis mẫu.
 Không có chúng thì nhánh `contested-in-corpus` chỉ được chạm bằng video tự dựng trong test — cơ chế có bài
 kiểm nhưng dữ liệu mẫu không bao giờ chịu lực.
+
+## Hàng xóm: `data/embeddings/`
+
+Mục `topic/T-014` thêm hai file dữ liệu ở `workshops/topic/data/embeddings/`, mỗi file một contract trong
+`workshops/topic/contracts/`:
+
+| File | Cái gì | Ai dựa vào |
+|---|---|---|
+| `openai-2026-09-25.json` | Bảng giá `$/1M token` của ba model embeddings ứng viên, `source: "vendor-docs"`, `assumption: "G20"` | Phép **chọn** model của `cheapestAdequateModel`. `costUsd` thật thì không — nó đọc `usage.total_tokens` từ phản hồi |
+| `novelty-probe.json` | 16 cặp `(thesis, video)` có nhãn *cùng chuyện / khác chuyện*, `labelledBy: "hand-built"` | Tiêu chí **"đủ chất lượng"**: một model chỉ đạt khi mọi cặp cùng chuyện xếp trên mọi cặp khác chuyện |
+
+Nhãn trong `novelty-probe.json` là chỗ **duy nhất** trong phép đo đó có phán đoán của người — nên nó nằm
+trong dữ liệu chứ không trong code, và `corpusId` của nó phải khớp corpus đang chạy (script và test đều
+đỏ khi lệch).

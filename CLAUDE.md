@@ -71,6 +71,14 @@ pnpm claims /tmp/prs.json
 
 # Phạm vi sự cố của một `main` đỏ, dạng máy đọc (nguồn duy nhất cho điều kiện 2):
 pnpm check > /tmp/check.txt 2>&1; node ops/scripts/main-red-scope.ts /tmp/check.txt "$(git rev-parse HEAD)"
+
+# Nhịp tim routine mà `watchdog.yml` dấu hiệu số 5 đọc — HAI nguồn, lấy `max` (mục P-043, `🤖 [QĐ] #213`):
+node ops/scripts/heartbeat-source.ts --source main=ops/logs --source telemetry=<nhánh claude/telemetry đã lấy về>/heartbeat
+# → {"at":…,"winner":"main"|"telemetry","readings":[…],"problems":[…]}
+# `problems` khai riêng ba trạng thái: nguồn KHÔNG TỒN TẠI · nguồn có dòng log mà không dòng nào là bước 0 · nguồn lỗi.
+
+# Bước 0e: kiểm một file log bước 0 trước khi đẩy bản sao lên nhánh `claude/telemetry` (KHÔNG mở PR):
+node ops/scripts/telemetry-beat.ts ops/logs/integration/step0-<mốc>-<routine>.jsonl
 ```
 
 **Không** có lệnh nào trong repo gọi API trả tiền ở Đợt 0. Mọi xưởng đang ở `impl: stub`.

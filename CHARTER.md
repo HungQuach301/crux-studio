@@ -704,6 +704,9 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    worker chạy dày nhất trong ba routine, nên gắn việc vào đầu lượt worker là đủ dày.
    Bước 0 rẻ: liệt kê PR xung đột, gọi ops/scripts/integrator-resolve.ts, chỉ chạy pnpm check khi có gộp thật.
    Không có PR nào xung đột thì in một dòng "không có PR xung đột" rồi đi tiếp — không bao giờ bỏ qua im lặng.
+   Bước 0e (mục P-043) chạy CẢ khi không có PR nào xung đột: đẩy bản sao dòng log bước 0 lên nhánh
+   claude/telemetry, KHÔNG mở PR. Đó là nguồn nhịp tim mà watchdog.yml đọc được trước khi PR của lượt này
+   merge — điều kiện chủ dự án đặt ra trên 🤖 [QĐ] #213.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
 2. Ưu tiên (mục P-022 và P-025, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó,
    đừng tự suy): nếu có PR đang mở với CI đỏ, hoặc có comment chưa xử lý, hoặc lượt bước 0 gần nhất
@@ -923,6 +926,38 @@ Làn integration của Crux Studio.
       là mọi PR đang mở có dòng riêng trong file ấy xung đột ngay phía GitHub — đo được: 7 PR lúc 04:05 giờ VN
       2026-09-22, rồi 8 PR ở lượt kế tiếp. Dòng **cũ** trong `P-016.jsonl` ở lại nguyên, log append-only; bên đọc
       gọi `readRunLogs` trên cả `ops/logs` nên tự thấy cả hai chỗ.
+
+   e. **Đẩy một bản sao dòng đó lên nhánh `claude/telemetry`** (mục `P-043`), ngay sau khi ghi file ở bước d và
+      **không chờ** PR của lượt này merge:
+
+      ```bash
+      node ops/scripts/telemetry-beat.ts <file log bước 0 vừa ghi> --commands
+      # In {branch, target, bytes} rồi in ĐÚNG các lệnh git phải chạy. Chạy chúng.
+      # Script không bao giờ tự ghi lên remote: thao tác ghi nằm ở chỗ người đọc
+      # bản ghi lượt chạy thấy được, không chôn trong một script.
+      ```
+
+      Commit đẩy lên nhánh đó **phải** mang `Co-Authored-By: Claude <noreply@anthropic.com>` và
+      `Claude-Session: <url phiên>` (`CLAUDE.md` mục 6) — các lệnh in ra đã mang sẵn. Đây là chỗ duy nhất
+      trong repo mà trailer **không sửa lại được về sau**: commit trên nhánh này không bao giờ vào `main`,
+      nên `no-model-name` và `check-commit-trailers` của `ci.yml` không quét nó, mà bài kiểm giả định **G14**
+      của `ops/scripts/recheck-assumptions.ts` **có** quét mọi nhánh `claude/*`. Một lần đẩy thiếu trailer là
+      một giả định báo `sai` vì một commit không PR nào chữa được.
+
+      `watchdog.yml` dấu hiệu số 5 lấy `max` nhịp tim trên **hai** nguồn: `ops/logs` của bản trên `main`, **và** nhánh
+      này. Trước `P-043` chỉ có nguồn thứ nhất, nên nhịp tim chỉ đập khi một PR vào `main` — và trong một khoảng yên
+      người canh `@nhắc` chủ dự án vì một nhà máy đang chạy đúng. Chủ dự án chốt điều kiện trên `🤖 [QĐ]` **#213**
+      (`2026-09-24T06:10:33Z`): chuyển nguồn nhịp tim ra khỏi `main` **trước** khi bỏ PR log của bước 0, và **không có
+      khoảng thời gian nào watchdog mất tín hiệu**.
+
+      Nhánh này **không bao giờ có PR**, nên push vào nó không chạy CI (`ops/workflows/ci.yml` chỉ kích bằng
+      `pull_request` và `workflow_dispatch`). Nguồn thật của dòng log vẫn là `ops/logs/integration/` trong PR của lượt
+      chạy — bất biến **I8** không đổi chỗ, đây chỉ là bản sao để đọc được sớm hơn. Một file cho mỗi lượt, tên lấy
+      nguyên từ bước d, nên hai worker chạy chồng nhau không bao giờ chạm cùng một file.
+
+      Đẩy bản sao **không** thay việc ghi file ở bước d, và cũng không phải điều kiện của nó: bước d hỏng thì bất biến
+      I8 đỏ, bước e hỏng thì nhịp tim rơi về nguồn `main` như trước `P-043` — hướng lệch an toàn, và
+      `heartbeat-source.ts` in ra nguồn nào đã trả lời nên chỗ rơi đó không im lặng.
 
 Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
 mỗi ngày, như trước khi đổi nhịp):
