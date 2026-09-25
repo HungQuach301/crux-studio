@@ -56,6 +56,63 @@ test('storyboard đủ chuẩn thì Preflight xanh', () => {
   assert.equal(report.verdict, 'pass', JSON.stringify(report.checks.filter((c) => c.verdict !== 'pass')));
 });
 
+test('không đưa validLayoutIds thì không chạy check layout-id-known (chưa nối pipeline thật, mục V-001)', () => {
+  const report = preflight(input());
+  assert.equal(verdictOf('layout-id-known', report), undefined);
+});
+
+test('layoutId ngoài layouts.json thì bị chặn khi có validLayoutIds', () => {
+  const scenes = [
+    scene({ id: 'S001', durationMs: 1500, layoutId: 'hero-number' }),
+    scene({ id: 'S002', durationMs: 4500, layoutId: 'L-nope' }),
+  ];
+  const report = preflight(
+    input({
+      scenes,
+      declared: { sceneCount: 2, totalMs: 6000 },
+      targetDurationMs: 6000,
+      audio: { totalMs: 6000, captionDriftMaxMs: 0 },
+      validLayoutIds: ['hero-number', 'bar-compare'],
+    }),
+  );
+  const check = report.checks.find((c) => c.id === 'layout-id-known');
+  assert.equal(check?.verdict, 'fail');
+  assert.deepEqual(check?.sceneIds, ['S002']);
+  assert.equal(report.verdict, 'fail');
+});
+
+test('ở impl=stub, layoutId lạ hạ xuống warn thay vì chặn', () => {
+  const scenes = [scene({ id: 'S001', durationMs: 1500, layoutId: 'L-nope' }), scene({ id: 'S002', durationMs: 4500, layoutId: 'L-nope' })];
+  const report = preflight(
+    input({
+      scenes,
+      declared: { sceneCount: 2, totalMs: 6000 },
+      targetDurationMs: 6000,
+      audio: { totalMs: 6000, captionDriftMaxMs: 0 },
+      validLayoutIds: ['hero-number'],
+      impl: 'stub',
+    }),
+  );
+  assert.equal(verdictOf('layout-id-known', report), 'warn');
+});
+
+test('layoutId hợp lệ hết thì check layout-id-known xanh', () => {
+  const scenes = [
+    scene({ id: 'S001', durationMs: 1500, layoutId: 'hero-number' }),
+    scene({ id: 'S002', durationMs: 4500, layoutId: 'bar-compare' }),
+  ];
+  const report = preflight(
+    input({
+      scenes,
+      declared: { sceneCount: 2, totalMs: 6000 },
+      targetDurationMs: 6000,
+      audio: { totalMs: 6000, captionDriftMaxMs: 0 },
+      validLayoutIds: ['hero-number', 'bar-compare'],
+    }),
+  );
+  assert.equal(verdictOf('layout-id-known', report), 'pass');
+});
+
 test('nhịp đều đặn là nhịp chết — độ lệch chuẩn thấp thì chặn', () => {
   const scenes = Array.from({ length: 4 }, (_, i) => scene({ id: `S00${i}`, durationMs: 3000 }));
   const report = preflight(input({ scenes, declared: { sceneCount: 4, totalMs: 12000 }, targetDurationMs: 12000, audio: { totalMs: 12000, captionDriftMaxMs: 0 } }));

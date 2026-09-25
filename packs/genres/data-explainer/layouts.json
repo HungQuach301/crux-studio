@@ -1,0 +1,156 @@
+{
+  "$schemaRef": "layouts.schema.json",
+  "genre": "data-explainer",
+  "version": "1.1",
+  "note": "Layout dọc là thiết kế RIÊNG, không phải layout ngang đổi khung nhìn. flip-point nằm ở wave 4 vì beat sensitivity chiếm 20% thời lượng và là phần khác biệt nhất của kênh, không thể trình bày bằng layout chưa thiết kế cho nó. Trần đã nâng ở wave 4 để một tập chỉ dùng layout wave 4 vẫn tạo đủ nội dung mới cho khoảng scene yêu cầu.",
+  "orientation": {
+    "landscape": {
+      "width": 1920,
+      "height": 1080
+    },
+    "vertical": {
+      "width": 1080,
+      "height": 1920
+    }
+  },
+  "landscapeLayouts": [
+    {
+      "id": "hero-number",
+      "wave": 4,
+      "maxPerEpisode": 16,
+      "variants": [
+        "plain",
+        "with-unit",
+        "with-delta"
+      ]
+    },
+    {
+      "id": "bar-compare",
+      "wave": 4,
+      "maxPerEpisode": 14,
+      "variants": [
+        "two",
+        "three",
+        "many"
+      ]
+    },
+    {
+      "id": "threshold-matrix",
+      "wave": 4,
+      "maxPerEpisode": 6,
+      "variants": [
+        "rows",
+        "grid"
+      ]
+    },
+    {
+      "id": "flip-point",
+      "wave": 4,
+      "maxPerEpisode": 6,
+      "variants": [
+        "axis",
+        "map"
+      ]
+    },
+    {
+      "id": "line-trend",
+      "wave": 4,
+      "maxPerEpisode": 10,
+      "variants": [
+        "single",
+        "dual"
+      ]
+    },
+    {
+      "id": "two-column-compare",
+      "wave": 5,
+      "maxPerEpisode": 6,
+      "variants": [
+        "text",
+        "mixed"
+      ]
+    },
+    {
+      "id": "stacked-cost",
+      "wave": 5,
+      "maxPerEpisode": 6,
+      "variants": [
+        "absolute",
+        "share"
+      ]
+    },
+    {
+      "id": "timeline",
+      "wave": 5,
+      "maxPerEpisode": 4,
+      "variants": [
+        "months",
+        "years"
+      ]
+    },
+    {
+      "id": "two-roads",
+      "wave": 5,
+      "maxPerEpisode": 3,
+      "variants": [
+        "fork",
+        "converge"
+      ]
+    },
+    {
+      "id": "quote-source",
+      "wave": 5,
+      "maxPerEpisode": 8,
+      "variants": [
+        "short",
+        "long"
+      ]
+    },
+    {
+      "id": "self-locate",
+      "wave": 5,
+      "maxPerEpisode": 2,
+      "variants": [
+        "checklist",
+        "matrix"
+      ]
+    },
+    {
+      "id": "doodle-transition",
+      "wave": 5,
+      "maxPerEpisode": 12,
+      "variants": [
+        "arrow",
+        "circle",
+        "underline"
+      ]
+    }
+  ],
+  "verticalLayouts": [
+    {
+      "id": "v-hero-number",
+      "wave": 4,
+      "variants": [
+        "plain",
+        "with-delta"
+      ]
+    },
+    {
+      "id": "v-bar-compare",
+      "wave": 4,
+      "variants": [
+        "two",
+        "three"
+      ]
+    },
+    {
+      "id": "v-flip-point",
+      "wave": 4,
+      "variants": [
+        "axis"
+      ]
+    }
+  ],
+  "countingRule": "maxPerEpisode đếm số LẦN TẠO NỘI DUNG MỚI của một cặp layout+variant, không đếm số scene. Scene có reusesRegionFrom (dùng lại đúng vùng và đúng nội dung, chỉ đổi máy quay) không tính. Quy tắc này là lý do một tập 180-220 scene chạy được với các trần dưới đây; xem phép tính sức chứa trong engine/docs/15-open-defects.md mục F16. Sức chứa theo cặp layout+variant của toàn bộ layout ngang là 228, trên trần scene cao nhất (220) — nghĩa là một tập hợp lệ tồn tại ngay cả khi KHÔNG scene nào dùng lại vùng. Quy tắc reusesRegionFrom là để tiết kiệm, không phải để vá một phép tính thiếu.",
+  "$note": "🤖 Chép từ docs/spec/CRUX-REFERENCE-SPEC.md (không có dấu ⚠️ Crux, nên còn hiệu lực). Đường dẫn chuyển theo bảng ở đầu spec: genres/ → packs/genres/."
+}
