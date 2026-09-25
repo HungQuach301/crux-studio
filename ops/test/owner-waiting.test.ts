@@ -255,17 +255,28 @@ test('newestLogAt: một dòng `at` hỏng KHÔNG làm mù cả `ref`', () => {
   // Log là file append-only nhiều lượt ghi. Bản đầu nhận dòng khớp `ref` đầu
   // tiên làm `newest` mà không kiểm `Date.parse`, nên mọi so sánh sau là
   // `x > NaN` → `false`, và con số của mục biến mất.
-  const rows = ownerWaitingRows({
-    backlogs: [{ lane: 'platform', content: '### P-001 · a\n- deps: —\n- hold: chờ chủ dự án merge\n' }],
-    decisions: [],
-    logs: [
+  // Phải đúng ở CẢ HAI thứ tự: bỏ phép kiểm `Number.isNaN` thì `NaN` chỉ cắn
+  // khi dòng hỏng đứng SAU dòng tốt (mọi so sánh với `NaN` là `false`, nên
+  // dòng hỏng thắng). Một bài chỉ thử một thứ tự cho 0 phép phá thử đỏ.
+  for (const logs of [
+    [
       { ref: 'platform/P-001', at: 'rác' },
       { ref: 'platform/P-001', at: '2026-09-20T06:00:00.000Z' },
     ],
-    now: NOW,
-    issueRefsOf: linkedPrNumbers,
-  });
-  assert.equal(rows[0]!.waitingDays, 5);
+    [
+      { ref: 'platform/P-001', at: '2026-09-20T06:00:00.000Z' },
+      { ref: 'platform/P-001', at: 'rác' },
+    ],
+  ]) {
+    const rows = ownerWaitingRows({
+      backlogs: [{ lane: 'platform', content: '### P-001 · a\n- deps: —\n- hold: chờ chủ dự án merge\n' }],
+      decisions: [],
+      logs,
+      now: NOW,
+      issueRefsOf: linkedPrNumbers,
+    });
+    assert.equal(rows[0]!.waitingDays, 5, `thứ tự ${JSON.stringify(logs.map((l) => l.at))}`);
+  }
 });
 
 test('clamp: cắt theo ĐIỂM MÃ, không cắt giữa cặp thay thế, và bóc dấu nhấn Markdown', () => {
@@ -325,15 +336,18 @@ test('compareRows: mốc ở tương lai (số âm thật) KHÔNG bị trộn v�
       ].join('\n'),
     },
   ];
+  // Mốc của P-002 ở tương lai **2 ngày** (`waitingDays = -2`) và nó xếp sau
+  // P-001 theo `key`, nên thứ tự chỉ đổi nếu mốc cho `null` thật sự nhỏ hơn
+  // mọi số đo được: với `-1` thì `null` của P-001 (−1) thắng −2 và thứ tự đảo.
   const rows = ownerWaitingRows({
     backlogs,
     decisions: [],
-    logs: [{ ref: 'platform/P-001', at: '2026-09-26T06:00:00.000Z' }],
+    logs: [{ ref: 'platform/P-002', at: '2026-09-27T06:00:00.000Z' }],
     now: NOW,
     issueRefsOf: linkedPrNumbers,
   });
-  // P-001 đo được (−1) nên nó đứng TRƯỚC P-002 (không đo được).
-  assert.deepEqual(rows.map((r) => r.key), ['platform/P-001', 'platform/P-002']);
+  assert.equal(rows.find((r) => r.key === 'platform/P-002')!.waitingDays, -2);
+  assert.deepEqual(rows.map((r) => r.key), ['platform/P-002', 'platform/P-001']);
 });
 
 test('decisionRefsInHold: chỉ lấy `#N` trong đoạn câu có nhắc `[QĐ]`', () => {
