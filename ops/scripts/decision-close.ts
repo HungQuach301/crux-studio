@@ -85,11 +85,60 @@ export const DECISION_LABEL = 'decision';
  * Thêm câu mới thì thêm **kèm một ca thật**, đúng luật `A10` của `#251`:
  * chỉ thêm luật khi có một lỗi đã thật sự xảy ra.
  */
-export const OWNER_DONE_PHRASES: readonly RegExp[] = [
-  /đóng\s+issue/i,
-  /đã\s+thực\s+hiện\s+qua/i,
-  /đã\s+xử\s+lý\s+xong/i,
-];
+export const OWNER_DONE_PHRASES: readonly RegExp[] = [/đóng\s+issue/i, /đã\s+thực\s+hiện\s+qua/i];
+
+/**
+ * Từ làm một câu **hết** nghĩa "xong rồi", dù nó chứa một cụm ở trên.
+ *
+ * Vòng soát ngữ cảnh sạch của mục này tìm ra bảy câu thật mà bản đầu đọc thành
+ * `close`, và **cả bảy đều là chiều đắt** — đóng một `[QĐ]` còn đang chờ người:
+ *
+ * | Câu | Vì sao bản đầu sai |
+ * |---|---|
+ * | *"Chưa đóng issue được, để tôi kiểm lại đã."* | `chưa` |
+ * | *"Đừng đóng issue này, tôi còn muốn theo dõi."* | `đừng` |
+ * | *"Không đóng issue nhé, chờ tôi."* | `không` |
+ * | *"Làm xong A rồi hãy đóng issue."* | `rồi hãy` — điều kiện chưa tới |
+ * | *"B. Sau khi có số đo thì đóng issue."* | `sau khi` |
+ * | *"Việc kia đã xử lý xong, nhưng câu hỏi ở issue này thì tôi chưa quyết."* | `chưa` |
+ *
+ * Phép chặn đặt ở mức **câu**, không mức comment: chủ dự án hay viết comment
+ * nhiều mục — chính chỉ dẫn `D1`–`D6` trên `#131` là hình dạng đó — nên một
+ * câu phủ định ở mục khác không được giết một câu *"xong"* rõ ràng ở mục này,
+ * và ngược lại. Ca thật `#88` (*"C: xác nhận, không hoàn tác. Đóng issue."*)
+ * chỉ đi qua được nhờ tách câu: `không` nằm ở câu thứ nhất, cụm khớp ở câu thứ
+ * hai.
+ *
+ * ⚠️ **Ranh giới từ phải là `(?<!\p{L})`, KHÔNG phải `\b`.** `\b` của JavaScript
+ * chỉ biết chữ ASCII, nên chữ tiếng Việt có dấu ở đầu hoặc cuối từ làm nó **im
+ * lặng không khớp** — `/\bđừng\b/` không bắt được *"Đừng đóng issue này"* vì
+ * `đ` không phải ký tự từ theo ASCII, và `/\bchớ\b/` hỏng ở đuôi `ớ`. Đây
+ * không phải lo xa: bản đầu của mục này dùng `\b` và để lọt đúng câu *"Đừng
+ * đóng issue này, tôi còn muốn theo dõi."* trong khi bắt đúng *"Chưa…"* và
+ * *"Không…"* — tức nó hỏng **một phần**, đúng kiểu khó thấy nhất.
+ */
+export const OWNER_DONE_BLOCKERS: readonly RegExp[] = [
+  'chưa',
+  'đừng',
+  'không',
+  'chớ',
+  'khi\\s+nào',
+  'sau\\s+khi',
+  'trước\\s+khi',
+  'rồi\\s+hãy',
+  'nếu',
+].map((word) => new RegExp(`(?<!\\p{L})(?:${word})(?!\\p{L})`, 'iu'));
+
+/**
+ * Mốc ẩn mà `closeComment` nhét vào mỗi comment tự đóng.
+ *
+ * Dùng để đọc một tín hiệu mà không phép đo nào khác thấy được: **issue này
+ * đã từng bị máy đóng, mà nay đang mở** ⇒ có người mở lại. Thiếu nó thì một
+ * issue bị đóng oan sẽ bị đóng **lại mỗi ngày** với cùng dữ liệu và cùng phán
+ * quyết, và đường thoát duy nhất của chủ dự án là bỏ nhãn `decision` — mà bỏ
+ * nhãn cũng đẩy issue ra khỏi bản tin, tức mất luôn cả hai đường.
+ */
+export const AUTOCLOSE_MARKER = '<!-- crux-decision-autoclose -->';
 
 /** Một thân issue hoặc comment, đúng hình dạng `gh issue view --json` trả về. */
 export interface DecisionComment {
@@ -123,6 +172,19 @@ export interface DecisionIssue {
   /** Trạng thái các PR mà `linkedPrNumbers` tìm ra, đã đo bởi bên gọi. */
   linkedPrs: readonly LinkedPr[];
   /**
+   * Các số PR issue nêu tên mà bên gọi **không đo được** — trạng thái thứ ba,
+   * khai riêng chứ không gộp vào hai trạng thái kia.
+   *
+   * Vì sao nó bắt buộc phải tồn tại: `gh api …/pulls/N` thất bại vì **thiếu
+   * quyền** (`pull-requests: read`) trông y hệt `#N` hoá ra là một issue chứ
+   * không phải PR. Gộp hai ca đó vào "vắng mặt khỏi `linkedPrs`" làm nguồn 2
+   * im lặng tắt **và** làm chốt `closed && !merged` im lặng tắt, rồi nguồn 3
+   * đóng issue phía sau lưng — "đã đo và không thấy gì", đúng nhóm **Z**.
+   * `heartbeat-source.ts` của mục `P-043` đã đặt cùng luật này: một nguồn
+   * `missing` **khác** một nguồn đã đo mà rỗng.
+   */
+  unmeasuredPrs?: readonly number[];
+  /**
    * `true` khi trên `main` có một `docs/decisions/D-Cxx.md` ghi issue này là
    * nguồn. Bên gọi dò; file này không đọc đĩa.
    */
@@ -153,13 +215,38 @@ export interface CloseDecision {
  * issue không bao giờ `merged`, nên nguồn 2 sẽ không bao giờ đủ điều kiện.
  * Đo được trên ca thật: `#234` dẫn `#233`, `#232`, `#226`, `#229`, `#39`,
  * `#84` và `#112`, mà chỉ `#233` là PR nó đang chờ.
+ *
+ * ## Vì sao là một "dải" chứ không phải một số
+ *
+ * Bản đầu bắt đúng **một** `#N` ngay sau chữ `PR`, và vòng soát ngữ cảnh sạch
+ * đo ra bốn cách viết nó hiểu sai — một trong đó là **chiều đắt**:
+ *
+ * | Câu | Bản đầu | Vì sao đắt |
+ * |---|---|---|
+ * | *"merge PR #233 và #234"* | `[233]` | `#234` KHÔNG bao giờ được đo, nên `every(merged)` ra `close` dù `#234` còn mở — **đóng non** |
+ * | *"merge PR `#120`"* | `[]` | dấu nháy ngược, đúng style `D-C07.md` và `CHARTER.md` dùng |
+ * | *"hai PR: #233, #234"* | `[]` | `PR` rồi dấu hai chấm |
+ * | *"[#168](…/pull/168) đã merge"* | `[]` | mất chốt `closed && !merged` của một PR bị bác |
+ *
+ * Nên `PR_RUN` bắt cả **dải** số đi sau chữ `PR` (hoặc `PRs`), và `/pull/<N>`
+ * ở bất cứ đâu. Dải dừng ở ký tự đầu tiên không phải số, khoảng trắng, dấu
+ * nháy ngược, `#`, `,`, `/` hay các từ nối `và`/`and` — nên nó không tràn sang
+ * phần văn xuôi kể bối cảnh phía sau.
+ */
+const PR_RUN =
+  /\bPRs?\b[\s:]*(?:(?:\[?`?#\d+`?\]?(?:\([^)]*\))?|\/pull\/\d+)(?:[\s,]*(?:và|and)?[\s,]*)?)+|\/pull\/\d+/gi;
+
+/**
+ * Các số PR mà issue nêu tên, theo thứ tự gặp, không trùng.
  */
 export function linkedPrNumbers(...sources: readonly string[]): number[] {
   const found: number[] = [];
   for (const source of sources) {
-    for (const match of source.matchAll(/\bPR\s*\[?#(\d+)/gi)) {
-      const number = Number(match[1]);
-      if (!found.includes(number)) found.push(number);
+    for (const run of source.matchAll(PR_RUN)) {
+      for (const one of run[0].matchAll(/#(\d+)|\/pull\/(\d+)/g)) {
+        const number = Number(one[1] ?? one[2]);
+        if (!found.includes(number)) found.push(number);
+      }
     }
   }
   return found;
@@ -175,9 +262,45 @@ export function linkedPrNumbers(...sources: readonly string[]): number[] {
  */
 export function isOwnerDoneComment(comment: DecisionComment, owner: string): boolean {
   if (comment.author.toLowerCase() !== owner.toLowerCase()) return false;
-  const body = comment.body.trim();
+
+  // Bỏ các dòng TRÍCH DẪN trước khi so. `isStopComment` của
+  // `ops/invariants.merge-gate.ts` không cần bước này, và đó không phải vì nó
+  // cẩn thận hơn — mà vì ở đó hướng lệch **ngược**: trích lại chữ `dừng` làm
+  // máy KHÔNG merge, tức an toàn. Ở đây trích lại một câu 🤖 làm máy ĐÓNG một
+  // câu hỏi đang chờ người. Cùng một phép so, hai hậu quả trái dấu, nên không
+  // chép nguyên phép so sang được.
+  // Bỏ cả mốc ẩn HTML trước khi tìm 🤖: comment của agent trong repo này mở
+  // đầu bằng một mốc rồi mới tới 🤖 (khuôn của `<!-- crux-escalate-main-do -->`
+  // ở `alert-escalation`, và của `AUTOCLOSE_MARKER` ngay dưới đây). Không bỏ
+  // nó thì `startsWith(AGENT_PREFIX)` sai, và một comment của MÁY bị đọc thành
+  // lệnh của người — đúng chiều đắt.
+  const body = comment.body
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n')
+    .filter((line) => !/^\s*>/.test(line))
+    .join('\n')
+    .trim();
+  if (body.length === 0) return false;
   if (body.startsWith(AGENT_PREFIX)) return false;
-  return OWNER_DONE_PHRASES.some((phrase) => phrase.test(body));
+
+  // Ít nhất MỘT câu vừa mang cụm "xong", vừa không mang từ chặn nào.
+  return body
+    .split(/[.!?\n]+/)
+    .some(
+      (sentence) =>
+        OWNER_DONE_PHRASES.some((phrase) => phrase.test(sentence)) &&
+        !OWNER_DONE_BLOCKERS.some((blocker) => blocker.test(sentence)),
+    );
+}
+
+/**
+ * `true` khi issue đã từng bị máy tự đóng (có comment mang `AUTOCLOSE_MARKER`).
+ *
+ * Bên gọi chỉ truyền vào issue **đang mở**, nên dấu này nghĩa là *"máy đóng
+ * rồi có người mở lại"* — xem `AUTOCLOSE_MARKER`.
+ */
+export function wasAutoClosedBefore(issue: DecisionIssue): boolean {
+  return issue.comments.some((comment) => comment.body.includes(AUTOCLOSE_MARKER));
 }
 
 /**
@@ -217,6 +340,18 @@ export function decideDecisionClose(issue: DecisionIssue, owner: string): CloseD
     return keep(`Không mang nhãn \`${DECISION_LABEL}\` — mục này chỉ xét issue \`[QĐ]\`.`);
   }
 
+  // ── Chặn TRƯỚC cả nguồn 1: máy đã từng đóng issue này mà nay nó đang mở,
+  //    tức có người mở lại. Mở lại là một hành động cố ý của người, nên nó
+  //    thắng MỌI nguồn bằng chứng — kể cả một câu "xong" cũ của chính chủ dự
+  //    án, vốn là thứ đã đóng issue lần đầu. Đặt nó sau nguồn 1 thì lượt sau
+  //    đóng lại đúng issue vừa được mở lại, mỗi ngày một lần.
+  if (wasAutoClosedBefore(issue)) {
+    return keep(
+      'Issue này đã từng được máy tự đóng mà nay đang mở — có người mở lại. ' +
+        'Đóng lại là bắt chủ dự án đóng đi đóng lại cùng một câu hỏi mỗi ngày.',
+    );
+  }
+
   // ── Nguồn 1 · chủ dự án nói xong. Mạnh nhất, và KHÔNG bị chặn bởi một PR
   //    bị bác: chủ dự án nói xong thì xong, kể cả khi đường đi đã đổi.
   const ownerSaysDone = issue.comments.find((comment) => isOwnerDoneComment(comment, owner));
@@ -224,6 +359,16 @@ export function decideDecisionClose(issue: DecisionIssue, owner: string): CloseD
     return close('Chủ dự án đã trả lời là xong (comment không mở đầu 🤖, `CLAUDE.md` mục 5).', [
       `câu trả lời của chủ dự án lúc \`${ownerSaysDone.createdAt}\`: ${JSON.stringify(ownerSaysDone.body.trim())}`,
     ]);
+  }
+
+  // ── Chặn nguồn 2 và 3: máy KHÔNG ĐO ĐƯỢC một PR issue nêu tên. "Chưa biết"
+  //    không được đi tiếp thành "không có gì cản" — xem `unmeasuredPrs`.
+  const unmeasured = issue.unmeasuredPrs ?? [];
+  if (unmeasured.length > 0) {
+    return keep(
+      `Không đo được trạng thái PR ${unmeasured.map((pr) => `#${pr}`).join(', ')} — ` +
+        'chưa biết thì không đóng. Thường là thiếu quyền `pull-requests: read` hoặc `#N` không phải PR.',
+    );
   }
 
   // ── Chặn nguồn 2 và 3: một bản thực hiện bị BÁC thì quyết định chưa xong.
@@ -275,11 +420,52 @@ export function attachLinkedPrs(
   measured: readonly LinkedPr[],
 ): DecisionIssue[] {
   const byNumber = new Map(measured.map((pr) => [pr.number, pr]));
+  return issues.map((one) => {
+    const named = linkedPrNumbers(one.title ?? '', one.body ?? '');
+    return {
+      ...one,
+      linkedPrs: named
+        .map((number) => byNumber.get(number))
+        .filter((pr): pr is LinkedPr => pr !== undefined),
+      unmeasuredPrs: named.filter((number) => !byNumber.has(number)),
+    };
+  });
+}
+
+/**
+ * Điền `hasDecisionDoc` từ nội dung `docs/decisions/*.md` đã nối lại.
+ *
+ * ## Vì sao không grep cả file
+ *
+ * Bản đầu của mục này grep `#<num>` trên **toàn bộ** nội dung các file quyết
+ * định, và vòng soát ngữ cảnh sạch đo ra hậu quả trên `main` hôm nay: **7/7**
+ * số thử đều khớp — `#19`, `#14`, `#29`, `#42`, `#120`, `#131`, `#167`. Lý do
+ * thì tầm thường và đúng kiểu im lặng:
+ *
+ * - `#19` khớp **chỉ vì** `D-C06.md` in ví dụ *định dạng trả lời* `#19 A, #14 B`;
+ * - `#120`, `#167`, `#29`, `#42` khớp vì `D-C04`/`D-C07` dẫn chúng làm **bối
+ *   cảnh** (`D-C07.md`: *"đang có PR `#120` mở trên chính file đó"*).
+ *
+ * Nên mỗi `[QĐ]` đang mở mà tình cờ được một `D-Cxx` nhắc tới ở bất cứ đâu sẽ
+ * bị đóng, kèm một dòng bằng chứng **nói sai sự thật** (*"ghi issue này là
+ * nguồn"*). Cùng lỗi hình dạng với `linkedPrNumbers` bắt mọi `#N`.
+ *
+ * Chỗ đúng để neo đã có sẵn và ổn định: mỗi `D-Cxx.md` mang đúng một dòng
+ * `- **Nguồn:** …` ở đầu file (`docs/decisions/README.md` quy định khuôn đó).
+ * Nên hàm này chỉ đọc **các dòng đó**.
+ */
+export const SOURCE_LINE = /^\s*-\s*\*\*Nguồn:\*\*/;
+
+export function markDecisionDocs(
+  issues: readonly DecisionIssue[],
+  decisionDocsText: string,
+): DecisionIssue[] {
+  const sourceLines = decisionDocsText.split('\n').filter((line) => SOURCE_LINE.test(line));
   return issues.map((one) => ({
     ...one,
-    linkedPrs: linkedPrNumbers(one.title ?? '', one.body ?? '')
-      .map((number) => byNumber.get(number))
-      .filter((pr): pr is LinkedPr => pr !== undefined),
+    hasDecisionDoc: sourceLines.some((line) =>
+      new RegExp(`(?:#${one.number}|/issues/${one.number})(?!\\d)`).test(line),
+    ),
   }));
 }
 
@@ -303,6 +489,9 @@ export function closeComment(decision: CloseDecision): string {
     throw new Error(`#${decision.issue} mang phán quyết \`keep\` — không dựng comment đóng cho nó.`);
   }
   return [
+    // Mốc ẩn: lượt sau đọc nó để biết issue này đã từng bị máy đóng, nên nếu
+    // nay nó đang mở thì có người mở lại và KHÔNG được đóng lại.
+    AUTOCLOSE_MARKER,
     `${AGENT_PREFIX} **Tự đóng: việc gắn với \`[QĐ]\` này đã xong.**`,
     '',
     decision.reason,
@@ -330,7 +519,9 @@ if (isMain) {
   const args = process.argv.slice(2);
   const linkedOnly = args[0] === '--linked-prs';
   const attachFrom = args[0] === '--attach-prs' ? args[1] : undefined;
-  const rest = args[0]?.startsWith('--') === true ? args.slice(attachFrom === undefined ? 1 : 2) : args;
+  const markDocsFrom = args[0] === '--mark-docs' ? args[1] : undefined;
+  const takesFile = attachFrom !== undefined || markDocsFrom !== undefined;
+  const rest = args[0]?.startsWith('--') === true ? args.slice(takesFile ? 2 : 1) : args;
   const path = rest[0];
   const owner = rest[1] ?? 'HungQuach301';
   if (path === undefined) {
@@ -339,7 +530,10 @@ if (isMain) {
         'Ảnh chụp: { "issues": [ { number, title, body, labels, comments, linkedPrs, hasDecisionDoc } ] }\n' +
         'Mặc định in: { "close": [...], "keep": [...] } — mỗi phán quyết kèm `reason` và `evidence`.\n' +
         '`--linked-prs <ảnh-chụp>`: in các số PR cần ĐO trạng thái, mỗi số một dòng.\n' +
-        '`--attach-prs <pr-state.json> <ảnh-chụp>`: in lại ảnh chụp với `linkedPrs` đã ghép.\n' +
+        '`--attach-prs <pr-state.json> <ảnh-chụp>`: in lại ảnh chụp với `linkedPrs` và\n' +
+        '  `unmeasuredPrs` đã ghép.\n' +
+        '`--mark-docs <docs-decisions-nối.txt> <ảnh-chụp>`: in lại ảnh chụp với `hasDecisionDoc`\n' +
+        '  điền từ các dòng `- **Nguồn:**` — CHỈ các dòng đó, xem `markDecisionDocs`.\n' +
         'Bên gọi đi ba lượt — lấy issue → đo PR → ghép rồi quyết định — và luật đọc tên PR chỉ\n' +
         'có MỘT bản (`linkedPrNumbers`). Chép nó sang `jq` là cách hai bản lệch nhau mà không gì\n' +
         'đỏ, đúng chỗ `STEP0_REF_PATTERN` của mục `P-043` đã sập một lần.',
@@ -363,6 +557,12 @@ if (isMain) {
   if (attachFrom !== undefined) {
     const measured = JSON.parse(readFileSync(attachFrom, 'utf8')) as readonly LinkedPr[];
     console.log(JSON.stringify({ issues: attachLinkedPrs(issues, measured) }, null, 2));
+    process.exit(0);
+  }
+
+  if (markDocsFrom !== undefined) {
+    const docs = readFileSync(markDocsFrom, 'utf8');
+    console.log(JSON.stringify({ issues: markDecisionDocs(issues, docs) }, null, 2));
     process.exit(0);
   }
 

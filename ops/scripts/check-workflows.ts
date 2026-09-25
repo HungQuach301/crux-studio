@@ -265,6 +265,34 @@ const PERMISSION_RULES: readonly PermissionRule[] = [
     accepts: [{ scope: 'checks', need: 'read' }],
     why: 'đọc check run qua Checks API. Scope `checks` KHÔNG nằm trong `contents`, `pull-requests` hay `actions` — thiếu nó cho ra 403 "Resource not accessible by integration".',
   },
+  {
+    // **Lần thứ hai của cùng chữ ký `KF-017`**, nên `CLAUDE.md` mục 13 đòi sửa
+    // tầng luật chứ không vá một workflow: luật ngay trên bắt `gh api
+    // …/check-runs`, mà `gh api …/pulls/N` — cùng hình dạng, cùng hậu quả —
+    // vẫn không rơi vào luật nào. Tìm ra ở vòng soát ngữ cảnh sạch của mục
+    // `platform/P-050`: `decision-close.yml` khai `contents: read` cộng
+    // `issues: write` rồi gọi `gh api repos/…/pulls/N`, và lời gọi đó có lưới
+    // `|| echo ''` nên một 403 trông **y hệt** ca "`#N` không phải PR".
+    //
+    // Bài kiểm tác động (mục `A3` của `#251`) chạy trước khi thêm luật: hai
+    // workflow còn lại gọi endpoint này là `automerge.yml` và `ci.yml`, cả hai
+    // đã khai `pull-requests: write` (bao được `read`), nên luật này ra **0
+    // file đỏ** trên tồn kho hiện tại.
+    //
+    // Đặt SAU luật `-X PUT …/pulls/…/merge` ở trên là chủ đích: `missingPermissions`
+    // gom mọi luật khớp, và một lời gọi merge cần `contents: write` chứ không
+    // phải chỉ `pull-requests: read` — hai luật cùng khớp thì đòi cả hai quyền,
+    // đúng điều cần.
+    // ⚠️ KHÔNG đòi một chữ số sau `/pulls/`. Bản đầu của luật này viết
+    // `\/pulls\/\d` và **im lặng không khớp** đúng lời gọi nó sinh ra để bắt:
+    // URL thật là `"repos/$REPO/pulls/$PR"`, tức sau `/pulls/` là một **biến
+    // bash**, không phải chữ số. Đo được: bỏ `pull-requests: read` khỏi
+    // `decision-close.yml` mà `pnpm lint:workflows` vẫn xanh. Một luật chống
+    // nhóm Z mà tự nó hỏng theo kiểu nhóm Z.
+    match: /\bgh\s+api\s+[^\n]*\/pulls\//,
+    accepts: [{ scope: 'pull-requests', need: 'read' }],
+    why: 'đọc pull request qua REST API (`repos/…/pulls/N`). Quyền này KHÔNG nằm trong `contents: read` — thiếu nó cho ra 403 "Resource not accessible by integration", và một lời gọi có lưới `|| echo \'\'` biến 403 thành "không tìm thấy" mà không gì đỏ (`KF-017`).',
+  },
 ];
 
 /** Đọc khối `permissions:` ở mức gốc của workflow. */

@@ -48,9 +48,19 @@ on:
         type: boolean
         default: true
 
+# `pull-requests: read` là BẮT BUỘC, không phải cho chắc: bước đo trạng thái PR
+# gọi `gh api repos/…/pulls/N`, và quyền đó KHÔNG nằm trong `contents: read`.
+# Khai khối `permissions` thì mọi quyền không liệt kê thành `none`, nên thiếu nó
+# là 403 — mà lời gọi có lưới `|| echo ''`, nên 403 trông y hệt "`#N` không phải
+# PR". Đó là lần thứ hai của chữ ký `KF-017` (lần đầu: thiếu `checks: read` ở
+# `automerge.yml`, 35 lượt đỏ / 0 PR merge trong ~5,9 giờ), nên `CLAUDE.md` mục
+# 13 đòi sửa cả **tầng luật**: `ops/scripts/check-workflows.ts` nay có một luật
+# quyền cho `gh api …/pulls/`, và `ops/scripts/decision-close.ts` khai riêng
+# `unmeasuredPrs` để "chưa đo được" không đi tiếp thành "không có gì cản".
 permissions:
   contents: read
   issues: write
+  pull-requests: read
 
 jobs:
   close:
@@ -80,28 +90,28 @@ jobs:
             --limit 200 --json number --jq '.[].number' > numbers.txt
           echo "issue nhãn decision đang mở: $(wc -l < numbers.txt)"
 
-          # `docs/decisions/` là nguồn bằng chứng thứ ba. Gom một lần, tra
-          # nhiều lần: một issue có `docs/decisions/D-Cxx.md` ghi nó là nguồn
-          # thì `CLAUDE.md` mục 14 coi quyết định đó đã ghi xong.
-          DECISION_DOCS=$(cat docs/decisions/*.md 2>/dev/null || echo '')
+          # `docs/decisions/` là nguồn bằng chứng thứ ba, và việc ĐỌC nó nằm
+          # trong script (`markDecisionDocs`) chứ không phải một `grep` ở đây:
+          # bản đầu grep cả file và khớp 7/7 số thử, vì `D-C06.md` in ví dụ
+          # định dạng trả lời `#19 A, #14 B` và `D-C07.md` dẫn `#120` làm bối
+          # cảnh. Chỗ đúng để neo là dòng `- **Nguồn:**`, và luật đó có bài
+          # kiểm. Ở đây chỉ còn việc nối file lại.
+          cat docs/decisions/*.md > decision-docs.txt 2>/dev/null || : > decision-docs.txt
 
           echo '{"issues":[]}' > snapshot.json
           while read -r NUM; do
             [ -n "$NUM" ] || continue
             gh api "repos/$REPO/issues/$NUM" > "issue-$NUM.json"
-            gh api "repos/$REPO/issues/$NUM/comments" --paginate > "comments-$NUM.json"
-            # `hasDecisionDoc`: khớp `#<num>` hoặc `/issues/<num>` trong khối
-            # `Nguồn:` của bất kỳ D-Cxx nào. Neo vào cuối chuỗi số để `#5`
-            # không khớp `#50`.
-            HAS_DOC=false
-            if printf '%s' "$DECISION_DOCS" \
-                 | grep -Eq "(#${NUM}|/issues/${NUM})([^0-9]|\$)"; then
-              HAS_DOC=true
-            fi
+            # `--paginate` in MỘT MẢNG CHO MỖI TRANG (đúng cái bẫy
+            # `automerge.yml` đã ghi lại), nên `--jq '.[]'` tãi từng comment
+            # thành dòng rồi `jq -s` gộp lại một mảng duy nhất. Thiếu bước này
+            # thì chỉ trang ĐẦU được đọc, và mọi issue > 30 comment im lặng mất
+            # bằng chứng — tức đúng các `[QĐ]` sống lâu.
+            gh api "repos/$REPO/issues/$NUM/comments?per_page=100" --paginate --jq '.[]' \
+              | jq -s '.' > "comments-$NUM.json"
             jq -n \
               --slurpfile issue "issue-$NUM.json" \
               --slurpfile comments "comments-$NUM.json" \
-              --argjson hasDoc "$HAS_DOC" \
               '{
                  number: $issue[0].number,
                  title: ($issue[0].title // ""),
@@ -113,7 +123,7 @@ jobs:
                    createdAt: (.created_at // "")
                  }],
                  linkedPrs: [],
-                 hasDecisionDoc: $hasDoc
+                 hasDecisionDoc: false
                }' > "snap-$NUM.json"
             jq --slurpfile one "snap-$NUM.json" \
               '.issues += $one' snapshot.json > snapshot.next && mv snapshot.next snapshot.json
@@ -151,6 +161,8 @@ jobs:
           #    đúng chỗ đầu file đã nói.
           node ops/scripts/decision-close.ts --attach-prs prstate.json snapshot.json > snapshot.next
           mv snapshot.next snapshot.json
+          node ops/scripts/decision-close.ts --mark-docs decision-docs.txt snapshot.json > snapshot.next
+          mv snapshot.next snapshot.json
 
           # ── Phán quyết.
           node ops/scripts/decision-close.ts snapshot.json "$OWNER" > verdict.json
@@ -178,3 +190,39 @@ jobs:
             gh issue close "$NUM" --repo "$REPO" --reason completed
             echo "đã đóng #$NUM"
           done < closing.jsonl
+
+          # ── Báo vào chỗ chủ dự án THẬT SỰ đọc.
+          #
+          # Comment bằng chứng ở trên nằm trên issue đã ĐÓNG, và
+          # `ops/scripts/digest-metrics.ts` gọi `gh issue list --state open
+          # --label decision` — nên bản tin không bao giờ đi qua đó. Nếu dừng ở
+          # đây thì lớp an toàn "đóng sai thì thấy được" không tồn tại, và một
+          # hành động `reversible` do máy tự làm mất cửa sổ `hoàn tác #N` 24 giờ
+          # mà CHARTER 2.3 và 2.5 đòi.
+          #
+          # Nên mỗi lượt có đóng thật phải để lại một dòng trên issue bản tin
+          # đang mở (nhãn `digest`) — đúng mục "Đã tự làm", đúng hộp quyết định
+          # duy nhất.
+          COUNT=$(jq -r '.close | length' verdict.json)
+          if [ "$COUNT" = "0" ]; then
+            echo "không đóng issue nào — không báo bản tin."
+            exit 0
+          fi
+          DIGEST=$(gh issue list --repo "$REPO" --label digest --state open \
+            --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$DIGEST" ]; then
+            # Không có bản tin đang mở là chuyện bình thường (bản tin hôm trước
+            # đã đóng, hôm nay chưa mở). KHÔNG tạo issue mới: `notify.yml` sẽ
+            # @nhắc chủ dự án cho một issue nhãn `digest` mới, tức gọi anh ngoài
+            # nhịp vì một việc máy tự lo. Lượt bản tin kế tiếp tự đọc các issue
+            # vừa đóng.
+            echo "không có issue bản tin đang mở — bỏ qua bước báo (không tạo issue mới)."
+            exit 0
+          fi
+          {
+            printf '%s\n\n' "🤖 **Đã tự làm — đóng $COUNT issue \`[QĐ]\` có việc đã xong** (mục \`platform/P-050\`, chỉ dẫn D3)."
+            jq -r '.close[] | "- #\(.issue) — \(.reason)"' verdict.json
+            printf '\n%s\n' "Đây là `reversible`: phủ quyết bằng \`hoàn tác #N\` trong 24 giờ, hoặc mở lại issue — máy sẽ **không** đóng lại (nó đọc mốc tự đóng cũ)."
+          } > digest-note.md
+          gh issue comment "$DIGEST" --repo "$REPO" --body-file digest-note.md
+          echo "đã báo vào bản tin #$DIGEST"
