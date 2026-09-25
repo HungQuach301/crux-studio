@@ -9,11 +9,14 @@ Chuyển `layouts.json`, hệ thống thị giác và visual tokens từ spec v�
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
+- hold: còn treo có chủ đích — check `layout-id-known` chưa nối vào pipeline thật, vì nối bây giờ đổi `ops/golden/ep-0001-stub/snapshots/assembly.json` mà cập nhật snapshot phải đi PR riêng (CHARTER 6.1); việc nối thuộc `V-006`
 - nguồn: spec phần Genre Pack; CHARTER 5.1
 - tiêu chí xong:
-  - `packs/genres/data-explainer/layouts.json` và `packs/channels/us-personal-finance/visual-tokens.json` tồn tại và validate được.
-  - Preflight bổ sung một kiểm: `layoutId` nào không có trong `layouts.json` thì chặn.
+  - ✅ `packs/genres/data-explainer/layouts.json` và `packs/channels/us-personal-finance/visual-tokens.json` tồn tại và validate được — `kernel/contracts/layouts.schema.json` + `visual-tokens.schema.json`, nạp qua `loadGenreLayouts`/`loadChannelVisualTokens` (`kernel/src/packs.ts`), kiểm trong `pnpm contracts`.
+  - ✅ Preflight có check mới `layout-id-known` (`workshops/assembly/src/preflight.ts`): `layoutId` không có trong `validLayoutIds` thì `fail` (`warn` ở `impl: stub`, cùng quy ước với các kiểm khối lượng nội dung khác).
+  - **Còn treo, cố ý:** check `layout-id-known` **chưa nối** vào pipeline thật (`ops/scripts/pipeline.ts` → `workshops/assembly/src/index.ts`) — xưởng `visual` stub hiện sinh `layoutId` giả (`L-1`…`L-5`), nối cứng bây giờ sẽ đổi `ops/golden/ep-0001-stub/snapshots/assembly.json`, và cập nhật snapshot phải đi **PR riêng** (CHARTER 6.1). Nối là việc tự nhiên của `V-006` (xưởng `visual` lên `impl: v1`), vì mục đó vốn đã phải ghi lại snapshot.
+  - PR: xem `ops/logs/visual/V-001.jsonl`.
 
 ### V-002 · Spike canvas liên tục — cổng chặn kiến trúc
 Trả lời **bằng số đo thật**: canvas liên tục với máy quay di chuyển có khả thi trên runner Actions không, và ở cấu hình nào thì chuyển động chấp nhận được.
@@ -83,4 +86,5 @@ Chỉ được dùng làm **cổng** khi nó trùng lựa chọn của chủ d�
 - nguồn: CHARTER 5.4
 - tiêu chí xong:
   - Tập vàng chạy lại xanh với `impl: v1`.
+  - Nối check `layout-id-known` vào pipeline thật (`ops/scripts/pipeline.ts` → `workshops/assembly/src/index.ts` truyền `validLayoutIds`), **và xoá trường `- hold:` của `V-001`**. Trường đó là nguồn quyết định giữ `V-001` ở `review`; quên xoá thì `V-001` không bao giờ lật được sang `done` mà không gì đỏ — đúng nhóm **Z**.
   - Cổng gu hình: 5 layout đạt 8/8 tiêu chí (CHARTER mục 10, Đợt 2).

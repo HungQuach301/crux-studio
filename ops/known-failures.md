@@ -46,6 +46,33 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 - **Luật chặn lần sau, KHÔNG gỡ được PR đã dính.** Check run `cancelled` nằm sẵn trên `head.sha` ấy và GitHub không sinh lượt mới cho nó; chỉ một **commit mới** mới gỡ được (một lần gộp `main` vào nhánh ở bước 0 của phụ lục P3 là đủ). Nên mục này còn một bộ dò: `blockedRequiredChecks` trong cùng file, đọc danh sách check run của một `head.sha` và trả về các check bắt buộc đang bị giữ, kèm cờ `silent` cho ca "có cả lượt `success` cùng tên" — tức PR trông xanh mà vẫn kẹt. Gọi bằng `node ops/scripts/ci-concurrency.ts <file.json>`, nhận cả mảng trần lẫn nguyên object `{"check_runs": […]}` mà API trả về.
   - `skipped` **không** nằm trong `NON_VERDICT_CONCLUSIONS`, và đây là chỗ vòng soát sửa bản đầu: GitHub coi một required check `skipped` là **đã qua**, mà `fix-has-test` và `protected-area` mang `if: github.event_name == 'pull_request'` nên ra `skipped` ở mọi lượt `workflow_dispatch` — để `skipped` trong danh sách là chuốc dương tính giả cho một bộ dò mà cả giá trị lẫn lý do tồn tại đều nằm ở chỗ nó không kêu oan.
 - **Cách đọc bản ghi này cho đúng:** đừng đọc thành "`concurrency` nguy hiểm". Đọc thành: *một lượt bị huỷ vẫn để lại dấu vết mang tên của lượt thành công, nên huỷ một lượt sinh ra check **bắt buộc** là huỷ luôn lời khẳng định mà cổng vào `main` đang chờ.*
+## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
+
+> Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Cái thiếu là thứ không chỉ báo nào đo: một câu hỏi đã hết cần hỏi vẫn nằm trong danh sách *"Cần anh quyết"* của bản tin.
+
+**Chữ ký:** một issue `[QĐ]` khai một điều kiện (một secret, một PR gate) → agent tin điều kiện **chưa đủ** → không đẩy nhánh việc đi tiếp và không nêu lại → issue nằm mở trong khi điều kiện **đã đủ từ lâu**. Mọi chỉ báo xanh vì bản thân "một issue mở" không làm gì đỏ.
+
+**Quan sát được, `#127`, đo bằng API 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-22T09:16Z` | `#127` mở — `[QĐ]` (nhãn `decision` + `irreversible`), tiêu đề *"…cấp kiểm 4 **chặn** ở một secret **chưa có**"*. Phương án A: *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**."* |
+| `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
+| `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
+| lúc viết mục này | `#127` **vẫn mở**. |
+
+**Nguyên nhân gốc — hai lớp:**
+
+1. **Agent đọc một trạng thái tồn kho bằng trí nhớ, không bằng chạy thật.** Câu *"`OPENAI_API_KEY` chưa có trên repo"* trong thân `#127` là đúng **lúc viết** (2026-09-22) và **sai** sau đó, nhưng không lượt nào đo lại. Đây là biến thể của chính luật CHARTER 11.1 *"kiểm bằng chạy thật, không bằng đọc tài liệu"* — một dòng văn trong thân issue cũng là "tài liệu".
+2. **Bản tin không có bộ dò cho hình dạng này.** Nó chỉ tách `[QĐ]` đang mở theo nhãn `reversible`/`irreversible` (mục "Cần anh quyết"), không hỏi *"điều kiện của nó đã đủ chưa"*. Nên một `[QĐ]` đã đủ điều kiện trông giống hệt một `[QĐ]` còn chờ người thật.
+
+**Chỗ đã sửa (mục `platform/P-052`, chỉ dẫn D6 của `#251`):** `renderDigestMetrics` thêm mục *"Quyết định điều kiện đã đủ nhưng còn mở"* — một `[QĐ]` khai chặn (`decisionDeclaresBlocked`, dấu hiệu lấy nguyên văn từ `#127`) mà có PR gate đã merge (`linkedPrNumbers` giao với tập PR đã merge) được **nêu lên** kèm số ngày đã mở. Bài kiểm `ops/test/digest-metrics.test.ts` khoá bằng fixture hình dạng `#127`.
+
+**Vì sao nêu lên chứ không tự đóng:** `#127` là `[QĐ]` `irreversible` (chi tiền + chọn nhà cung cấp) — nó **vẫn cần chủ dự án quyết** dù `#66` đã merge; điều kiện dạng-PR đủ chỉ nghĩa "hết cớ để nằm im", không nghĩa "đã quyết". Việc **đóng** một `[QĐ]` khi có bằng chứng mạnh thuộc `decision-close.ts` (`platform/P-050`); mục này ngược dấu — kéo một `[QĐ]` đã đủ điều kiện ra khỏi im lặng để chủ dự án soát. Hai mục cùng họ, không đè nhau.
+
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "đừng dùng điều kiện trong `[QĐ]`". Đọc thành: *một điều kiện đã khai thì phải có máy đo lại nó, nếu không nó thành một lời khẳng định đóng băng ở thời điểm viết.*
 
 ---
 

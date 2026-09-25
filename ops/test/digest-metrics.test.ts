@@ -22,8 +22,12 @@ import {
   classifyDecision,
   collectMetrics,
   computeProgress,
+  conditionMetButOpen,
+  decisionAgeDays,
+  decisionDeclaresBlocked,
   decisionRows,
   laneFromTitle,
+  linkedPrNumbers,
   mergedByLane,
   needOwnerCount,
   openPrRows,
@@ -235,6 +239,73 @@ test('ÂM — needOwnerCount: issue `decision` thiếu nhãn phân loại VẪN 
   const rows = decisionRows([{ number: 3, title: 'c', labels: [{ name: 'decision' }] }]);
   assert.equal(needOwnerCount(rows), 1);
   assert.match(renderDigestMetrics(baseMetrics({ decisions: rows })), /#3 · c \(chưa phân loại/);
+});
+
+// --- P-052 (D6): `[QĐ]` điều kiện đã đủ nhưng vẫn mở (ca `#127`) ---
+
+test('decisionRows: KHÔNG có `opts` thì giữ nguyên hình dạng {number,title,kind} cho bên gọi cũ', () => {
+  const rows = decisionRows([{ number: 9, title: 'x', labels: [{ name: 'decision' }], body: 'chưa có #66' }]);
+  // deepEqual: không được lọt thêm khoá conditionMetPrs/ageDays khi bên gọi không xin.
+  assert.deepEqual(rows, [{ number: 9, title: 'x', kind: 'chưa phân loại' }]);
+});
+
+test('linkedPrNumbers: đọc mọi `#N` tăng dần, không lặp', () => {
+  assert.deepEqual(linkedPrNumbers('merge PR #66, xem #125 và lại #66'), [66, 125]);
+  assert.deepEqual(linkedPrNumbers('không có tham chiếu'), []);
+});
+
+test('decisionDeclaresBlocked: bắt đúng dấu hiệu của `#127`, bỏ qua câu không khai chặn', () => {
+  assert.equal(decisionDeclaresBlocked('cấp kiểm 4 chặn ở một secret chưa có'), true);
+  assert.equal(decisionDeclaresBlocked('tám mô hình đang chờ secret'), true);
+  assert.equal(decisionDeclaresBlocked('Chọn track A hay B cho kênh'), false);
+  // Vòng soát bước 6: một `/chờ\s/` trần bắt cả "không chờ ai" — dấu hiệu bị
+  // bỏ, nên câu này KHÔNG được coi là khai chặn (chỉ "đang chờ" mới tính).
+  assert.equal(decisionDeclaresBlocked('Khuyến nghị: không chờ ai, làm ngay'), false);
+});
+
+test('decisionAgeDays: số ngày 1 số lẻ; thiếu/hỏng createdAt → null', () => {
+  const now = new Date('2026-09-25T09:16:00Z');
+  assert.equal(decisionAgeDays('2026-09-22T09:16:00Z', now), 3);
+  assert.equal(decisionAgeDays(undefined, now), null);
+  assert.equal(decisionAgeDays('không-phải-ngày', now), null);
+});
+
+test('conditionMetButOpen: nêu `[QĐ]` hình dạng #127 (khai chặn + PR gate #66 đã merge)', () => {
+  const now = new Date('2026-09-25T09:16:00Z');
+  const rows = decisionRows(
+    [
+      {
+        number: 127,
+        title: '🤖 [QĐ] … cấp kiểm 4 chặn ở một secret chưa có',
+        labels: [{ name: 'decision' }, { name: 'irreversible' }],
+        body: 'Phương án A: Cấp OPENAI_API_KEY rồi merge PR #66. Xem thêm PR #125.',
+        createdAt: '2026-09-22T09:16:00Z',
+      },
+    ],
+    { mergedPrNumbers: new Set([66]), now }, // #125 CHƯA merge trong tập này
+  );
+  const flagged = conditionMetButOpen(rows);
+  assert.equal(flagged.length, 1);
+  assert.deepEqual(flagged[0]!.conditionMetPrs, [66]); // chỉ #66, không #125
+  assert.equal(flagged[0]!.ageDays, 3);
+  const text = renderDigestMetrics(baseMetrics({ decisions: rows }));
+  assert.match(text, /^Quyết định điều kiện đã đủ nhưng còn mở: 1$/m);
+  assert.match(text, /^- #127 · .+ · điều kiện đã đủ: PR #66 đã merge · đã mở 3 ngày$/m);
+});
+
+test('ÂM — conditionMetButOpen: PR gate chưa merge, hoặc không khai chặn, hoặc không nêu PR → KHÔNG nêu', () => {
+  const now = new Date('2026-09-25T00:00:00Z');
+  const issues = [
+    // khai chặn nhưng PR gate #999 CHƯA merge (không có trong tập)
+    { number: 1, title: 'chặn ở secret chưa có', labels: [{ name: 'decision' }], body: 'merge PR #999' },
+    // PR #66 đã merge nhưng KHÔNG khai chặn → không phải ca điều kiện
+    { number: 2, title: 'Chọn track', labels: [{ name: 'decision' }], body: 'so với #66 đã làm' },
+    // khai chặn nhưng KHÔNG nêu PR nào
+    { number: 3, title: 'chờ số đo, chưa có', labels: [{ name: 'decision' }], body: 'chờ kết quả' },
+  ];
+  const rows = decisionRows(issues, { mergedPrNumbers: new Set([66]), now });
+  assert.equal(conditionMetButOpen(rows).length, 0);
+  assert.match(renderDigestMetrics(baseMetrics({ decisions: rows })), /^Quyết định điều kiện đã đủ nhưng còn mở: 0$/m);
 });
 
 // --- renderDigestMetrics ---
