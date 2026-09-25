@@ -4,6 +4,27 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-048 · fix · Cửa `open` không được `ci.yml` gắn nhãn `automerge`, nên PR sạch không bao giờ vào hàng đợi merge (D4a của #251, KF-032)
+
+Job `protected-area` của `ops/workflows/ci.yml` gắn nhãn theo cửa merge bằng khối `case "$GATE"`. `Gate` của `ops/invariants.protected-area.ts` chỉ có ba giá trị (`owner-merge`, `automerge-delayed`, `open`), nhưng chỉ hai nhánh `owner-merge)` và `automerge-delayed)` `--add-label` nhãn của mình; nhánh `*)` — tức cửa `open` — chỉ **gỡ** hai nhãn kia mà không bao giờ `--add-label automerge`. `ops/workflows/automerge.yml` lọc hàng đợi theo **nhãn** (`automerge`/`automerge-delayed`), nên PR cửa `open` không bao giờ vào hàng đợi merge — không phải chậm, là **không bao giờ**. Đo được: #223 mở `04:38Z`, CI 8/8 xanh, cửa `open`, đứng yên ~20 giờ mà không chỉ báo nào đỏ. Nhóm **Z**, và càng "sạch" (không chạm vùng bảo vệ) thì càng chắc chắn kẹt.
+
+Chỉ dẫn của chủ dự án ở [#251](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5824819912) mục **D4a**, ưu tiên cao ("nó chặn mọi PR sạch").
+
+- deps: —
+- risk: medium — chạm `ops/workflows/ci.yml` (cửa `automerge-delayed`, không dùng secret, không phát hành). Bản sửa **không** nới cổng nào: chỉ **thêm** một `--add-label` cân xứng với hai nhánh kia, không đụng `automerge.yml` (bộ lọc theo nhãn vốn đúng) và không đụng `ops/invariants.*`.
+- status: review
+- hold: chờ một phép đo sau khi merge và `sync-workflows` chép sang `.github/` — một PR cửa `open` có được gắn `automerge` và vào hàng đợi không. Workflow chỉ có hiệu lực sau khi merge (`CLAUDE.md` mục 4), nên không tự chuyển `done` ở đây.
+- nguồn: `ops/known-failures.md` `KF-032`; #251 mục D4a; comment `crux-worker-1` trên [#223](https://github.com/HungQuach301/crux-studio/pull/223#issuecomment-5824814993)
+- tiêu chí xong:
+  - ✅ `ops/workflows/ci.yml` — nhánh `*)` của `case "$GATE"` nay `gh pr edit "$PR" --add-label automerge`, cân xứng với hai nhánh kia. Ba cửa, ba nhãn.
+  - ✅ Máy chặn tách khỏi YAML: `ops/scripts/check-workflows.ts` `mergeGateLabelProblems` đòi cả ba cửa `--add-label` đúng nhãn của mình, chạy trong `pnpm lint:workflows`. Nhận diện đúng khối gắn nhãn theo cửa merge (bằng `case "$GATE"` cộng cả hai nhánh `owner-merge)`/`automerge-delayed)`) nên không kêu oan trên workflow khác.
+  - ✅ **Bài tái hiện lỗi** (bất biến **I2**, nhãn `fix`): `ops/test/check-workflows.test.ts` dựng đúng khối `*)` thiếu `automerge` của #223, cộng bài khoá từng nhánh, bài thiếu hẳn nhánh, bài không-kêu-oan, và bài đọc `ci.yml` **thật**.
+  - ✅ Phá thử: gỡ dòng `--add-label automerge` khỏi `ci.yml` thật → bài "ci.yml THẬT" **đỏ**; khôi phục → xanh (đo bằng chạy thật, không đọc lời khai).
+  - ⬜ **Chờ phép đo sau khi áp:** #223 **không tự thoát** nhờ PR này — nhãn phải do một lượt `ci.yml` MỚI trên #223 gắn (sự kiện `synchronize`/`labeled`), sau khi workflow được sync. Chủ dự án merge tay hoặc một lượt sau gắn `automerge` sau khi soát vẫn là đường ngắn hơn.
+- **vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) — 0 CHẶN, 1 nên sửa (đã sửa):** reviewer tự chạy `pnpm check`/`pnpm replay` (1248/1248, 6/6 — khớp), đột biến `mergeGateLabelProblems` (thân hàm `return []` → 5/9 bài đỏ; gỡ dòng khỏi `ci.yml` thật → bài "ci.yml THẬT" đỏ), xác nhận `Gate` đúng ba giá trị và `automerge.yml:109` lọc theo nhãn. **Nên sửa đã sửa:** regex guard neo bằng `\b` cho `automerge` — vì `automerge` là tiền tố của `automerge-delayed` nên một cửa `open` gắn NHẦM `automerge-delayed` vẫn lọt. Đổi sang `(?![-\w])` và thêm bài khoá ca gắn-nhầm (đo bằng chạy thật: regex cũ → bài mới đỏ, regex mới → xanh). Nên sửa còn lại (nhãn `cross-lane` cho file log `integration`) là luật mềm CI tự gắn.
+- **ngoài phạm vi, tách mục — không tự nống PR:**
+  - **D4b** (`ops/invariants.protected-area.ts` chưa coi `ops/workflows/ci.yml` là hạ tầng merge, nên nhãn `owner-merge` tay không đứng được trên #249) — bản sửa chạm `ops/invariants.*` nên tự nó là **`owner-merge`**, một PR riêng chủ dự án merge.
+  - **D4c** (bước tải gitleaks trong `secret-scan` không phân biệt "quét rồi sạch" với "chưa quét được" — HTTP 500 làm job đỏ) — một PR `fix` riêng.
 ### P-052 · Bản tin phát hiện `[QĐ]` có điều kiện đã đủ nhưng vẫn mở, và KF cho ca `#127` (D6)
 
 Chỉ dẫn **D6** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn `#131` lúc `2026-09-24T23:54:32Z`): *"Ghi KF: `#127` nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy. Bản tin phải phát hiện được `[QĐ]` có điều kiện đã đủ nhưng vẫn mở."*

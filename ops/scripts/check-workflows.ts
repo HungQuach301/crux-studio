@@ -631,6 +631,78 @@ export function undocumentedSwallows(source: string): number[] {
   return bad;
 }
 
+/**
+ * Cửa merge của `protected-area.ts` chỉ có ba giá trị (`owner-merge`,
+ * `automerge-delayed`, `open`), và job gắn nhãn của `ci.yml` khai chúng bằng
+ * một khối `case "$GATE" in … esac`. Mỗi cửa PHẢI gắn đúng nhãn của mình, vì
+ * `automerge.yml` lọc hàng đợi merge theo **nhãn**, không theo cửa:
+ *
+ * | cửa (`GATE`)        | nhánh `case`         | nhãn phải `--add-label` |
+ * |---------------------|----------------------|-------------------------|
+ * | `owner-merge`       | `owner-merge)`       | `owner-merge`           |
+ * | `automerge-delayed` | `automerge-delayed)` | `automerge-delayed`     |
+ * | `open`              | `*)`                 | `automerge`             |
+ *
+ * Chỗ hỏng thật (`D4a` của #251, `KF-032`): nhánh `*)` — tức cửa `open` — chỉ
+ * GỠ hai nhãn kia mà quên `--add-label automerge`, nên mọi PR cửa `open`
+ * không bao giờ vào hàng đợi merge, trong khi CI vẫn xanh (nhóm Z). `#223`
+ * đứng yên ~20 giờ vì đúng chỗ này.
+ *
+ * Luật này chỉ áp cho workflow MANG khối gắn nhãn theo cửa merge — nhận diện
+ * bằng `case "$GATE"` cộng cả hai nhánh `owner-merge)` và `automerge-delayed)`
+ * — nên nó không kêu oan trên workflow khác có thể dùng `case` cho việc khác.
+ */
+export function mergeGateLabelProblems(source: string, file: string): string[] {
+  const caseStart = source.indexOf('case "$GATE"');
+  if (caseStart === -1) return [];
+  const esacIndex = source.indexOf('esac', caseStart);
+  if (esacIndex === -1) return [];
+  const block = source.slice(caseStart, esacIndex);
+
+  // Chỉ nhận diện đúng khối gắn nhãn theo cửa merge, không phải mọi `case "$GATE"`.
+  if (!/(^|\n)\s*owner-merge\)/.test(block) || !/(^|\n)\s*automerge-delayed\)/.test(block)) {
+    return [];
+  }
+
+  // Tách khối thành các nhánh theo dấu `<mẫu>)`. Mỗi nhánh chạy tới `;;`.
+  const branchOf = (pattern: string): string | null => {
+    // `pattern` là chuỗi thô của mẫu (`owner-merge`, `automerge-delayed`, `\\*`).
+    const re = new RegExp(`(?:^|\\n)\\s*${pattern}\\)([\\s\\S]*?);;`);
+    const m = re.exec(block);
+    return m ? m[1]! : null;
+  };
+
+  const expectations: ReadonlyArray<{ pattern: string; gate: string; label: string }> = [
+    { pattern: 'owner-merge', gate: 'owner-merge', label: 'owner-merge' },
+    { pattern: 'automerge-delayed', gate: 'automerge-delayed', label: 'automerge-delayed' },
+    { pattern: '\\*', gate: 'open', label: 'automerge' },
+  ];
+
+  const problems: string[] = [];
+  for (const { pattern, gate, label } of expectations) {
+    const branch = branchOf(pattern);
+    if (branch === null) {
+      problems.push(
+        `${file} — khối \`case "$GATE"\` thiếu nhánh cho cửa \`${gate}\` (mẫu \`${pattern.replace('\\', '')})\`).`,
+      );
+      continue;
+    }
+    // `(?![-\\w])` chứ không phải `\\b`: `automerge` là tiền tố của
+    // `automerge-delayed`, và `\\b` khớp ranh giới giữa `automerge` và `-`,
+    // nên `--add-label automerge-delayed` sẽ được coi là đã gắn `automerge`.
+    // Lookahead âm loại cả `-` lẫn ký tự từ ngay sau nhãn, nên một cửa gắn
+    // NHẦM nhãn của cửa khác vẫn bị bắt (không chỉ ca thiếu hẳn nhãn).
+    if (!new RegExp(`--add-label\\s+${label}(?![-\\w])`).test(branch)) {
+      problems.push(
+        `${file} — nhánh cửa \`${gate}\` của \`case "$GATE"\` không \`--add-label ${label}\`. ` +
+          '`automerge.yml` lọc hàng đợi merge theo NHÃN, nên cửa nào không tự gắn nhãn của mình thì ' +
+          'PR của cửa đó không bao giờ vào hàng đợi — mà CI vẫn xanh (KF-032, nhóm Z).',
+      );
+    }
+  }
+  return problems;
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 //
 // Phần dưới chỉ chạy khi gọi trực tiếp. Nhờ vậy test import được
@@ -685,6 +757,8 @@ if (isMain) {
       }
 
       problems.push(...duplicateMappingKeys(source, file));
+
+      problems.push(...mergeGateLabelProblems(source, file));
 
       const dryRun = missingDryRun(file, source);
       if (dryRun !== null) warnings.push(`${file} — ${dryRun}`);

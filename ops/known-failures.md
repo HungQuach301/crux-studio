@@ -1089,6 +1089,16 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 
 ---
 
+## KF-032 · Cửa `open` không được `ci.yml` gắn nhãn `automerge`, nên PR sạch không bao giờ vào hàng đợi merge — CI vẫn 8/8 xanh
+
+> Số **KF-032**: dò `## KF-` trên `main` **và mọi** nhánh PR đang mở (KF-005), cao nhất đang dùng là `KF-031` (#249), nên `KF-032` không đụng ai.
+
+- **Lần gặp:** 1 (#223 — mở `2026-09-24T04:38:39Z`, CI 8/8 xanh từ `04:46Z`, cửa `open`, đứng yên ~20 giờ mà không chỉ báo nào đỏ). Chỉ dẫn của chủ dự án ở #251 mục **D4a**.
+- **Chữ ký:** một PR có CI đủ xanh, `mergeable_state` không `blocked`, cửa `protected-area.ts` là `open`, nhưng **không mang nhãn** `automerge` — và `automerge.yml` lọc hàng đợi theo `automerge`/`automerge-delayed`, nên nó vô hình với máy merge. Càng "sạch" (không chạm vùng bảo vệ) thì càng chắc chắn kẹt.
+- **Nguyên nhân gốc:** khối `case "$GATE"` của job `protected-area` trong `ops/workflows/ci.yml` có ba nhánh, nhưng chỉ hai nhánh `owner-merge)` và `automerge-delayed)` `--add-label` nhãn của mình; nhánh `*)` — tức cửa `open`, giá trị thứ ba và duy nhất còn lại của `Gate` — chỉ **gỡ** hai nhãn kia mà không bao giờ `--add-label automerge`. Hai luật đúng riêng lẻ (gắn nhãn theo cửa · lọc hàng đợi theo nhãn) cắn nhau ở đúng cửa không ai gắn. Nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+- **Đã sửa ở đâu:** `ops/workflows/ci.yml` — thêm `gh pr edit "$PR" --add-label automerge` vào nhánh `*)`, cân xứng với hai nhánh kia. Không đụng `automerge.yml` (bộ lọc theo nhãn vốn đúng); chỗ hỏng là bên **sinh** nhãn, không phải bên đọc.
+- **Máy chặn từ nay:** `ops/scripts/check-workflows.ts` — `mergeGateLabelProblems` đọc khối `case "$GATE"` và đòi **cả ba** cửa `--add-label` đúng nhãn của mình (`owner-merge`→`owner-merge`, `automerge-delayed`→`automerge-delayed`, `open`/`*)`→`automerge`), chạy trong `pnpm lint:workflows`. Luật chỉ áp cho workflow mang khối gắn nhãn theo cửa merge (nhận diện bằng `case "$GATE"` cộng cả hai nhánh `owner-merge)`/`automerge-delayed)`) nên không kêu oan. `ops/test/check-workflows.test.ts` — bài **TÁI HIỆN LỖI** dựng đúng khối `*)` thiếu nhãn của #223 (bất biến I2), cộng bài khoá từng nhánh, bài thiếu nhánh, bài không-kêu-oan, và bài đọc `ci.yml` **thật** đòi cả ba cửa đủ nhãn.
+- **Còn lại, tách phạm vi (không nống mục này):** #223 **không tự thoát** nhờ PR này — workflow chỉ có hiệu lực sau khi merge và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4), và nhãn phải do một lượt `ci.yml` mới trên #223 gắn (một sự kiện `synchronize`/`labeled` bất kỳ). Chủ dự án merge tay hoặc một lượt sau gắn `automerge` sau khi soát vẫn là đường ngắn hơn. Hai mục anh em D4b (`protected-area.ts` chưa coi `ci.yml` là hạ tầng merge) và D4c (bước tải gitleaks không phân biệt "quét rồi sạch" với "chưa quét được") là hai PR riêng.
 ## KF-033 · PR sửa `ops/workflows/**` gây **báo động giả** trong cửa sổ chờ `sync-workflows` — @nhắc chủ dự án dù nhà máy chạy đúng
 
 > Số **KF-033**: dò `## KF-` trên `main` (cao nhất `KF-030`) **và trên đầu các PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-033` không đụng ai.
