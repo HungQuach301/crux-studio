@@ -1,0 +1,12 @@
+{
+  "selected": {
+    "question": "should you pay off a 6% mortgage early or invest the cash instead?"
+  },
+  "claims": [
+    { "id": "C1", "statement": "The comparison is after-tax mortgage rate versus after-tax expected return, not headline rate versus market average." },
+    { "id": "C2", "statement": "At a 6% loan and a 7% expected return, investing wins by about 1.1% per year before sequence risk." },
+    { "id": "C3", "statement": "Paying down debt wins once the guaranteed rate exceeds the after-tax return you can defend." },
+    { "id": "C4", "statement": "The decision flips again inside five years of retirement, when sequence-of-returns risk dominates." }
+  ],
+  "targetDurationMs": 780000
+}

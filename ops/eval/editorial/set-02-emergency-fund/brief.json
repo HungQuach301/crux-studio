@@ -1,0 +1,11 @@
+{
+  "selected": {
+    "question": "how many months of expenses should an emergency fund actually hold?"
+  },
+  "claims": [
+    { "id": "C1", "statement": "The right size scales with income volatility, not with a flat three-to-six-month rule." },
+    { "id": "C2", "statement": "For a single earner with commission pay, the model lands near eight months of core spending." },
+    { "id": "C3", "statement": "The number falls below three months once a second stable income covers fixed costs." }
+  ],
+  "targetDurationMs": 690000
+}

@@ -17,13 +17,19 @@
  * 3. `limitation` bắt buộc có chữ, và `assertNoUniversalClaim` chặn đúng các
  *    lối nói mà WP-014 mục 5 cấm ("chưa ai công bố", "nobody has").
  *
- * **Giới hạn của chính phép so ở đây**, khai ra thay vì giấu: đây là so
- * **từ vựng** (trùng token sau khi bỏ hư từ), không phải so ngữ nghĩa.
- * WP-014 dự tính dùng `EMBEDDINGS_API_KEY`; secret đó chưa có và chọn nhà
- * cung cấp là quyết định `irreversible` (CHARTER 2.3 nhóm 3). Phép so từ
- * vựng bỏ sót cách diễn đạt khác chữ, nên nó **thiên về** kết luận
+ * **Giới hạn của chính phép so ở đây**, khai ra thay vì giấu: mặc định là so
+ * **từ vựng** (trùng token sau khi bỏ hư từ), không phải so ngữ nghĩa. Phép
+ * so từ vựng bỏ sót cách diễn đạt khác chữ, nên nó **thiên về** kết luận
  * `novel-in-corpus` — chệch đúng theo hướng nguy hiểm. Câu đó nằm trong
  * `limitation` của MỌI kết quả, không nằm trong ghi chú này.
+ *
+ * Từ mục `topic/T-014`, `checkNovelty` nhận thêm một tham số tuỳ chọn:
+ * bảng điểm **ngữ nghĩa** đã tính sẵn (`SemanticSimilarity`). Chủ dự án đã
+ * chốt OpenAI cho embeddings và cấp `EMBEDDINGS_API_KEY` (chỉ dẫn `#251`,
+ * `2026-09-25T01:28:33Z`), và ghi rõ đổi nhà cung cấp về sau là
+ * `reversible`. Lời gọi mạng KHÔNG nằm trong file này — nó ở
+ * `embeddings.ts` — nên hàm dưới đây giữ nguyên tính thuần của CHARTER 6.1
+ * và `pnpm check` không bao giờ đi qua một API trả tiền.
  *
  * Bất biến I3: chỉ được import `@crux/kernel`.
  */
@@ -74,6 +80,15 @@ export interface NoveltyCheck {
   reasons: NoveltyReason[];
   similarCount: number;
   contradictingCount: number;
+  /**
+   * Phép so đã dùng, **máy đọc được**. `matches[].overlap` của hai phép so là
+   * hai đại lượng khác nhau (tỷ lệ token trùng vs cosine) và chúng có hai
+   * miền khác nhau; bất biến **I6** đòi con số hiển thị có nguồn, nên nguồn
+   * đó là một trường chứ không phải một câu trong `limitation`.
+   */
+  method: 'lexical' | 'semantic';
+  /** Model sinh ra bảng điểm ngữ nghĩa. Chỉ có mặt khi `method` là `semantic`. */
+  similarityModel?: string;
   matches?: { videoId: string; overlap: number; stance: 'similar' | 'contradicting' }[];
   limitation: string;
 }
@@ -81,6 +96,24 @@ export interface NoveltyCheck {
 export interface Thesis {
   id: string;
   statement: string;
+}
+
+/**
+ * Bảng điểm ngữ nghĩa **đã tính sẵn** cho một thesis: `videoId` → cosine
+ * giữa vector của thesis và vector của video (mục `topic/T-014`).
+ *
+ * Vì sao truyền bảng điểm vào thay vì truyền một client: `checkNovelty` phải
+ * chạy lại được y nguyên từ artifact (CHARTER 6.1). Một client thì cùng đầu
+ * vào cho hai đầu ra khác nhau vào hai ngày khác nhau; một bảng điểm thì
+ * không. Bên tính bảng này là `embeddings.ts`, và chính nó ghi `costUsd`.
+ */
+export interface SemanticSimilarity {
+  /** Model đã tính ra bảng điểm — đi vào `limitation` để người đọc biết số này của ai. */
+  model: string;
+  /** `videoId` → cosine, trong khoảng [-1, 1]. */
+  scores: Readonly<Record<string, number>>;
+  /** Từ điểm này trở lên thì video được tính là "nói cùng chuyện". */
+  threshold: number;
 }
 
 export interface NoveltyThresholds {
@@ -178,17 +211,57 @@ export function assertNoUniversalClaim(text: string, where: string): void {
   }
 }
 
-function limitationFor(corpus: Corpus, checkedAt: string): string {
+function limitationFor(
+  corpus: Corpus,
+  checkedAt: string,
+  similarity: SemanticSimilarity | undefined,
+): string {
   const scope = corpus.scope;
+  // Câu cuối nói về PHÉP SO đã dùng thật, không về phép so mà file này mặc
+  // định. Hai nhánh cho hai phép so khác nhau: một câu chung cho cả hai sẽ
+  // sai ở đúng một nửa số lần chạy.
+  // Hướng chệch phải có ở CẢ HAI nhánh. Embeddings chữa phần "khác chữ", nó
+  // KHÔNG chữa phần "không có trong metadata" — nên chiều chệch vẫn là về phía
+  // "mới lạ", chỉ nhẹ hơn. Bỏ câu đó ở nhánh ngữ nghĩa là để người đọc tưởng
+  // chỗ chệch đã hết.
+  const method = similarity
+    ? `Phép so là so ngữ nghĩa bằng embeddings (\`${similarity.model}\`), ngưỡng ${similarity.threshold}. ` +
+      `Nó bắt được cách diễn đạt khác chữ mà so từ vựng bỏ sót, nhưng nó vẫn chỉ đọc metadata, ` +
+      `và điểm cosine là phép đo gần đúng của "nói cùng chuyện" chứ không phải bằng chứng. ` +
+      `Video nói đúng chuyện mà không nhắc ở tiêu đề hay mô tả vẫn bị bỏ sót, nên kết quả vẫn ` +
+      `chệch về phía "mới lạ" — nhẹ hơn so từ vựng, không phải hết.`
+    : `Phép so là so từ vựng, không phải so ngữ nghĩa, nên cách diễn đạt khác chữ bị bỏ sót ` +
+      `và kết quả chệch về phía "mới lạ".`;
   return (
     `Kết quả chỉ nói về corpus \`${corpus.corpusId}\`: ${corpus.coverage.videoCount} video, ` +
     `vùng ${scope.regions.join('/')}, ngôn ngữ ${scope.languages.join('/')}, ` +
     `cửa sổ ${scope.windowDays} ngày tính tới ${scope.asOf}, kiểm ngày ${checkedAt}. ` +
     `Corpus là metadata (tiêu đề, mô tả), không phải nội dung video — một video nói đúng ` +
     `chuyện này trong phút thứ tám mà không nhắc ở tiêu đề thì không đếm được. ` +
-    `Phép so là so từ vựng, không phải so ngữ nghĩa, nên cách diễn đạt khác chữ bị bỏ sót ` +
-    `và kết quả chệch về phía "mới lạ".`
+    method
   );
+}
+
+/**
+ * Điểm ngữ nghĩa của một video, và **ném lỗi** khi bảng điểm không có video
+ * đó.
+ *
+ * Vì sao ném chứ không coi là 0: thiếu một điểm nghĩa là lần nhúng đã bỏ sót
+ * một video — có thể vì hết quota giữa chừng, có thể vì ghép cặp sai index.
+ * Coi nó là 0 thì video đó biến mất khỏi `similarCount`, kết luận chệch về
+ * phía `novel-in-corpus`, và **không gì đỏ**: đúng hình dạng nhóm Z, và đúng
+ * cái hướng chệch nguy hiểm mà cả mục này sinh ra để chữa.
+ */
+function semanticScoreOf(similarity: SemanticSimilarity, videoId: string): number {
+  const score = similarity.scores[videoId];
+  if (typeof score !== 'number' || Number.isNaN(score)) {
+    throw new Error(
+      `Bảng điểm ngữ nghĩa (\`${similarity.model}\`) thiếu điểm cho video \`${videoId}\`. ` +
+        `Nhúng thiếu một video thì kết luận chệch về phía "mới lạ" mà không chỉ báo nào đỏ — ` +
+        `nên đây là lỗi, không phải điểm 0.`,
+    );
+  }
+  return score;
 }
 
 /**
@@ -201,17 +274,26 @@ export function checkNovelty(
   corpus: Corpus,
   checkedAt: string,
   thresholds: NoveltyThresholds = DEFAULT_THRESHOLDS,
+  similarity?: SemanticSimilarity,
 ): NoveltyCheck {
   const reasons: NoveltyReason[] = [];
   const thesisTokens = tokenize(thesis.statement);
 
+  // Một ngưỡng cho một phép so. Dùng `thresholds.similarOverlap` (hiệu chuẩn
+  // cho phần token trùng) làm ngưỡng cosine sẽ là hai đại lượng khác nhau đội
+  // chung một con số.
+  const cutoff = similarity ? similarity.threshold : thresholds.similarOverlap;
+  const scoreOf = similarity
+    ? (video: CorpusVideo): number => semanticScoreOf(similarity, video.videoId)
+    : (video: CorpusVideo): number => overlapRatio(thesisTokens, videoText(video));
+
   const matches = corpus.videos
     .map((video) => ({
       videoId: video.videoId,
-      overlap: overlapRatio(thesisTokens, videoText(video)),
+      overlap: scoreOf(video),
       stance: looksContradicting(video) ? ('contradicting' as const) : ('similar' as const),
     }))
-    .filter((match) => match.overlap >= thresholds.similarOverlap);
+    .filter((match) => match.overlap >= cutoff);
 
   const contradicting = matches.filter((m) => m.stance === 'contradicting');
   const similar = matches.filter((m) => m.stance === 'similar');
@@ -269,7 +351,7 @@ export function checkNovelty(
     });
   }
 
-  const limitation = limitationFor(corpus, checkedAt);
+  const limitation = limitationFor(corpus, checkedAt, similarity);
   assertNoUniversalClaim(limitation, 'limitation');
   for (const reason of reasons) assertNoUniversalClaim(reason.detail, `reasons[${reason.code}]`);
 
@@ -287,6 +369,8 @@ export function checkNovelty(
     reasons,
     similarCount: similar.length,
     contradictingCount: contradicting.length,
+    method: similarity ? 'semantic' : 'lexical',
+    ...(similarity ? { similarityModel: similarity.model } : {}),
     matches,
     limitation,
   };

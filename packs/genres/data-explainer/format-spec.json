@@ -48,7 +48,20 @@
     "motionCoverageMin": 0.7,
     "longestStaticRunMsMax": 8000,
     "textWordsPerSecondMax": 1.5,
-    "sceneMaxDurationMs": 12000
+    "sceneMaxDurationMs": 12000,
+    "promptEval": {
+      "$note": "Ngưỡng eval prompt cho xưởng editorial (mục E-003, CHARTER 6.3 mục 3). minSampleSets = quy tắc ba tập (spec §2). tolerances = dung sai từng chỉ số máy (spec §3) so với baseline ops/eval/editorial/<id>/expected-metrics.json. wordCount cho phép ±10% (stub chưa đạt khối lượng thật; v1 siết theo scriptWordCount). Các chỉ số cấu trúc khớp tuyệt đối.",
+      "minSampleSets": 3,
+      "tolerances": {
+        "wordCount": { "tolerancePct": 10 },
+        "beatCount": { "toleranceAbs": 0 },
+        "deviceCount": { "toleranceAbs": 0 },
+        "claimCount": { "toleranceAbs": 0 },
+        "adBreakCount": { "toleranceAbs": 0 },
+        "bridgeCount": { "toleranceAbs": 0 },
+        "sourcedClaimRatio": { "toleranceAbs": 0 }
+      }
+    }
   },
   "sampledFromKinds": [
     "beat",

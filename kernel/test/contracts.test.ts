@@ -45,8 +45,8 @@ test('artifact của xưởng này không lọt qua contract của xưởng khá
 });
 
 test('bất biến I5: contract release không chấp nhận visibility khác private', () => {
-  const artifact = goldenArtifact('release') as { payload: { publication: { visibility: string } } };
-  artifact.payload.publication.visibility = 'public';
+  const artifact = goldenArtifact('release') as { payload: { publication: { visibility: string } } }; // I5-allow: kiểu rộng CỐ Ý, để dòng dưới đặt được giá trị sai mà bài kiểm chứng minh contract từ chối
+  artifact.payload.publication.visibility = 'public'; // I5-allow: bài kiểm chứng minh contract CHẶN giá trị này — đây là chiều ngược, không phải đường tải lên
   const result = validateArtifact('release', artifact);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.path.endsWith('publication.visibility')));

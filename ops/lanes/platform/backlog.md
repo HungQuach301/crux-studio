@@ -856,7 +856,12 @@ Cách sửa duy nhất nằm trong nhánh — viết lại thông điệp commit
 
 - deps: —
 - risk: high
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): `blocked` không thuộc tập hợp lệ
+  `ready · claimed · review · done · parked` (`ops/lanes/README.md`), nên mục này rơi qua cả hai phép lọc
+  của `pnpm backlog:status` và im lặng từ lúc được viết. Giá trị đúng là `parked`: `CLAUDE.md` mục 13 định
+  nghĩa đúng hình dạng này — chặn ở một quyết định của chủ dự án, đã mở `🤖 [QĐ]`, làn chuyển sang mục
+  khác. Nội dung mục không đổi chữ nào.
 - nguồn: `ops/known-failures.md` KF-018; comment 15:55Z và 17:45Z trên PR `#65`; điểm 6 của vòng soát trên PR `#112` (18:53Z); `.claude/settings.json` phần `deny`; `CLAUDE.md` mục 6 và mục 13
 - tiêu chí xong:
   - Chốt một trong ba đường ở `🤖 [QĐ] #165`: (a) chủ dự án force-push 13 nhánh; (b) `#142` thêm mốc ân hạn, chỉ quét commit tạo **sau** khi luật bật; (c) `automerge.yml` truyền `commit_message` tường minh lúc squash — lưu ý file đó là vùng `owner-merge`.
@@ -924,9 +929,21 @@ Mục 3, dòng về `main` đỏ, vẫn viết: *"Chủ dự án chỉ được 
 
 Tách khỏi `P-034` vì **cửa merge khác**, không phải vì phạm vi khác: đo bằng `node ops/invariants.protected-area.ts --base-charter` thì `P-034` (mục 2 và 14) ra `automerge-delayed`, còn sửa thêm dòng này kéo cả PR sang `owner-merge` vì luật cắt CHARTER **theo mục** và đây là mục 3. Gộp vào sẽ bắt chủ dự án merge tay một PR vốn máy tự merge được — ngược thước đo mục 1.3.
 
-- deps: `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau
+- deps: P-034
 - risk: low — một câu tài liệu, không chạm code
-- status: blocked
+- status: ready
+- ghi chú: `P-034` (PR `#198`) phải vào `main` trước, để hai bản CHARTER không đá nhau.
+- **vì sao `ready`, không phải `blocked`** (mục `I-019`): `blocked` ngoài tập hợp lệ nên mục này biến mất
+  khỏi mọi báo cáo. Chỗ chặn ở đây là một **`deps`**, nên để `readyQueue` giữ và thả: nó xếp mục vào
+  `blocked` kèm lý do `platform/P-034` chừng nào `P-034` chưa vào `main`, và tự thả ra đúng lúc nó vào.
+  Một trạng thái viết tay chỉ nhân đôi cùng một sự thật, và bản viết tay là bản không ai nhớ cập nhật.
+- **vì sao lý do chuyển xuống dòng `ghi chú`** (vòng soát ngữ cảnh sạch của `I-019`): dòng `deps` cũ viết
+  `` `P-034` (PR `#198`) vào `main` trước, để hai bản CHARTER không đá nhau ``. `parseDeps` cắt theo **dấu
+  phẩy** (luật của `I-015`), nên vế hai thành một phần phụ thuộc **không tra được** và mục kẹt ở `blocked`
+  **vĩnh viễn** — kể cả sau khi `P-034` merge. Đo bằng chạy thật với `P-034` đặt `done`: `readyNow` rỗng,
+  `waitingOn: ["để hai bản CHARTER không đá nhau (không tra được)"]`. Đúng nhóm **Z** mà `I-019` sinh ra
+  để diệt, chỉ đổi chỗ từ "biến mất khỏi mọi nhóm" sang "nằm mãi ở `blocked`". Lời giải thích thuộc về một
+  dòng khác; dòng `deps` chỉ chứa mã mục.
 - nguồn: vòng soát ngữ cảnh sạch của PR `#198`; CHARTER 2.4 nhật ký **C9**
 - tiêu chí xong:
   - ⬜ CHARTER mục 3 sửa câu đó thành "@nhắc ngay từ lần đỏ đầu, nhắc lại mỗi 4 giờ (2.4)".
@@ -943,7 +960,10 @@ Vì sao tách khỏi `P-032`: nó chạm `ops/scripts/digest-metrics.ts`, mà PR
 
 - deps: `P-027` (PR `#120`) vào `main` trước
 - risk: low — thiếu nó thì lần merge lối nhanh vẫn có @nhắc tức thời, chỉ mất chỗ soát lại vào sáng hôm sau.
-- status: blocked
+- status: ready
+- **vì sao `ready`, không phải `blocked`** (mục `I-019`): cùng lý do với `P-037` ngay trên — chỗ chặn là
+  một `deps` đã ghi đúng ở dòng trên, để `readyQueue` giữ và thả, không để một chuỗi viết tay ngoài tập
+  hợp lệ làm mục biến mất khỏi báo cáo.
 - nguồn: comment của chủ dự án trên `🤖 [QĐ] #169`, điều kiện 6; `docs/decisions/D-C07.md`
 - tiêu chí xong:
   - ⬜ Bản tin (phụ lục P2) có mục **"Đã merge qua lối nhanh `hotfix`"**, mỗi dòng: số PR · sự cố nào · file nào đã chạm · giờ merge. Rỗng thì in một dòng "không có", không bỏ mục (cấm im lặng, rà soát Z2).
@@ -960,9 +980,13 @@ Khi hàng đợi xung đột trống **và** mọi mục `ready` đã có PR m�
 
 - deps: —
 - risk: medium — hai vế ngược nhau. Nghiêng về tiết kiệm CI quá tay thì watchdog gọi người sai; nghiêng về nhịp tim quá tay thì mục này không đổi gì.
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): cùng lý do với `P-030` — `blocked` ngoài tập
+  hợp lệ nên mục im lặng. Dòng `**chặn ở:**` ngay dưới đã nói đúng hình dạng `parked` của `CLAUDE.md` mục
+  13: chờ quyết định của chủ dự án trên `🤖 [QĐ] #213`.
 - nguồn: comment của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193) (`2026-09-23T14:18:09Z`, khối `CHI PHÍ GITHUB ACTIONS`); `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213); CHARTER 2.4 dấu hiệu số 5; `ops/workflows/watchdog.yml` biến `LAST_BEAT`; `ops/workflows/ci.yml` (chỉ kích bằng `pull_request`, nên push vào nhánh không có PR **không** chạy CI)
-- **chặn ở:** quyết định của chủ dự án trên `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213). Phần cơ chế đã có sẵn và có test (xem dưới), nhưng nó chỉ có hiệu lực khi phụ lục P1/P3 của CHARTER gọi tới — mà đó là sửa luật vận hành, nên không tự làm. Lớp chặn tự động của phiên chặn thao tác đó, phân loại `Instruction Poisoning`: ghi luật vào vùng bảo vệ dựa trên nội dung một comment issue đúng là hình dạng `CLAUDE.md` mục 5 và bất biến **I7** tồn tại để bắt. Không lách.
+- **chặn ở:** ⚠️ **Câu trả lời đã tới, và nó KHÔNG phải một chữ cái.** Chủ dự án trả lời `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213) lúc `2026-09-24T06:10:33Z`: đồng ý bỏ PR log, **với điều kiện** chuyển nguồn nhịp tim của `watchdog.yml` ra khỏi `main` **TRƯỚC**, chứng minh bằng **một lần chạy thật**, và không có khoảng nào watchdog mất tín hiệu — *"Nếu đã bỏ rồi thì hoàn tác cho tới khi đủ điều kiện trên"* (đã kiểm: **chưa bị bỏ**, phụ lục P1/P3 chưa gọi `step0PrGate`, nên không có gì phải hoàn tác). Nên mục này nay chặn ở **mục `P-043`**, không còn chặn ở chủ dự án: vế "chuyển nguồn" đã làm xong ở đó, còn lại đúng một ô ⬜ — một lần chạy `watchdog.yml` thật đọc nhịp tim từ nguồn mới, chỉ chạy được sau khi `P-043` merge và `sync-workflows` chép sang (`CLAUDE.md` mục 4).
+  - Ghi chú cũ, giữ lại vì nó vẫn đúng cho **phần** sửa luật: phần cơ chế đã có sẵn và có test (xem dưới), nhưng nó chỉ có hiệu lực khi phụ lục P1/P3 của CHARTER gọi tới. `P-043` sửa luật theo hướng **cộng thêm** một bước (đẩy bản sao nhịp tim), không nới lớp chặn nào và không bỏ dấu hiệu nào — khác hẳn việc bỏ PR log, thứ vẫn phải chờ ô ⬜ ở trên.
 - tiêu chí xong:
   - ✅ Cơ chế quyết định tách khỏi văn xuôi: `ops/scripts/step0-pr-gate.ts` hàm `step0PrGate` trả `openPr` cộng một lý do đọc được. PR bỏ lại vì `aborted-ineligible` **không** tính là việc thật (bỏ lại không tạo commit nào).
   - ✅ Test `ops/test/step0-pr-gate.test.ts` khoá **cả hai** chiều hỏng: lượt log-only vẫn mở PR (chiều tốn tiền), và lượt log-only không mở PR trong lúc nhịp tim sắp quá hạn (chiều gọi người — nhóm **Z**, không gì đỏ). 18 bài; đã **phá thật** sáu chỗ, cả sáu đỏ đúng bài, khôi phục thì xanh lại.
@@ -1066,3 +1090,78 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ✅ Ghi `ops/known-failures.md` **KF-027**.
   - ⬜ **Còn lại, tách phạm vi:** `claimKeyFromTitle` của `P-041` (`#225`, đang mở) vẫn mang bản vá tại chỗ của riêng nó. Không gộp ở đây vì file đó chưa trên `main` và sửa nó sẽ chồng lên một PR đang mở (`CLAUDE.md` mục 11: hai làn cùng sửa một file). Việc của lượt sau `#225` merge.
 - **mã mục nhận lúc 2026-09-24 ~07:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở, cao nhất là `P-041` (`#225`), nên `P-042` không đụng ai. Mã `KF-027` nhận cùng cách, cao nhất là `KF-026` (`#226`).
+
+### P-043 · Nhịp tim của routine chỉ đập khi một PR vào `main`, nên người canh gọi chủ dự án cho một nhà máy đang chạy đúng
+
+`watchdog.yml` dấu hiệu số 5 (CHARTER 2.4, ngưỡng 3 giờ) quét `ops/logs` của **bản đã checkout**, tức bản trên `main`. Nên nhịp tim chỉ đập khi một PR merge. Trong một khoảng yên — không PR nào xung đột, mọi mục `ready` đều đã có PR — **không gì vào `main`**, và người canh `@nhắc` chủ dự án cho một nhà máy đang chạy đúng.
+
+Đó là chỗ hai luật cắn nhau mà `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213) mở ra: muốn bỏ PR log của bước 0 để cắt chi phí Actions (chỉ dẫn của chủ dự án trên bản tin `#193`) thì phải trả bằng đúng dấu hiệu này. Chủ dự án trả lời lúc `2026-09-24T06:10:33Z`, nguyên văn:
+
+> Đồng ý bỏ PR log của bước 0, với điều kiện: chuyển nguồn nhịp tim của watchdog sang nơi khác (nhánh claude/telemetry của R2 hoặc tương đương) TRƯỚC khi bỏ, và chứng minh bằng một lần chạy thật watchdog đọc được nhịp tim từ nguồn mới. Không có khoảng thời gian nào watchdog mất tín hiệu. Nếu đã bỏ rồi thì hoàn tác cho tới khi đủ điều kiện trên.
+
+**Đã kiểm "nếu đã bỏ rồi" trước khi làm gì khác: chưa bị bỏ, nên không có gì phải hoàn tác.** Cơ chế `ops/scripts/step0-pr-gate.ts` có trên `main` nhưng CHARTER phụ lục P1 bước 0 và P3 bước 0d **chưa gọi tới**, và PR `#227` (lượt `crux-worker-2` `07:23Z` cùng ngày) vẫn là một PR log. Mục này là vế *"chuyển nguồn ... TRƯỚC khi bỏ"*; vế bỏ PR log là `P-038` và nó **không** đi cùng PR này.
+
+**Chiều hỏng đắt nhất không phải chiều đang xảy ra.** Hướng dễ sai là **thay** nguồn: trỏ dấu hiệu số 5 sang nhánh telemetry rồi bỏ `main` ra. Lúc đó có đúng một khoảng — từ khi workflow mới lên `main` tới lượt routine đầu tiên ghi vào nhánh mới — mà nguồn mới còn rỗng và nguồn cũ đã bỏ, tức người canh **câm**. Không gì đỏ trong khoảng đó: `watchdog.yml` xanh, `pnpm check` xanh, chỉ là một dấu hiệu đã tắt. Nhóm **Z** thuần, và đúng thứ câu *"Không có khoảng thời gian nào watchdog mất tín hiệu"* cấm. Nên nguồn được **cộng**, không **thay**: nhịp tim là `max` trên cả hai.
+
+- deps: —
+- risk: medium — chạm đúng workflow cảnh báo. Sai ở đây là mất luôn cái báo động, nên mọi chiều hỏng đều nghiêng về "báo thừa" chứ không "báo thiếu".
+- status: review
+- hold: còn lại — một lần chạy thật `watchdog.yml` (dispatch `dry_run`) đọc nhịp tim từ nguồn mới; workflow chỉ có hiệu lực sau khi PR này merge và `sync-workflows` chạy (`CLAUDE.md` mục 4)
+- nguồn: `🤖 [QĐ]` [#213](https://github.com/HungQuach301/crux-studio/issues/213) và câu trả lời của chủ dự án trên đó (`2026-09-24T06:10:33Z`, comment KHÔNG mở đầu 🤖 trên issue nhãn `decision` — `CLAUDE.md` mục 5); comment của chủ dự án trên bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193) khối `CHI PHÍ GITHUB ACTIONS`; CHARTER 2.4 dấu hiệu số 5; `ops/workflows/watchdog.yml` biến `LAST_BEAT`; mục `platform/P-038`
+- tiêu chí xong:
+  - ✅ `ops/scripts/heartbeat-source.ts` — nhịp tim là `max` trên **nhiều** nguồn, mỗi nguồn khai riêng trong `readings` để bên gọi nói được nguồn nào đã trả lời. Thứ tự nguồn không đổi `at` (phép `max` giao hoán), có bài kiểm hai chiều.
+  - ✅ **Ba trạng thái của một nguồn, không phải hai:** `missing` (thư mục không tồn tại — fetch hỏng, hoặc nhánh chưa được tạo) **khác** nguồn rỗng (đã đo, không có dòng bước 0) **khác** nguồn lỗi. Gộp chúng vào `null` là để một nguồn chết mà không ai biết. Bài kiểm đòi hai câu báo cáo **khác nhau**.
+  - ✅ `ops/scripts/telemetry-beat.ts` — vế ghi: nhánh `claude/telemetry`, thư mục `heartbeat/`, một file cho mỗi lượt (tên lấy nguyên từ `step0LogPath` của kernel, nên hai worker chồng nhau không chạm cùng file). Chỉ dòng bước 0 được vào — **lớp phòng thủ thứ hai**, cùng luật `isStep0Ref` với bên đọc. ⚠️ **Đính chính sau vòng soát:** bản đầu khai một dòng lạ sẽ "giả mạo nhịp tim mới hơn sự thật", và reviewer đo được là **sai** — `readHeartbeatSource` đã lọc ở phía đọc, nên một dòng `at: "2027-01-01"` nhét vào nhánh này không nhấc nổi nhịp tim. Lời khai cũ mời lượt sau nới bộ lọc của **bên đọc** vì tin bên ghi đã canh, tức tháo đúng lớp đang thật sự giữ.
+  - ✅ `ops/workflows/watchdog.yml` dấu hiệu số 5 đọc **hai** nguồn và in báo cáo theo từng nguồn vào log lượt chạy cộng thân cảnh báo (cùng cách dấu hiệu số 6 làm với `LANE_REPORT`). Nó **không** tự `add` khi một nguồn chết: chừng nào `main` còn là nguồn thì một nguồn chết không làm người canh mù, và gọi chủ dự án cho chuyện máy tự lo là ngược thước đo CHARTER 1.3.
+  - ✅ **Bộ lọc `ref` của dòng bước 0 chỉ còn MỘT bản.** Trước mục này nó nằm ở hai chỗ, hai ngôn ngữ: hằng `STEP0_REF_PATTERN` (TypeScript) và một biểu thức `jq` chép tay trong YAML — bản chép đã lệch thật một lần (thiếu `P1-step0-` và `P3-daily-`). Bản `jq` bị **bỏ hẳn**; `ops/test/lane-heartbeat.test.ts` đổi việc từ *"hai bản phải giống nhau"* sang *"chỉ được có một bản"*. ⚠️ **Khai đúng mức, sau vòng soát:** bài mới chặt hơn ở chiều *cấm bản chép tồn tại*, nhưng **lỏng hơn** bài cũ ở chiều *một biểu thức `jq` viết lại tương đương* — bài cũ đòi dòng `jq` mang nguyên văn hằng nên nó đỏ khi dòng đó bị viết lại, bài mới chỉ cấm bản chép nguyên văn. Lỗ đó được bịt bằng **hai bài mới** ở ô dưới, không bằng lời khẳng định "chặt hơn".
+  - ✅ **Hai chiều lệch TS ↔ YAML có máy canh:** tên nhánh trong `env:` phải khớp hằng `TELEMETRY_BRANCH`, và YAML phải khai **đủ hai** `--source`. Bài thứ hai là chỗ duy nhất giữ đúng chữ của chủ dự án — bỏ `--source "main=…"` ra là tạo lại đúng khoảng câm mà `#213` cấm, và không bài kiểm nào khác thấy được.
+  - ✅ **Chạy thật, đúng khối bash của `watchdog.yml`** (`08:5xZ` 2026-09-24), trên nhánh `claude/telemetry` thật và `ops/logs` của `origin/main` thật:
+    ```
+    Nhịp tim routine: 2026-09-24T08:39:16.000Z — nguồn `telemetry`.
+      - `main` (…/mainco/ops/logs): 2026-09-24T07:42:45.000Z  (170/292 dòng bước 0)
+      - `telemetry` (…/crux-telemetry/heartbeat): 2026-09-24T08:39:16.000Z  (1/1 dòng bước 0)
+    LAST_BEAT=2026-09-24T08:39:16.000Z  AGE_MIN=16  (ngưỡng 180)
+    ```
+    Nguồn mới **thắng** phép `max` (mới hơn `main` 56 phút), và nguồn cũ vẫn trả lời — đúng hình dạng "cộng nguồn, không thay nguồn".
+  - ✅ CHARTER phụ lục P3 **bước 0e** (mới) và P1 bước 0 nói rõ việc đẩy bản sao; `CLAUDE.md` mục 1 in sẵn hai lệnh.
+  - ✅ **Hai bài mới sau vòng soát ngữ cảnh sạch, bịt ba lỗ reviewer đo được là 35/35 vẫn xanh:** (a) `LAST_BEAT` phải lấy `.at` **từ output của script**, không được quét lại `ops/logs` bằng `jq` chép tay (chiều quay về một nguồn, đúng hành vi trước `P-043`) và không được chọn **một** nguồn trong `readings` (bỏ phép `max`); (b) `BEAT_REPORT` phải lấy `.render` của script — luật render ba trạng thái **cũng** chỉ còn một chỗ — và phải **có mặt** trong `BODY` của cảnh báo. Phá lại cả bốn cách: 3b → 1 đỏ · 3c → 1 đỏ · tự render bằng `jq` → 1 đỏ · bỏ `$BEAT_REPORT` khỏi `BODY` → 1 đỏ.
+  - ✅ **CHẶN của vòng soát đã sửa:** `git archive … | tar -x` không có lưới làm **cả job `watchdog` đỏ** dưới `set -euo pipefail` (đo được EXIT=2 — nuốt trọn sáu dấu hiệu, trong đúng workflow mà `smoke-workflows.yml` đã khai là không ai canh khi nó đỏ, rủi ro **B7**). Nay `|| rm -rf "$TELEMETRY_CHECKOUT"`: một archive giải **dở** phải về `missing` ("chưa biết") chứ không về "đã đo và rỗng", nếu không thì chính luật ba trạng thái của mục này bị xoá.
+  - ✅ **`|| echo` sau `jq` là mã chết, đã bỏ:** `echo "" | jq -r '.at // empty'` thoát **0**, nên khi `node` hỏng thì `BEAT_REPORT` thành chuỗi rỗng và câu cảnh báo không bao giờ in. Nay `[ -z "$BEAT" ]` được kiểm **tường minh** trước khi gọi `jq`.
+  - ✅ **Các lệnh git nay được IN RA thật** (`telemetry-beat.ts --commands`, hàm `telemetryPushCommands`). Bản đầu *hứa* điều này trong docblock rồi chỉ in `{branch, target, bytes}` — tức CHARTER bước 0e dặn một việc không lệnh nào tồn tại để làm; cờ `--check` cũng là cờ chết (bị `filter` loại rồi không bao giờ đọc). Bài kiểm chạy `bash -n` trên các lệnh in ra, đòi chúng mang đủ hai trailer, cấm tên/mã model (`KF-014`) và cấm mọi `--force`.
+  - ✅ Docblock của `STEP0_REF_PATTERN` (`ops/scripts/lane-heartbeat.ts`) viết lại: ba câu của nó trỏ sang một bản `jq` **không còn tồn tại** sau chính PR này. Lịch sử giữ lại vì nó là bằng chứng, nhưng khai rõ là lịch sử.
+  - ⬜ **Còn lại, và nó là phần chủ dự án đòi:** một lần chạy **`watchdog.yml` thật** (dispatch `dry_run`) đọc nhịp tim từ nguồn mới. Không làm được trong lượt này vì workflow chỉ có hiệu lực sau khi PR merge và `.github/workflows/sync-workflows.yml` chép sang (`CLAUDE.md` mục 4). Khối bash đã chạy thật ở trên là bằng chứng về **logic**, không phải về **workflow** — khai đúng mức, không gộp hai thứ.
+  - ⬜ **Còn lại, tách phạm vi:** `P-038` (bỏ PR log của bước 0) chỉ được mở sau khi ô ⬜ trên xong. Đó là toàn bộ điều kiện của `#213`, nên gộp vào đây là tự cho mình cái phép mà chủ dự án chưa cho.
+  - ⬜ **Điều kiện THÊM cho `P-038`, vòng soát ngữ cảnh sạch tìm ra:** nhánh `claude/telemetry` là một đường ghi vào repo **không đi qua cổng nào** — `ci.yml` chỉ kích bằng `pull_request: branches:[main]` và `workflow_dispatch`, nên push vào nhánh này không qua gitleaks (**I1**), không qua `no-model-name`, không qua `protected-area`. Hôm nay rủi ro thấp vì **cùng nội dung** cũng đi qua PR log của lượt chạy và được quét ở đó. Nó thành chỗ chịu tải đúng lúc `P-038` bỏ PR log, khi nhánh telemetry là đích **duy nhất**. Trường `note` của dòng log là văn xuôi tự do do agent viết và đi lên nguyên văn, nên đây không phải lo xa. Ghi thành điều kiện của `P-038`, không phải việc của PR này.
+- **mã mục nhận lúc 2026-09-24 ~08:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở — cao nhất là `P-042` (`main`), `P-041` (`#225`) và `P-040` (`#224`), nên `P-043` không đụng ai.
+
+---
+
+### P-049 · fix · Báo động giả trong cửa sổ chờ `sync-workflows` sau PR sửa `ops/workflows/**`
+
+Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). Một PR sửa `ops/workflows/**` vào `main` mở một cửa sổ vài chục giây mà bản workflow đang chạy (`.github/`) lệch bản nguồn (`ops/workflows/`) cho tới khi `sync-workflows` chép sang. Trong cửa sổ đó tầng cảnh báo `@nhắc` chủ dự án dù `main` đang xanh — báo động giả (ngược nhóm Z). Đo được `2026-09-24T22:26Z` (`#229`/`a642919` → `843bbd4` sau 33 giây). Chi tiết: `ops/known-failures.md` `KF-033`.
+
+- deps: —
+- risk: medium — bản sửa chạm tầng cảnh báo (`ops/workflows/watchdog.yml` hoặc `main-ci.yml`), và ràng buộc của chủ dự án là **không nới** dấu hiệu bắt `sync-workflows` chạy hỏng thật (dấu hiệu 3). Vì thế phương án nằm ở `🤖 [QĐ]` `#254`, chưa tự làm.
+- status: parked
+- hold: chờ chủ dự án chốt phương án ở `🤖 [QĐ]` `#254` (A/B/C). Đây là `reversible`; nếu không có câu trả lời khác, lượt sau làm theo khuyến nghị **A** — bộ phân loại "đang chờ sync" hạ cấp @nhắc, giữ nguyên dấu hiệu 3.
+- nguồn: chỉ dẫn D2 `#251`; sự cố `#229`/`a642919`→`843bbd4`; `ops/known-failures.md` `KF-033`; `KF-028` (lỗi "60 giờ" riêng, do `#231`/`P-044` chữa)
+- tiêu chí xong:
+  - ✅ **Ghi KF** — `ops/known-failures.md` `KF-033` (chữ ký, nguyên nhân gốc, và lưới đỡ tạm cho lượt sau).
+  - ✅ **Mở `🤖 [QĐ]`** — `#254`, năm phần theo `CLAUDE.md` mục 14, ba phương án kèm hệ quả, khuyến nghị A.
+  - ⬜ **Bản sửa** — chờ `#254`. Bộ phân loại "đang chờ sync" tách khỏi YAML, có bài khoá **hai chiều** (một red thật vẫn @nhắc; một cửa sổ sync không @nhắc); dấu hiệu 3 (`sync` chạy hỏng) giữ nguyên, có bài âm. Bài tái hiện lỗi bắt buộc (**I2**) khi lên bản sửa mang nhãn `fix`.
+
+### P-051 · fix · Soát chéo GPT ra bản tóm tắt PR thay vì danh sách phát hiện có mức
+
+Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). `ops/scripts/gpt-review.ts` (`buildReviewPrompt`) dặn model *"nêu tối đa 5 phát hiện đáng chú ý"*, nên mọi comment `gpt-review` là **tóm tắt lại nội dung PR** — năm gạch đầu dòng mô tả PR làm gì — với **0 phát hiện có mức**. Vô dụng cho người soát và cho worker sở hữu PR: không phân biệt được "phải sửa trước khi merge" với "nên sửa". Đo được: 5 comment `gpt-review` trên `#249`, cùng dạng trên `#242`/`#223`/`#238`/`#231`, đều là tóm tắt.
+
+- deps: —
+- risk: low — chỉ đổi prompt hệ thống và bài kiểm; không đụng đường gọi API, không đụng secret (vẫn ở header `Authorization`), giữ nguyên khung I7 (đóng khung DIFF là DỮ LIỆU, bỏ qua chỉ dẫn nằm trong nội dung soát).
+- status: review
+- nguồn: chỉ dẫn D5 `#251`; `ops/scripts/gpt-review.ts` `buildReviewPrompt`; mục gốc `platform/P-003`
+- tiêu chí xong:
+  - ✅ Prompt đòi đầu ra là **DANH SÁCH PHÁT HIỆN** có nhãn mức `[CHẶN]` / `[NÊN SỬA]`; không có phát hiện thì đúng một dòng `"không phát hiện"`.
+  - ✅ Prompt **CẤM** tóm tắt lại nội dung PR, mô tả PR làm gì, liệt kê thay đổi hay khen ngợi.
+  - ✅ Bài **tái hiện lỗi** (**I2**) trong `ops/test/gpt-review.test.ts`: khẳng định prompt mang `[CHẶN]`/`[NÊN SỬA]`/`"không phát hiện"`/`CẤM tóm tắt` và KHÔNG còn `"đáng chú ý"`. Chứng minh bằng chạy thật: đỏ (`not ok`, fail 1) trên prompt cũ, xanh (14/14) trên prompt mới.
+- giới hạn và việc kế tiếp, khai trước (mục KHÔNG bị treo — bản sửa đã xong, sẵn sàng merge):
+  - Hiệu lực runtime (comment thành danh sách phát hiện) chỉ quan sát được ở **lần chạy `gpt-review` kế tiếp SAU khi PR merge** và `sync-workflows` chép `ops/workflows/` sang `.github/` (`CLAUDE.md` mục 4) — bản thân nhánh này không chạy được lần gọi GPT có tính phí.
+  - **B14b** (worker sở hữu PR phải ĐỌC comment `gpt-review` và ghi xử lý từng điểm) là một mục **tách riêng**, ngoài phạm vi PR này — một mục = một PR.

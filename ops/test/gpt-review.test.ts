@@ -67,6 +67,20 @@ test('buildReviewPrompt · một diff GIẢ VỜ ra lệnh vẫn chỉ nằm tro
   assert.ok(!prompt.system.includes(adversarial));
 });
 
+test('buildReviewPrompt · D5 (#251, mục platform/P-051): đầu ra phải là danh sách phát hiện có mức, CẤM tóm tắt', () => {
+  const prompt = buildReviewPrompt(['a.ts'], 'diff giả');
+  // Ba dấu hiệu bắt buộc của D5 — chính chỗ prompt CŨ thiếu, nên bài này ĐỎ
+  // trên prompt cũ (tái hiện lỗi, I2): prompt cũ chỉ đòi "tối đa 5 phát hiện
+  // đáng chú ý" và "không thấy gì đáng chú ý", không nhãn mức nào.
+  assert.match(prompt.system, /\[CHẶN\]/);
+  assert.match(prompt.system, /\[NÊN SỬA\]/);
+  assert.match(prompt.system, /"không phát hiện"/);
+  // Cấm tóm tắt lại nội dung PR — đúng lỗi D5 nêu (mọi comment gpt-review là tóm tắt).
+  assert.match(prompt.system, /CẤM tóm tắt/);
+  // Prompt mới KHÔNG được còn câu mời tóm tắt của prompt cũ.
+  assert.ok(!/đáng chú ý/.test(prompt.system), 'còn sót câu mời tóm tắt "đáng chú ý" của prompt cũ');
+});
+
 // ── missingSecretNotice ─────────────────────────────────────────────────
 
 test('missingSecretNotice · nêu đúng tên secret thiếu', () => {
