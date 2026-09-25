@@ -88,7 +88,7 @@ test('buildReviewPrompt · D5 (#251, mục platform/P-054): đầu ra phải là
   // Khẳng định theo HẰNG SỐ mà chính `gpt-review.ts` xuất ra, không theo một
   // chuỗi chép tay: bản đầu của bài này neo vào chữ `[CHẶN]` trong ngoặc
   // vuông, và khi hai bản cài đặt của cùng chỉ dẫn D5 gặp nhau ở lần gộp
-  // `main` (PR #257 và #258, `KF-036`) thì phép khớp chép tay đó ĐỎ trên một
+  // `main` (PR #257 và #258, `KF-038`) thì phép khớp chép tay đó ĐỎ trên một
   // prompt hoàn toàn đúng luật. Một luật chỉ có một bản (`P-043`, `KF-016`).
   // Neo CHỮ NGUYÊN VĂN trước, rồi mới đi qua hằng số. Thiếu ba dòng này thì
   // đổi `BLOCKING_LEVEL` thành `'X1'` vẫn cho cả bộ test xanh (đo được:

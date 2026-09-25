@@ -6,9 +6,11 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
-## KF-038 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
+## KF-038 · Phép dò mã mục trống đọc một **danh sách PR đã cũ/thiếu**, nên hai mục khác nhau nhận cùng một mã
 
 > Số **KF-038**: dò `## KF-` trên `main` **và trên đầu MỌI nhánh remote** (`git branch -r`), không chỉ các PR mà một phép liệt kê trước đó trả về — chính chỗ mục này ghi lại. Cao nhất đang dùng là `KF-037` (`#260`); `KF-036` do `#242` giữ (`claude/dreamy-ride-ynixo1`, push `05:03:22Z`) và `KF-035` do `main` giữ. ⚠️ Bản đầu của mục này **tự vấp đúng cái bẫy nó mô tả**: nó nhận số `KF-036` sau khi dò 11 PR "đang mở", mà `#242` đã giữ `KF-036` từ trước đó hơn một tiếng. Khi `#242` merge, `merge=union` sẽ sinh **hai** khối `## KF-036` mà không gì đỏ — đúng hình dạng hai khối `## KF-016` đang nằm sẵn trong file này.
+
+- **Lần gặp:** **3** — `### P-028` (`#224`, mã trùng một mục đã merge, chữa bằng đổi sang `P-040`) · `### P-051` (`#257` vs `#258`, mục này) · `## KF-036` (chính mục này cấp nhầm khi được viết ra, `#242` đã giữ). Ba lần, ba loại mã, **một** chữ ký: phép dò đọc một danh sách không đầy đủ. Ngưỡng ba lần của `CLAUDE.md` mục 13 **đã chạm** → chỗ phải sửa là một cổng máy, không phải lời dặn (xem cuối mục).
 
 **Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh trên cả hai PR, `main` xanh. Chỗ hỏng chỉ lộ ra ở **lần gộp `main`**, và lộ ra dưới dạng một xung đột trông như xung đột nội dung bình thường.
 
@@ -98,6 +100,18 @@ Máy **không** làm sai luật của nó: cửa `open` chỉ đòi "CI xanh tr�
 **Chỗ thủng là ở luật, không ở máy.** CHARTER 6.4 đòi mỗi PR có subagent ngữ cảnh sạch soát **trước khi gắn** nhãn tự merge — luật viết cho thời điểm *gắn nhãn*, không cho thời điểm *merge*. Với `automerge-delayed`, CHARTER 3.3 có sẵn cơ chế bù: *"Một lần push mới đặt lại đồng hồ, nên khoảng chờ luôn áp lên đúng nội dung sắp vào `main`"*. Cửa `open` **không có gì tương đương**, nên một PR `automerge` chỉ cần được soát **một lần, ở bất kỳ phiên bản nào**, rồi mọi lần push sau đó đi thẳng vào `main` không qua soát.
 
 Đây là **lần thứ hai trong một ngày** cùng một họ sự cố quanh mục `I-020` (lần một: `KF-025`, hai worker cùng nhận một mục). `CLAUDE.md` mục 13 đòi sửa **luật** ở lần thứ hai, không vá sản phẩm.
+
+**LẦN THỨ BA — `#258`, 2026-09-25** (mục `P-055`). Cùng hình dạng, và lần này **không** phải nhãn sống sót qua một lần push đổi nội dung: nhãn `automerge` đã nằm sẵn trên PR từ lượt mở nó, rồi một lượt worker **khác** nhận PR ở bước 2 phụ lục P1 và push một commit gộp mang phán đoán thật (giữ prompt của một bên, **viết lại một bài kiểm**). Cửa `open` không có khoảng chờ nên `automerge.yml` merge lúc `06:53:34Z`, **54 giây** sau khi CI xanh (`06:52:40Z`), trong lúc vòng soát bước 6 còn chạy.
+
+| # | Lượt | Khoảng CI xanh → merge | Nội dung chưa soát |
+|---|---|---|---|
+| 1 | `#94`, 2026-09-22 | 83 giây (tạo → merge) | issue `🤖 [QĐ]` `#96` |
+| 2 | `#222`, 2026-09-24 | 76 giây sau push | 14 file giải xung đột |
+| 3 | `#258`, 2026-09-25 | 54 giây | một lần giải xung đột có phán đoán, gồm **viết lại một bài kiểm** |
+
+Vì sao lần ba đáng ghi riêng dù nguyên nhân gần giống lần hai: hai lần đầu là **agent tự gắn nhãn rồi soát sau**, nên lời dặn *"soát xong mới gắn nhãn"* (phương án **A** của `#96`) đủ chữa. Lần ba thì agent **không gắn nhãn nào** — nhãn đã ở đó từ lượt trước, và bước 2 của phụ lục P1 bảo worker push thẳng vào PR của người khác. **Một lời dặn về thứ tự gắn nhãn không phủ được ca này**; chỗ chữa là `I-021` (nhãn hết hiệu lực khi `head.sha` đổi), hoặc worker gỡ nhãn trước khi push rồi gắn lại sau bước 6.
+
+- **Lần gặp:** **3** — `#94` (2026-09-22, issue `#96`) · `#222` (2026-09-24, mục này) · `#258` (2026-09-25, mục `P-055`). Ngưỡng ba lần của `CLAUDE.md` mục 13 **đã chạm**: chỗ phải sửa là luật/máy, không phải vá từng PR. Bản sửa đã có chủ ở `integration/I-021` và đang ⬜ vì nó chạm vùng `owner-merge`.
 
 - **Máy chặn từ nay:** *chưa có* — và đây là chỗ khai thẳng thay vì để trống im lặng. Bản sửa đề xuất nằm ở mục backlog `integration/I-021`: `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn được gắn (đọc từ timeline của label event), lệch thì **gỡ nhãn** và đòi soát lại thay vì merge. Việc đó chạm `ops/workflows/automerge.yml` — vùng **`owner-merge`** (CHARTER mục 3), nên nó phải đi bằng một PR riêng mà chủ dự án merge; ghi ở đây để nó không rơi mất trong lúc chờ.
 - **Cách đọc bản ghi này cho đúng:** đừng đọc thành "automerge nguy hiểm". Đọc thành: *một nhãn tự merge là lời khẳng định về MỘT phiên bản cụ thể, nên nó phải hết hiệu lực khi phiên bản đó đổi.*
