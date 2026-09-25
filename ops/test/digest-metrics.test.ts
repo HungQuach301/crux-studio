@@ -319,6 +319,7 @@ function baseMetrics(over: Partial<Parameters<typeof renderDigestMetrics>[0]> = 
     delayed: [],
     parked: [],
     decisions: [],
+    ownerWaiting: [],
     cost: { cost24h: 0, total: 0, budget: 600, percent: 0 },
     progress: {
       doneLast24h: 0,
@@ -339,6 +340,45 @@ test('renderDigestMetrics: dòng đầu LUÔN là `Cần anh quyết: N việc`,
     { number: 14, title: 'B', labels: [{ name: 'decision' }, { name: 'irreversible' }] },
   ]);
   assert.equal(renderDigestMetrics(baseMetrics({ decisions: rows })).split('\n')[0], 'Cần anh quyết: 2 việc');
+});
+
+test('renderDigestMetrics: khối "Việc đang chờ anh" đứng NGAY SAU khối "Cần anh quyết" (mục P-053, chỉ dẫn C1)', () => {
+  // C1 nói thẳng "ngay sau *Cần anh quyết*". Vị trí là thứ chủ dự án đọc
+  // trong 60 giây đầu trên điện thoại (rủi ro B11), nên nó có bài khoá —
+  // không phải một lời dặn trong CHARTER.
+  const rows = decisionRows([
+    { number: 19, title: 'A', labels: [{ name: 'decision' }, { name: 'irreversible' }] },
+  ]);
+  const lines = renderDigestMetrics(baseMetrics({ decisions: rows })).split('\n');
+  assert.equal(lines[0], 'Cần anh quyết: 1 việc');
+  assert.equal(lines[1], '- #19 · A');
+  assert.equal(lines[2], '');
+  assert.equal(lines[3], 'Việc đang chờ anh: 0 việc');
+  // Và nó đi TRƯỚC "Quyết định reversible đang mở".
+  const iWaiting = lines.findIndex((l) => l.startsWith('Việc đang chờ anh:'));
+  const iReversible = lines.findIndex((l) => l.startsWith('Quyết định reversible đang mở:'));
+  assert.ok(iWaiting >= 0 && iReversible >= 0);
+  assert.ok(iWaiting < iReversible);
+});
+
+test('renderDigestMetrics: khối "Việc đang chờ anh" in từng dòng khi có việc', () => {
+  const text = renderDigestMetrics(
+    baseMetrics({
+      ownerWaiting: [
+        {
+          kind: 'decision' as const,
+          key: '#101',
+          what: 'hạn mức tìm kiếm YouTube — chỉ anh mở Console đọc được',
+          waitingDays: 3.2,
+          blocking: ['T-008', 'T-011'],
+          blockingGate: ['T-008', 'T-011'],
+          link: '#101',
+        },
+      ],
+    }),
+  );
+  assert.match(text, /^Việc đang chờ anh: 1 việc$/m);
+  assert.match(text, /^- #101 · hạn mức tìm kiếm YouTube — chỉ anh mở Console đọc được · đã chờ 3\.2 ngày · chặn 2 mục \(T-008, T-011\) · 2 thuộc làn topic \(cổng Mốc 3\) · #101$/m);
 });
 
 test('renderDigestMetrics: đủ năm nhóm số liệu mà tiêu chí xong đòi', () => {
