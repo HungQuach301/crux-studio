@@ -106,7 +106,8 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
   workflow mới trong `ops/workflows/` **chỉ có hiệu lực sau khi PR merge vào `main`** và `sync-workflows.yml`
   chép xong. Nên "chạy ở lượt tới" tách làm hai:
   - **sóng 1 (lượt này)** — cơ chế: `ops/scripts/model-assumption-check.ts`, `ops/workflows/model-assumption-check.yml`,
-    24 bài kiểm, cộng một dòng danh sách trắng cho `isToolCommit` (không có nó thì giả định **G14** báo `sai`).
+    33 bài kiểm, cộng một dòng danh sách trắng cho `isToolCommit` (không có nó thì giả định **G14** báo
+    `sai` vì một commit **không PR nào chữa được**), cộng `KF-040`.
   - **sóng 2 (lượt sau khi sóng 1 vào `main` và sync chạy xong)** — chạy thật: `workflow_dispatch` kèm
     `dry_run=false`, lấy bằng chứng từ nhánh `claude/tier4-evidence`, ghi vào `verification.tiers` của
     tám file mô hình, rồi **đóng `#127`**. Đóng `#127` ở sóng 1 là khai một việc chưa làm là đã làm.
@@ -116,7 +117,11 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
     trang in `gpt-4o-mini` $0.15/$0.60, trùng khít hằng số `gpt-4o-mini` mà `gpt-review.ts` đã ghi từ
     `2026-09-21`) giao với `GET /v1/models`. Key không cấp ứng viên nào thì **DỪNG**, không lùi.
   - ✅ `gpt-4o-mini` bị cấm **đích danh** bằng cổng cứng `TIER4_BANNED_MODELS`, không phải bằng chỗ vắng
-    mặt trong bảng — một lượt sau nhét nó vào bảng vẫn bị chặn. Có bài tái hiện.
+    mặt trong bảng — một lượt sau nhét nó vào bảng vẫn bị chặn. ⚠️ **Bản đầu của ô này khai sai**: bài
+    được gọi là "tái hiện" dựng lại phép lọc bằng tay trong chính test, nên xoá hẳn cổng đi thì **24/24
+    vẫn xanh** (vòng soát ngữ cảnh sạch, phát hiện `C4`). Đã sửa: `pickStrongestModel` nhận bảng ưu tiên
+    qua **tham số**, và bài kiểm đẩy `gpt-4o-mini` lên ĐẦU một bảng bẩn rồi gọi hàm thật. Phá thử lại:
+    xoá dòng lọc → **1 bài đỏ đúng chỗ**.
   - ✅ Đầu ra **sai dạng KHÔNG BAO GIỜ thành `pass`**: `parseTier4Report` không có nhánh "gần đúng thì cho
     qua", và đầu ra sai dạng thì mô hình đó **không sinh bằng chứng** — `evaluateLlmAssumptionCheck(undefined)`
     trả `pass: false` kèm *"Chưa có báo cáo"*. Hướng lệch là *chưa kiểm*, không phải *kiểm rồi và sạch*.
@@ -125,15 +130,38 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
   - ✅ Nội dung file mô hình vào prompt dưới dạng **dữ liệu, không phải chỉ dẫn** (bất biến I7); secret chỉ
     nằm ở header ký request, không vào body và không vào `argv`.
   - ✅ `costUsd` tính từ `usage` do chính OpenAI trả về, ghi một dòng `ops/logs/topic/T-006b.jsonl` ở **mọi**
-    lần chạy script — kể cả lần bị bỏ qua vì thiếu secret (bất biến I8).
+    lần chạy script — kể cả lần bị bỏ qua vì thiếu secret, **và kể cả lần ném sau khi đã tiêu tiền** (bất
+    biến I8). ⚠️ Bản đầu thủng đúng ca đắt nhất: `readModel`/`readHandCases` nằm ngoài `try`, nên một file
+    `M-00N.cases.json` hỏng cho ra **2 lần gọi API đã tính tiền, 0 dòng log** (vòng soát, `C2`). Đây là
+    **lần thứ hai** của chữ ký đó trong repo — xem **`KF-040`**, và bản sửa nằm ở tầng luật (`try` mở từ
+    trước lời gọi tính tiền đầu tiên, `finally` ghi log) chứ không phải một chỗ vá.
+  - ✅ Dòng log `costUsd` của **lượt chạy thật** cũng đi lên nhánh `claude/tier4-evidence` cùng bằng chứng.
+    Bản đầu chỉ chép thư mục `tier4/`, nên `git clean -fdx` ở lối `--orphan` xoá luôn dòng log và số tiền
+    không bao giờ về tới repo (vòng soát, `C3`).
+  - ✅ Lượt chạy thật **thứ hai trở đi** không còn đỏ sau khi đã tiêu tiền: workflow dọn cây làm việc trước
+    khi đổi nhánh (vòng soát, `C1` — `git checkout -B` từ chối ghi đè file chưa track). Tái hiện bằng git
+    thật trên hai lượt liên tiếp: lượt 2 **đi qua**, nhánh bằng chứng có **2 commit** (nối thêm, không
+    `--force`), cả hai dòng `costUsd` còn nguyên.
   - ⬜ **Sóng 2, chưa làm:** chạy thật tám mô hình, ghi `verification.tiers[llm-assumption-check]` cho cả
     tám kèm `evidenceRef` và `checkedAt`, rồi đóng `#127`. Không lượt nào được ghi `pass: true` mà không có
     file bằng chứng tương ứng dưới `workshops/topic/data/models/tier4/`.
   - ⬜ **Sóng 2, chưa làm:** quan sát `#127` thật sự đóng được, và `T-006` chuyển khỏi `review`.
+- **Ba chỗ còn hở, khai chứ không giấu** (vòng soát ngữ cảnh sạch nêu, chưa sửa trong mục này):
+  - **Giá $/1M nay có bài ghim sáu con số** (đổi giá mà không đổi bài kiểm là CI đỏ), nhưng repo đang có
+    **hai** bảng giá trong `ops/scripts/` không chung nguồn — bảng của mục này và bảng của
+    `novelty-embeddings-trial.ts` (`G20`). Luật mềm CHARTER mục 4 (hằng số trùng lặp). Chỗ chữa đúng là
+    đưa giá xuống **dữ liệu** kèm `source`/ngày đọc và một mã giả định riêng, đúng lối `G20` — một mục
+    backlog riêng, không nống mục này.
+  - **`askTier4` không đặt `max_completion_tokens` và không hỏi lại lần hai.** Hai dòng đầu bảng ưu tiên
+    là model suy luận (`gpt-5`, `o3`): một đầu ra bị cắt vì reasoning token sẽ đọc thành *"sai dạng"* →
+    `failed` → phải chạy lại cả lượt, tiền đã tiêu. Hướng lệch **an toàn** (không bao giờ thành `pass`),
+    nhưng **đắt**. Chưa siết vì chưa có ca thật — đúng luật **A10** của `#251`; thấy lần đầu thì mở mục.
+  - **Không cổng máy nào bắt một script gọi API trả tiền *mới* quên luật `KF-040`.** Cả hai lần đều do
+    vòng soát ngữ cảnh sạch bắt, không do CI.
 - **`verification.status` vẫn KHÔNG do máy đặt** (`D-C02` điểm c): cấp 4 đạt chỉ gỡ một cổng; `verified`
   vẫn chờ tám issue `irreversible` tóm tắt và chữ của chủ dự án. Mục này không chạm vào điều đó.
 - công cụ: `ops/scripts/model-assumption-check.ts` · `ops/workflows/model-assumption-check.yml` ·
-  `ops/test/model-assumption-check.test.ts` (24 bài) · bằng chứng ghi dưới
+  `ops/test/model-assumption-check.test.ts` (33 bài) · bằng chứng ghi dưới
   `workshops/topic/data/models/tier4/` (thư mục con, nên `ops/scripts/check-models.ts` không quét nhầm nó
   qua `model.schema.json` — cùng lối `cases/`)
 

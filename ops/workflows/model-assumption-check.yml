@@ -95,19 +95,37 @@ jobs:
       # sử của nhánh này là bản ghi các lượt cấp 4 đã chạy — ghi đè nó là
       # xoá bằng chứng của lượt trước.
       #
-      # Subject của commit là chuỗi CỐ ĐỊNH, máy sinh, và
-      # `isToolCommit` ở `ops/scripts/recheck-assumptions.ts` có một dòng
-      # danh sách trắng cho đúng nó. Thiếu dòng đó thì bài kiểm giả định
-      # **G14** đọc commit này là commit của agent, thấy nó không có
-      # `Claude-Session` (một workflow không có phiên nào để ghi) và báo
-      # `sai` — một lỗi không PR nào chữa được, vì commit này không bao giờ
-      # vào `main`.
-      - name: Đẩy bằng chứng lên nhánh claude/tier4-evidence (KHÔNG mở PR, KHÔNG force)
+      # ⚠️ HAI chỗ dưới đây là bản sửa của vòng soát ngữ cảnh sạch PR `#264`,
+      # đừng gỡ khi dọn dẹp:
+      #
+      #   (C1) DỌN CÂY LÀM VIỆC TRƯỚC KHI ĐỔI NHÁNH. Script vừa ghi bằng
+      #        chứng vào `$EV` (file CHƯA track trên `main`) và vừa append
+      #        vào `ops/logs/topic/T-006b.jsonl` (file ĐÃ track). Nhánh
+      #        `claude/tier4-evidence` chứa đúng các path đó, nên
+      #        `git checkout -B` TỪ CHỐI ghi đè và bước này đỏ — ở **lượt
+      #        chạy thật thứ hai trở đi**, tức sau khi tiền API đã tiêu.
+      #        Lượt đầu đi lối `--orphan` nên không lộ. Đã tái hiện bằng git
+      #        thật: `error: The following untracked working tree files
+      #        would be overwritten by checkout`, exit 1.
+      #
+      #   (C3) DÒNG LOG `costUsd` CŨNG PHẢI LÊN NHÁNH. `ops/logs/topic/
+      #        T-006b.jsonl` là chỗ DUY NHẤT mang `costUsd` thật của lượt
+      #        chạy (bất biến **I8**, `CLAUDE.md` mục 15). Bản đầu chỉ chép
+      #        thư mục bằng chứng, nên `git clean -fdx` ở lối `--orphan`
+      #        xoá luôn dòng log và số tiền không bao giờ về tới repo.
+      - name: Đẩy bằng chứng và dòng log lên nhánh claude/tier4-evidence (KHÔNG mở PR, KHÔNG force)
         if: steps.tier4.outputs.ran == 'true'
         run: |
           set -euo pipefail
           EV=workshops/topic/data/models/tier4
-          cp -r "$EV" "$RUNNER_TEMP/tier4"
+          LOG=ops/logs/topic/T-006b.jsonl
+          mkdir -p "$RUNNER_TEMP/carry/$EV" "$RUNNER_TEMP/carry/logs"
+          cp -r "$EV/." "$RUNNER_TEMP/carry/$EV/"
+          cp "$LOG" "$RUNNER_TEMP/carry/logs/T-006b.$GITHUB_RUN_ID.jsonl"
+          # C1: bỏ hẳn dấu vết trong cây làm việc TRƯỚC khi đổi nhánh — cả
+          # file chưa track lẫn phần đã sửa trên file đã track.
+          rm -rf "$EV"
+          git checkout -- .
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           # Z9 — `|| true` an toàn ở đúng đây: nhánh CHƯA TỒN TẠI ở lượt cấp 4
@@ -125,9 +143,10 @@ jobs:
             git rm -rf --cached . >/dev/null
             git clean -fdx -e node_modules >/dev/null
           fi
-          mkdir -p "$EV"
-          cp -r "$RUNNER_TEMP/tier4/." "$EV/"
-          git add --force "$EV"
+          mkdir -p "$EV" logs
+          cp -r "$RUNNER_TEMP/carry/$EV/." "$EV/"
+          cp -r "$RUNNER_TEMP/carry/logs/." logs/
+          git add "$EV" logs
           git commit -m 'chore: tier4 evidence from ops/scripts/model-assumption-check'
           git push origin HEAD:refs/heads/claude/tier4-evidence
 

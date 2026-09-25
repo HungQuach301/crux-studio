@@ -38,6 +38,37 @@ Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trư
 
 ---
 
+## KF-040 · Tiền API đã tiêu, rồi lượt chạy ném — và **không dòng log nào** ghi lại số tiền đó
+
+> Số **KF-040**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất toàn cục là `KF-039` (PR `#242`), nên `KF-040` không đụng ai.
+
+- **Lần gặp: 2.** Đủ ngưỡng `CLAUDE.md` mục 13 *"lỗi cùng loại lần thứ hai → sửa spec/contract/prompt, không vá sản phẩm"*.
+- **Nhóm Z.** Không gì đỏ: script ném, job đỏ vì một lý do khác (tên file hỏng), và người đọc thấy một job đỏ chứ không thấy *"vừa tiêu N đô mà sổ chi không có dòng nào"*. Ngân sách học của CHARTER mục 8 đọc `ops/logs/**`, nên tiền đã tiêu **biến mất khỏi phép cộng**.
+- **Chữ ký:** một script gọi API trả tiền trong vòng lặp → một bước **ngoài** `try` (đọc file đầu vào, dựng prompt) ném ở lượt thứ N → ngoại lệ thoát khỏi hàm → `appendLog` không bao giờ chạy → **N-1 lần gọi đã bị tính tiền, 0 dòng log**. Bất biến **I8** đòi *mọi* lần chạy có một dòng mang `costUsd`, và nhánh ném là nhánh **đắt nhất**, tức nhánh ít được phép im lặng nhất.
+
+| Lần | Chỗ | Phát hiện bởi |
+|---|---|---|
+| 1 | `ops/scripts/novelty-embeddings-trial.ts` (mục `topic/T-014`, PR `#253`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~03:0xZ` |
+| 2 | `ops/scripts/model-assumption-check.ts` (mục `topic/T-006b`, PR `#264`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~10:0xZ` |
+
+Lần 2 xảy ra **~7 giờ sau** lần 1, trong một file **mới viết**, bởi một lượt agent **không đọc** bản sửa của lần 1. Đó là phần đáng ghi: bài học nằm trong một docblock của một file khác, và docblock không đi theo người viết file sau.
+
+- **Tái hiện, lần 2, chạy thật:**
+  ```
+  ném ở readHandCases('M-003') sau 2 lần gọi API
+  → NÉM RA NGOÀI runTier4
+  → số lần đã GỌI OPENAI (đã tính tiền): 2
+  → số dòng log ghi được (I8):            0
+  ```
+- **Nguyên nhân gốc:** `try` được đặt quanh *"lời gọi mạng"* vì đó là chỗ **trông như** có thể hỏng. Nhưng phạm vi đúng của `try` không phải "chỗ dễ hỏng" mà là **"từ lúc đồng hồ tiền bắt đầu chạy"** — mọi thứ sau lần gọi tính tiền đầu tiên, kể cả một phép đọc file trông vô hại.
+- **Máy chặn từ nay:**
+  - Lần 1: `ops/scripts/novelty-embeddings-trial.ts` ghi log trong `finally`, `costUsd` cộng dồn **ngoài** `try`.
+  - Lần 2: `ops/scripts/model-assumption-check.ts` — `runTier4` bao **cả vòng lặp** trong `try/finally`, `totalCostUsd` khai ngoài `try`, và hai lời gọi `readModel`/`readHandCases` chuyển **vào trong** `try` của từng model. Hai bài kiểm khoá hai lớp: `TÁI HIỆN C2` (file ca kiểm hỏng) và `C2 lớp 2` (ngoại lệ ngoài phạm vi một model). Phá thử: bỏ `finally` chỉ ghi ở đường trót lọt → **1 bài đỏ đúng chỗ**; đưa `readHandCases` ra ngoài `try` → **1 bài đỏ đúng chỗ**.
+- **Luật rút ra, cho mọi script gọi API trả tiền sau này:** đặt `try` từ **trước lời gọi tính tiền đầu tiên**, cộng dồn `costUsd` vào một biến khai **ngoài** `try`, và ghi dòng log trong `finally`. Ba câu đó là ba câu, không phải một gợi ý.
+- **Còn hở, khai chứ không giấu:** chưa có cổng **máy** nào bắt một script *mới* quên luật này — hai lần sửa đều do vòng soát ngữ cảnh sạch bắt, không do CI. Một bộ dò dạng *"file nào gọi `api.openai.com` mà không có `finally` chứa `appendLog`"* là một mục backlog riêng; chưa mở vì nó cần đo xem có bao nhiêu ca giả. Tới lúc đó, KF này là lưới đỡ.
+
+---
+
 ## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
 
 > Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.

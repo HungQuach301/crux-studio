@@ -122,17 +122,28 @@ export type PickResult = { candidate: Tier4Candidate } | { problem: string };
  * trả `problem` — KHÔNG lùi về một model rẻ hơn ngoài bảng, và tuyệt đối
  * không lùi về `gpt-4o-mini`: lùi im lặng là cách một lượt chạy trông giống
  * đã làm đúng chỉ dẫn trong khi nó vừa làm ngược lại.
+ *
+ * `preference` là **tham số**, không phải hằng đóng cứng, và đó không phải
+ * một chỗ linh hoạt cho vui: với bảng mặc định, `gpt-4o-mini` không có mặt
+ * nên dòng lọc `TIER4_BANNED_MODELS` KHÔNG BAO GIỜ chạy, và một bài kiểm
+ * dựng lại phép lọc bằng tay chỉ lặp lại code chứ không kiểm nó. Vòng soát
+ * ngữ cảnh sạch của PR `#264` đo được đúng điều đó: xoá hẳn dòng lọc → 24/24
+ * bài vẫn xanh. Nhận bảng qua tham số là cách **duy nhất** để bài kiểm đẩy
+ * một model bị cấm vào đúng đường đi thật của hàm.
  */
-export function pickStrongestModel(available: readonly string[]): PickResult {
+export function pickStrongestModel(
+  available: readonly string[],
+  preference: readonly Tier4Candidate[] = TIER4_MODEL_PREFERENCE,
+): PickResult {
   const offered = new Set(available);
-  for (const candidate of TIER4_MODEL_PREFERENCE) {
+  for (const candidate of preference) {
     if (TIER4_BANNED_MODELS.includes(candidate.model)) continue;
     if (offered.has(candidate.model)) return { candidate };
   }
   return {
     problem:
-      `Key không cấp model nào trong bảng TIER4_MODEL_PREFERENCE ` +
-      `(${TIER4_MODEL_PREFERENCE.map((c) => c.model).join(', ')}). ` +
+      `Key không cấp model nào trong bảng ưu tiên ` +
+      `(${preference.map((c) => c.model).join(', ')}). ` +
       `DỪNG chứ không lùi về ${TIER4_BANNED_MODELS.join(', ')} — chỉ dẫn của chủ dự án trên #127 cấm đích danh.`,
   };
 }
@@ -179,6 +190,29 @@ export interface HandCaseDeclaration {
  * theo hướng "không thấy vấn đề nào" là hướng lệch đắt nhất ở đây, vì nó
  * đẩy một mô hình chưa kiểm lên sát cổng Mốc 3.
  */
+/**
+ * Chiếu **tường minh** đúng bảy trường mà cấp 4 được phép nhìn.
+ *
+ * Bên gọi đọc nguyên file `M-00N.json`, mà file đó còn mang `verification` —
+ * tức phán quyết của các cấp kiểm TRƯỚC. Đưa nó vào prompt là đặt một mỏ
+ * neo: người soát đọc thấy `hand-worked-case` đã `pass: true` rồi mới đi
+ * tìm chỗ sai. Bản đầu của file này dùng `JSON.stringify(model)` nên nó lọt
+ * vào thật — vòng soát ngữ cảnh sạch của PR `#264` đo được (`prompt.user`
+ * chứa chuỗi `"verification"`). Chiếu tường minh chứ không xoá vài khoá:
+ * một trường mới thêm vào schema sau này sẽ **không** tự lọt vào prompt.
+ */
+export function declarationOnly(model: ModelDeclaration): ModelDeclaration {
+  return {
+    modelId: model.modelId,
+    title: model.title,
+    question: model.question,
+    assumptions: model.assumptions,
+    parameters: model.parameters,
+    outputs: model.outputs,
+    formula: model.formula,
+  };
+}
+
 export function buildTier4Prompt(model: ModelDeclaration, handCases: readonly HandCaseDeclaration[]): Tier4Prompt {
   const system = [
     'You are an independent reviewer from a different provider than the model that wrote the artifact below.',
@@ -206,7 +240,7 @@ export function buildTier4Prompt(model: ModelDeclaration, handCases: readonly Ha
     `Model under review: ${model.modelId} — ${model.title}`,
     '',
     '```json',
-    JSON.stringify({ model, handCases }, null, 2),
+    JSON.stringify({ model: declarationOnly(model), handCases }, null, 2),
     '```',
   ].join('\n');
 
@@ -469,66 +503,92 @@ export async function runTier4(deps: Tier4Deps): Promise<Tier4RunOutcome> {
     return { status: 'failed', note, results: [], totalCostUsd: 0 };
   }
 
+  // Hai biến này nằm NGOÀI `try` và cộng dồn ngay sau mỗi model, để dòng log
+  // ở `finally` nói đúng số tiền **ĐÃ TIÊU** kể cả khi lượt chạy chết giữa
+  // chừng. Đây là **lần thứ hai** của chữ ký đó trong repo — lần đầu ở
+  // `ops/scripts/novelty-embeddings-trial.ts` (mục `topic/T-014`), và
+  // `CLAUDE.md` mục 13 đòi lần thứ hai thì sửa ở tầng luật cộng ghi
+  // `ops/known-failures.md`, không vá một chỗ. Xem `KF-040`.
+  //
+  // `readModel`/`readHandCases` **phải** nằm trong `try`: một file
+  // `M-00N.cases.json` thiếu hay hỏng ở mô hình thứ N ném ra, và bản đầu để
+  // hai lời gọi đó ngoài `try` nên ngoại lệ thoát khỏi cả hàm — đo được ở
+  // vòng soát PR `#264`: **2 lần gọi API đã tính tiền, 0 dòng log**.
   const results: Tier4ModelResult[] = [];
   let totalCostUsd = 0;
-  for (const modelId of ids) {
-    const declaration = deps.readModel(modelId);
-    const prompt = buildTier4Prompt(declaration, deps.readHandCases(modelId));
-    try {
-      const chat = await askTier4(prompt, picked.model, apiKey, deps.fetchImpl);
-      const report = parseTier4Report(chat.raw);
-      const cost = tier4CostUsd(chat.promptTokens, chat.completionTokens, picked);
-      totalCostUsd += cost;
-      const clean = report.unflaggedAssumptions.length === 0 && report.unitIssues.length === 0;
-      results.push({
-        modelId,
-        matched: report.conforms && clean,
-        // Sai dạng → KHÔNG bằng chứng. Xem docblock đầu file: hướng lệch an
-        // toàn là trông giống "chưa kiểm", không giống "kiểm rồi và sạch".
-        evidence: report.conforms
-          ? {
-              reviewedAt: deps.now(),
-              provider: `openai/${picked.model}`,
-              unflaggedAssumptions: report.unflaggedAssumptions,
-              unitIssues: report.unitIssues,
-            }
-          : undefined,
-        unflaggedCount: report.unflaggedAssumptions.length,
-        unitIssueCount: report.unitIssues.length,
-        promptTokens: chat.promptTokens,
-        completionTokens: chat.completionTokens,
-        costUsd: cost,
-        problems: report.problems,
-      });
-    } catch (error) {
-      results.push({
-        modelId,
-        matched: false,
-        unflaggedCount: 0,
-        unitIssueCount: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        costUsd: 0,
-        problems: [`lỗi gọi OpenAI: ${(error as Error).message}`],
-      });
+  let crashed: Error | undefined;
+  try {
+    for (const modelId of ids) {
+      try {
+        const declaration = deps.readModel(modelId);
+        const prompt = buildTier4Prompt(declaration, deps.readHandCases(modelId));
+        const chat = await askTier4(prompt, picked.model, apiKey, deps.fetchImpl);
+        const report = parseTier4Report(chat.raw);
+        const cost = tier4CostUsd(chat.promptTokens, chat.completionTokens, picked);
+        totalCostUsd += cost;
+        const clean = report.unflaggedAssumptions.length === 0 && report.unitIssues.length === 0;
+        results.push({
+          modelId,
+          matched: report.conforms && clean,
+          // Sai dạng → KHÔNG bằng chứng. Xem docblock đầu file: hướng lệch an
+          // toàn là trông giống "chưa kiểm", không giống "kiểm rồi và sạch".
+          evidence: report.conforms
+            ? {
+                reviewedAt: deps.now(),
+                provider: `openai/${picked.model}`,
+                unflaggedAssumptions: report.unflaggedAssumptions,
+                unitIssues: report.unitIssues,
+              }
+            : undefined,
+          unflaggedCount: report.unflaggedAssumptions.length,
+          unitIssueCount: report.unitIssues.length,
+          promptTokens: chat.promptTokens,
+          completionTokens: chat.completionTokens,
+          costUsd: cost,
+          problems: report.problems,
+        });
+      } catch (error) {
+        results.push({
+          modelId,
+          matched: false,
+          unflaggedCount: 0,
+          unitIssueCount: 0,
+          promptTokens: 0,
+          completionTokens: 0,
+          costUsd: 0,
+          problems: [`lỗi gọi OpenAI: ${(error as Error).message}`],
+        });
+      }
     }
+  } catch (error) {
+    // Ngoại lệ NGOÀI phạm vi một model (hiếm) — không nuốt, chỉ hoãn tới sau
+    // khi `finally` đã ghi được dòng log.
+    crashed = error instanceof Error ? error : new Error(String(error));
+  } finally {
+    const done = results.filter((r) => r.evidence !== undefined).length;
+    deps.appendLog({
+      at: deps.now(),
+      lane: 'topic',
+      kind: 'stage',
+      ref: TIER4_LOG_REF,
+      status: crashed !== undefined || done === 0 ? 'failed' : 'ok',
+      durationMs: Date.now() - startedAt,
+      costUsd: totalCostUsd,
+      note:
+        crashed !== undefined
+          ? `cấp kiểm 4 qua openai/${picked.model} NÉM sau khi đã đo ${results.length}/${ids.length} mô hình ` +
+            `(tổng costUsd ĐÃ TIÊU ${totalCostUsd.toFixed(4)}): ${crashed.message}`
+          : `cấp kiểm 4 qua openai/${picked.model}: ${results.filter((r) => r.matched).length}/${results.length} khớp, ` +
+            `${results.length - done} đầu ra không dùng được, tổng costUsd ${totalCostUsd.toFixed(4)}`,
+    });
   }
+  if (crashed !== undefined) throw crashed;
 
   const matched = results.filter((r) => r.matched).length;
   const unreadable = results.filter((r) => r.evidence === undefined).length;
   const note =
     `cấp kiểm 4 qua openai/${picked.model}: ${matched}/${results.length} khớp, ` +
     `${unreadable} đầu ra không dùng được, tổng costUsd ${totalCostUsd.toFixed(4)}`;
-  deps.appendLog({
-    at: deps.now(),
-    lane: 'topic',
-    kind: 'stage',
-    ref: TIER4_LOG_REF,
-    status: unreadable === results.length ? 'failed' : 'ok',
-    durationMs: Date.now() - startedAt,
-    costUsd: totalCostUsd,
-    note,
-  });
   return {
     status: unreadable === results.length ? 'failed' : 'ok',
     note,
