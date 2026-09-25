@@ -79,6 +79,42 @@ test('buildReviewPrompt · một diff GIẢ VỜ ra lệnh vẫn chỉ nằm tro
   assert.ok(!prompt.system.includes(adversarial));
 });
 
+test('buildReviewPrompt · D5 (#251, mục platform/P-054): đầu ra phải là danh sách phát hiện có mức, CẤM tóm tắt', () => {
+  const prompt = buildReviewPrompt(['a.ts'], 'diff giả');
+  // Ba dấu hiệu bắt buộc của D5 — chính chỗ prompt CŨ thiếu, nên bài này ĐỎ
+  // trên prompt cũ (tái hiện lỗi, I2): prompt cũ chỉ đòi "tối đa 5 phát hiện
+  // đáng chú ý" và "không thấy gì đáng chú ý", không nhãn mức nào.
+  //
+  // Khẳng định theo HẰNG SỐ mà chính `gpt-review.ts` xuất ra, không theo một
+  // chuỗi chép tay: bản đầu của bài này neo vào chữ `[CHẶN]` trong ngoặc
+  // vuông, và khi hai bản cài đặt của cùng chỉ dẫn D5 gặp nhau ở lần gộp
+  // `main` (PR #257 và #258, `KF-036`) thì phép khớp chép tay đó ĐỎ trên một
+  // prompt hoàn toàn đúng luật. Một luật chỉ có một bản (`P-043`, `KF-016`).
+  assert.match(prompt.system, new RegExp(BLOCKING_LEVEL));
+  assert.match(prompt.system, new RegExp(ADVISORY_LEVEL));
+  assert.match(prompt.system, new RegExp(`"${NO_FINDING_PHRASE}"`));
+  // Cấm tóm tắt lại nội dung PR — đúng lỗi D5 nêu (mọi comment gpt-review là tóm tắt).
+  assert.match(prompt.system, /CẤM tóm tắt/);
+  // Prompt mới KHÔNG được còn câu mời tóm tắt của prompt cũ.
+  assert.ok(!/đáng chú ý/.test(prompt.system), 'còn sót câu mời tóm tắt "đáng chú ý" của prompt cũ');
+
+  // Chặt hơn cả ba phép khớp trên, và là chỗ mà bản chép tay KHÔNG kiểm được:
+  // hình dạng mà prompt DẠY mô hình phải là hình dạng mà `parseReviewFindings`
+  // ĐỌC ĐƯỢC. Lấy thẳng các dòng ví dụ trong prompt ra rồi cho parser đọc —
+  // prompt và parser vì thế không thể lệch nhau mà vẫn xanh.
+  const examples = prompt.system
+    .split('\n')
+    .filter((line) => line.startsWith(`${BLOCKING_LEVEL} ${LEVEL_SEPARATOR}`) || line.startsWith(`${ADVISORY_LEVEL} ${LEVEL_SEPARATOR}`));
+  assert.equal(examples.length, 2, 'prompt phải nêu đúng một ví dụ cho mỗi mức');
+  const verdict = parseReviewFindings(examples.join('\n'));
+  assert.ok(verdict.conforms, `ví dụ trong prompt không qua được chính parser: ${verdict.problems.join(' | ')}`);
+  assert.equal(verdict.findings.length, 2);
+  assert.deepEqual(
+    verdict.findings.map((f) => f.level),
+    [BLOCKING_LEVEL, ADVISORY_LEVEL],
+  );
+});
+
 // ── missingSecretNotice ─────────────────────────────────────────────────
 
 test('missingSecretNotice · nêu đúng tên secret thiếu', () => {

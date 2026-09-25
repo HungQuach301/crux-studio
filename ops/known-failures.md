@@ -6,6 +6,68 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
+
+> Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh trên cả hai PR, `main` xanh. Chỗ hỏng chỉ lộ ra ở **lần gộp `main`**, và lộ ra dưới dạng một xung đột trông như xung đột nội dung bình thường.
+
+**Chữ ký:** hai lượt worker nhận **cùng một chỉ dẫn** trong cùng một khoảng vài phút → mỗi lượt chạy phép dò mã trống của `KF-005` (`### P-` trên `main` **và** trên đầu các PR đang mở) → cả hai đều thấy cùng một mã cao nhất → **cả hai cấp cùng một mã** cho hai mục khác nhau.
+
+**Quan sát được, `P-051`, 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `~03:1xZ` | `crux-worker-2` nhận chỉ dẫn **D5**, mở PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257), cấp mã `P-051` |
+| `03:41:42Z` | `crux-worker-1` mở PR [`#258`](https://github.com/HungQuach301/crux-studio/pull/258) cho **cùng** chỉ dẫn D5, dò ra cao nhất `P-050` (`#256`) → cũng cấp `P-051` |
+| `03:46:04Z` | `#257` **merge** — `P-051` vào `main`, 4 phút sau khi `#258` mở |
+| `03:41`–`06:4x` | `#258` xung đột với `main` ở `backlog.md` **và** `gpt-review.ts`; `integrator-resolve.ts` ra `aborted-ineligible` **5 lượt liên tiếp** |
+
+**Vì sao phép dò của `KF-005` không đỡ được:** nó đúng với tồn kho **tại thời điểm chạy**. Một PR đã mở nhưng chưa được dò (`#257` không nằm trong danh sách 10 PR mà `#258` dò — nó mở gần như cùng lúc), hoặc merge **sau** lúc dò, không bao giờ xuất hiện trong kết quả. Khoảng hở bằng đúng thời gian sống của một lượt worker, và ba worker chạy chồng nhau thì khoảng hở đó được dùng thường xuyên.
+
+**Vì sao hai worker nhận cùng một việc:** đây là lớp thứ hai, và nó đã có mục riêng — `P-041` (`#225`, bộ dò va chạm đọc từ tiêu đề PR). Mục này ghi lớp **mã mục**, không thay `P-041`.
+
+**Chỗ đã sửa lần này (thủ công, ở lượt gộp):** mục của `#258` đổi mã sang `P-054`, `ops/logs/platform/P-051.jsonl` tách lại theo `D-C04` (một file cho mỗi mục — auto-merge đã trộn dòng của hai mục vào một file mà **không gì đỏ**, vì `merge=union` không biết hai mục khác nhau).
+
+**Máy chặn nào còn thiếu:** chưa có. Hai hướng, mỗi hướng một mục riêng (một mục = một PR):
+
+1. **Cấp mã bằng một nguồn nối tiếp**, không bằng phép dò — mã mục do một lệnh cấp và ghi lại, để hai lượt không bao giờ đọc ra cùng một số.
+2. **Cổng máy bắt mã trùng ở CI** — `### P-xxx` trùng giữa đầu nhánh và `main`, và dòng log có `ref` không khớp tên file, đều đỏ được ngay trong `pnpm check`. Hướng này rẻ hơn và bắt được **cả** ca `P-028` cũ (`#224`) lẫn ca này.
+
+Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trước khi commit mục**, không phải ở đầu lượt.
+
+---
+
+## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
+
+> Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Cái thiếu là thứ không chỉ báo nào đo: một câu hỏi đã hết cần hỏi vẫn nằm trong danh sách *"Cần anh quyết"* của bản tin.
+
+**Chữ ký:** một issue `[QĐ]` khai một điều kiện (một secret, một PR gate) → agent tin điều kiện **chưa đủ** → không đẩy nhánh việc đi tiếp và không nêu lại → issue nằm mở trong khi điều kiện **đã đủ từ lâu**. Mọi chỉ báo xanh vì bản thân "một issue mở" không làm gì đỏ.
+
+**Quan sát được, `#127`, đo bằng API 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-22T09:16Z` | `#127` mở — `[QĐ]` (nhãn `decision` + `irreversible`), tiêu đề *"…cấp kiểm 4 **chặn** ở một secret **chưa có**"*. Phương án A: *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**."* |
+| `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
+| `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
+| lúc viết mục này | `#127` **vẫn mở**. |
+
+**Nguyên nhân gốc — hai lớp:**
+
+1. **Agent đọc một trạng thái tồn kho bằng trí nhớ, không bằng chạy thật.** Câu *"`OPENAI_API_KEY` chưa có trên repo"* trong thân `#127` là đúng **lúc viết** (2026-09-22) và **sai** sau đó, nhưng không lượt nào đo lại. Đây là biến thể của chính luật CHARTER 11.1 *"kiểm bằng chạy thật, không bằng đọc tài liệu"* — một dòng văn trong thân issue cũng là "tài liệu".
+2. **Bản tin không có bộ dò cho hình dạng này.** Nó chỉ tách `[QĐ]` đang mở theo nhãn `reversible`/`irreversible` (mục "Cần anh quyết"), không hỏi *"điều kiện của nó đã đủ chưa"*. Nên một `[QĐ]` đã đủ điều kiện trông giống hệt một `[QĐ]` còn chờ người thật.
+
+**Chỗ đã sửa (mục `platform/P-052`, chỉ dẫn D6 của `#251`):** `renderDigestMetrics` thêm mục *"Quyết định điều kiện đã đủ nhưng còn mở"* — một `[QĐ]` khai chặn (`decisionDeclaresBlocked`, dấu hiệu lấy nguyên văn từ `#127`) mà có PR gate đã merge (`linkedPrNumbers` giao với tập PR đã merge) được **nêu lên** kèm số ngày đã mở. Bài kiểm `ops/test/digest-metrics.test.ts` khoá bằng fixture hình dạng `#127`.
+
+**Vì sao nêu lên chứ không tự đóng:** `#127` là `[QĐ]` `irreversible` (chi tiền + chọn nhà cung cấp) — nó **vẫn cần chủ dự án quyết** dù `#66` đã merge; điều kiện dạng-PR đủ chỉ nghĩa "hết cớ để nằm im", không nghĩa "đã quyết". Việc **đóng** một `[QĐ]` khi có bằng chứng mạnh thuộc `decision-close.ts` (`platform/P-050`); mục này ngược dấu — kéo một `[QĐ]` đã đủ điều kiện ra khỏi im lặng để chủ dự án soát. Hai mục cùng họ, không đè nhau.
+
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "đừng dùng điều kiện trong `[QĐ]`". Đọc thành: *một điều kiện đã khai thì phải có máy đo lại nó, nếu không nó thành một lời khẳng định đóng băng ở thời điểm viết.*
+
+---
+
 ## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
 
 > Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.
