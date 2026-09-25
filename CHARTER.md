@@ -788,7 +788,7 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; **việc đang chờ chủ dự án**
    (mục `platform/P-053`, chỉ dẫn C1) — mục backlog có `- hold:` chờ chính anh cộng `[QĐ] reversible` máy
    không tự làm được, lấy bằng `ownerWaitingRows` của `ops/scripts/owner-waiting.ts`, ĐỪNG đọc `- hold:`
-   bằng mắt: phần lớn lời giữ là chờ **máy** (34 trên 46 trường thật) và trộn hai loại làm mục này vô dụng;
+   bằng mắt: phần lớn lời giữ là chờ **máy** (đo trên đầu nhánh của `P-053`: **35 trên 46** trường thật) và trộn hai loại làm mục này vô dụng;
    chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3; và số liệu **Tiến độ**
    (mục `platform/P-019`): số mục done 24 giờ, số mục còn lại theo từng đợt, thông lượng 3 ngày, ngày dự kiến
@@ -796,7 +796,7 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    `ops/scripts/digest-metrics.ts` (`collectMetrics` → `renderDigestMetrics`), nó tính tất cả từ backlog, log
    và snapshot GitHub bằng mô hình có test (bất biến I6). Đợt của một mục suy từ làn theo bảng `LANE_BATCH`.
 
-3. Mở issue "🤖 [Bản tin] YYYY-MM-DD", nhãn digest, tiếng Việt, tối đa khoảng 25 dòng, theo đúng năm phần:
+3. Mở issue "🤖 [Bản tin] YYYY-MM-DD", nhãn digest, tiếng Việt, tối đa khoảng 25 dòng, theo đúng sáu phần:
 
    Cần anh quyết: N việc
      Mỗi irreversible MỘT dòng: tóm tắt · khuyến nghị · link. Không thuật ngữ chưa giải thích.

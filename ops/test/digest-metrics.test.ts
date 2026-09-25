@@ -378,7 +378,9 @@ test('renderDigestMetrics: khối "Việc đang chờ anh" in từng dòng khi c
     }),
   );
   assert.match(text, /^Việc đang chờ anh: 1 việc$/m);
-  assert.match(text, /^- #101 · hạn mức tìm kiếm YouTube — chỉ anh mở Console đọc được · đã chờ 3\.2 ngày · chặn 2 mục \(T-008, T-011\) · 2 thuộc làn topic \(cổng Mốc 3\) · #101$/m);
+  // "đã mở", không phải "đã chờ": hàng `decision` đo tuổi issue (I6 — nhãn
+  // phải nói đúng đại lượng nó đo).
+  assert.match(text, /^- #101 · hạn mức tìm kiếm YouTube — chỉ anh mở Console đọc được · đã mở 3\.2 ngày · chặn 2 mục \(T-008, T-011\) · 2 thuộc làn topic \(cổng Mốc 3\) · #101$/m);
 });
 
 test('renderDigestMetrics: đủ năm nhóm số liệu mà tiêu chí xong đòi', () => {

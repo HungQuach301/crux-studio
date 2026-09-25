@@ -52,17 +52,47 @@ import type { BacklogItem } from './backlog-status.ts';
  */
 export const GATE_LANE = 'topic';
 
+/** Ký tự nhấn của Markdown — cùng tập mà `normalizeForHold` của `backlog-status.ts` bóc. */
+const EMPHASIS = /[`*_]/g;
+
+/**
+ * Chuẩn hoá một đoạn **trước khi** dò dấu hiệu. Hai phép, mỗi phép trả lời
+ * một ca đo được trong vòng soát ngữ cảnh sạch của chính mục này:
+ *
+ * - **NFC.** Bàn phím tiếng Việt trên macOS/iOS gõ ra **NFD**, và thân `[QĐ]`
+ *   là do chủ dự án gõ. Đo được: `ownerHoldWait('chờ chủ dự án merge')` trả
+ *   `true`, nhưng cùng chuỗi ở dạng NFD trả `false` — 11 hàng thật tụt về 0.
+ * - **Bóc dấu nhấn Markdown.** Repo bôi đậm cụm lẻ ở khắp nơi, nên
+ *   `Không **cần anh** làm gì` lách qua phép bóc câu phủ định (`\s+` không
+ *   khớp `**`) và một `[QĐ]` khai *"không cần anh làm gì"* bị **nêu oan** —
+ *   đúng chiều hỏng đắt nhất mà mục này tự khai. Cùng chữ ký `C1b` của `#256`.
+ *
+ * **Vì sao không gọi thẳng `normalizeForHold`** của `backlog-status.ts` dù nó
+ * bóc đúng tập ký tự đó: hàm kia còn gộp `\s+` thành một dấu cách, tức **xoá
+ * ranh giới dòng** — mà luật `chờ … [QĐ]` dưới đây sống bằng đúng ranh giới
+ * câu, kể cả một lần xuống dòng. Hai phép chuẩn hoá cho hai mục đích khác
+ * nhau; ghi ra đây để lần sau không ai "gộp cho gọn".
+ */
+function forSignals(text: string): string {
+  return text.normalize('NFC').replace(EMPHASIS, '');
+}
+
 /**
  * Lời giữ khai thẳng là **không treo** — không phải một lời giữ hợp lệ, dù
  * trường `- hold:` có mặt.
  *
  * Ca thật: `audio/AU-008` viết `- hold: — **không treo.** Trần 30 USD đã được
  * chủ dự án duyệt thẳng …`. Nó **nhắc** chủ dự án nên mọi dấu hiệu dưới đây
- * khớp, mà mục lại đang nói ngược: nó không chờ ai. Thiếu phép phủ định này
- * thì dòng đầu tiên của mục mới đã là một dòng sai — và một mục "Việc đang
- * chờ anh" nói sai ngay ca đầu là thứ chủ dự án thôi đọc.
+ * khớp, mà mục lại đang nói ngược: nó không chờ ai.
+ *
+ * **Neo ở ĐẦU chuỗi**, không quét cả chuỗi. Vòng soát đo được cả hai chiều
+ * hỏng của bản quét-cả-chuỗi: `chờ chủ dự án merge …; vế B không treo vì đã
+ * duyệt` bị **nuốt** (một việc chờ anh biến mất — đúng nhóm Z mục này chữa),
+ * còn `— **không** treo.` thì **lọt** (dấu nhấn chen giữa hai chữ). Neo ở đầu
+ * cộng `forSignals` chặn cả hai: `audio/AU-008` mở đầu bằng đúng cụm đó, và
+ * một câu "không treo" nằm giữa thân không còn phủ quyết được cả lời giữ.
  */
-const HOLD_NOT_HELD = /không\s+treo/iu;
+const HOLD_NOT_HELD = /^\s*[—–-]?\s*không\s+treo/iu;
 
 /**
  * Dấu hiệu "lời giữ này chờ chính chủ dự án". **Cố ý hẹp**, mỗi dấu hiệu có
@@ -70,8 +100,7 @@ const HOLD_NOT_HELD = /không\s+treo/iu;
  * luật khi có một lỗi đã thật sự xảy ra):
  *
  * - `chủ dự án` — `platform/P-045` (*"chờ chủ dự án merge"*), `assembly/A-001`
- *   (*"chờ mắt chủ dự án"*), `platform/P-033` (*"nhịp mỗi giờ cần chủ dự án
- *   đổi lịch"*).
+ *   (*"chờ mắt chủ dự án"*), `visual/V-002` (*"chỉ số 4–6 chờ mắt chủ dự án"*).
  * - `chờ … [QĐ]` — `audio/AU-001` (*"chờ quyết định irreversible chọn nhà cung
  *   cấp giọng đọc (🤖 [QĐ])"*), `platform/P-027` (*"chờ 🤖 [QĐ] #116"*),
  *   `platform/P-049` (*"chờ chủ dự án chốt phương án ở 🤖 [QĐ] #254"*). Một
@@ -85,17 +114,25 @@ const HOLD_NOT_HELD = /không\s+treo/iu;
  * tác động (`A3` của `#251`) chạy trên 46 trường `- hold:` thật bắt được đúng
  * một dương tính giả, và nó là lời giữ của **chính mục `P-053`**: nó *nhắc*
  * `[QĐ] reversible` khi kể hai vế C2/C3 đã tách, trong khi thứ nó chờ là một
- * lượt `crux-digest` — tức chờ **máy**. `[^.;]{0,80}` giữ phép khớp trong cùng
- * một câu, nên một chữ `chờ` ở câu trước không kéo cả lời giữ vào đây.
- * Không có dấu hiệu `chặn … [QĐ]`: chưa lời giữ thật nào viết thế (luật `A10`).
+ * lượt `crux-digest` — tức chờ **máy**.
+ *
+ * ⚠️ **Lớp ngăn câu là `[^.;:,\n]`, không phải `[^.;]`.** Bản đầu của chính
+ * luật này khai *"giữ phép khớp trong cùng một câu"* mà lại cho qua **dấu
+ * phẩy, hai chấm và cả xuống dòng** — vòng soát ngữ cảnh sạch dựng được ba
+ * chuỗi lọt. Lời khai rộng hơn mã là một lỗi riêng, không chỉ là một lỗ:
+ * lượt sau đọc comment rồi tin là chỗ đó đã kín.
  *
  * KHÔNG có dấu hiệu nào cho *"chưa kiểm bằng chạy thật"* — đó là chờ **máy**
  * (một lượt routine kế tiếp), không phải chờ người, và nó là hình dạng `hold`
- * phổ biến nhất trong repo (34 trên 46 trường thật). Gộp nó vào đây sẽ nhét
- * hơn ba chục dòng máy-tự-lo vào đúng mục dành riêng cho việc của chủ dự án,
- * tức chữa nhóm Z bằng cách dựng một nhóm Z khác.
+ * phổ biến nhất trong repo (35 trên 46 trường thật trên đầu nhánh này). Gộp
+ * nó vào đây sẽ nhét hơn ba chục dòng máy-tự-lo vào đúng mục dành riêng cho
+ * việc của chủ dự án, tức chữa nhóm Z bằng cách dựng một nhóm Z khác.
  */
-const OWNER_HOLD_SIGNALS: readonly RegExp[] = [/chủ\s+dự\s+án/iu, /chờ[^.;]{0,80}\[QĐ\]/iu, /cần\s+người/iu];
+const OWNER_HOLD_SIGNALS: readonly RegExp[] = [
+  /chủ\s+dự\s+án/iu,
+  /chờ[^.;:,\n]{0,80}\[QĐ\]/iu,
+  /cần\s+người/iu,
+];
 
 /**
  * Trường `- hold:` này có phải một việc đang chờ **chủ dự án** không.
@@ -105,8 +142,9 @@ const OWNER_HOLD_SIGNALS: readonly RegExp[] = [/chủ\s+dự\s+án/iu, /chờ[^.
  */
 export function ownerHoldWait(hold: string | null | undefined): boolean {
   if (hold == null || hold.trim() === '') return false;
-  if (HOLD_NOT_HELD.test(hold)) return false;
-  return OWNER_HOLD_SIGNALS.some((re) => re.test(hold));
+  const text = forSignals(hold);
+  if (HOLD_NOT_HELD.test(text)) return false;
+  return OWNER_HOLD_SIGNALS.some((re) => re.test(text));
 }
 
 /**
@@ -119,9 +157,13 @@ export function ownerHoldWait(hold: string | null | undefined): boolean {
  * anh không phải làm gì, nên lần sau anh không tin mục này nữa.
  *
  * Bóc bằng `replace` thay vì `(?<!không\s)` có lý do đo được: giữa `không` và
- * `cần` có thể là nhiều khoảng trắng hoặc một lần xuống dòng (thân issue thật
- * xuống dòng ở cột 100), mà lookbehind độ rộng thay đổi thì khó đọc hơn và
- * dễ viết sai một lần nữa.
+ * `cần` có thể là nhiều khoảng trắng, một lần xuống dòng, hoặc **dấu nhấn
+ * Markdown** (`forSignals` đã bóc dấu nhấn trước khi tới đây).
+ *
+ * **Còn hở, khai trước:** `chẳng cần anh` và `không còn cần anh` vẫn lọt.
+ * Chưa thân `[QĐ]` thật nào viết hai dạng đó, nên theo luật `A10` của `#251`
+ * chúng **không** được thêm trước khi có một ca thật — thêm luật bằng cách
+ * đoán là đúng thứ `A10` cấm.
  */
 const OWNER_HAND_NEGATIONS: readonly RegExp[] = [/không\s+cần\s+anh/giu];
 
@@ -155,16 +197,35 @@ const OWNER_HAND_SIGNALS: readonly RegExp[] = [
 
 /**
  * `[QĐ]` này có phải một chỗ chặn **cần chủ dự án** không — đọc tiêu đề cộng
- * thân, sau khi bóc các câu phủ định.
+ * thân, sau khi chuẩn hoá và bóc các câu phủ định.
  *
  * Bên gọi chỉ đưa vào issue `reversible`: `irreversible` đã nằm ở dòng đầu
  * bản tin (*"Cần anh quyết"*), và in lại nó ở đây là bắt chủ dự án đọc cùng
  * một việc hai lần trong một bản tin dài.
  */
 export function decisionNeedsOwnerHand(text: string): boolean {
-  let stripped = text;
+  let stripped = forSignals(text);
   for (const re of OWNER_HAND_NEGATIONS) stripped = stripped.replace(re, ' ');
   return OWNER_HAND_SIGNALS.some((re) => re.test(stripped));
+}
+
+/**
+ * Số `[QĐ]` mà một lời giữ **thật sự chờ** — chỉ lấy `#N` nằm trong đoạn câu
+ * có nhắc `[QĐ]`.
+ *
+ * Vì sao không lấy mọi `#N` trong lời giữ: đo trên dữ liệu thật, `platform/P-045`
+ * nhắc `#84`/`#39` và `platform/P-039` nhắc `#194`/`#208` như **phép đo sau
+ * này**, không phải chỗ chủ dự án bấm vào. Và cùng tập số đó còn quyết định
+ * một `[QĐ]` đang chặn mục nào ở nhánh (b) của `ownerWaitingRows`, nên nhiễu
+ * này không dừng ở phần hiển thị.
+ */
+export function decisionRefsInHold(hold: string, issueRefsOf: (text: string) => number[]): number[] {
+  const refs = new Set<number>();
+  for (const segment of forSignals(hold).split(/[.;\n]/)) {
+    if (!/\[QĐ\]/u.test(segment)) continue;
+    for (const n of issueRefsOf(segment)) refs.add(n);
+  }
+  return [...refs].sort((a, b) => a - b);
 }
 
 /** Một mục backlog kèm làn của nó — khoá là `<lane>/<id>`, `deps` là mã trần. */
@@ -179,7 +240,18 @@ interface LaneItem {
  * `<lane>/<id>`.
  */
 export interface BacklogGraph {
-  /** Mã trần → mục và làn của nó. Mã trùng giữa hai làn thì mục ĐẦU thắng. */
+  /**
+   * **Mọi** mục đọc được, theo thứ tự file rồi thứ tự trong file — kể cả mục
+   * mang mã **trùng** một mục trước đó.
+   *
+   * Vì sao cần riêng trường này bên cạnh `byId`: mã trùng **đang có thật**
+   * (`ops/lanes/platform/backlog.md` có hai mục `### P-028`), và một `byId`
+   * "mục đầu thắng" sẽ bỏ **im lặng** trường `- hold:` của mục thứ hai. Đó
+   * đúng là hình dạng mà `duplicateIds` của `backlog-status.ts` sinh ra để
+   * không im lặng, nên đồ thị này không được đi ngược nó.
+   */
+  items: readonly LaneItem[];
+  /** Mã trần → mục và làn của nó. Mã trùng thì mục ĐẦU thắng — chỉ dùng cho cạnh `deps`. */
   byId: ReadonlyMap<string, LaneItem>;
   /** Mã trần → những mã khai nó trong `- deps:` (cạnh ngược). */
   dependants: ReadonlyMap<string, readonly string[]>;
@@ -187,15 +259,18 @@ export interface BacklogGraph {
 
 /** Dựng đồ thị từ nội dung các file backlog. Một định nghĩa "mục backlog" cho cả repo: `parseBacklog`. */
 export function backlogGraph(files: readonly { lane: string; content: string }[]): BacklogGraph {
+  const items: LaneItem[] = [];
   const byId = new Map<string, LaneItem>();
   const dependants = new Map<string, string[]>();
 
   for (const file of files) {
     for (const item of parseBacklog(file.content)) {
-      if (!byId.has(item.id)) byId.set(item.id, { lane: file.lane, item });
+      const entry = { lane: file.lane, item };
+      items.push(entry);
+      if (!byId.has(item.id)) byId.set(item.id, entry);
     }
   }
-  for (const { item } of byId.values()) {
+  for (const { item } of items) {
     for (const dep of item.deps ?? []) {
       if (dep.id == null) continue;
       const list = dependants.get(dep.id);
@@ -203,7 +278,7 @@ export function backlogGraph(files: readonly { lane: string; content: string }[]
       else if (!list.includes(item.id)) list.push(item.id);
     }
   }
-  return { byId, dependants };
+  return { items, byId, dependants };
 }
 
 /** Bao nhiêu mục bị chặn bởi một tập mã, và bao nhiêu trong số đó thuộc làn giữ cổng Mốc 3. */
@@ -249,7 +324,18 @@ export interface OwnerWaitRow {
   key: string;
   /** **Việc cụ thể** — lời `- hold:` hoặc tiêu đề `[QĐ]`, đã cắt theo `WHAT_MAX`. */
   what: string;
-  /** **Đã chờ bao lâu**, tính bằng ngày (1 số lẻ). `null` khi không đo được — in ra chứ không đoán. */
+  /**
+   * **Đã chờ bao lâu**, tính bằng ngày (1 số lẻ). `null` khi không đo được —
+   * in ra chứ không đoán. Số **âm** nghĩa là mốc nằm ở tương lai (lệch đồng
+   * hồ, chữ ký `I-021`); nó cũng được in ra chứ không kẹp về 0.
+   *
+   * ⚠️ Hai `kind` đo **hai đại lượng khác nhau**, và dòng in ra phải nói
+   * đúng cái nào: hàng `decision` đo *"issue đã mở bao lâu"* (`createdAt`),
+   * hàng `backlog` đo *"lượt chạy gần nhất chạm mục cách đây bao lâu"* (mốc
+   * `at` của dòng log). Gọi cả hai là "đã chờ" là nói sai bất biến **I6**:
+   * bất cứ lượt agent nào chạm mục cũng đặt lại đồng hồ của hàng `backlog`,
+   * nên nó KHÔNG trả lời được "chủ dự án đã giữ chỗ này bao lâu".
+   */
   waitingDays: number | null;
   /** **Đang chặn gì** — mã mục bị chặn, bắc cầu, tăng dần. */
   blocking: readonly string[];
@@ -260,19 +346,37 @@ export interface OwnerWaitRow {
 }
 
 /**
- * Trần độ dài của trường `what`. Lời `- hold:` thật dài tới hơn 400 ký tự
- * (`audio/AU-008`), và C1 đòi *"mỗi mục một dòng"* đọc được trên màn hình
- * điện thoại (rủi ro B11). Cắt kèm `…` để chủ dự án thấy là còn nữa; bản đầy
- * đủ nằm ở `link`.
+ * Trần độ dài của trường `what`, đếm bằng **điểm mã** chứ không bằng đơn vị
+ * UTF-16. Lời `- hold:` thật dài tới hơn 400 ký tự (`audio/AU-008`), và C1
+ * đòi *"mỗi mục một dòng"* đọc được trên màn hình điện thoại (rủi ro B11).
  */
-export const WHAT_MAX = 140;
+export const WHAT_MAX = 110;
 
+/**
+ * Cắt an toàn cho một dòng bản tin. Ba phép, mỗi phép trả lời một ca vòng
+ * soát đo được:
+ *
+ * - **bóc dấu nhấn Markdown** — cắt giữa một cặp `` ` `` hay `**` để lại
+ *   markdown lệch, và GitHub render phần còn lại của dòng sai. Đo được: 2
+ *   trên 11 hàng thật bị cắt giữa cặp.
+ * - **cắt theo điểm mã** (`[...flat]`) — `slice` theo UTF-16 cắt **giữa cặp
+ *   thay thế**. Đo được: một lời giữ dài 138 ký tự rồi tới `🤖` cho ra một
+ *   nửa cặp ở đuôi, `isWellFormed()` là `false`, GitHub in ra `�`. Lời giữ
+ *   thật **có** `🤖` (`platform/P-049`).
+ * - **gộp khoảng trắng** — lời giữ thật xuống dòng ở cột 100.
+ */
 function clamp(text: string): string {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length <= WHAT_MAX ? flat : `${flat.slice(0, WHAT_MAX - 1).trimEnd()}…`;
+  const flat = forSignals(text).replace(/\s+/g, ' ').trim();
+  const chars = [...flat];
+  if (chars.length <= WHAT_MAX) return flat;
+  return `${chars.slice(0, WHAT_MAX - 1).join('').trimEnd()}…`;
 }
 
-/** Số ngày (1 số lẻ) từ `from` tới `now`; `null` khi thiếu hoặc không đọc được `from`. */
+/**
+ * Số ngày (1 số lẻ) từ `from` tới `now`; `null` khi thiếu hoặc không đọc được
+ * `from`. Số **âm** khi `from` nằm ở tương lai — trả ra chứ không kẹp, để
+ * dòng bản tin nói được "mốc ở tương lai" thay vì in một con số vô nghĩa.
+ */
 export function waitingDaysFrom(from: string | undefined, now: Date): number | null {
   if (from === undefined) return null;
   const at = Date.parse(from);
@@ -295,16 +399,15 @@ export interface OwnerWaitingInput {
   /** Issue `[QĐ]` **`reversible` đang mở**. `irreversible` đã ở dòng đầu bản tin, đừng đưa vào đây. */
   decisions: readonly OwnerWaitDecision[];
   /**
-   * Dòng log đọc được (`readRunLogs`), dùng để trả lời *"đã chờ bao lâu"* cho
-   * một mục backlog: mốc `at` **mới nhất** của `ref` `<lane>/<id>`.
+   * Dòng log đọc được (`readRunLogs`), dùng để trả lời *"lượt chạy gần nhất
+   * chạm mục cách đây bao lâu"* cho một mục backlog: mốc `at` **mới nhất** của
+   * `ref` `<lane>/<id>`.
    *
    * Vì sao không có nguồn nào khác: file backlog là markdown, trường
    * `- hold:` không mang mốc thời gian, và `git log` trên một dòng markdown
-   * cho mốc **lần sửa cuối**, đổi mỗi lần ai đó sửa một chữ trong mục. Dòng
-   * log là mốc *"lượt chạy gần nhất chạm mục này"* — đúng thứ chủ dự án cần
-   * để biết một việc đã nằm im bao lâu. Mục chưa có dòng log nào ra `null`,
-   * và `null` được in ra chứ không lặng lẽ thành 0 (cùng luật ba trạng thái
-   * mà `heartbeat-source.ts` đặt).
+   * cho mốc **lần sửa cuối**, đổi mỗi lần ai đó sửa một chữ trong mục. Mục
+   * chưa có dòng log nào ra `null`, và `null` được in ra chứ không lặng lẽ
+   * thành 0 (cùng luật ba trạng thái mà `heartbeat-source.ts` đặt).
    */
   logs: readonly { ref: string; at: string }[];
   now: Date;
@@ -319,26 +422,39 @@ export interface OwnerWaitingInput {
  *
  * 1. số mục bị chặn **thuộc làn `topic`** (làn giữ cổng, `ops/lanes/priority.md`), giảm dần;
  * 2. tổng số mục bị chặn, giảm dần;
- * 3. đã chờ lâu hơn đi trước — `null` (không đo được) xếp **cuối**, vì một
- *    con số không có thì không được giả vờ là lớn;
+ * 3. chờ lâu hơn đi trước — `null` (không đo được) xếp **cuối** bằng
+ *    `-Infinity`, chứ không bằng `-1`: `waitingDays` có thể âm thật khi mốc
+ *    nằm ở tương lai, và `-1` sẽ trộn một hàng đo được với một hàng không đo
+ *    được;
  * 4. `key` tăng dần, để hai lượt chạy trên cùng dữ liệu cho cùng một thứ tự.
  */
 function compareRows(a: OwnerWaitRow, b: OwnerWaitRow): number {
   if (a.blockingGate.length !== b.blockingGate.length) return b.blockingGate.length - a.blockingGate.length;
   if (a.blocking.length !== b.blocking.length) return b.blocking.length - a.blocking.length;
-  const aDays = a.waitingDays ?? -1;
-  const bDays = b.waitingDays ?? -1;
+  const aDays = a.waitingDays ?? Number.NEGATIVE_INFINITY;
+  const bDays = b.waitingDays ?? Number.NEGATIVE_INFINITY;
   if (aDays !== bDays) return bDays - aDays;
   return a.key.localeCompare(b.key);
 }
 
-/** Mốc `at` mới nhất của một mục trong tập dòng log; `undefined` khi mục chưa có dòng nào. */
+/**
+ * Mốc `at` mới nhất của một mục trong tập dòng log; `undefined` khi mục chưa
+ * có dòng nào **đọc được**.
+ *
+ * Dòng có `at` không parse được bị **bỏ qua**, không làm mù cả `ref`: log là
+ * file append-only nhiều lượt ghi, nên một dòng hỏng sẽ nuốt luôn con số của
+ * mục nếu nó được nhận làm `newest` rồi mọi so sánh sau thành `x > NaN`.
+ */
 function newestLogAt(logs: OwnerWaitingInput['logs'], lane: string, id: string): string | undefined {
   const ref = `${lane}/${id}`;
   let newest: string | undefined;
+  let newestMs = Number.NEGATIVE_INFINITY;
   for (const line of logs) {
     if (line.ref !== ref) continue;
-    if (newest === undefined || Date.parse(line.at) > Date.parse(newest)) newest = line.at;
+    const ms = Date.parse(line.at);
+    if (Number.isNaN(ms) || ms <= newestMs) continue;
+    newestMs = ms;
+    newest = line.at;
   }
   return newest;
 }
@@ -348,17 +464,19 @@ export function ownerWaitingRows(input: OwnerWaitingInput): OwnerWaitRow[] {
   const graph = backlogGraph(input.backlogs);
   const rows: OwnerWaitRow[] = [];
 
-  // (a) mục backlog có `- hold:` chờ chính chủ dự án.
-  for (const [id, { lane, item }] of graph.byId) {
+  // (a) mục backlog có `- hold:` chờ chính chủ dự án. Duyệt `graph.items`, KHÔNG
+  // duyệt `graph.byId`: mã trùng đang có thật, và bỏ mục thứ hai là bỏ im lặng
+  // đúng thứ `duplicateIds` sinh ra để không im lặng.
+  for (const { lane, item } of graph.items) {
     if (!ownerHoldWait(item.holdField)) continue;
-    const blocked = blockedCounts(graph, [id]);
-    const refs = input.issueRefsOf(item.holdField ?? '');
+    const blocked = blockedCounts(graph, [item.id]);
+    const refs = decisionRefsInHold(item.holdField ?? '', input.issueRefsOf);
     const issues = refs.map((n) => `#${n}`).join(', ');
     rows.push({
       kind: 'backlog',
-      key: `${lane}/${id}`,
+      key: `${lane}/${item.id}`,
       what: clamp(item.holdField ?? ''),
-      waitingDays: waitingDaysFrom(newestLogAt(input.logs, lane, id), input.now),
+      waitingDays: waitingDaysFrom(newestLogAt(input.logs, lane, item.id), input.now),
       blocking: blocked.ids,
       blockingGate: blocked.gateIds,
       link: issues === '' ? `ops/lanes/${lane}/backlog.md` : `ops/lanes/${lane}/backlog.md · ${issues}`,
@@ -366,13 +484,13 @@ export function ownerWaitingRows(input: OwnerWaitingInput): OwnerWaitRow[] {
   }
 
   // (b) `[QĐ] reversible` mà máy không tự làm được. Nó chặn những mục có
-  // `- hold:` nhắc chính số issue đó, cộng mọi mục bắc cầu sau chúng.
+  // `- hold:` **chờ** chính số issue đó, cộng mọi mục bắc cầu sau chúng.
   for (const decision of input.decisions) {
     const text = `${decision.title}\n${decision.body ?? ''}`;
     if (!decisionNeedsOwnerHand(text)) continue;
-    const roots = [...graph.byId]
-      .filter(([, { item }]) => input.issueRefsOf(item.holdField ?? '').includes(decision.number))
-      .map(([id]) => id);
+    const roots = graph.items
+      .filter(({ item }) => decisionRefsInHold(item.holdField ?? '', input.issueRefsOf).includes(decision.number))
+      .map(({ item }) => item.id);
     const blocked = blockedCounts(graph, roots);
     const ids = [...new Set([...roots, ...blocked.ids])].sort();
     const gateIds = ids.filter((id) => graph.byId.get(id)?.lane === GATE_LANE);
@@ -390,8 +508,18 @@ export function ownerWaitingRows(input: OwnerWaitingInput): OwnerWaitRow[] {
   return rows.sort(compareRows);
 }
 
-/** Tối đa bao nhiêu mã bị chặn được in ra trước khi gộp thành `…+K`. */
+/** Tối đa bao nhiêu mã bị chặn được in ra trong một hàng trước khi gộp thành `…+K`. */
 export const BLOCKING_SHOWN = 3;
+
+/**
+ * Tối đa bao nhiêu **hàng** được in ra. Bản tin có trần *"khoảng 25 dòng"*
+ * (CHARTER 2.5) và rủi ro `B11` đòi đọc xong trong 60 giây trên màn hình điện
+ * thoại; đo trên dữ liệu thật khối này ra **12 hàng**. `BLOCKING_SHOWN` kẹp số
+ * mã **trong** một hàng, trần này kẹp **số hàng** — thiếu nó thì một ngày xấu
+ * đẩy bản tin dài gấp đôi. Phần dư không biến mất: một dòng cuối nói còn bao
+ * nhiêu và xem ở đâu.
+ */
+export const MAX_ROWS = 8;
 
 function renderBlocking(row: OwnerWaitRow): string {
   if (row.blocking.length === 0) return 'chưa dò được mục nào đứng sau';
@@ -402,10 +530,22 @@ function renderBlocking(row: OwnerWaitRow): string {
   return `chặn ${row.blocking.length} mục (${shown}${tail})${gate}`;
 }
 
+/**
+ * Cột thời gian, nói đúng đại lượng nó đo (bất biến **I6**). Hàng `decision`
+ * đo tuổi issue; hàng `backlog` đo khoảng cách tới lượt chạy gần nhất chạm
+ * mục — hai thứ khác nhau, và gọi cả hai là "đã chờ" là nói sai.
+ */
+function renderWaited(row: OwnerWaitRow): string {
+  if (row.waitingDays == null) return 'chưa đo được mốc thời gian';
+  if (row.waitingDays < 0) return `mốc ở TƯƠNG LAI ${-row.waitingDays} ngày — lệch đồng hồ (I-021)`;
+  return row.kind === 'decision'
+    ? `đã mở ${row.waitingDays} ngày`
+    : `lượt gần nhất chạm mục: ${row.waitingDays} ngày trước`;
+}
+
 /** Một dòng bản tin cho một hàng. */
 export function renderOwnerWaitRow(row: OwnerWaitRow): string {
-  const waited = row.waitingDays == null ? 'chưa đo được đã chờ bao lâu' : `đã chờ ${row.waitingDays} ngày`;
-  return `- ${row.key} · ${row.what} · ${waited} · ${renderBlocking(row)} · ${row.link}`;
+  return `- ${row.key} · ${row.what} · ${renderWaited(row)} · ${renderBlocking(row)} · ${row.link}`;
 }
 
 /**
@@ -413,10 +553,22 @@ export function renderOwnerWaitRow(row: OwnerWaitRow): string {
  * `rows` rỗng. Cùng luật với dòng `Cần anh quyết: N việc` (mục `P-005`): một
  * khối biến mất khi rỗng là một khối mà chủ dự án phải đọc kỹ mới biết nó có
  * hay không, và "không có việc nào chờ anh" là tin đáng nói.
+ *
+ * Dòng đếm luôn nói **tổng thật**, kể cả khi `MAX_ROWS` cắt bớt phần in ra —
+ * một con số nhỏ đi vì trần hiển thị là đúng nhóm Z.
  */
 export function renderOwnerWaitingLines(rows: readonly OwnerWaitRow[]): string[] {
   const out = [`Việc đang chờ anh: ${rows.length} việc`];
-  for (const row of rows) out.push(renderOwnerWaitRow(row));
-  if (rows.length === 0) out.push('- không có việc nào đang chờ anh (không mục backlog nào giữ chỗ vì anh, không `[QĐ] reversible` nào máy không tự làm được)');
+  for (const row of rows.slice(0, MAX_ROWS)) out.push(renderOwnerWaitRow(row));
+  if (rows.length > MAX_ROWS) {
+    out.push(
+      `- …còn ${rows.length - MAX_ROWS} việc nữa, xếp sau theo mức chặn — xem \`pnpm digest:metrics\` hoặc trường \`- hold:\` trong \`ops/lanes/*/backlog.md\``,
+    );
+  }
+  if (rows.length === 0) {
+    out.push(
+      '- không có việc nào đang chờ anh (không mục backlog nào giữ chỗ vì anh, không `[QĐ] reversible` nào máy không tự làm được)',
+    );
+  }
   return out;
 }

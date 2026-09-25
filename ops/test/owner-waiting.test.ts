@@ -21,10 +21,12 @@ import { join } from 'node:path';
 import {
   BLOCKING_SHOWN,
   GATE_LANE,
+  MAX_ROWS,
   WHAT_MAX,
   backlogGraph,
   blockedCounts,
   decisionNeedsOwnerHand,
+  decisionRefsInHold,
   ownerHoldWait,
   ownerWaitingRows,
   renderOwnerWaitRow,
@@ -211,6 +213,173 @@ test('decisionNeedsOwnerHand: KHÔNG có dấu hiệu nào cho "trả lời"/"co
   assert.equal(decisionNeedsOwnerHand('nó đẩy thẳng vào "thời gian của anh" đúng loại việc mà mặc định M8 muốn xoá'), false);
 });
 
+test('forSignals: dấu nhấn Markdown không lách được phép bóc câu phủ định (vòng soát bước 6)', () => {
+  // Repo bôi đậm cụm lẻ ở khắp nơi, nên `\s+` giữa `không` và `cần anh`
+  // không khớp `**`. Đây là chiều hỏng đắt nhất mà mục này tự khai — nêu oan
+  // một `[QĐ]` đã khai "anh không cần làm gì". Cùng chữ ký `C1b` của `#256`.
+  assert.equal(decisionNeedsOwnerHand('🤖 Không **cần anh** làm gì. Quyết định `reversible`.'), false);
+  assert.equal(decisionNeedsOwnerHand('Không *cần anh* làm gì.'), false);
+  assert.equal(decisionNeedsOwnerHand('Không `cần anh` làm gì.'), false);
+  // Và không được nuốt một câu dương chỉ vì nó được bôi đậm.
+  assert.equal(decisionNeedsOwnerHand('Mục này **cần anh** mở Console.'), true);
+});
+
+test('forSignals: văn bản NFD (bàn phím tiếng Việt trên macOS/iOS) vẫn đọc được', () => {
+  // Thân `[QĐ]` là do chủ dự án gõ. Không chuẩn hoá thì 11 hàng thật ra 0.
+  assert.equal(ownerHoldWait('chờ chủ dự án merge'.normalize('NFD')), true);
+  assert.equal(ownerHoldWait('còn treo — cần người/nền tảng đặt CLAUDE_SESSION_URL'.normalize('NFD')), true);
+  assert.equal(decisionNeedsOwnerHand('Việc này cần anh mở Console.'.normalize('NFD')), true);
+  assert.equal(decisionNeedsOwnerHand('Chỉ anh làm được.'.normalize('NFD')), true);
+  // Phép phủ định cũng phải chịu được NFD, nếu không nó nêu oan.
+  assert.equal(decisionNeedsOwnerHand('Không cần anh làm gì.'.normalize('NFD')), false);
+});
+
+test('ownerHoldWait: lớp ngăn câu của luật `chờ … [QĐ]` chặn CẢ phẩy, hai chấm và xuống dòng', () => {
+  // Bản đầu dùng `[^.;]` và khai là "giữ phép khớp trong cùng một câu" —
+  // vòng soát dựng được ba chuỗi lọt. Lời khai rộng hơn mã là một lỗi riêng.
+  assert.equal(ownerHoldWait('chờ một lượt routine kế tiếp, ngoài phạm vi: `[QĐ]` khác'), false);
+  assert.equal(ownerHoldWait('chờ một lượt routine kế tiếp: ngoài phạm vi là `[QĐ]` khác'), false);
+  assert.equal(ownerHoldWait('chờ một lượt routine kế tiếp\nngoài phạm vi: `[QĐ]` khác'), false);
+});
+
+test('ownerHoldWait: phép phủ định "không treo" neo ở ĐẦU chuỗi, không quét cả chuỗi', () => {
+  // Chiều một: quét cả chuỗi thì một việc chờ chủ dự án bị NUỐT.
+  assert.equal(ownerHoldWait('chờ chủ dự án merge automerge.yml; vế B không treo vì đã duyệt'), true);
+  // Chiều hai: `— **không** treo.` (dấu nhấn chen giữa) vẫn phải bị phủ quyết.
+  assert.equal(ownerHoldWait('— **không** treo. Trần 30 USD đã được chủ dự án duyệt thẳng.'), false);
+  // Và ca thật `audio/AU-008` giữ nguyên hành vi.
+  assert.equal(ownerHoldWait('— **không treo.** Trần **30 USD** đã được chủ dự án duyệt thẳng.'), false);
+});
+
+test('newestLogAt: một dòng `at` hỏng KHÔNG làm mù cả `ref`', () => {
+  // Log là file append-only nhiều lượt ghi. Bản đầu nhận dòng khớp `ref` đầu
+  // tiên làm `newest` mà không kiểm `Date.parse`, nên mọi so sánh sau là
+  // `x > NaN` → `false`, và con số của mục biến mất.
+  const rows = ownerWaitingRows({
+    backlogs: [{ lane: 'platform', content: '### P-001 · a\n- deps: —\n- hold: chờ chủ dự án merge\n' }],
+    decisions: [],
+    logs: [
+      { ref: 'platform/P-001', at: 'rác' },
+      { ref: 'platform/P-001', at: '2026-09-20T06:00:00.000Z' },
+    ],
+    now: NOW,
+    issueRefsOf: linkedPrNumbers,
+  });
+  assert.equal(rows[0]!.waitingDays, 5);
+});
+
+test('clamp: cắt theo ĐIỂM MÃ, không cắt giữa cặp thay thế, và bóc dấu nhấn Markdown', () => {
+  // `slice` theo UTF-16 để lại một nửa cặp thay thế ở đuôi; GitHub in ra `�`.
+  // Lời giữ thật CÓ `🤖` (`platform/P-049`).
+  for (const pad of [93, 94, 95, 96, 97]) {
+    const hold = `chờ chủ dự án ${'x'.repeat(pad)}🤖 xong`;
+    const rows = ownerWaitingRows({
+      backlogs: [{ lane: 'platform', content: `### P-001 · a\n- deps: —\n- hold: ${hold}\n` }],
+      decisions: [],
+      logs: [],
+      now: NOW,
+      issueRefsOf: linkedPrNumbers,
+    });
+    const what = rows[0]!.what;
+    // `String.isWellFormed` cần lib ES2024; tsconfig của repo thấp hơn, nên
+    // đo thẳng: duyệt theo ĐIỂM MÃ thì một nửa cặp thay thế hiện ra như một
+    // đơn vị lẻ trong dải U+D800–U+DFFF.
+    const lone = [...what].some((ch) => {
+      const cp = ch.codePointAt(0)!;
+      return cp >= 0xd800 && cp <= 0xdfff;
+    });
+    assert.equal(lone, false, `pad ${pad}: cắt giữa cặp thay thế`);
+    assert.ok([...what].length <= WHAT_MAX, `pad ${pad}: vượt trần điểm mã`);
+  }
+  // Dấu nhấn bị bóc, nên một lần cắt không để lại markdown lệch.
+  const rows = ownerWaitingRows({
+    backlogs: [{ lane: 'platform', content: '### P-001 · a\n- deps: —\n- hold: chờ **chủ dự án** merge `automerge.yml`\n' }],
+    decisions: [],
+    logs: [],
+    now: NOW,
+    issueRefsOf: linkedPrNumbers,
+  });
+  assert.equal(rows[0]!.what, 'chờ chủ dự án merge automerge.yml');
+});
+
+test('renderOwnerWaitRow: mốc ở TƯƠNG LAI được nói ra, không in "-1 ngày"', () => {
+  const rows = ownerWaitingRows({
+    backlogs: [{ lane: 'platform', content: '### P-001 · a\n- deps: —\n- hold: chờ chủ dự án merge\n' }],
+    decisions: [],
+    logs: [{ ref: 'platform/P-001', at: '2026-09-26T06:00:00.000Z' }],
+    now: NOW,
+    issueRefsOf: linkedPrNumbers,
+  });
+  assert.equal(rows[0]!.waitingDays, -1);
+  assert.match(renderOwnerWaitRow(rows[0]!), /mốc ở TƯƠNG LAI 1 ngày — lệch đồng hồ \(I-021\)/);
+});
+
+test('compareRows: mốc ở tương lai (số âm thật) KHÔNG bị trộn với "không đo được"', () => {
+  // Bản đầu dùng `-1` làm mốc cho `null`, mà `waitingDays` có thể là `-1` thật.
+  const backlogs = [
+    {
+      lane: 'platform',
+      content: [
+        '### P-001 · a', '- deps: —', '- hold: chờ chủ dự án merge', '',
+        '### P-002 · b', '- deps: —', '- hold: chờ chủ dự án merge', '',
+      ].join('\n'),
+    },
+  ];
+  const rows = ownerWaitingRows({
+    backlogs,
+    decisions: [],
+    logs: [{ ref: 'platform/P-001', at: '2026-09-26T06:00:00.000Z' }],
+    now: NOW,
+    issueRefsOf: linkedPrNumbers,
+  });
+  // P-001 đo được (−1) nên nó đứng TRƯỚC P-002 (không đo được).
+  assert.deepEqual(rows.map((r) => r.key), ['platform/P-001', 'platform/P-002']);
+});
+
+test('decisionRefsInHold: chỉ lấy `#N` trong đoạn câu có nhắc `[QĐ]`', () => {
+  // Ca thật: `platform/P-045` nhắc `#84`/`#39` như một PHÉP ĐO sau này, không
+  // phải chỗ chủ dự án bấm vào — và cùng tập số đó quyết định một `[QĐ]` đang
+  // chặn mục nào ở nhánh (b).
+  const p045 =
+    'chờ chủ dự án merge — `ops/workflows/automerge.yml` thuộc vùng `owner-merge`; và một phép đo sau khi sync: lượt `automerge` kế tiếp có xét tới `#84`/`#39` không';
+  assert.deepEqual(decisionRefsInHold(p045, linkedPrNumbers), []);
+  const p027 = 'còn treo — hai tiêu chí cuối (sửa cơ chế A/B + bằng chứng chạy thật) chờ 🤖 [QĐ] #116; không tự chọn A/B';
+  assert.deepEqual(decisionRefsInHold(p027, linkedPrNumbers), [116]);
+});
+
+test('backlogGraph: mã TRÙNG không làm mất `- hold:` của mục thứ hai', () => {
+  // Mã trùng đang có thật: `ops/lanes/platform/backlog.md` có HAI mục `### P-028`.
+  // Bỏ mục thứ hai là bỏ im lặng — đúng thứ `duplicateIds` của
+  // `backlog-status.ts` sinh ra để không im lặng.
+  const rows = ownerWaitingRows({
+    backlogs: [
+      { lane: 'platform', content: '### X-001 · a\n- deps: —\n' },
+      { lane: 'visual', content: '### X-001 · b\n- deps: —\n- hold: chờ mắt chủ dự án\n' },
+    ],
+    decisions: [],
+    logs: [],
+    now: NOW,
+    issueRefsOf: linkedPrNumbers,
+  });
+  assert.deepEqual(rows.map((r) => r.key), ['visual/X-001']);
+});
+
+test('renderOwnerWaitingLines: trần MAX_ROWS cắt phần IN RA, nhưng dòng đếm vẫn nói tổng THẬT', () => {
+  const rows = Array.from({ length: MAX_ROWS + 3 }, (_, i) => ({
+    kind: 'backlog' as const,
+    key: `platform/P-${String(i).padStart(3, '0')}`,
+    what: 'chờ chủ dự án merge',
+    waitingDays: 1,
+    blocking: [] as string[],
+    blockingGate: [] as string[],
+    link: 'ops/lanes/platform/backlog.md',
+  }));
+  const lines = renderOwnerWaitingLines(rows);
+  assert.equal(lines[0], `Việc đang chờ anh: ${MAX_ROWS + 3} việc`);
+  assert.equal(lines.length, 1 + MAX_ROWS + 1);
+  assert.match(lines.at(-1)!, /^- …còn 3 việc nữa/);
+});
+
 // --- đồ thị deps và số mục bị chặn ---
 
 const GRAPH_FILES = [
@@ -335,7 +504,7 @@ test('ownerWaitingRows: mục chưa có dòng log nào ra `null`, KHÔNG lặng 
   });
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!.waitingDays, null);
-  assert.match(renderOwnerWaitRow(rows[0]!), /chưa đo được đã chờ bao lâu/);
+  assert.match(renderOwnerWaitRow(rows[0]!), /chưa đo được mốc thời gian/);
 });
 
 test('ownerWaitingRows: `null` (không đo được) xếp CUỐI trong cùng mức chặn, không giả vờ là lớn', () => {
@@ -398,7 +567,7 @@ test('renderOwnerWaitRow: một dòng mang đủ bốn thứ C1 đòi — việc
     blockingGate: ['T-001', 'T-002'],
     link: '#900',
   });
-  assert.match(line, /^- #900 · chỉ anh mở được Console · đã chờ 3\.2 ngày · /);
+  assert.match(line, /^- #900 · chỉ anh mở được Console · đã mở 3\.2 ngày · /);
   assert.match(line, new RegExp(`chặn 4 mục \\(T-001, T-002, T-003, …\\+${4 - BLOCKING_SHOWN}\\)`));
   assert.match(line, new RegExp(`2 thuộc làn ${GATE_LANE} \\(cổng Mốc 3\\)`));
   assert.ok(line.endsWith('· #900'));
