@@ -149,8 +149,69 @@ export const HOLD_MARKERS: readonly RegExp[] = [
  * Khoan dung như `- status:`: cho phép thụt lề, không phân biệt hoa thường,
  * ăn khoảng trắng thừa hai đầu lý do. Lý do **phải không rỗng** — một dòng
  * `- hold:` trống là khai thiếu, không tính là một lời giữ hợp lệ.
+ *
+ * ⚠️ **Mẫu này chỉ khớp DÒNG ĐẦU, nên nó không bao giờ được dùng một mình**
+ * — xem `joinHoldLines` ngay dưới và `KF-041`.
  */
 const HOLD_FIELD = /^\s*-\s*hold:\s*(\S.*?)\s*$/i;
+
+/**
+ * Dòng **nối tiếp** của một lý do `- hold:` đã xuống dòng: thụt lề, có chữ,
+ * và **không** mở một mục mới. Bốn thứ bị loại khỏi "nối tiếp" vì mỗi thứ mở
+ * một khối riêng của Markdown, không phải phần còn lại của một câu:
+ *
+ * - `-` / `*` / `+` — một gạch đầu dòng con hoặc một trường khác;
+ * - `>` — khối trích dẫn (repo dùng nó cho các ghi chú `⚠️`);
+ * - `|` — một hàng bảng.
+ *
+ * Dòng trống, dòng không thụt lề, và hết thân mục đều **dừng** phép nối.
+ */
+const HOLD_CONTINUATION = /^\s+(?![-*+>|]\s?)(\S.*?)\s*$/;
+
+/**
+ * Nối lý do `- hold:` với các dòng nối tiếp của nó thành **một** chuỗi.
+ *
+ * ## Vì sao hàm này tồn tại — `KF-041`, lần thứ hai cùng một chữ ký
+ *
+ * `HOLD_FIELD` là mẫu **một dòng**, và `ops/lanes/README.md` khai hình dạng
+ * đúng là *"Một dòng `- hold: <lý do>`"*. Nhưng lý do là văn xuôi tiếng Việt
+ * dài, nên người viết **xuống dòng** — và bên đọc thì lặng lẽ giữ đúng dòng
+ * đầu. Không gì đỏ: `pnpm check` EXIT=0 với cả hai ca thật dưới đây. Nhóm
+ * **Z** thuần, và chỗ chữ bị mất đi thẳng tới **mắt chủ dự án**: từ mục
+ * `platform/P-053` (`ops/scripts/owner-waiting.ts`), lý do này là chữ in
+ * trong khối *"Việc đang chờ anh"* của bản tin.
+ *
+ * Hai ca đo được, hai lượt khác nhau, cùng chữ ký:
+ *
+ * | Mục | Cắt ở đâu | Phần mất |
+ * |---|---|---|
+ * | `topic/T-014` | `…(secret chỉ sống trong` | điều kiện gỡ treo, và câu "mục **không** tự chuyển `done`" |
+ * | `release/R-002` | `…tạo OAuth client scope` | tên scope, "đặt refresh token vào Secrets", chế độ **In production**, điều kiện mở lại |
+ *
+ * `CLAUDE.md` mục 13 đòi lần thứ hai thì **sửa tầng luật, không vá sản
+ * phẩm**. Nên chỗ sửa là **bên đọc**, không phải hai mục backlog: dặn người
+ * viết "nhớ giữ một dòng" là một luật không có máy nào giữ, và nó đã bị vi
+ * phạm hai lần bởi hai lượt khác nhau. Bên đọc đọc đủ thứ được viết ra thì
+ * **cả lớp lỗi này không còn chỗ tồn tại**, thay vì chỉ bị phát hiện.
+ *
+ * Hình dạng khuyến nghị vẫn là một dòng (`ops/lanes/README.md`), vì dòng bản
+ * tin phải đọc được trong khoảng 60 giây trên màn hình điện thoại (`CLAUDE.md`
+ * mục 9). Hàm này là lưới an toàn cho lúc nó bị vi phạm, không phải lời mời
+ * viết dài.
+ *
+ * Nối bằng **một khoảng trắng**: xuống dòng trong Markdown không phải một
+ * đoạn mới, nên `"… client scope"` + `"`youtube.upload`, …"` phải ra một câu
+ * liền, không phải hai dòng dán vào nhau mất khoảng trắng.
+ */
+export function joinHoldLines(first: string, rest: readonly string[]): string {
+  const parts = [first];
+  for (const line of rest) {
+    const m = HOLD_CONTINUATION.exec(line);
+    if (m === null) break;
+    parts.push(m[1]!);
+  }
+  return parts.join(' ');
+}
 
 /**
  * Tập `status` hợp lệ của một mục backlog — `ops/lanes/README.md`, CHARTER
@@ -358,12 +419,14 @@ export function parseBacklog(content: string): BacklogItem[] {
     }
 
     // Trường `- hold:` — dòng đầu tiên khớp thắng, cùng cách `- status:` lấy
-    // dòng đầu. Lý do đã được `HOLD_FIELD` cắt khoảng trắng hai đầu.
+    // dòng đầu. Lý do đã được `HOLD_FIELD` cắt khoảng trắng hai đầu, rồi
+    // `joinHoldLines` nối các dòng xuống dòng của nó vào (`KF-041`): mẫu một
+    // dòng dùng một mình là cách 3/4 lời giữ bị bỏ im lặng.
     let holdField: string | null = null;
     for (let i = 0; i < body.length; i++) {
       const m = HOLD_FIELD.exec(body[i]!);
       if (m) {
-        holdField = m[1]!;
+        holdField = joinHoldLines(m[1]!, body.slice(i + 1));
         break;
       }
     }
@@ -876,6 +939,19 @@ function main(): void {
   // không phụ thuộc vào việc lượt này có chạy `--fix` hay không.
   const { readyNow, blocked, duplicateIds, cycles } = readyQueue(backlogs, subjects);
 
+  // Mục `parked` KHÔNG rơi vào nhóm nào khác: `readyQueue` lọc
+  // `status !== 'ready'`, và `reviewFindings` chỉ xét `review` cộng `status`
+  // sai — mà `parked` hợp lệ. Nên trước khoá này, một mục `parked` đọc được,
+  // hợp lệ, có thật là **vô hình** với `pnpm backlog:status`, đúng chữ ký
+  // `KF-030` (*"một mục backlog có thật … mà không xuất hiện ở bất kỳ nhóm nào"*).
+  // Đo `2026-09-25`: **12** mục im như vậy. In ra KỂ CẢ KHI RỖNG, cùng luật
+  // với `invalidStatus` và `cycles`.
+  const parked = backlogs.flatMap(({ lane, content }) =>
+    parseBacklog(content)
+      .filter((item) => item.status === 'parked')
+      .map((item) => `${lane}/${item.id}`),
+  );
+
   const by = (verdict: ItemVerdict) =>
     findings.filter((f) => f.verdict === verdict).map((f) => `${f.lane}/${f.id}`);
   const heldByOutput = (heldBy: HeldBy) =>
@@ -900,6 +976,7 @@ function main(): void {
         // nhóm này sinh ra để giữ.
         invalidStatus: by('invalid-status'),
         cycles,
+        parked,
         fixed: fix ? by('stale') : [],
         backlogUpdated: written,
         // Kèm tên mục: phụ lục P1 bước 3 đòi dán `readyNow` vào báo cáo khi

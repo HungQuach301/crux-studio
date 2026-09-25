@@ -43,20 +43,53 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 
 - deps: R-001
 - risk: high
-- status: ready
+- status: parked
+- hold: chờ chủ dự án — điều kiện (1) và (2) của `🤖 [QĐ]` #248: tạo kênh YouTube, tạo OAuth client scope `youtube.upload` ở chế độ **In production**, rồi đặt `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` vào Secrets. Mở lại `ready` ngay khi secret có mặt.
+- **ba tên secret đã chốt, và chúng chưa tồn tại ở đâu trong repo** — `YOUTUBE_CLIENT_ID`,
+  `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`, chốt ở comment `5829566818` trên `#248` *"để lượt sau
+  không tự đặt tên khác"*. Đo `2026-09-25`: `grep -rn` ba tên đó trên toàn kho ra **đúng một** chỗ, là
+  `ops/logs/release/R-002.jsonl` — tức một dòng log, không phải một khai báo. Nêu chúng ở đây là điều làm
+  phép so với `topic/T-011` thành thật: mục đó được lấy làm mốc **vì** nó nêu đích danh secret còn thiếu.
+  Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003` và
+  `T-011`).
+- **vì sao `parked` từ lượt `2026-09-25` ~10:5xZ, trong khi mục này tự khai "không phải ca `parked`"**:
+  điều kiện mà chính bullet dưới đây đặt ra **đã xong**. Nguyên văn của nó: *"đây **không** phải ca `parked`
+  như `topic/T-011` (mục đó nêu đích danh secret còn thiếu); chỗ thiếu ở đây là chính **mảnh tài liệu**
+  đó"*. Mảnh tài liệu đó nay **có**: giả định `G21` ở `docs/assumptions.md` (đường xác thực, trần
+  100 video/ngày, có trích và ngày đọc) cộng hướng dẫn tạo OAuth client viết trên `#248`, cả hai vào `main`
+  ở sóng trước (PR #263). Nên chỗ thiếu còn lại **đúng là một secret có tên**, tức đúng hình dạng
+  `topic/T-011` mà bullet đó dùng làm mốc so — và theo chính phép so đó, ca này nay **là** ca `parked`.
+  Ba số đo được của chỗ hỏng, không phải lời khai:
+  - tiêu chí xong còn ⬜ **duy nhất** (quota đo thật) chờ **secret**, không chờ máy và không chờ quyết định
+    — chính dòng tiêu chí đó đã viết sẵn câu ấy; hai tiêu chí kia ✅ từ PR #247.
+  - cùng chỗ chặn ấy, `verify/VF-G21` — mục **sở hữu** phép đo — khai `status: parked` kèm câu *"mở lại
+    thành `ready` ngay khi secret có mặt"*. Hai mục, **một** chỗ chặn, **hai** câu trả lời máy đọc được
+    khác nhau; `readyQueue` chỉ nhìn `status === 'ready'` nên nó trả câu sai.
+  - giá của câu sai đó đo được ở lượt chạy: `readyNow` nêu `release/R-002` là mục duy nhất chưa có PR mở,
+    nên **mọi** lượt worker kể từ khi PR #263 merge đều bị dẫn tới một mục không lượt nào tiến được, và
+    phải đọc lại thân mục bằng văn xuôi mới biết — đúng thứ `I-015` cấm (*"đừng đối chiếu `deps` bằng
+    mắt"*), và đúng nhóm **Z**: `pnpm check` xanh, CI xanh, chỉ báo `readyNow` nói sai.
 - **vì sao `deps` KHÔNG còn `G6`** (mục `I-019`): `G6` trỏ tới `verify/VF-G6`, mà `VF-G6` ghi `deps: R-002`
   — hai mục chờ nhau vĩnh viễn, một vòng phụ thuộc thật nằm trên `main`. Chiều đúng là chiều `VF-G6` đang
   ghi: thân `VF-G6` nói rõ *"kiểm: lần tải lên đầu tiên ở mục `R-002`"*, tức giả định G6 được kiểm **bằng**
   mục này, không phải là nền móng của nó. Nên cắt ở đây. Quan hệ vẫn còn nguyên ở dòng `nguồn` ngay dưới,
   chỗ nó thuộc về.
 - **mục này nay nằm trong `readyNow`, và lượt nhận nó phải biết trước** (vòng soát ngữ cảnh sạch của
-  `I-019`): cắt vòng làm `R-002` thôi bị khoá oan — `R-001` đã vào `main` thật — nhưng nó vẫn cần một
+  `I-019`) — ⚠️ **vế `readyNow` của câu này cũng hết hiệu lực từ 2026-09-25**, cùng lúc và cùng lý do với
+  vế *"không phải ca `parked`"*: mục chuyển `parked` nên `readyQueue` không nhận nó nữa (đo: readyNow
+  4 → 3). Giữ nguyên văn vì nó là bản ghi trạng thái lúc `I-019` viết: cắt vòng làm `R-002` thôi bị khoá oan — `R-001` đã vào `main` thật — nhưng nó vẫn cần một
   đường xác thực YouTube mà **repo chưa ghi ở đâu cả**: không `docs/assumptions.md`, không backlog, không
   workflow nào nhắc tới một secret hay app OAuth cho việc tải lên. Nên đây **không** phải ca `parked` như
   `topic/T-011` (mục đó nêu đích danh secret còn thiếu); chỗ thiếu ở đây là chính **mảnh tài liệu** đó.
   Việc đầu tiên của lượt nhận `R-002` là chốt đường xác thực rồi ghi nó vào sổ giả định — chọn nhà cung
   cấp và ký điều khoản là nhóm `irreversible` số 3 của CHARTER 2.3, nên nếu nó cần một tài khoản hay một
   điều khoản mới thì mở `🤖 [QĐ]` trước, đừng tự chọn.
+
+  > ⚠️ **Bullet trên giữ nguyên văn vì nó đúng lúc viết, và câu kết của nó đã được thi hành.** "Việc đầu
+  > tiên" đó là sóng PR #263: đường xác thực đã chốt qua `🤖 [QĐ]` #248 (chủ dự án trả lời **A** kèm ba
+  > điều kiện) và đã ghi vào sổ giả định thành `G21`. Vì thế vế *"không phải ca `parked`"* của nó **hết
+  > hiệu lực từ 2026-09-25**; xem bullet `vì sao parked` ở trên. Không xoá chữ nào của nó: nó là bản ghi
+  > lý do một lượt trước chọn `ready`, và xoá đi thì lượt sau không đọc được vì sao lựa chọn ấy đổi.
 - nguồn: CHARTER bất biến I5; giả định G6; giả định **G21** (đường xác thực và hạn mức tải lên)
 - **ĐÃ CÓ CÂU TRẢ LỜI cho `🤖 [QĐ]` #248** — comment của chủ dự án `2026-09-24T23:50:04Z`, không mở đầu
   bằng 🤖 trên issue nhãn `decision`, tức là **chỉ dẫn** theo `CLAUDE.md` mục 5. Nguyên văn: *"#248 A, với
@@ -96,9 +129,13 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 - **khi ba điều kiện của `#248` xong thì còn một bước cuối** (`CLAUDE.md` mục 14): ghi quyết định lâu dài
   vào `docs/decisions/D-C09.md` (mã trống kế tiếp — `main` đang có `D-C04`, `D-C06`, `D-C07`, `D-C08`)
   rồi mới đóng `#248`. Ghi ở đây để lượt đó không phải tra lại.
-- **mục này làm theo sóng, và `status` giữ `ready` cho tới sóng cuối** (cùng lối `platform/P-014`): tiêu
-  chí 2 không phụ thuộc quyết định nào nên làm xong trước; tiêu chí 1 chờ đường xác thực, là nhóm
-  `irreversible` số 3 của CHARTER 2.3.
+- **mục này làm theo sóng** (cùng lối `platform/P-014`): tiêu chí 2 không phụ thuộc quyết định nào nên
+  làm xong trước; tiêu chí 1 chờ đường xác thực, là nhóm `irreversible` số 3 của CHARTER 2.3.
+  - ⚠️ Câu cũ của bullet này — *"và `status` giữ `ready` cho tới sóng cuối"* — **hết hiệu lực từ
+    2026-09-25**, và giữ nguyên nó sẽ là một chỗ mục này tự nói ngược trường `- status:` của chính nó.
+    Luật đúng, hẹp hơn: `status` giữ `ready` cho tới **sóng máy cuối cùng**. Sóng máy cuối cùng là PR #263;
+    sóng còn lại chờ **người**, nên `parked` (xem bullet `vì sao parked` ở trên). Đây là chỗ khuôn của
+    `platform/P-014` **không** áp được nguyên vẹn: các sóng còn lại của `P-014` đều là việc của máy.
 - tiêu chí xong:
   - ⬜ Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng. `🤖 [QĐ]` #248 **đã
     được trả lời** (A, ba điều kiện), nhưng tiêu chí này vẫn ⬜: nó chờ **secret**, không chờ quyết định.
