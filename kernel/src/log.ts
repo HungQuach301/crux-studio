@@ -226,6 +226,61 @@ export function isStep0LogId(id: string): boolean {
   return id.startsWith(`${STEP0_LOG_PREFIX}-`) && isSafeLogId(id);
 }
 
+/** Hình dạng mã log bước 0, tách thành hai phần mà `step0LogId` ghép lại. */
+const STEP0_LOG_ID_SHAPE = new RegExp(
+  `^${STEP0_LOG_PREFIX}-(\\d{4}-\\d{2}-\\d{2})T(\\d{2})(\\d{2})(\\d{2})Z-(.+)$`,
+);
+
+/**
+ * Đọc ngược mã log bước 0 về `{ at, runner }` — **phép đảo của
+ * `step0LogId`**, và đứng ngay cạnh nó vì lý do docblock của `step0LogId`
+ * đã ghi: một chỗ sinh ra tên thì một chỗ đọc ngược lại, không nơi nào tự
+ * cắt chuỗi. Mục `platform/P-056` cần nó để lấy **tuổi** của một nhánh chờ
+ * `step0-pending/<mã>` mà không phải gọi mạng: mốc thời gian đã nằm trong
+ * chính cái tên.
+ *
+ * Trả `null` cho mọi mã không đọc được, và bên gọi **phải nói ra** chỗ
+ * `null` chứ không im lặng bỏ qua (`KF-041` là một chỗ hỏng im lặng; đừng
+ * thêm chỗ thứ hai).
+ *
+ * ## Vì sao còn phải ghép lại rồi so, khi RegExp đã khớp
+ *
+ * RegExp chỉ chứng minh mã **có hình dạng** đúng, không chứng minh nó là mã
+ * mà `step0LogId` sẽ sinh ra. Nên phép kiểm cuối là **ghép lại bằng chính
+ * `step0LogId` rồi so từng byte**. Hai đường nó bắt, và chúng KHÁC nhau —
+ * cả hai đều đo được, không suy:
+ *
+ * - **`step0LogId` ném lỗi.** Tên routine không qua `SAFE_RUNNER`
+ *   (`"crux worker"` vẫn khớp `(.+)` của RegExp trên), hoặc mốc không đọc
+ *   được (`T253199Z` khớp `\d{2}` ba lần nhưng `Date.parse` từ chối).
+ * - **Ghép lại ra chuỗi KHÁC.** `2026-02-31T134339Z` là mốc không tồn tại
+ *   mà `Date` lặng lẽ cuộn sang `2026-03-03`, nên `step0LogId` trả
+ *   `step0-2026-03-03T134339Z-…` — không ném lỗi, chỉ khác. Đây là ca mà
+ *   một phép kiểm hình dạng KHÔNG bắt được, và là lý do phép so này tồn
+ *   tại chứ không phải trang trí.
+ *
+ * Một phép kiểm ngày viết riêng ở đây sẽ là **bản luật thứ hai** cho cùng
+ * một việc: bản đầu của hàm này có nó, và hậu quả đo được là phép so ghép
+ * lại thành mã chết — xoá phép so đi thì bộ test vẫn xanh 16/16. Nên chỉ
+ * giữ một bản: cặp hàm đảo nhau tự khoá nhau.
+ */
+export function parseStep0LogId(id: string): { at: string; runner: string } | null {
+  const match = STEP0_LOG_ID_SHAPE.exec(id);
+  if (match === null) return null;
+  const [, date, hh, mm, ss, runner] = match as unknown as [string, string, string, string, string, string];
+  const at = `${date}T${hh}:${mm}:${ss}Z`;
+  let rebuilt: string;
+  try {
+    rebuilt = step0LogId(at, runner);
+  } catch {
+    // `step0LogId` ném lỗi cho `at`/`runner` không hợp lệ. Ở đây "không đọc
+    // được" là câu trả lời đúng, không phải một ngoại lệ cho bên gọi bắt.
+    return null;
+  }
+  if (rebuilt !== id) return null;
+  return { at, runner };
+}
+
 /**
  * Đường dẫn log của một lượt bước 0:
  * `<root>/ops/logs/integration/step0-<mốc>-<routine>.jsonl`.

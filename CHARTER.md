@@ -182,6 +182,7 @@ Cơ chế: mốc `<!-- crux-escalate-* -->` thôi mang nghĩa "đã nhắc thì 
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn;
   - chi phí tích luỹ trong `ops/logs/**/*.jsonl` (bất biến I8) vượt **80%** cận dưới của ngân sách học;
   - không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim quá **3 giờ** — dấu hiệu một routine có lượt chạy lỗi hoặc đã ngừng chạy (mục `P-020`). Nhịp tim là dòng `at` mới nhất trong **các dòng log bước 0** (phụ lục P1/P3 ghi một dòng ở mọi lượt). Từ mục `P-023` các dòng đó nằm rải ở nhiều file, nên watchdog quét cả `ops/logs` rồi lọc theo trường `ref` — **không neo vào một tên file**.
+  - một nhánh chờ `claude/integration/step0-pending/*` mang dòng log bước 0 **chưa vào `main`** quá ngưỡng (mục `platform/P-056`, `ops/known-failures.md` `KF-041`). Lượt bước 0 không gỡ được PR nào được quyền không mở PR (mục `P-038`), nhưng dòng log của nó vẫn phải tới `main` qua PR của một lượt sau — vế đó đã hỏng **bốn** lần liên tiếp, tức bất biến I8 thủng bốn lượt mà mọi chỉ báo đều xanh. Ngưỡng giờ nằm ở `STEP0_PENDING_STALE_HOURS` của `ops/scripts/step0-pending-branches.ts`, suy từ khoảng chờ merge chứ không phải một số trần.
 
 ### 2.5 Bản tin ngày — hộp quyết định duy nhất
 

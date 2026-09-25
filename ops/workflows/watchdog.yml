@@ -77,7 +77,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Soát sáu dấu hiệu im lặng
+      - name: Soát bảy dấu hiệu im lặng
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -105,6 +105,11 @@ jobs:
           # `ops/test/heartbeat-source.test.ts` đọc cả hai chỗ và so, nên hai
           # bản không lệch nhau im lặng được.
           TELEMETRY_BRANCH: 'claude/telemetry'
+          # P-056 · tiền tố nhánh chờ của các lượt log-only. Phải khớp
+          # nguyên văn hằng `STEP0_PENDING_BRANCH_PREFIX` của
+          # `ops/scripts/step0-pr-gate.ts`; `ops/test/step0-pending-branches.test.ts`
+          # đọc cả hai chỗ và so, nên hai bản không lệch nhau im lặng được.
+          STEP0_PENDING_PREFIX: 'claude/integration/step0-pending'
         run: |
           set -euo pipefail
           NOW=$(date -u +%s)
@@ -324,6 +329,59 @@ jobs:
           fi
           echo "$LANE_REPORT"
 
+          # 7 · Nhánh chờ `step0-pending` chưa ai gộp (`KF-041`, mục
+          #     `platform/P-056`). Một lượt bước 0 không gỡ được PR nào được
+          #     quyền KHÔNG mở PR (`P-038`); dòng log của nó vẫn được ghi và
+          #     đẩy lên nhánh chờ, rồi một lượt SAU phải `cherry-pick` nhánh
+          #     đó vào PR của mình. Vế hai đó không có gì nhắc, và nó đã hỏng
+          #     BỐN lần liên tiếp — bốn lượt worker không có dòng log nào
+          #     trên nhánh chính, nhánh cũ nhất kẹt ~34,9 giờ, mà `pnpm
+          #     check` xanh, CI xanh, `main` xanh, dấu hiệu số 5 vẫn đập
+          #     (bản sao nhịp tim ở `claude/telemetry` che đúng chỗ này).
+          #
+          #     Đây là chỗ RẺ NHẤT để canh: lượt này đã `git fetch` nhánh
+          #     telemetry ở trên, nên thêm một `git ls-remote --heads` không
+          #     thêm job nào. `pnpm check` KHÔNG phải chỗ đặt — nó chạy trên
+          #     mọi PR và không có remote trong CI nếu không thêm một lần
+          #     fetch cho mỗi lượt chạy.
+          #
+          #     NGƯỠNG GIỜ KHÔNG NẰM Ở ĐÂY: nó là `STEP0_PENDING_STALE_HOURS`
+          #     của `ops/scripts/step0-pending-branches.ts`, suy từ
+          #     `DEFAULT_DELAY_HOURS`. YAML chỉ so SỐ NHÁNH quá ngưỡng với 0.
+          #     Chép con số giờ vào đây là tạo bản luật thứ hai, và hai bản
+          #     lệch nhau im lặng — `ops/test/step0-pending-branches.test.ts`
+          #     canh đúng chiều đó.
+          PENDING_LIST="${RUNNER_TEMP:-/tmp}/crux-step0-pending.txt"
+          # Z9 · `|| true` có chủ ý: chưa lượt log-only nào chạy thì remote
+          # KHÔNG có nhánh nào khớp tiền tố và `git ls-remote` vẫn thoát 0
+          # với đầu ra rỗng — nhưng mạng trượt thì nó thoát khác 0, và dưới
+          # `set -e` điều đó giết cả năm dấu hiệu kia. Rơi về danh sách rỗng
+          # là hướng an toàn CÓ ĐIỀU KIỆN: script dưới vẫn in ra một dòng
+          # "không nhánh nào", nên một lần fetch trượt không biến thành im
+          # lặng — nó chỉ mất một lượt chấm, và workflow này chạy mỗi giờ.
+          git ls-remote --heads origin "refs/heads/$STEP0_PENDING_PREFIX/*" \
+            | sed 's#.*refs/heads/##' > "$PENDING_LIST" || true
+
+          # `if !` chứ KHÔNG `|| VAR=…`, cùng lý do đã ghi ở dấu hiệu số 6:
+          # `|| VAR=…` là một hình dạng nuốt lỗi mà luật Z9 không nhìn thấy.
+          if ! PENDING_JSON=$(node ops/scripts/step0-pending-branches.ts \
+              --branches "$PENDING_LIST" --json); then
+            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-041) — xem log của lượt chạy này."
+            PENDING_STALE=0
+          else
+            PENDING_REPORT=$(echo "$PENDING_JSON" | jq -r '.render // empty')
+            PENDING_STALE=$(echo "$PENDING_JSON" | jq -r '.stale | length')
+            if [ -z "$PENDING_REPORT" ]; then
+              PENDING_REPORT="⚠ Không đọc được báo cáo nhánh chờ (KF-041) — JSON không có \`render\`."
+              PENDING_STALE=0
+            fi
+          fi
+          echo "$PENDING_REPORT"
+
+          if [ "$PENDING_STALE" -gt 0 ]; then
+            add "Có $PENDING_STALE nhánh chờ \`$STEP0_PENDING_PREFIX/*\` mang dòng log bước 0 CHƯA vào nhánh chính quá ngưỡng (\`KF-041\`, mục \`platform/P-056\`; ngưỡng ở \`STEP0_PENDING_STALE_HOURS\`). Bất biến **I8** đang thủng đúng ngần ấy lượt chạy: mọi bên đọc log — \`ops/metrics.md\`, bản tin ngày, phép đếm chuỗi kẹt của phụ lục P1 bước 2 — đếm THẤP hơn sự thật. Cách gỡ: lượt worker kế tiếp \`cherry-pick\` các nhánh ấy vào PR của nó rồi xoá nhánh đã gộp (\`P-038\`). Chi tiết từng nhánh ở ngay dưới."
+          fi
+
           if [ "$TEST" = "true" ]; then
             add "Đây là cảnh báo THỬ, do chủ dự án bấm tay. Nếu anh đọc được dòng này trên điện thoại thì đường thông báo đã thông (DoD Đợt 0)."
           fi
@@ -355,6 +413,7 @@ jobs:
             "$PROBLEMS" \
             "$BEAT_REPORT" \
             "$LANE_REPORT" \
+            "$PENDING_REPORT" \
             "" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
             "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")

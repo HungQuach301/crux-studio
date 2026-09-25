@@ -1014,6 +1014,7 @@ Khi hàng đợi xung đột trống **và** mọi mục `ready` đã có PR m�
   - ✅ Test `ops/test/step0-pr-gate.test.ts` khoá **cả hai** chiều hỏng: lượt log-only vẫn mở PR (chiều tốn tiền), và lượt log-only không mở PR trong lúc nhịp tim sắp quá hạn (chiều gọi người — nhóm **Z**, không gì đỏ). 18 bài; đã **phá thật** sáu chỗ, cả sáu đỏ đúng bài, khôi phục thì xanh lại.
   - ⬜ Phụ lục P1 bước 0 và P3 bước 0d của CHARTER gọi tới `step0PrGate` và nói rõ lượt `openPr: false` làm gì. **Chờ quyết định.**
   - ⬜ Dòng log của lượt `openPr: false` không bị mất (bất biến **I8**): commit và `git push` lên nhánh chờ `claude/integration/step0-pending/<mã log>`, không mở PR. Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp.
+    → **Vế hai (`cherry-pick` rồi xoá) chuyển sang mục `P-056`.** Vế một chạy trong đúng lượt viết ra nó nên nó chạy; vế hai nằm ở một lượt **khác** và đã hỏng bốn lần liên tiếp (`ops/known-failures.md` `KF-041`). `P-056` biến nó thành thứ máy nói ra — `ops/scripts/step0-pending-branches.ts` cộng dấu hiệu số 7 của `ops/workflows/watchdog.yml` — nên đừng đọc ô này như thể nó còn giữ phần ấy. Ô vẫn ⬜ vì vế một chưa có bài kiểm riêng.
   - ⬜ Chỗ gọi phải lấy `lastHeartbeatOnMainAt` bằng **đúng bộ lọc** mà `watchdog.yml` dùng (`ref` khớp `(^|/)(step0|P3-run)-` hoặc `== "platform/P-016"`), và bộ lọc đó phải là **một** chỗ dùng chung — tốt nhất export từ `kernel/src/log.ts`, nơi đã giữ `STEP0_LOG_PREFIX`. Hai bộ lọc khác nhau thì cổng và watchdog nói hai chuyện mà không gì đỏ.
   - ⬜ Một phép đo sau khi áp: số PR log mỗi 24 giờ trước và sau, để biết mục này có thật sự cắt được chi phí hay chỉ dịch nó đi.
 - **vòng soát ngữ cảnh sạch của PR #212 — 0 phát hiện chặn**, và hai phát hiện đã sửa ngay trong PR đó:
@@ -1215,17 +1216,32 @@ Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQu
 
 Tìm ra ở bước 0 lượt `crux-worker-1` `~11:39Z` `2026-09-25`, đo được chứ không suy: bốn nhánh `claude/integration/step0-pending/*` còn trên remote mà dòng log của chúng **chưa bao giờ** tới nhánh chính, nhánh cũ nhất kẹt **~34,9 giờ**. Bất biến **I8** thủng bốn lượt, và `step0Streaks(readRunLogs("ops/logs"))` đếm `totalRuns: 114` — thiếu đúng bốn. Chi tiết đầy đủ, kèm bảng bốn nhánh và lý do từng chỉ báo im: `ops/known-failures.md` `KF-041`.
 
-Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp"*. Cái thiếu là **người hoặc máy đọc nó**: luật nằm trong một ô ⬜ của một mục đang treo, phụ lục P1 bước 0 không nhắc tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng. Mục này biến vế hai thành thứ máy nói ra, đúng chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649): *thành bài kiểm máy khoá được, không phải lời dặn*.
+Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp"*. Cái thiếu là **người hoặc máy đọc nó**: luật nằm trong một ô gạch đầu dòng chưa tick của một mục đang treo, phụ lục P1 bước 0 không nhắc tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng. Mục này biến vế hai thành thứ máy nói ra, đúng chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649): *thành bài kiểm máy khoá được, không phải lời dặn*.
 
 - deps: —
 - risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
-- status: ready
-- nguồn: bước 0 lượt `crux-worker-1` `2026-09-25T11:39Z`; PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) (chỗ bốn dòng log được cứu bằng tay); `ops/known-failures.md` `KF-041`; ô ⬜ thứ hai của mục `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*)
+- status: review
+- nguồn: bước 0 lượt `crux-worker-1` `2026-09-25T11:39Z`; PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) (chỗ bốn dòng log được cứu bằng tay); `ops/known-failures.md` `KF-041`; ô chưa tick thứ hai của mục `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*)
 - tiêu chí xong:
-  - ⬜ **Hàm thuần, không đụng mạng** — nhận danh sách tên nhánh chờ cộng danh sách mã log đã có ở nhánh chính, trả về những nhánh **chưa** gộp kèm tuổi từng nhánh. Dùng lại `isStep0PendingBranch` và `STEP0_PENDING_BRANCH_PREFIX` đã có ở `ops/scripts/step0-pr-gate.ts`, và `step0LogId` của kernel để tách mã ra khỏi tên nhánh — một chỗ sinh ra tên thì một chỗ đọc ngược lại, không tự cắt chuỗi.
-  - ⬜ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng bốn nhánh quan sát được ở `KF-041` cộng danh sách mã log của nhánh chính tại `0926b38` → hàm phải trả đủ bốn. Ca âm: cùng bốn nhánh nhưng mã đã có ở nhánh chính → trả rỗng. Ca biên: một nhánh không phải nhánh chờ, một tên nhánh chờ không có mã hợp lệ (phải **nêu vấn đề**, không im lặng bỏ qua — đúng cách `heartbeat-source.ts` khai `problems`).
-  - ⬜ **Một nơi chạy định kỳ đọc remote thật** — `watchdog.yml` là chỗ rẻ nhất: nó đã `git fetch` nhánh `claude/telemetry` mỗi lượt, nên thêm một `git ls-remote --heads` cho tiền tố nhánh chờ không thêm job nào. Quá ngưỡng thì mở cảnh báo, cùng đường đi với các dấu hiệu sẵn có của CHARTER 2.4.
-  - ⬜ **Ngưỡng khai thành hằng số có tên**, không phải số trần trong YAML, và có bài khoá nó — cùng hình dạng `HEARTBEAT_STALE_MINUTES`/`HEARTBEAT_SAFETY_MARGIN_MINUTES` của `step0-pr-gate.ts`.
-  - ⬜ **`pnpm check` KHÔNG phải chỗ đặt.** Khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên mọi PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy — trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần.
-  - ⬜ **Ô ⬜ thứ hai của `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*) trỏ sang mục này** khi làm xong, để hai mục không nói hai chuyện.
+  - ✅ **Hàm thuần, không đụng mạng** — nhận danh sách tên nhánh chờ cộng danh sách mã log đã có ở nhánh chính, trả về những nhánh **chưa** gộp kèm tuổi từng nhánh. Dùng lại `isStep0PendingBranch` và `STEP0_PENDING_BRANCH_PREFIX` đã có ở `ops/scripts/step0-pr-gate.ts`, và `step0LogId` của kernel để tách mã ra khỏi tên nhánh — một chỗ sinh ra tên thì một chỗ đọc ngược lại, không tự cắt chuỗi.
+  - ✅ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng bốn nhánh quan sát được ở `KF-041` cộng danh sách mã log của nhánh chính tại `0926b38` → hàm phải trả đủ bốn. Ca âm: cùng bốn nhánh nhưng mã đã có ở nhánh chính → trả rỗng. Ca biên: một nhánh không phải nhánh chờ, một tên nhánh chờ không có mã hợp lệ (phải **nêu vấn đề**, không im lặng bỏ qua — đúng cách `heartbeat-source.ts` khai `problems`).
+  - ✅ **Một nơi chạy định kỳ đọc remote thật** — `watchdog.yml` là chỗ rẻ nhất: nó đã `git fetch` nhánh `claude/telemetry` mỗi lượt, nên thêm một `git ls-remote --heads` cho tiền tố nhánh chờ không thêm job nào. Quá ngưỡng thì mở cảnh báo, cùng đường đi với các dấu hiệu sẵn có của CHARTER 2.4.
+  - ✅ **Ngưỡng khai thành hằng số có tên**, không phải số trần trong YAML, và có bài khoá nó — cùng hình dạng `HEARTBEAT_STALE_MINUTES`/`HEARTBEAT_SAFETY_MARGIN_MINUTES` của `step0-pr-gate.ts`.
+  - ✅ **`pnpm check` KHÔNG phải chỗ đặt.** Khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên mọi PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy — trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần.
+  - ✅ **Ô chưa tick thứ hai của `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*) trỏ sang mục này** khi làm xong, để hai mục không nói hai chuyện.
 - mã mục: dò `### P-` trên nhánh chính **và trên đầu cả 13 PR đang mở** lúc `2026-09-25T11:39Z` (`KF-005`, `KF-036`) — cao nhất `P-055` (`#261`), nên `P-056` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
+
+**Đã làm — số thật trên nhánh `claude/hopeful-dirac-pxptkr`:**
+
+| Tiêu chí | Ở đâu |
+|---|---|
+| Hàm thuần | `step0PendingBranches` · `ops/scripts/step0-pending-branches.ts` |
+| Đọc ngược mã log | `parseStep0LogId` · `kernel/src/log.ts`, ngay cạnh `step0LogId` |
+| Bài tái hiện lỗi | `ops/test/step0-pending-branches.test.ts` — **17** bài |
+| Nơi chạy định kỳ | `ops/workflows/watchdog.yml` **dấu hiệu số 7**, cộng một dòng ở CHARTER 2.4 |
+| Ngưỡng có tên | `STEP0_PENDING_STALE_HOURS = DEFAULT_DELAY_HOURS + STEP0_PENDING_MARGIN_HOURS` = 18 giờ |
+
+Chi tiết phép đo, vòng phá thử và chỗ hỏng mà chính vòng phá thử bắt được: `ops/known-failures.md` `KF-041`.
+
+**Một việc dọn còn nợ, khai chứ không giấu — không phải tiêu chí xong của mục này:** bốn nhánh `claude/integration/step0-pending/*` vẫn nằm trên remote dù dòng log của chúng đã vào nhánh chính qua `#267` — tức vế *"xoá nhánh đã gộp"* của `P-038` chưa chạy. Tool ở đây **không** báo động vì chúng (nó đo *"dòng log đã tới chưa"*, đo được: `0 pending` hôm nay), nên đây là việc dọn, không phải chỗ hỏng. Thao tác xoá nhánh remote bị lớp chặn an toàn của phiên từ chối ở hai lượt liên tiếp, nên nó cần một lượt có quyền hoặc chủ dự án.
+
