@@ -1239,9 +1239,12 @@ Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR 
 | Đọc ngược mã log | `parseStep0LogId` · `kernel/src/log.ts`, ngay cạnh `step0LogId` |
 | Bài tái hiện lỗi | `ops/test/step0-pending-branches.test.ts` — **17** bài |
 | Nơi chạy định kỳ | `ops/workflows/watchdog.yml` **dấu hiệu số 7**, cộng một dòng ở CHARTER 2.4 |
-| Ngưỡng có tên | `STEP0_PENDING_STALE_HOURS = DEFAULT_DELAY_HOURS + STEP0_PENDING_MARGIN_HOURS` = 18 giờ |
+| Ngưỡng có tên | `STEP0_PENDING_STALE_HOURS = DEFAULT_DELAY_HOURS + STEP0_PENDING_MARGIN_HOURS` = 24 giờ |
+| Đường tự gỡ cảnh báo | **bước 0f** của phụ lục P1 và P3 (CHARTER), cộng lệnh `pnpm step0:pending` ở `CLAUDE.md` mục 1 |
 
-Chi tiết phép đo, vòng phá thử và chỗ hỏng mà chính vòng phá thử bắt được: `ops/known-failures.md` `KF-041`.
+Chi tiết phép đo, vòng phá thử và **bốn chỗ hỏng mà vòng soát ngữ cảnh sạch bắt được trong bản đầu** (một câu báo yên khi `git ls-remote` trượt · `problems` chết trong log lượt chạy · một phép kiểm ngày thừa làm vòng ghép-lại thành mã chết · ngưỡng 18 giờ sai theo số `KF-020` của chính CHARTER 3.3): `ops/known-failures.md` `KF-041`.
+
+**Vì sao mục này phải chạm phụ lục P1/P3 và `CLAUDE.md` mục 1.** Phần mô tả vấn đề ở trên kể ba chỗ thiếu, và hai trong ba là *"phụ lục P1 bước 0 không nhắc tới nhánh chờ"* và *"`CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng"*. Bản đầu chỉ thêm **phép phát hiện** (dấu hiệu số 7) mà không thêm **đường gỡ**, nên cảnh báo sinh ra sẽ @nhắc chủ dự án mỗi 4 giờ cho một việc chỉ worker làm được — ngược thước đo CHARTER 1.3, và ngược chính lý do dấu hiệu số 6 cố ý **không** báo động. Bước 0f đóng vòng đó.
 
 **Một việc dọn còn nợ, khai chứ không giấu — không phải tiêu chí xong của mục này:** bốn nhánh `claude/integration/step0-pending/*` vẫn nằm trên remote dù dòng log của chúng đã vào nhánh chính qua `#267` — tức vế *"xoá nhánh đã gộp"* của `P-038` chưa chạy. Tool ở đây **không** báo động vì chúng (nó đo *"dòng log đã tới chưa"*, đo được: `0 pending` hôm nay), nên đây là việc dọn, không phải chỗ hỏng. Thao tác xoá nhánh remote bị lớp chặn an toàn của phiên từ chối ở hai lượt liên tiếp, nên nó cần một lượt có quyền hoặc chủ dự án.
 

@@ -17,7 +17,11 @@ import { readFileSync } from 'node:fs';
 
 import { parseStep0LogId, step0LogId } from '../../kernel/src/log.ts';
 import { DEFAULT_DELAY_HOURS } from '../invariants.merge-gate.ts';
-import { STEP0_PENDING_BRANCH_PREFIX, step0PendingBranch } from '../scripts/step0-pr-gate.ts';
+import {
+  STEP0_PENDING_BRANCH_PREFIX,
+  step0LogIdFromPendingBranch,
+  step0PendingBranch,
+} from '../scripts/step0-pr-gate.ts';
 import {
   STEP0_PENDING_FUTURE_TOLERANCE_MINUTES,
   STEP0_PENDING_MARGIN_HOURS,
@@ -175,20 +179,45 @@ test('ca biên: `now` không đọc được thì KHÔNG trả "không có nhán
 
 // ── Hằng số ngưỡng: khoá cả hai chiều lệch ────────────────────────────────
 
-test('ngưỡng nằm TRÊN khoảng chờ merge, và suy ra từ nó chứ không phải số trần', () => {
-  // Ca âm của chính phép suy: đặt margin = 0 thì bài này đỏ. Một ngưỡng bằng
-  // đúng khoảng chờ merge sẽ báo động mọi PR `automerge-delayed` mang một
-  // nhánh chờ — gọi chủ dự án cho một hàng đợi đang chạy đúng (CHARTER 1.3).
+/** Hàng đợi merge đã từng đứng bao lâu — CHARTER 3.3, phép đo 2026-09-23, `KF-020`. */
+const MEASURED_QUEUE_STALL_HOURS = 8.6;
+/** Nhánh chờ cũ nhất đã từng kẹt bao lâu — `KF-041`, phép đo 2026-09-25. */
+const MEASURED_WORST_STUCK_HOURS = 34.9;
+
+test('ngưỡng nằm GIỮA hai mốc đo được, và suy ra chứ không phải số trần', () => {
   assert.equal(STEP0_PENDING_STALE_HOURS, DEFAULT_DELAY_HOURS + STEP0_PENDING_MARGIN_HOURS);
   assert.ok(STEP0_PENDING_MARGIN_HOURS > 0, 'khoảng trừ thêm phải lớn hơn 0');
+
+  // CẬN DƯỚI — và đây là chỗ bản đầu sai, nên bài này ghim nó bằng số của
+  // chính kho chứ không bằng lời. Bản đầu để margin 6 (ngưỡng 18) với lý do
+  // "một lượt worker nhận, cộng hàng đợi chạy trơn". Nhưng CHARTER 3.3 ghi
+  // hàng đợi merge đã từng đứng ~8,6 giờ (`KF-020`), nên 12 + 8,6 = 20,6 >
+  // 18: một hàng đợi tắc đúng như đã xảy ra sẽ tự sinh cảnh báo dù không có
+  // gì hỏng — gọi chủ dự án cho một hàng đợi đang chạy đúng (CHARTER 1.3).
   assert.ok(
-    STEP0_PENDING_STALE_HOURS > DEFAULT_DELAY_HOURS,
-    'ngưỡng phải nằm TRÊN khoảng chờ merge dài nhất luật cho phép',
+    STEP0_PENDING_STALE_HOURS > DEFAULT_DELAY_HOURS + MEASURED_QUEUE_STALL_HOURS,
+    `ngưỡng phải nằm TRÊN ${DEFAULT_DELAY_HOURS} + ${MEASURED_QUEUE_STALL_HOURS} giờ ` +
+      '(khoảng chờ merge cộng ca tắc hàng đợi đã đo được ở KF-020), nếu không nó báo động ' +
+      'cho một hàng đợi đang chạy đúng',
   );
-  // Và phải nằm DƯỚI ca thật đã đo được, nếu không nó im ở đúng chỗ nó được
-  // viết ra để bắt (`KF-041`: nhánh cũ nhất kẹt ~34,9 giờ).
-  assert.ok(STEP0_PENDING_STALE_HOURS < 34.9, 'ngưỡng phải bắt được ca 34,9 giờ của KF-041');
+
+  // CẬN TRÊN — trên mốc này thì nó im ở đúng ca nó được viết ra để bắt.
+  assert.ok(
+    STEP0_PENDING_STALE_HOURS < MEASURED_WORST_STUCK_HOURS,
+    `ngưỡng phải bắt được ca ${MEASURED_WORST_STUCK_HOURS} giờ của KF-041`,
+  );
   assert.ok(STEP0_PENDING_FUTURE_TOLERANCE_MINUTES > 0);
+});
+
+test('step0LogIdFromPendingBranch: phép đảo của step0PendingBranch', () => {
+  for (const id of KF041_LOG_IDS) {
+    assert.equal(step0LogIdFromPendingBranch(step0PendingBranch(id)), id);
+  }
+  // Không phải nhánh chờ, và phần đuôi rỗng — cả hai trả `null` để bên gọi
+  // nói ra, chứ không trả chuỗi rỗng rồi trôi tiếp.
+  assert.equal(step0LogIdFromPendingBranch('claude/platform/P-056'), null);
+  assert.equal(step0LogIdFromPendingBranch(`${STEP0_PENDING_BRANCH_PREFIX}/`), null);
+  assert.equal(step0LogIdFromPendingBranch(STEP0_PENDING_BRANCH_PREFIX), null);
 });
 
 test('ngưỡng KHỚP con số thật trong ops/workflows/watchdog.yml', () => {
@@ -221,6 +250,62 @@ test('tiền tố nhánh chờ KHỚP con số thật trong ops/workflows/watchd
   const matches = [...yaml.matchAll(/STEP0_PENDING_PREFIX:\s*'([^']+)'/g)];
   assert.equal(matches.length, 1, 'phải có đúng một khai báo tiền tố nhánh chờ trong watchdog.yml');
   assert.equal(matches[0]![1], STEP0_PENDING_BRANCH_PREFIX);
+});
+
+// ── Dấu hiệu số 7 của watchdog: hai chỗ CHẶN mà vòng soát bắt được ───────
+
+test('dấu hiệu 7 KHÔNG được nuốt lỗi `git ls-remote` bằng `|| true`', () => {
+  // Đây là chỗ CHẶN thứ nhất của vòng soát `P-056`, và nó đáng một bài kiểm
+  // chứ không chỉ một lần sửa: bản đầu viết
+  //   git ls-remote … | sed … > "$PENDING_LIST" || true
+  // Dưới `set -euo pipefail`, `git` hỏng → cả pipeline thoát khác 0 → `||
+  // true` nuốt → file RỖNG → script in ra ĐÚNG TỪNG BYTE câu của ca lành.
+  // Tức một lần fetch trượt KHẲNG ĐỊNH LÀ LÀNH, tệ hơn im lặng — nhóm Z
+  // nằm trong chính bản sửa viết ra để giết nhóm Z.
+  // Quét MÃ, không quét lời văn: chú thích ngay trên chỗ sửa có trích lại
+  // nguyên văn bản hỏng (`… || true`) để lượt sau biết vì sao, và một bài
+  // kiểm quét cả chú thích sẽ đỏ vì đúng câu giải thích cách nó không được
+  // hỏng. Bản đầu của bài này mắc đúng lỗi đó.
+  const code = readFileSync('ops/workflows/watchdog.yml', 'utf8')
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+  const lsRemote = code.split('\n').filter((line) => line.includes('git ls-remote --heads origin'));
+  assert.equal(lsRemote.length, 1, 'phải có đúng một lời gọi `git ls-remote` cho nhánh chờ');
+  assert.ok(
+    lsRemote[0]!.includes('if !'),
+    'lời gọi `git ls-remote` phải bắt mã thoát tường minh bằng `if !`',
+  );
+  assert.ok(
+    !/git ls-remote[\s\S]{0,200}?\|\| true/.test(code),
+    '`|| true` quanh `git ls-remote` biến một lần fetch trượt thành một câu báo yên',
+  );
+});
+
+test('dấu hiệu 7 phân biệt "không đo được" với "không có nhánh nào kẹt"', () => {
+  // Ca lành và ca không đo được phải ra HAI câu khác nhau. Nếu chúng trùng
+  // nhau thì bên đọc không phân biệt được, và đó đúng là chỗ hỏng trên.
+  const yaml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
+  const healthy = renderStep0PendingReport({ pending: [], stale: [], problems: [] });
+  const notMeasured = [...yaml.matchAll(/PENDING_REPORT="(⚠[^"]*)"/g)].map((m) => m[1]!);
+  assert.ok(notMeasured.length >= 3, 'phải có câu "không đo được" cho mọi nhánh lỗi của dấu hiệu 7');
+  for (const line of notMeasured) {
+    assert.notEqual(line, healthy);
+    assert.ok(line.startsWith('⚠'), `câu không đo được phải mở đầu bằng ⚠: ${line}`);
+  }
+});
+
+test('dấu hiệu 7: `problems` cũng phải tới được chỗ có người đọc', () => {
+  // Chỗ CHẶN/NÊN SỬA thứ hai: một nhánh chờ mang mã log không đọc được sinh
+  // một câu trong `problems` nói "phải xem bằng tay" — nhưng nếu chỉ
+  // `PENDING_STALE` dẫn tới `add` thì câu đó chỉ nằm trong log lượt chạy,
+  // rồi workflow in "Nhà máy vẫn thở" và thoát. Im lặng ở đúng chỗ `KF-041`
+  // ghi lại.
+  const yaml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
+  assert.ok(
+    /\[ "\$PENDING_PROBLEMS" -gt 0 \]/.test(yaml),
+    '`problems` khác rỗng phải dẫn tới `add`, không chỉ nằm trong log lượt chạy',
+  );
 });
 
 // ── `parseStep0LogId` — phép đảo của `step0LogId` ─────────────────────────
@@ -273,7 +358,7 @@ test('renderStep0PendingReport: đánh dấu nhánh quá ngưỡng và in cả p
     now: KF041_NOW,
   });
   const text = renderStep0PendingReport(report);
-  assert.match(text, /4 \(quá ngưỡng 18 giờ: 1\)/);
+  assert.match(text, new RegExp(`4 \\(quá ngưỡng ${STEP0_PENDING_STALE_HOURS} giờ: 1\\)`));
   assert.match(text, /⚠ claude\/integration\/step0-pending\/step0-2026-09-24T004410Z-crux-worker-1 — kẹt 34\.9 giờ/);
   assert.match(text, /claude\/visual\/V-001/);
 });

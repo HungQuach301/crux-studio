@@ -70,6 +70,13 @@ node ops/scripts/heartbeat-source.ts --source main=ops/logs --source telemetry=<
 
 # Bước 0e: kiểm một file log bước 0 trước khi đẩy bản sao lên nhánh `claude/telemetry` (KHÔNG mở PR):
 node ops/scripts/telemetry-beat.ts ops/logs/integration/step0-<mốc>-<routine>.jsonl
+
+# Bước 0f (mục P-056, `KF-041`): nhánh chờ nào của lượt log-only trước còn giữ một dòng log CHƯA tới
+# `main`? Chạy, đừng đọc `git branch -r` bằng mắt — và đừng coi "không in gì" là lành, lệnh này ném lỗi
+# khi không đo được chứ không trả danh sách rỗng:
+pnpm step0:pending
+# → nhánh nào còn trong `pending` thì `git cherry-pick` dòng log của nó vào PR của lượt này rồi XOÁ
+#   nhánh đã gộp (vế hai của `P-038`). Đây là đường DUY NHẤT gỡ dấu hiệu số 7 của `watchdog.yml`.
 ```
 
 **Không** có lệnh nào trong repo gọi API trả tiền ở Đợt 0. Mọi xưởng đang ở `impl: stub`.

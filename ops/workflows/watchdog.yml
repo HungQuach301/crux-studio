@@ -23,9 +23,9 @@ on:
         default: false
       # P-010 · chế độ chạy thử. Khác `test_alert` ở đúng một điểm và điểm
       # đó là tất cả: `test_alert` MỞ issue thật (nó kiểm đường thông báo);
-      # `dry_run` soát đủ bốn dấu hiệu rồi IN RA issue nó định mở, không mở.
+      # `dry_run` soát đủ bảy dấu hiệu rồi IN RA issue nó định mở, không mở.
       dry_run:
-        description: 'Chạy thử: soát đủ bốn dấu hiệu, in ra issue ĐỊNH mở, không mở issue nào'
+        description: 'Chạy thử: soát đủ bảy dấu hiệu, in ra issue ĐỊNH mở, không mở issue nào'
         type: boolean
         default: false
 
@@ -55,14 +55,14 @@ jobs:
       # người canh chết đúng lúc nó phải lên tiếng.
       #
       # `continue-on-error` vì chính lý do đó áp cho cả bước này: nó đứng
-      # TRƯỚC cả năm phép soát, nên nó hỏng (tool cache trượt, nodejs.org
-      # không với tới được) là cả người canh câm — mất luôn bốn dấu hiệu
+      # TRƯỚC cả bảy phép soát, nên nó hỏng (tool cache trượt, nodejs.org
+      # không với tới được) là cả người canh câm — mất luôn sáu dấu hiệu
       # không dính gì tới Node. Runner đã có sẵn Node; thiếu bản đủ mới thì
       # `alert-escalation.ts` không chạy được, và bước quyết định dưới đã có
       # sẵn hướng an toàn cho ca đó: rơi về `mention`.
       - uses: actions/setup-node@v7
         # Z9 · nuốt lỗi ở đây là an toàn và CÓ CHỦ Ý: bước này đứng TRƯỚC cả
-        # năm phép soát, nên để nó đỏ là để cả người canh câm — mất luôn bốn
+        # bảy phép soát, nên để nó đỏ là để cả người canh câm — mất luôn sáu
         # dấu hiệu không dính gì tới Node. Runner đã có sẵn Node; thiếu bản
         # đủ mới thì `alert-escalation.ts` không chạy được, và bước quyết
         # định dưới đã có hướng an toàn cho đúng ca đó: rơi về `mention`.
@@ -88,7 +88,7 @@ jobs:
           # `main-ci.yml` để hai cảnh báo không đếm nhầm nhịp của nhau.
           #
           # Chỉ là tiền tố, vì mốc đầy đủ còn mang vân tay của TẬP DẤU HIỆU
-          # (xem chỗ dựng `MARKER` dưới). Workflow này gộp năm dấu hiệu vào
+          # (xem chỗ dựng `MARKER` dưới). Workflow này gộp bảy dấu hiệu vào
           # MỘT issue, mà CHARTER 2.4 đếm chúng là những loại cảnh báo khẩn
           # KHÁC nhau — "nhà máy im lặng" và "chi phí vượt 80% ngân sách" là
           # hai loại riêng. Một mốc dùng chung cho cả issue thì một dấu hiệu
@@ -149,9 +149,9 @@ jobs:
           #     hạn (rủi ro B13). Khi đó mọi workflow agent viết vào
           #     ops/workflows/ sẽ IM LẶNG không có hiệu lực — không có gì
           #     đỏ, chỉ là không có gì xảy ra. Đây là lý do nó được canh riêng.
-          # Z9: đây là MỘT trong năm dấu hiệu của watchdog, không phải việc
+          # Z9: đây là MỘT trong bảy dấu hiệu của watchdog, không phải việc
           # chính. `gh run list` lỗi vặt (API, quyền, hay workflow chưa từng
-          # chạy) không được phép làm đỏ cả job và nuốt luôn bốn dấu hiệu
+          # chạy) không được phép làm đỏ cả job và nuốt luôn sáu dấu hiệu
           # còn lại — nhánh `if [ -n "$SYNC" ]` dưới coi rỗng là "không có gì
           # để báo", không phải "đã kiểm và ổn".
           SYNC=$(gh run list --repo "$REPO" --workflow sync-workflows.yml \
@@ -228,7 +228,7 @@ jobs:
           rm -rf "$TELEMETRY_CHECKOUT"
           # Z9 · `|| true` có chủ ý: nhánh telemetry có thể CHƯA tồn tại (mọi
           # lượt trước lượt routine đầu tiên ghi vào nó), và một fetch trượt
-          # không được phép giết năm dấu hiệu còn lại. Nguồn thiếu KHÔNG bị
+          # không được phép giết sáu dấu hiệu còn lại. Nguồn thiếu KHÔNG bị
           # nuốt: thư mục vắng mặt đi vào trường `missing` của
           # `heartbeat-source.ts` và được in ra trong báo cáo dưới.
           git fetch --no-tags --depth=1 origin "+refs/heads/$TELEMETRY_BRANCH:refs/crux/telemetry" || true
@@ -238,7 +238,7 @@ jobs:
             # PR #229 đo được là CHẶN ở bản đầu: không có lưới thì một lỗi của
             # `git archive` hay `tar` (archive lỗi, hết chỗ đĩa, SIGPIPE) giết cả
             # bước dưới `set -euo pipefail` — đo được EXIT=2, **không dấu hiệu
-            # nào trong sáu dấu hiệu chạy**. Và `smoke-workflows.yml` đã khai sẵn
+            # nào trong bảy dấu hiệu chạy**. Và `smoke-workflows.yml` đã khai sẵn
             # rằng không gì canh một lần chạy đỏ của `watchdog.yml`, nên đó là
             # người canh chết mà không ai canh người canh (rủi ro B7).
             #
@@ -253,7 +253,7 @@ jobs:
           # Z9 · `|| true`: `node` thiếu bản đủ mới (bước `setup-node` ở trên
           # cũng `continue-on-error`) phải thành "không đọc được nhịp tim" —
           # tức nhánh `-z "$LAST_BEAT"` GỌI `add` — chứ không thành một job đỏ
-          # nuốt năm dấu hiệu kia.
+          # nuốt sáu dấu hiệu kia.
           BEAT=$(node ops/scripts/heartbeat-source.ts --json \
             --source "main=ops/logs" \
             --source "telemetry=$TELEMETRY_CHECKOUT/heartbeat" || true)
@@ -278,7 +278,7 @@ jobs:
             LAST_BEAT=""
           else
             # Z9 · `|| true` ở hai dòng dưới: JSON lạ làm `jq` thoát khác 0, và
-            # dưới `set -euo pipefail` thì cả job đỏ — nuốt năm dấu hiệu kia.
+            # dưới `set -euo pipefail` thì cả job đỏ — nuốt sáu dấu hiệu kia.
             # Rơi về chuỗi rỗng là hướng an toàn: nhánh `-z "$LAST_BEAT"` dưới
             # GỌI `add`, nên "không đọc được" vẫn tới tay chủ dự án.
             BEAT_REPORT=$(echo "$BEAT" | jq -r '.render // empty' 2>/dev/null || true)
@@ -319,8 +319,8 @@ jobs:
           #
           #     Dùng `if !` chứ KHÔNG dùng `|| LANE_REPORT=…`: script thoát
           #     khác 0 khi không quét được `ops/logs`, và bắt lỗi đó là có
-          #     chủ đích (đây là MỘT trong sáu dấu hiệu, không được phép giết
-          #     năm dấu hiệu kia). Nhưng `|| VAR=…` là một hình dạng nuốt lỗi
+          #     chủ đích (đây là MỘT trong bảy dấu hiệu, không được phép giết
+          #     sáu dấu hiệu kia). Nhưng `|| VAR=…` là một hình dạng nuốt lỗi
           #     mà luật Z9 (`undocumentedSwallows`) KHÔNG nhìn thấy — nó chỉ
           #     bắt `|| true` và `continue-on-error`. Đưa một hình dạng vô
           #     hình vào cây là tự mở một chỗ nhóm Z mới, nên viết tường minh.
@@ -352,31 +352,64 @@ jobs:
           #     lệch nhau im lặng — `ops/test/step0-pending-branches.test.ts`
           #     canh đúng chiều đó.
           PENDING_LIST="${RUNNER_TEMP:-/tmp}/crux-step0-pending.txt"
-          # Z9 · `|| true` có chủ ý: chưa lượt log-only nào chạy thì remote
-          # KHÔNG có nhánh nào khớp tiền tố và `git ls-remote` vẫn thoát 0
-          # với đầu ra rỗng — nhưng mạng trượt thì nó thoát khác 0, và dưới
-          # `set -e` điều đó giết cả năm dấu hiệu kia. Rơi về danh sách rỗng
-          # là hướng an toàn CÓ ĐIỀU KIỆN: script dưới vẫn in ra một dòng
-          # "không nhánh nào", nên một lần fetch trượt không biến thành im
-          # lặng — nó chỉ mất một lượt chấm, và workflow này chạy mỗi giờ.
-          git ls-remote --heads origin "refs/heads/$STEP0_PENDING_PREFIX/*" \
-            | sed 's#.*refs/heads/##' > "$PENDING_LIST" || true
+          PENDING_PROBLEMS=0
 
+          # KHÔNG `|| true` ở đây, và chỗ này là một chỗ hỏng đã đo được
+          # trong chính vòng soát của mục `P-056` — ghi lại vì nó đúng nhóm
+          # Z mà dấu hiệu này sinh ra để giết.
+          #
+          # Bản đầu viết `git ls-remote … | sed … > "$PENDING_LIST" || true`.
+          # Dưới `set -euo pipefail`, `git` hỏng làm cả pipeline thoát khác
+          # 0, `|| true` nuốt, và `$PENDING_LIST` còn lại RỖNG. Script dưới
+          # đọc một danh sách rỗng rồi in ra ĐÚNG TỪNG BYTE câu của ca lành:
+          # "không nhánh nào còn dòng log chưa vào nhánh chính". Tức một lần
+          # `ls-remote` trượt không im lặng — nó KHẲNG ĐỊNH LÀ LÀNH, và cái
+          # đó tệ hơn im lặng.
+          #
+          # Nên bắt mã thoát tường minh, đúng hình dạng `if !` mà dấu hiệu
+          # số 6 dùng, và rơi về một câu "không đo được" phân biệt được với
+          # ca lành. Danh sách rỗng THẬT (chưa lượt log-only nào chạy) vẫn
+          # đi đường thường: `git ls-remote` thoát 0 với đầu ra rỗng.
+          if ! git ls-remote --heads origin "refs/heads/$STEP0_PENDING_PREFIX/*" \
+              | sed 's#.*refs/heads/##' > "$PENDING_LIST"; then
+            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-041) — \`git ls-remote\` thoát khác 0. ĐÂY KHÔNG PHẢI \"không có nhánh nào kẹt\"; xem log của lượt chạy này."
+            PENDING_STALE=0
+            PENDING_PROBLEMS=1
           # `if !` chứ KHÔNG `|| VAR=…`, cùng lý do đã ghi ở dấu hiệu số 6:
           # `|| VAR=…` là một hình dạng nuốt lỗi mà luật Z9 không nhìn thấy.
-          if ! PENDING_JSON=$(node ops/scripts/step0-pending-branches.ts \
+          elif ! PENDING_JSON=$(node ops/scripts/step0-pending-branches.ts \
               --branches "$PENDING_LIST" --json); then
-            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-041) — xem log của lượt chạy này."
+            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-041) — script thoát khác 0. Xem log của lượt chạy này."
             PENDING_STALE=0
+            PENDING_PROBLEMS=1
           else
-            PENDING_REPORT=$(echo "$PENDING_JSON" | jq -r '.render // empty')
-            PENDING_STALE=$(echo "$PENDING_JSON" | jq -r '.stale | length')
-            if [ -z "$PENDING_REPORT" ]; then
-              PENDING_REPORT="⚠ Không đọc được báo cáo nhánh chờ (KF-041) — JSON không có \`render\`."
+            # Z9 · `|| true` có chủ ý, cùng lý do và cùng hình dạng như dấu
+            # hiệu số 5: một JSON lạ làm `jq` thoát khác 0, và dưới
+            # `set -euo pipefail` thì cả job đỏ — tức nuốt sáu dấu hiệu kia.
+            # Rơi về chuỗi rỗng là hướng an toàn: nhánh `-z` ngay dưới biến
+            # nó thành một câu "không đo được", không thành một câu báo yên.
+            PENDING_REPORT=$(echo "$PENDING_JSON" | jq -r '.render // empty' 2>/dev/null || true)
+            # Z9 · rỗng ở đây KHÔNG trôi tiếp: nhánh `-z` ngay dưới biến nó
+            # thành một câu "không đo được", không thành một câu báo yên.
+            PENDING_STALE=$(echo "$PENDING_JSON" | jq -r '.stale | length' 2>/dev/null || true)
+            # Z9 · cùng lý do dòng trên — rỗng đi vào nhánh `-z`, không đi
+            # vào phép so `-gt 0` (một chuỗi rỗng ở đó giết cả job).
+            PENDING_PROBLEMS=$(echo "$PENDING_JSON" | jq -r '.problems | length' 2>/dev/null || true)
+            if [ -z "$PENDING_REPORT" ] || [ -z "$PENDING_STALE" ] || [ -z "$PENDING_PROBLEMS" ]; then
+              PENDING_REPORT="⚠ Không đọc được báo cáo nhánh chờ (KF-041) — JSON không có \`render\`/\`stale\`/\`problems\`. ĐÂY KHÔNG PHẢI \"không có nhánh nào kẹt\"."
               PENDING_STALE=0
+              PENDING_PROBLEMS=1
             fi
           fi
           echo "$PENDING_REPORT"
+
+          # `problems` cũng phải tới được chỗ có người đọc, không chỉ nằm
+          # trong log lượt chạy: một nhánh chờ mang mã log không đọc được
+          # vẫn có thể đang giữ một dòng log chưa gộp, và im lặng ở đó đúng
+          # là chỗ hỏng `KF-041` ghi lại.
+          if [ "$PENDING_PROBLEMS" -gt 0 ] && [ "$PENDING_STALE" -eq 0 ]; then
+            add "Dấu hiệu số 7 (nhánh chờ \`step0-pending\`, \`KF-041\`) có $PENDING_PROBLEMS chỗ KHÔNG ĐO ĐƯỢC. Đây không phải \"không có nhánh nào kẹt\" — bất biến **I8** có thể đang thủng mà phép đo không thấy. Chi tiết từng chỗ ở ngay dưới."
+          fi
 
           if [ "$PENDING_STALE" -gt 0 ]; then
             add "Có $PENDING_STALE nhánh chờ \`$STEP0_PENDING_PREFIX/*\` mang dòng log bước 0 CHƯA vào nhánh chính quá ngưỡng (\`KF-041\`, mục \`platform/P-056\`; ngưỡng ở \`STEP0_PENDING_STALE_HOURS\`). Bất biến **I8** đang thủng đúng ngần ấy lượt chạy: mọi bên đọc log — \`ops/metrics.md\`, bản tin ngày, phép đếm chuỗi kẹt của phụ lục P1 bước 2 — đếm THẤP hơn sự thật. Cách gỡ: lượt worker kế tiếp \`cherry-pick\` các nhánh ấy vào PR của nó rồi xoá nhánh đã gộp (\`P-038\`). Chi tiết từng nhánh ở ngay dưới."
@@ -430,7 +463,7 @@ jobs:
             "" \
             "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4. Nhắc lại mỗi 4 giờ chừng nào tập dấu hiệu này còn nguyên; một dấu hiệu MỚI xuất hiện thì gọi ngay, không chờ hết 4 giờ (mục \`platform/P-034\`).")
 
-          # Chạy thử dừng ở ĐÂY, không sớm hơn: năm phép soát trên đã gọi
+          # Chạy thử dừng ở ĐÂY, không sớm hơn: bảy phép soát trên đã gọi
           # `gh issue list`, `gh pr list`, `gh run list` thật và đọc
           # `ops/logs/**` thật, nên lỗi quyền hay lệnh `gh` sai vẫn lộ ra.
           # Chỉ đúng thao tác ghi ra ngoài là bị chặn.

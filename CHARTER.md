@@ -708,6 +708,13 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    Bước 0e (mục P-043) chạy CẢ khi không có PR nào xung đột: đẩy bản sao dòng log bước 0 lên nhánh
    claude/telemetry, KHÔNG mở PR. Đó là nguồn nhịp tim mà watchdog.yml đọc được trước khi PR của lượt này
    merge — điều kiện chủ dự án đặt ra trên 🤖 [QĐ] #213.
+   Bước 0f (mục P-056) cũng chạy ở MỌI lượt, kể cả lượt không có PR nào xung đột: gộp lại các nhánh chờ
+   của những lượt log-only trước. Chạy lệnh, đừng đọc bằng mắt (CLAUDE.md mục 1 có nguyên văn lệnh):
+       pnpm step0:pending
+   Nhánh nào còn trong `pending` thì `git cherry-pick` dòng log của nó vào PR của lượt này rồi xoá nhánh
+   đã gộp — đó là vế hai của luật P-038, và nó đã hỏng BỐN lần liên tiếp vì không chỗ nào nhắc nó
+   (`ops/known-failures.md` KF-041). Lượt này KHÔNG mở PR thì không gộp được; để nguyên, lượt sau làm.
+   Đây là đường DUY NHẤT gỡ dấu hiệu số 7 của watchdog.yml: nó báo cho tới khi dòng log tới nhánh chính.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
 2. Ưu tiên (mục P-022 và P-025, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó,
    đừng tự suy): nếu có PR đang mở với CI đỏ, hoặc có comment chưa xử lý, hoặc lượt bước 0 gần nhất
@@ -949,6 +956,18 @@ Làn integration của Crux Studio.
       Đẩy bản sao **không** thay việc ghi file ở bước d, và cũng không phải điều kiện của nó: bước d hỏng thì bất biến
       I8 đỏ, bước e hỏng thì nhịp tim rơi về nguồn `main` như trước `P-043` — hướng lệch an toàn, và
       `heartbeat-source.ts` in ra nguồn nào đã trả lời nên chỗ rơi đó không im lặng.
+
+   f. **Gộp lại các nhánh chờ của những lượt log-only trước** (mục `P-056`, `KF-041`). Chạy
+      `pnpm step0:pending` — nó liệt kê nhánh `claude/integration/step0-pending/*` nào còn giữ một dòng log
+      **chưa** tới nhánh chính, kèm tuổi từng nhánh. Nhánh nào còn trong `pending` thì `git cherry-pick`
+      dòng log của nó vào PR của lượt này rồi **xoá** nhánh đã gộp (vế hai của `P-038`).
+
+      Vì sao phải viết ra ở đây: vế một của `P-038` (đẩy dòng log lên nhánh chờ) nằm trong đúng lượt viết ra
+      nó nên nó chạy; vế hai nằm ở một lượt **khác** và không gì nhắc — nên nó hỏng **bốn** lần liên tiếp,
+      bốn lượt worker không có dòng log nào trên nhánh chính, mà `pnpm check` xanh, CI xanh, `main` xanh.
+      Từ `P-056` `watchdog.yml` **dấu hiệu số 7** báo khi một nhánh chờ quá ngưỡng, và bước này là đường
+      **duy nhất** gỡ nó: cảnh báo đó tắt khi dòng log tới nhánh chính, không tắt bằng cách nào khác.
+      Lượt không mở PR thì không gộp được — để nguyên, lượt sau làm.
 
 Các bước 1–5 dưới đây CHỈ chạy ở lần chạy đầu tiên trong ngày có giờ hệ thống ≥ 02:00 giờ Việt Nam (tức đúng một lần
 mỗi ngày, như trước khi đổi nhịp):

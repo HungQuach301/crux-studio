@@ -38,31 +38,55 @@
  * để canh một thứ đổi vài giờ một lần.
  */
 
-import { readdirSync } from 'node:fs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { DEFAULT_DELAY_HOURS } from '../invariants.merge-gate.ts';
 import { parseStep0LogId } from '../../kernel/src/log.ts';
-import { STEP0_PENDING_BRANCH_PREFIX, isStep0PendingBranch } from './step0-pr-gate.ts';
+import {
+  STEP0_PENDING_BRANCH_PREFIX,
+  isStep0PendingBranch,
+  step0LogIdFromPendingBranch,
+} from './step0-pr-gate.ts';
 
 /**
- * Khoảng trừ thêm trên khoảng chờ merge. Một nhánh chờ chỉ tới nhánh chính
- * qua PR của một lượt sau, và PR đó có thể mang `automerge-delayed` — tức
- * còn phải đợi `DEFAULT_DELAY_HOURS` giờ CI xanh nữa. Sáu giờ là chỗ đứng
- * cho phần đó: một lượt worker để nhận nhánh chờ (nhịp thật 2–3 lượt mỗi
- * giờ, `VF-G1`), cộng hàng đợi merge tuần tự (CHARTER mục 7).
+ * Khoảng trừ thêm trên khoảng chờ merge.
+ *
+ * **Con số này đo được, không chọn cho tròn.** Bản đầu để 6 giờ với lý do
+ * "một lượt worker nhận nhánh chờ, cộng hàng đợi chạy trơn". Vòng soát
+ * ngữ cảnh sạch của `P-056` bác nó bằng số của chính kho: CHARTER 3.3 ghi
+ * phép đo ngày 2026-09-23 — *"hàng đợi merge đứng ~8,6 giờ, 9 PR xung
+ * đột, 0 push (`KF-020`)"*. `12 + 6 = 18 < 12 + 8,6 = 20,6`, tức một hàng
+ * đợi tắc đúng như đã từng xảy ra sẽ tự sinh cảnh báo dù không có gì
+ * hỏng — đúng ca mà đoạn dưới nói ngưỡng phải tránh.
+ *
+ * Nên 12 giờ: phủ trọn 8,6 giờ tắc đã đo được, cộng chỗ cho một lượt
+ * worker nhận nhánh chờ (nhịp thật 2–3 lượt mỗi giờ, `VF-G1`).
  */
-export const STEP0_PENDING_MARGIN_HOURS = 6;
+export const STEP0_PENDING_MARGIN_HOURS = 12;
 
 /**
  * Quá ngần này giờ mà dòng log của một nhánh chờ vẫn chưa có trên nhánh
- * chính thì `watchdog.yml` lên tiếng.
+ * chính thì `watchdog.yml` **dấu hiệu số 7** lên tiếng.
  *
- * Suy ra từ `DEFAULT_DELAY_HOURS`, **không** phải một số trần: ngưỡng này
- * phải nằm **trên** khoảng chờ merge dài nhất mà luật cho phép, nếu không
- * mọi PR `automerge-delayed` mang một nhánh chờ sẽ tự sinh một cảnh báo —
- * gọi chủ dự án cho một hàng đợi đang chạy đúng, ngược thước đo CHARTER 1.3.
- * Và nó phải nằm **dưới** 34,9 giờ đã đo được ở `KF-041`, nếu không nó im
- * ở đúng ca nó được viết ra để bắt. `12 + 6 = 18` nằm giữa hai mốc đó.
+ * Suy ra từ `DEFAULT_DELAY_HOURS`, **không** phải một số trần, và nó phải
+ * nằm giữa hai mốc **đo được**:
+ *
+ * - **Trên** `DEFAULT_DELAY_HOURS` cộng khoảng tắc hàng đợi đã từng xảy ra
+ *   (`12 + 8,6`, xem `STEP0_PENDING_MARGIN_HOURS`) — dưới mốc đó thì mọi PR
+ *   `automerge-delayed` mang một nhánh chờ tự sinh một cảnh báo, tức gọi
+ *   chủ dự án cho một hàng đợi đang chạy đúng (ngược CHARTER 1.3).
+ * - **Dưới** 34,9 giờ đã đo được ở `KF-041` — trên mốc đó thì nó im ở đúng
+ *   ca nó được viết ra để bắt.
+ *
+ * `12 + 12 = 24` nằm giữa `20,6` và `34,9`.
+ *
+ * ## Một cận trên KHÔNG tồn tại, khai ra thay vì giả vờ đã che
+ *
+ * Nhánh chờ được `cherry-pick` vào một PR `owner-merge` thì khoảng chờ là
+ * **thời gian của chủ dự án**, không có trần nào — 24 giờ có thể ngắn hơn
+ * nó. Ca đó cho một cảnh báo mà người nhận không làm gì sai, và không con
+ * số nào ở đây chữa được: chữa nó là việc của bên chọn PR để `cherry-pick`
+ * vào (phụ lục P1 bước 0f), không phải của một ngưỡng.
  */
 export const STEP0_PENDING_STALE_HOURS = DEFAULT_DELAY_HOURS + STEP0_PENDING_MARGIN_HOURS;
 
@@ -154,11 +178,15 @@ export function step0PendingBranches(input: Step0PendingInput): Step0PendingRepo
       continue;
     }
 
-    const logId = branch.slice(`${STEP0_PENDING_BRANCH_PREFIX}/`.length);
-    const parsed = parseStep0LogId(logId);
-    if (parsed === null) {
+    // Phép ĐẢO của `step0PendingBranch`, không phải một `slice` tự cắt ở
+    // đây: docblock của `parseStep0LogId` và tiêu chí xong thứ nhất của
+    // `P-056` đều đòi "một chỗ sinh ra tên thì một chỗ đọc ngược lại", và
+    // vòng soát bắt đúng chỗ lời nói lệch mã này.
+    const logId = step0LogIdFromPendingBranch(branch);
+    const parsed = logId === null ? null : parseStep0LogId(logId);
+    if (logId === null || parsed === null) {
       problems.push(
-        `Nhánh chờ \`${branch}\` mang mã log không đọc được (\`${logId}\`) — không suy ra được ` +
+        `Nhánh chờ \`${branch}\` mang mã log không đọc được (\`${logId ?? branch}\`) — không suy ra được ` +
           'mốc lượt chạy nên không đo được tuổi. Nhánh này vẫn có thể đang giữ một dòng log chưa ' +
           'gộp; phải xem bằng tay.',
       );
@@ -223,18 +251,46 @@ export function mergedStep0LogIds(dir: string): string[] {
     .map((name) => name.slice(0, -'.jsonl'.length));
 }
 
+/**
+ * Hỏi remote danh sách nhánh chờ. Ném lỗi khi `git` thoát khác 0 — **không**
+ * rơi về danh sách rỗng: một danh sách rỗng đi vào `step0PendingBranches`
+ * cho ra đúng từng byte câu của ca lành ("không nhánh nào…"), tức một lần
+ * `ls-remote` trượt sẽ KHẲNG ĐỊNH LÀ LÀNH. Đó là chỗ hỏng nhóm **Z** mà
+ * vòng soát của `P-056` bắt được trong chính bản đầu của mục này, nên đây
+ * là chỗ phải ồn ào chứ không phải chỗ nuốt.
+ */
+export function listPendingBranchesFromRemote(remote = 'origin'): string[] {
+  const run = spawnSync(
+    'git',
+    ['ls-remote', '--heads', remote, `refs/heads/${STEP0_PENDING_BRANCH_PREFIX}/*`],
+    { encoding: 'utf8' },
+  );
+  if (run.status !== 0) {
+    throw new Error(
+      `git ls-remote thoát ${run.status ?? 'không rõ'} — KHÔNG đo được nhánh chờ. ` +
+        `Đây không phải "không có nhánh nào kẹt". ${(run.stderr ?? '').trim()}`,
+    );
+  }
+  return (run.stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim().replace(/^[0-9a-f]{7,40}\s+refs\/heads\//, ''))
+    .filter((line) => line.length > 0);
+}
+
 function usage(): never {
   process.stderr.write(
-    'Dùng: node ops/scripts/step0-pending-branches.ts --branches <file> ' +
+    'Dùng: node ops/scripts/step0-pending-branches.ts (--from-remote | --branches <file>) ' +
       '[--logs-dir ops/logs/integration] [--now <ISO>] [--json]\n' +
-      '  --branches  file văn bản, mỗi dòng một tên nhánh remote (đã cắt `refs/heads/`).\n' +
-      '              Dòng trống bị bỏ; dòng dạng `<sha>\\trefs/heads/<nhánh>` được cắt sẵn.\n',
+      '  --from-remote  tự hỏi `git ls-remote` danh sách nhánh chờ (đây là dạng `pnpm step0:pending`).\n' +
+      '  --branches     file văn bản, mỗi dòng một tên nhánh remote (đã cắt `refs/heads/`).\n' +
+      '                 Dòng trống bị bỏ; dòng dạng `<sha>\\trefs/heads/<nhánh>` được cắt sẵn.\n',
   );
   process.exit(2);
 }
 
 function main(argv: readonly string[]): void {
   let branchesFile: string | undefined;
+  let fromRemote = false;
   let logsDir = 'ops/logs/integration';
   let now = new Date().toISOString();
   let asJson = false;
@@ -243,6 +299,8 @@ function main(argv: readonly string[]): void {
     const arg = argv[index]!;
     if (arg === '--json') {
       asJson = true;
+    } else if (arg === '--from-remote') {
+      fromRemote = true;
     } else if (arg === '--branches') {
       branchesFile = argv[(index += 1)];
     } else if (arg === '--logs-dir') {
@@ -253,15 +311,17 @@ function main(argv: readonly string[]): void {
       usage();
     }
   }
-  if (branchesFile === undefined) usage();
+  if (fromRemote === (branchesFile !== undefined)) usage();
 
-  const branches = readFileSync(branchesFile, 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    // `git ls-remote` in ra `<sha>\trefs/heads/<nhánh>`; nhận cả dạng thô để
-    // bên gọi không phải nhớ một lần `sed` nữa.
-    .map((line) => line.replace(/^[0-9a-f]{7,40}\s+refs\/heads\//, ''))
-    .filter((line) => line.length > 0);
+  const branches = fromRemote
+    ? listPendingBranchesFromRemote()
+    : readFileSync(branchesFile!, 'utf8')
+        .split('\n')
+        .map((line) => line.trim())
+        // `git ls-remote` in ra `<sha>\trefs/heads/<nhánh>`; nhận cả dạng thô
+        // để bên gọi không phải nhớ một lần `sed` nữa.
+        .map((line) => line.replace(/^[0-9a-f]{7,40}\s+refs\/heads\//, ''))
+        .filter((line) => line.length > 0);
 
   const report = step0PendingBranches({ branches, mergedLogIds: mergedStep0LogIds(logsDir), now });
   process.stdout.write(

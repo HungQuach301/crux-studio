@@ -19,6 +19,7 @@
     "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
     "backlog:status": "node ops/scripts/backlog-status.ts",
     "lanes:heartbeat": "node ops/scripts/lane-heartbeat.ts",
+    "step0:pending": "node ops/scripts/step0-pending-branches.ts --from-remote",
     "digest:metrics": "node ops/scripts/digest-metrics.ts",
     "gate:flow": "node ops/scripts/gate-flow.ts",
     "topic:novelty-trial": "node ops/scripts/novelty-embeddings-trial.ts",
