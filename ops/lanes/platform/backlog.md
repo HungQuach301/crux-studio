@@ -4,6 +4,32 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-053 · Bản tin thiếu mục "Việc đang chờ anh", nên việc chờ chủ dự án nằm im nhiều ngày mà không gì đỏ (C1 + C4)
+
+Chỉ dẫn **C1** và **C4** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn [`#131` lúc `2026-09-24T16:15:26Z`](https://github.com/HungQuach301/crux-studio/issues/131#issuecomment-5817849982)), nhóm mà anh dặn *"ưu tiên mục này trước các mục còn lại của 14 mục trên"*. Nhóm **D** đã xong cả sáu (`P-049`…`P-052`), nên **C** là nhóm còn lại đứng đầu.
+
+Chỗ hỏng anh nêu, và đo lại được: bản tin chỉ đưa quyết định `irreversible` lên đầu, nên **hai loại việc chờ anh rơi mất hẳn** — (a) mục backlog có `- hold:` chờ chính anh, (b) `[QĐ] reversible` mà máy **không tự làm được**. Anh dẫn bốn ca: `#101` (mở Google Cloud Console đọc hạn mức), `#92` cộng `V-002`/`A-001` (xem clip, chấm `WP-003` mục 5), `#5` (`VF-G1`), và khoá YouTube Data API cho `T-011`/`T-008`.
+
+Đo trên `main` `2aa0b73`: **15 issue `decision` đang mở**, trong đó **11 `reversible`** — cả 11 nằm ngoài dòng *"Cần anh quyết"* vì `needOwnerCount` cố ý không đếm `reversible` (đúng `D-C06`), và mục *"Quyết định reversible đang mở"* chỉ in tên chứ **không** phân biệt *"máy đã tự làm, chỉ chờ đóng"* với *"máy không làm được, đang chờ anh"*. `#5` mở từ `2026-09-20`, `#36` từ `2026-09-21`, `#101` từ `2026-09-22`. Phía backlog: **31 trường `- hold:`** trên bảy làn, không lệnh nào tách ra được cái nào chờ anh.
+
+Nhóm **Z** đúng định nghĩa: `pnpm check` xanh, CI xanh, `main` xanh, bản tin xanh — mà nút thắt người bị đếm thiếu, nên thước đo *"thời gian của anh"* (CHARTER 1.3) và dòng *"nút thắt hiện tại là máy hay người"* đều nói sai.
+
+- deps: —
+- risk: low — chỉ **thêm** một mục vào `renderDigestMetrics` cộng một module hàm thuần mới; không đổi `needOwnerCount`, không đổi dòng đầu bản tin, không đóng/mở issue nào, không chạm vùng bảo vệ ngoài phụ lục P2 của `CHARTER.md` (ngoài mục 1 và 3). Hướng lệch chọn theo chỗ đắt hơn: **nêu thừa** một dòng thì anh thấy ngay và bỏ qua được; **nuốt mất** một việc đang chờ anh là đúng cái nhóm Z mà mục này chữa.
+- status: review
+- hold: chưa **quan sát** bản tin thật in mục *"Việc đang chờ anh"* — routine `crux-digest` (20:30, phụ lục P2) chưa chạy sau khi mục này vào `main`; lượt `crux-digest` kế tiếp là quan sát đầu tiên (cùng hình dạng hold của `P-051`/`P-052`). Mục **không** tự chuyển `done` tới khi có quan sát đó. Cộng hai vế **ngoài phạm vi, đã tách**: `C2` (@nhắc riêng khi quá 48 giờ — chạm `notify.yml`) và `C3` (`[QĐ] reversible` cần đầu vào của anh thì hoặc chuyển mục này, hoặc máy tự quyết theo khuyến nghị).
+- nguồn: `#251` C1–C4 · thân và nhãn của 15 issue `decision` đang mở (đọc bằng API, không đọc bằng mắt) · 31 trường `- hold:` trong `ops/lanes/*/backlog.md` · `ops/lanes/priority.md` (làn giữ cổng Mốc 3)
+- tiêu chí xong:
+  - ⬜ `ops/scripts/owner-waiting.ts`: hàm thuần `ownerHoldWait`, `decisionNeedsOwnerHand`, `blockedCounts`, `ownerWaitingRows`, `renderOwnerWaitingLines`.
+  - ⬜ `ops/scripts/digest-metrics.ts`: `DigestMetrics.ownerWaiting`, và `renderDigestMetrics` in mục *"Việc đang chờ anh"* **ngay sau** khối *"Cần anh quyết"*.
+  - ⬜ `CHARTER.md` phụ lục P2: khối *"Việc đang chờ anh"* thành phần **bắt buộc** của bản tin, đặt đúng vị trí thứ hai.
+  - ⬜ `ops/known-failures.md`: `KF-037` cho ca nhóm Z này (vế **C4**).
+  - ⬜ `ops/test/owner-waiting.test.ts`: bài kiểm hai chiều cho từng luật con, fixture lấy **nguyên văn** từ `#5`, `#101`, `#92`, `#213`, `#36` (ca dương) và `#107`, `#45`, `#96`, `#254` (ca âm).
+  - ⬜ **Bài kiểm tác động** (`A3` của `#251`): chạy bộ dò trên **toàn bộ** 15 issue `decision` đang mở và 31 trường `- hold:` thật, dán số ra.
+  - ⬜ `pnpm check` và `pnpm replay` xanh, số thật dán vào PR.
+
+---
+
 ### P-052 · Bản tin phát hiện `[QĐ]` có điều kiện đã đủ nhưng vẫn mở, và KF cho ca `#127` (D6)
 
 Chỉ dẫn **D6** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn `#131` lúc `2026-09-24T23:54:32Z`): *"Ghi KF: `#127` nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy. Bản tin phải phát hiện được `[QĐ]` có điều kiện đã đủ nhưng vẫn mở."*
