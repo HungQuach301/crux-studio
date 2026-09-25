@@ -1114,6 +1114,33 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 
 ---
 
+## KF-039 · Cổng cú pháp của `I-018` **cho qua** cây union có khai báo trùng — `resolved` lần thứ hai cho một cây Node không nạp được
+
+> Số **KF-039**: `KF-036` là mã mà mục này nhận lúc viết, nhưng `main` đã cấp cùng số cho một chỗ hỏng khác (`KF-036 · Phép dò mã mục trống…`, mục `platform/P-054`, PR `#258`, vào `main` lúc `2026-09-25T06:53:33Z`) — tức **đúng chỗ hỏng mà `KF-036` của `main` mô tả**, xảy ra với chính mục này. Lượt `crux-worker-1` ~07:5xZ 2026-09-25 gộp `main` vào nhánh này ở bước 0 và phát hiện va chạm, nên đổi số ở đây. `KF-039` là mã trống kế tiếp, dò `^## KF-` trên `main` **và** trên đầu nhánh cả 11 PR đang mở (cao nhất `KF-038`, PR `#261`) — `KF-005`.
+
+- **Lần gặp:** 2 của **cùng một lớp hỏng** với `KF-016` (`integrator-resolve.ts` trả `resolved` cho một cây không đọc được), nhưng **chữ ký khác** nên cổng của `I-018` không bắt. Lần này: PR `#242` (`claude/dreamy-ride-ynixo1`, mục `audio/AU-007`), lượt `crux-worker-1` ~04:41Z ngày 2026-09-25, sau khi `#39`/`V-001` vào `main` lúc `04:36:59Z` (`b1063a9`).
+- **Chữ ký:** `node ops/scripts/integrator-resolve.ts origin/main` in `{"outcome":"resolved","files":["kernel/src/packs.ts"]}` và thoát `0`, nhưng cổng **đầu tiên** của `pnpm check` (`pnpm contracts`) đỏ ngay ở tầng **nạp module**, không phải ở `typecheck`:
+
+  ```
+  file:///home/user/crux-studio/kernel/src/packs.ts:13
+  import { assertValid,                 } from './validate.ts';
+           ^^^^^^^^^^^
+  SyntaxError: Identifier 'assertValid' has already been declared
+  ```
+
+- **Nguyên nhân gốc:** hai phía cùng **thêm** một dòng `import … assertValid …` vào cùng khối import — `main` viết `import { assertValid, type JsonSchema } from './validate.ts';` (V-001), nhánh viết `import { assertValid } from './validate.ts';` (AU-007). Union thuần cộng thêm giữ **cả hai** dòng. Không bên nào xoá dòng nào, nên phép đếm dòng xoá của `integrator-resolve.ts` lại không thấy gì — **y hệt `KF-016`**.
+- **Vì sao cổng `I-018` không bắt — và đây mới là phần mới:** `mergedSyntaxProblem` (`ops/scripts/merge-syntax.ts`) kiểm file script bằng `ts.transpileModule(..., { reportDiagnostics: true })`, phép này **chỉ báo lỗi PARSE**. Hai dòng `import` trùng ký hiệu **parse hoàn toàn hợp lệ** — lỗi là lỗi *khai báo trùng*, phát sinh ở tầng **liên kết module** của ESM, sau khi parse xong. Nên cổng trả `null` (cho qua) trên đúng file mà Node từ chối nạp. Đo được, hai chiều, bởi vòng soát ngữ cảnh sạch của phụ lục P1 bước 6:
+
+  ```
+  mergedSyntaxProblem(<file có 2 dòng import trùng>)  → null            # cổng CHO QUA
+  node -e "await import('…/kernel/src/packs.ts')"     → SyntaxError…    # Node TỪ CHỐI
+  ```
+
+- **Phân loại SAI, không chỉ là một lần bỏ sót:** CHARTER phụ lục P3 bước 0b nói ca "cây sau khi union không còn đọc được" là **`aborted-ineligible`**, *không* phải "PR đỏ" — và hai ca đi **hai đường khác nhau** ở lượt sau (phụ lục P1 bước 2: `aborted-ineligible` thì worker giải xung đột bằng phán đoán; `red-after-merge` thì worker đọc chỗ đỏ rồi sửa code). Tool trả `resolved`, nên `pickPrToHandle` xếp `#242` vào ca `red-after-merge`. Kết quả cuối vẫn đúng ở lượt này, nhưng đường đi là đường sai.
+- **Vì sao nó đắt:** nhóm **Z** ở đúng công cụ mà cả hàng đợi merge dựa vào. Phần *"Thiên lệch, khai trước"* của `KF-016` liệt kê các lỗ còn lại của cổng — nó kể đường gộp `clean` và phép kiểm YAML hẹp, **không** kể ca khai báo trùng. Nên tới trước dòng này, sổ đang nói **sai phạm vi lỗ** của chính cổng đó. Lượt integrator kế tiếp gặp lại hình dạng này sẽ lại nhận `resolved` và push một cây đỏ lên nhánh PR.
+- **Đã sửa ở đâu:** *chỉ mới phần vá sản phẩm.* Lượt `crux-worker-1` 04:41Z reset về `66ab9b8` (không push cây đỏ — P3 bước 0b), rồi gộp lại bằng `git merge` thường và **giải tay** đúng một khối import: gộp hai danh sách thành một, giữ đủ `readingTableSchema` (AU-007) lẫn `fileURLToPath` + `type JsonSchema` (V-001), `assertValid` đúng **một** lần. Đo không nuốt bên nào: `git diff origin/main -- kernel/src/packs.ts` **0 dòng xoá**; `git diff 66ab9b8 -- …` xoá **đúng 1 dòng**, là dòng import trùng; 19/19 export còn nguyên. Theo `CLAUDE.md` mục 13 thì đó **vẫn là vá sản phẩm**, không phải sửa cơ chế.
+- **Máy chặn từ nay:** **chưa có** — và đây là chỗ để mở có chủ đích, khai ra thay vì im. Phần siết `ops/scripts/merge-syntax.ts` chạm **tầng luật** đang bắt lỗi, nên `CLAUDE.md` mục 13 đòi **tách PR riêng**: *"Bản sửa vừa sửa chỗ hỏng vừa siết thêm luật thì tách hai PR"*. PR `#242` chỉ mang dòng tài liệu này. Mục backlog cho phần cơ chế cần: mở rộng `mergedSyntaxProblem` bắt khai báo trùng ở phạm vi đỉnh của module (nạp thử, hoặc soát tên trùng của `import`/`const`/`let`/`function`/`class`), kèm **test tái hiện lỗi** đúng hình dạng "hai bên cùng thêm một dòng import cùng ký hiệu" (bất biến **I2**), và đo **hai chiều** như `I-018` đã làm: đỏ trên bản trước khi sửa, xanh sau bản sửa. Giữ nguyên thiên lệch của `merge-syntax.ts` (báo sai đắt hơn bỏ sót): chỉ báo khi cây **chắc chắn** không nạp được.
+- **Lưới đỡ tới khi có máy chặn:** bước 0 phải chạy `pnpm check` **đủ** trước khi push (P3 bước 0b đã đòi), và một cây gộp `resolved` mà `pnpm check` đỏ ở lỗi *nạp module* hay *cú pháp* thì đọc là **`aborted-ineligible`**, không phải một PR đỏ bình thường — cùng dòng lưới đỡ mà `KF-016` đã đặt, nay nói rõ là nó phủ cả lỗi khai báo trùng.
 ## KF-034 · Soát chéo GPT chạy đều, tốn tiền đều, và chưa bao giờ ra một phát hiện nào
 
 > Số **KF-034**: dò `## KF-` trên `main` (cao nhất `KF-033`) **và trên đầu cả 10 PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-034` không đụng ai.
