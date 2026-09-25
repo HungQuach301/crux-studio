@@ -44,10 +44,14 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 - deps: R-001
 - risk: high
 - status: parked
-- hold: chờ chủ dự án — điều kiện (1) và (2) của `🤖 [QĐ]` #248: tạo kênh YouTube, tạo OAuth client scope
-  `youtube.upload`, đặt refresh token vào Secrets, và đặt app ở chế độ **In production**. Mở lại thành
-  `ready` ngay khi secret có mặt; không có secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret
-  (cùng luật với `T-003` và `T-011`).
+- hold: chờ chủ dự án — điều kiện (1) và (2) của `🤖 [QĐ]` #248: tạo kênh YouTube, tạo OAuth client scope `youtube.upload` ở chế độ **In production**, rồi đặt `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` vào Secrets. Mở lại `ready` ngay khi secret có mặt.
+- **ba tên secret đã chốt, và chúng chưa tồn tại ở đâu trong repo** — `YOUTUBE_CLIENT_ID`,
+  `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`, chốt ở comment `5829566818` trên `#248` *"để lượt sau
+  không tự đặt tên khác"*. Đo `2026-09-25`: `grep -rn` ba tên đó trên toàn kho ra **đúng một** chỗ, là
+  `ops/logs/release/R-002.jsonl` — tức một dòng log, không phải một khai báo. Nêu chúng ở đây là điều làm
+  phép so với `topic/T-011` thành thật: mục đó được lấy làm mốc **vì** nó nêu đích danh secret còn thiếu.
+  Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003` và
+  `T-011`).
 - **vì sao `parked` từ lượt `2026-09-25` ~10:5xZ, trong khi mục này tự khai "không phải ca `parked`"**:
   điều kiện mà chính bullet dưới đây đặt ra **đã xong**. Nguyên văn của nó: *"đây **không** phải ca `parked`
   như `topic/T-011` (mục đó nêu đích danh secret còn thiếu); chỗ thiếu ở đây là chính **mảnh tài liệu**
@@ -71,7 +75,9 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
   mục này, không phải là nền móng của nó. Nên cắt ở đây. Quan hệ vẫn còn nguyên ở dòng `nguồn` ngay dưới,
   chỗ nó thuộc về.
 - **mục này nay nằm trong `readyNow`, và lượt nhận nó phải biết trước** (vòng soát ngữ cảnh sạch của
-  `I-019`): cắt vòng làm `R-002` thôi bị khoá oan — `R-001` đã vào `main` thật — nhưng nó vẫn cần một
+  `I-019`) — ⚠️ **vế `readyNow` của câu này cũng hết hiệu lực từ 2026-09-25**, cùng lúc và cùng lý do với
+  vế *"không phải ca `parked`"*: mục chuyển `parked` nên `readyQueue` không nhận nó nữa (đo: readyNow
+  4 → 3). Giữ nguyên văn vì nó là bản ghi trạng thái lúc `I-019` viết: cắt vòng làm `R-002` thôi bị khoá oan — `R-001` đã vào `main` thật — nhưng nó vẫn cần một
   đường xác thực YouTube mà **repo chưa ghi ở đâu cả**: không `docs/assumptions.md`, không backlog, không
   workflow nào nhắc tới một secret hay app OAuth cho việc tải lên. Nên đây **không** phải ca `parked` như
   `topic/T-011` (mục đó nêu đích danh secret còn thiếu); chỗ thiếu ở đây là chính **mảnh tài liệu** đó.

@@ -6,6 +6,43 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-041 · Trường máy đọc `- hold:` bị đọc **cắt giữa câu** khi lý do xuống dòng, và chữ bị mất đi thẳng tới mắt chủ dự án
+
+> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất tìm được là `KF-040` (PR `#264`), nên số trống kế tiếp là `KF-041`.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` **EXIT=0** với cả hai ca dưới đây, CI xanh, `main` xanh. Không phép đo nào trong kho nhìn vào chỗ này.
+
+**Chữ ký:** `HOLD_FIELD` của `ops/scripts/backlog-status.ts` là một mẫu RegExp **một dòng** (`^\s*-\s*hold:\s*(\S.*?)\s*$`), và `ops/lanes/README.md` khai hình dạng đúng là *"**Một dòng** `- hold: <lý do>`"*. Nhưng lý do là văn xuôi tiếng Việt dài, nên người viết **xuống dòng** — và bên đọc lặng lẽ giữ đúng dòng đầu, bỏ phần còn lại. Không có gì phân biệt "lý do ngắn thật" với "lý do bị cắt".
+
+**Vì sao nó đắt hơn một chỗ đọc thiếu:** từ mục `platform/P-053` (`ops/scripts/owner-waiting.ts`, PR `#260`), chính chuỗi này là **chữ in trong khối "Việc đang chờ anh" của bản tin ngày**. Nên phần bị bỏ không nằm im trong file — nó là phần chủ dự án cần để hành động, và nó biến mất khỏi đúng cái hộp quyết định duy nhất mà `D-C06` dựng lên. Vòng soát ngữ cảnh sạch chạy `owner-waiting.ts` của `#260` trên bản sửa và thấy `release/R-002` hiện ra **với câu cụt**.
+
+**Lần gặp: 2**, hai lượt khác nhau, cùng một chữ ký:
+
+| # | Mục | Mẫu cũ cắt ở đâu | Mất bao nhiêu | Phần mất là gì |
+|---|---|---|---|---|
+| 1 | `topic/T-014` (đã trên `main`) | ``…`EMBEDDINGS_API_KEY` (secret chỉ sống trong`` | **142** ký tự | điều kiện gỡ treo, và câu *"mục **không** tự chuyển `done`"* — cắt để lại một dấu ngoặc chưa đóng |
+| 2 | `release/R-002` (lượt `2026-09-25` ~10:5xZ) | `…tạo kênh YouTube, tạo OAuth client scope` | **243** ký tự | tên scope, *"đặt refresh token vào Secrets"*, chế độ **In production**, điều kiện mở lại |
+
+Phép đo: dựng lại giá trị của mẫu một dòng rồi so với `parseBacklog` trên cả **47** trường `- hold:` thật của kho → đúng **2** mục lệch.
+
+**Nguyên nhân gốc:** luật *"giữ một dòng"* là **lời dặn cho người viết**, không có máy nào giữ. Nó đã bị vi phạm hai lần bởi hai lượt khác nhau, và cả hai lần đều không do cẩu thả — xuống dòng là phản xạ đúng khi câu dài hơn chiều rộng file.
+
+**Chỗ đã sửa (tầng luật, không vá sản phẩm — `CLAUDE.md` mục 13):** sửa **bên đọc**, không sửa hai mục backlog. `joinHoldLines` của `ops/scripts/backlog-status.ts` nối lý do với các dòng nối tiếp của nó, và **dừng** ở mọi thứ mở một khối Markdown mới (`-` `*` `+` gạch đầu dòng · `>` trích dẫn · `|` hàng bảng · dòng trống · dòng không thụt lề). Hệ quả: `topic/T-014` đọc đủ **không cần sửa một chữ nào** trong làn `topic`.
+
+Vì sao chọn *đọc đủ* chứ không *báo đỏ khi xuống dòng*: báo đỏ chỉ **phát hiện** lớp lỗi và để lại một cái bẫy người viết phải nhớ; đọc đủ **xoá hẳn lớp lỗi**. Cùng lối lập luận mà docblock của `HOLD_MARKERS` đã ghi cho lưới lời văn: *"danh sách chuỗi con KHÔNG hội tụ … Đó **không** phải chỗ để vá tiếp"*.
+
+**Máy chặn từ nay:** ba bài ở `ops/test/backlog-status.test.ts`, bài thứ ba chạy trên **backlog thật** nên nó bắt cả ca tương lai:
+
+1. `joinHoldLines` — nối đúng một khoảng trắng, và **dừng** đúng ở tám hình dạng biên (mỗi hình dạng một `assert` riêng, gộp lại thì một mẫu hỏng vẫn xanh nhờ mẫu khác).
+2. `parseBacklog` trên hai hình dạng thật (2 dòng nối và 1 dòng), kèm phép đòi dấu ngoặc `(secret …)` phải được đóng trong chính lý do.
+3. **Trên `ops/lanes/*/backlog.md` thật:** với mọi trường `- hold:`, `holdField` phải bằng bản **nối đủ**, không bằng bản một dòng.
+
+Phá thử, mỗi phép đúng số bài đỏ rồi khôi phục: bỏ `joinHoldLines` khỏi `parseBacklog` → **2 đỏ** (gồm bài trên backlog thật) · bỏ cổng loại gạch con/trích dẫn/bảng → **1 đỏ** · nối không khoảng trắng → **2 đỏ** · khôi phục → **77/77**.
+
+**Hình dạng khuyến nghị vẫn là một dòng** (`ops/lanes/README.md`), vì dòng bản tin phải đọc được trong khoảng 60 giây trên màn hình điện thoại (`CLAUDE.md` mục 9). `joinHoldLines` là lưới an toàn cho lúc nó bị vi phạm, không phải lời mời viết dài.
+
+---
+
 ## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
 
 > Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.
