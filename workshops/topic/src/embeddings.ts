@@ -155,6 +155,18 @@ export interface OpenAiProviderOptions {
 }
 
 /**
+ * Thay mọi lần xuất hiện của `secret` trong `text` bằng `***`. Dùng trước khi
+ * đưa bất cứ thứ gì nhà cung cấp trả về vào một thông điệp lỗi.
+ *
+ * Khoá rỗng thì trả nguyên văn: thay chuỗi rỗng sẽ chèn `***` vào giữa mọi ký
+ * tự, biến một thông điệp đọc được thành rác.
+ */
+export function redactSecret(text: string, secret: string): string {
+  if (secret.length === 0) return text;
+  return text.split(secret).join('***');
+}
+
+/**
  * Bản OpenAI. Không tự đọc `process.env` — bên gọi đưa khoá vào, nên đường
  * đi của secret nhìn thấy được ở chỗ gọi thay vì chôn trong một lớp sâu.
  */
@@ -177,8 +189,12 @@ export function openAiEmbeddingProvider(options: OpenAiProviderOptions): Embeddi
         body: JSON.stringify({ model: options.model.model, input: texts }),
       });
       if (!response.ok) {
-        // Thân lỗi có thể mang khoá bị vọng lại; chỉ lấy mã và một đoạn ngắn.
-        const body = (await response.text()).slice(0, 200);
+        // Thân lỗi xác thực hay vọng lại chính khoá, và nó nằm ở ĐẦU thông
+        // điệp — nên cắt đuôi (`slice`) không che được gì. Thay từng lần xuất
+        // hiện của khoá bằng `***` TRƯỚC, rồi mới cắt cho ngắn. Actions có che
+        // secret đã đăng ký, nhưng luật phải nằm trong code chứ không nằm
+        // trong may mắn.
+        const body = redactSecret(await response.text(), options.apiKey).slice(0, 200);
         throw new Error(
           `Gọi embeddings thất bại: HTTP ${response.status}. Đoạn đầu thân lỗi: ${body}`,
         );
@@ -200,7 +216,17 @@ export function openAiEmbeddingProvider(options: OpenAiProviderOptions): Embeddi
       for (let i = 0; i < vectors.length; i += 1) {
         if (!vectors[i]) throw new Error(`Thiếu vector cho đoạn số ${i} — phản hồi không đủ index.`);
       }
-      const totalTokens = payload.usage?.total_tokens ?? 0;
+      // CHẶN được reviewer nêu: `?? 0` ở đây biến một lần gọi CÓ HOÁ ĐƠN thành
+      // `costUsd: 0` mà không gì đỏ — và nó xoá mất chính tín hiệu mà vế 2 của
+      // giả định **G20** cần để bị bác bỏ (`VF-G20` đối chiếu hoá đơn sẽ thấy
+      // lệch mà không phân biệt được "giá sai" với "usage vắng mặt").
+      const totalTokens = payload.usage?.total_tokens;
+      if (typeof totalTokens !== 'number' || !Number.isFinite(totalTokens)) {
+        throw new Error(
+          `Phản hồi embeddings không có \`usage.total_tokens\` — không tính được costUsd. ` +
+            `Đây là giả định G20 vế 2 bị bác: DỪNG chứ không ghi $0 cho một lần gọi có hoá đơn.`,
+        );
+      }
       return {
         model: options.model.model,
         vectors,
@@ -321,4 +347,41 @@ export function cheapestAdequateModel(candidates: readonly ModelCandidate[]): Mo
   return adequate.reduce((best, c) =>
     c.model.usdPerMillionTokens < best.model.usdPerMillionTokens ? c : best,
   );
+}
+
+export const noveltyProbeSchema: JsonSchema = JSON.parse(
+  readFileSync(`${CONTRACTS_DIR}novelty-probe.v0.schema.json`, 'utf8'),
+) as JsonSchema;
+
+export interface NoveltyProbe {
+  schemaVersion: number;
+  probeId: string;
+  corpusId: string;
+  labelledBy: 'hand-built';
+  theses: { id: string; statement: string; note?: string }[];
+  pairs: ProbePair[];
+}
+
+export function validateNoveltyProbe(value: unknown): ValidationResult {
+  return validate(value, noveltyProbeSchema);
+}
+
+/**
+ * Nạp tập thăm dò và **validate** trước khi trả — đối xứng với
+ * `readEmbeddingModelTable`.
+ *
+ * Vì sao phải đối xứng (reviewer nêu): `sameTopic` viết nhầm thành chuỗi
+ * `"false"` thì `pairs.filter((p) => p.sameTopic)` coi là truthy, một cặp
+ * khác chuyện bị xếp vào nhóm cùng chuyện, `margin` sai, và
+ * `cheapestAdequateModel` chọn sai model — **không gì đỏ**. Contract có
+ * `"type": "boolean"` nên phép validate bắt đúng ca đó.
+ */
+export function readNoveltyProbe(fileName = 'novelty-probe.json'): NoveltyProbe {
+  const value = JSON.parse(readFileSync(`${DATA_DIR}${fileName}`, 'utf8')) as unknown;
+  const result = validateNoveltyProbe(value);
+  if (!result.valid) {
+    const errors = result.errors.map((e) => `${e.path}: ${e.message}`).join('; ');
+    throw new Error(`Tập thăm dò \`${fileName}\` không hợp contract: ${errors}`);
+  }
+  return value as NoveltyProbe;
 }

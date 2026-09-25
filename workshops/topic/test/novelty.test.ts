@@ -294,7 +294,15 @@ test('T-014: `limitation` nói đúng phép so ĐÃ dùng và gọi tên model',
   });
   assert.match(semantic.limitation, /so ngữ nghĩa bằng embeddings/);
   assert.match(semantic.limitation, /text-embedding-3-small/);
-  assert.doesNotMatch(semantic.limitation, /chệch về phía "mới lạ"/);
+  // Hướng chệch KHÔNG được biến mất ở nhánh ngữ nghĩa: embeddings chữa phần
+  // "khác chữ", không chữa phần "không có trong metadata".
+  assert.match(semantic.limitation, /chệch về phía "mới lạ"/);
+  assert.match(semantic.limitation, /nhẹ hơn so từ vựng, không phải hết/);
+  // Trường máy đọc (I6), không phải văn xuôi.
+  assert.equal(lexical.method, 'lexical');
+  assert.equal(lexical.similarityModel, undefined);
+  assert.equal(semantic.method, 'semantic');
+  assert.equal(semantic.similarityModel, 'text-embedding-3-small');
   // Câu cấm của WP-014 mục 5 vẫn đứng ở nhánh mới.
   assert.doesNotThrow(() => assertNoUniversalClaim(semantic.limitation, 'limitation'));
   assert.equal(validateNoveltyCheck(semantic).valid, true);
@@ -309,4 +317,19 @@ test('T-014: nhánh `insufficient-corpus` thắng cả điểm ngữ nghĩa cao'
     scores: scoreTable(few, 0.99),
   });
   assert.equal(semantic.verdict, 'insufficient-corpus');
+});
+
+test('T-014: cosine ÂM vẫn hợp contract — nhánh ngữ nghĩa không tự phạm contract của chính nó', () => {
+  const corpus = loadCorpus();
+  const semantic = checkNovelty(THESIS, corpus, CHECKED_AT, undefined, {
+    model: 'fake-small',
+    // Ngưỡng âm là ca reviewer nêu: `overlap` của contract từng khoá [0, 1]
+    // trong khi cosine nằm trong [-1, 1], nên một điểm âm lọt vào `matches` là
+    // artifact tự phạm contract của chính nó.
+    threshold: -0.5,
+    scores: scoreTable(corpus, -0.3, { 'yt-0001': 0.9 }),
+  });
+  const result = validateNoveltyCheck(semantic);
+  assert.equal(result.valid, true, JSON.stringify(result.errors));
+  assert.ok(semantic.matches?.some((m) => m.overlap < 0), 'ca này phải thật sự có điểm âm');
 });

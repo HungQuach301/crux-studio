@@ -272,4 +272,25 @@ Chỗ hỏng mà mục này chữa, đo được: `checkNovelty` so **từ vựn
   - `workshops/topic/src/novelty.ts` — tham số thứ năm **tuỳ chọn** `SemanticSimilarity`; mặc định không đổi nên tập vàng không đổi byte nào. Thiếu điểm của một video thì **ném**, không im lặng coi là 0.
   - `ops/scripts/novelty-embeddings-trial.ts` (`pnpm topic:novelty-trial`) — chạy cả ba model ứng viên trên 38 video, in bảng so hai phép so ba mức (`≠` khác verdict · `±` cùng verdict khác số đếm · trống), chọn model, ghi `costUsd`.
   - Dữ liệu: `data/embeddings/openai-2026-09-25.json` (bảng giá, `source: "vendor-docs"`, `assumption: "G20"`) và `data/embeddings/novelty-probe.json` (16 cặp có nhãn người đặt), mỗi file một contract trong `workshops/topic/contracts/`.
+- ✅ **Soát chéo subagent ngữ cảnh sạch (P1 bước 6) — 2 CHẶN, đã sửa cả hai:**
+  - `main()` của script không có `try`/`finally`, nên model 3 ném **sau khi** model 1 và 2 đã bị tính tiền
+    thì không dòng log nào được ghi — tiền đã tiêu mà bất biến **I8** thủng, và không gì đỏ. Nay `costUsd`
+    cộng dồn ngoài vòng lặp và dòng log ghi ở `finally`, lỗi ném lại **sau** khi log đã nằm trên đĩa.
+  - `payload.usage?.total_tokens ?? 0` biến một lần gọi **có hoá đơn** thành `costUsd: 0` im lặng — và xoá
+    mất chính tín hiệu mà vế 2 của **G20** cần để bị bác bỏ. Nay `usage` vắng mặt thì **ném**.
+- ✅ **4 trong 6 mục NÊN SỬA, đã sửa:** contract `novelty-check` nới cận dưới `overlap` về `-1` (cosine nằm
+  trong `[-1, 1]` còn contract khoá `[0, 1]` — nhánh ngữ nghĩa tự phạm contract của chính nó, chứng minh
+  bằng ca `threshold: -0.5` nay là một bài kiểm) và thêm trường **máy đọc** `method`/`similarityModel`
+  (bất biến **I6**: `overlap` của hai phép so là hai đại lượng, nguồn phải là trường chứ không phải một câu
+  trong `limitation`) · `readNoveltyProbe()` validate tập thăm dò, đối xứng với `readEmbeddingModelTable`
+  (thiếu nó thì `sameTopic: "false"` là chuỗi truthy → chọn sai model, không gì đỏ) · `redactSecret` thay
+  khoá bằng `***` trong thân lỗi trước khi cắt (`slice` cắt đuôi, mà khoá vọng lại nằm ở **đầu**) ·
+  `limitation` nhánh ngữ nghĩa **giữ lại** hướng chệch: embeddings chữa phần "khác chữ", không chữa phần
+  "không có trong metadata".
+- ⬜ **2 mục NÊN SỬA còn lại, tách thành mục anh em** (một mục = một PR): `lint-deps.ts` chỉ đếm specifier
+  `@crux/workshop-*` nên một script `ops/` import `workshops/<tên>/src/` bằng **đường dẫn tương đối** đi
+  qua **I3** mà không dòng nào đỏ (PR này là tiền lệ đầu tiên, và nó chỉ chạm **một** xưởng nên chưa phạm
+  phần thực chất của I3) · `CLAUDE.md` mục 5 mới kể **ba** chỗ mà comment không-🤖 là lệnh, trong khi luồng
+  `[Chỉ dẫn]` `#251` do chính chủ dự án lập là chỗ **thứ tư** — chính là mục **E2** mà danh sách `#251` đang
+  nợ.
 - ⬜ **CÒN TREO — lần chạy thật chưa xảy ra.** Chủ dự án đòi "chứng minh bằng chạy thật", và phiên agent **không có** `EMBEDDINGS_API_KEY` (secret chỉ sống trong Actions). Script dừng đúng luật và ghi dòng log `status: "skipped"`. Đường tới lần chạy thật là một workflow `workflow_dispatch` dùng secret đó — workflow **dùng secret** nằm trong vùng `owner-merge` (CHARTER mục 3), nên nó là **mục anh em riêng**, không gộp vào PR này. Tới khi nó chạy: `VF-G20` giữ `parked`, và câu "`costUsd` từ `usage` thật" là **thiết kế**, chưa phải quan sát.

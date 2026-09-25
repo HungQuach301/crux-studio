@@ -15,19 +15,16 @@ import {
   scoresFor,
   trialOneModel,
 } from '../scripts/novelty-embeddings-trial.ts';
-import type { EmbeddingModel, EmbeddingProvider, ProbePair } from '../../workshops/topic/src/embeddings.ts';
+import { readNoveltyProbe, validateNoveltyProbe } from '../../workshops/topic/src/embeddings.ts';
+import type { EmbeddingModel, EmbeddingProvider } from '../../workshops/topic/src/embeddings.ts';
 import type { Corpus, CorpusVideo } from '../../workshops/topic/src/corpus.ts';
 
 const CORPUS_PATH = 'workshops/topic/data/corpus/us-personal-finance-2026-09-01.json';
-const PROBE_PATH = 'workshops/topic/data/embeddings/novelty-probe.json';
 
 const corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8')) as Corpus;
-const probe = JSON.parse(readFileSync(PROBE_PATH, 'utf8')) as {
-  probeId: string;
-  corpusId: string;
-  theses: { id: string; statement: string }[];
-  pairs: ProbePair[];
-};
+// Đọc qua `readNoveltyProbe` chứ không `as`: bài kiểm phải đi qua ĐÚNG cửa mà
+// script đi, nếu không một tập thăm dò không hợp contract vẫn xanh ở đây.
+const probe = readNoveltyProbe();
 
 const MODEL: EmbeddingModel = { model: 'fake-small', usdPerMillionTokens: 0.02, dimensions: 3 };
 
@@ -63,6 +60,17 @@ function fakeProvider(usdPerMillionTokens = MODEL.usdPerMillionTokens): Embeddin
     },
   };
 }
+
+test('tập thăm dò đi qua cửa validate, và `sameTopic` phải là boolean thật', () => {
+  assert.equal(validateNoveltyProbe(probe).valid, true);
+  // Ca hỏng mà reviewer nêu: `"false"` là chuỗi, và `filter` coi nó là truthy
+  // nên một cặp khác chuyện lọt vào nhóm cùng chuyện — contract bắt đúng đó.
+  const broken = {
+    ...probe,
+    pairs: probe.pairs.map((p, i) => (i === 0 ? { ...p, sameTopic: 'false' } : p)),
+  };
+  assert.equal(validateNoveltyProbe(broken).valid, false);
+});
 
 test('tập thăm dò gắn nhãn cho ĐÚNG corpus đang chạy, và mọi videoId có thật', () => {
   assert.equal(probe.corpusId, corpus.corpusId);

@@ -44,10 +44,11 @@ import {
   measureSeparation,
   openAiEmbeddingProvider,
   readEmbeddingModelTable,
+  readNoveltyProbe,
   type EmbeddingModel,
   type EmbeddingProvider,
   type ModelCandidate,
-  type ProbePair,
+  type NoveltyProbe,
 } from '../../workshops/topic/src/embeddings.ts';
 import { checkNovelty, type SemanticSimilarity } from '../../workshops/topic/src/novelty.ts';
 import type { Corpus, CorpusVideo } from '../../workshops/topic/src/corpus.ts';
@@ -63,13 +64,6 @@ const PROBE_PATH = 'workshops/topic/data/embeddings/novelty-probe.json';
  * của `novelty.ts` đã khai.
  */
 export const TRIAL_SEMANTIC_THRESHOLD = 0.45;
-
-interface Probe {
-  probeId: string;
-  corpusId: string;
-  theses: { id: string; statement: string; note?: string }[];
-  pairs: ProbePair[];
-}
 
 /** Văn bản đem đi nhúng cho một video. Cùng một phép ghép với `videoText` của `novelty.ts`. */
 export function embedTextFor(video: CorpusVideo): string {
@@ -112,7 +106,7 @@ export async function trialOneModel(
   provider: EmbeddingProvider,
   model: EmbeddingModel,
   corpus: Corpus,
-  probe: Probe,
+  probe: NoveltyProbe,
   checkedAt: string,
 ): Promise<{ candidate: ModelCandidate; costUsd: number; totalTokens: number; lines: string[] }> {
   const videoBatch = await provider.embed(corpus.videos.map(embedTextFor));
@@ -194,7 +188,7 @@ async function main(): Promise<void> {
 
   const started = Date.now();
   const corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8')) as Corpus;
-  const probe = JSON.parse(readFileSync(PROBE_PATH, 'utf8')) as Probe;
+  const probe = readNoveltyProbe();
   if (probe.corpusId !== corpus.corpusId) {
     throw new Error(
       `Tập thăm dò gắn nhãn cho corpus \`${probe.corpusId}\` nhưng đang chạy trên \`${corpus.corpusId}\` — nhãn nói về một tập video khác.`,
@@ -205,51 +199,72 @@ async function main(): Promise<void> {
   const checkedAt = at;
 
   const candidates: ModelCandidate[] = [];
+
+  // Hai biến này nằm NGOÀI `try` và được cộng dồn ngay sau mỗi model, để dòng
+  // log ở `finally` nói đúng số tiền ĐÃ TIÊU kể cả khi lượt chạy chết giữa
+  // chừng. Bất biến **I8** đòi *mọi* lần chạy có một dòng log; nhánh ném là
+  // nhánh ĐẮT nhất (model 1 và 2 đã bị tính tiền rồi model 3 mới ném), nên nó
+  // là nhánh ít được phép im lặng nhất.
   let costUsd = 0;
   let totalTokens = 0;
+  let verdictLine = 'Lượt chạy chết trước khi có kết luận.';
+  let status: 'ok' | 'failed' = 'failed';
+  let failure: unknown;
 
   console.log(`Corpus \`${corpus.corpusId}\`: ${corpus.videos.length} video · tập thăm dò \`${probe.probeId}\`: ${probe.pairs.length} cặp có nhãn`);
   console.log(`Bảng giá: ${table.vendor}, \`${table.source}\`, ${table.asOf} (giả định G20)\n`);
 
-  for (const model of table.models) {
-    const provider = openAiEmbeddingProvider({ apiKey, model });
-    const result = await trialOneModel(provider, model, corpus, probe, checkedAt);
-    candidates.push(result.candidate);
-    costUsd += result.costUsd;
-    totalTokens += result.totalTokens;
-    const sep = result.candidate.separation;
-    console.log(
-      `${model.model}  $${model.usdPerMillionTokens}/1M · ${sep.adequate ? 'ĐỦ CHẤT LƯỢNG' : 'TRƯỢT'} ` +
-        `(minSame=${sep.minSame.toFixed(3)} maxDifferent=${sep.maxDifferent.toFixed(3)} margin=${sep.margin.toFixed(3)}) ` +
-        `· ${result.totalTokens} token · $${result.costUsd.toFixed(6)}`,
-    );
-    for (const line of result.lines) console.log(line);
-    console.log('    (≠ hai phép so cho verdict khác nhau · ± cùng verdict nhưng khác số video cùng chuyện)');
-    console.log('');
+  try {
+    for (const model of table.models) {
+      const provider = openAiEmbeddingProvider({ apiKey, model });
+      const result = await trialOneModel(provider, model, corpus, probe, checkedAt);
+      candidates.push(result.candidate);
+      costUsd += result.costUsd;
+      totalTokens += result.totalTokens;
+      const sep = result.candidate.separation;
+      console.log(
+        `${model.model}  $${model.usdPerMillionTokens}/1M · ${sep.adequate ? 'ĐỦ CHẤT LƯỢNG' : 'TRƯỢT'} ` +
+          `(minSame=${sep.minSame.toFixed(3)} maxDifferent=${sep.maxDifferent.toFixed(3)} margin=${sep.margin.toFixed(3)}) ` +
+          `· ${result.totalTokens} token · $${result.costUsd.toFixed(6)}`,
+      );
+      for (const line of result.lines) console.log(line);
+      console.log('    (≠ hai phép so cho verdict khác nhau · ± cùng verdict nhưng khác số video cùng chuyện)');
+      console.log('');
+    }
+
+    const winner = cheapestAdequateModel(candidates);
+    verdictLine = winner
+      ? `Rẻ nhất đủ chất lượng: \`${winner.model.model}\` ($${winner.model.usdPerMillionTokens}/1M token, margin ${winner.separation.margin.toFixed(3)}).`
+      : 'KHÔNG model nào trong bảng tách được hai nhóm cặp. Không chọn bừa: điểm ngữ nghĩa của một model không tách được thì không mang tin gì.';
+    status = winner ? 'ok' : 'failed';
+    console.log(verdictLine);
+    console.log(`Tổng lần chạy này: ${totalTokens} token · costUsd $${costUsd.toFixed(6)}`);
+    if (!winner) process.exitCode = 1;
+  } catch (error) {
+    failure = error;
+    verdictLine =
+      `Lượt chạy NÉM sau khi đã đo ${candidates.length}/${table.models.length} model: ` +
+      `${error instanceof Error ? error.message : String(error)}`;
+    process.exitCode = 1;
+  } finally {
+    writeLogLine({
+      at,
+      lane: 'topic',
+      kind: 'lane',
+      ref: 'topic/T-014',
+      status,
+      durationMs: Date.now() - started,
+      costUsd,
+      note:
+        `Phép đo embeddings trên corpus \`${corpus.corpusId}\` (${corpus.videos.length} video) và tập thăm dò ` +
+        `\`${probe.probeId}\` (${probe.pairs.length} cặp có nhãn), ${table.models.length} model ứng viên, ` +
+        `${totalTokens} token đã tiêu. ${verdictLine}`,
+    });
   }
 
-  const winner = cheapestAdequateModel(candidates);
-  const verdictLine = winner
-    ? `Rẻ nhất đủ chất lượng: \`${winner.model.model}\` ($${winner.model.usdPerMillionTokens}/1M token, margin ${winner.separation.margin.toFixed(3)}).`
-    : 'KHÔNG model nào trong bảng tách được hai nhóm cặp. Không chọn bừa: điểm ngữ nghĩa của một model không tách được thì không mang tin gì.';
-  console.log(verdictLine);
-  console.log(`Tổng lần chạy này: ${totalTokens} token · costUsd $${costUsd.toFixed(6)}`);
-
-  writeLogLine({
-    at,
-    lane: 'topic',
-    kind: 'lane',
-    ref: 'topic/T-014',
-    status: winner ? 'ok' : 'failed',
-    durationMs: Date.now() - started,
-    costUsd,
-    note:
-      `Phép đo embeddings trên corpus \`${corpus.corpusId}\` (${corpus.videos.length} video) và tập thăm dò ` +
-      `\`${probe.probeId}\` (${probe.pairs.length} cặp có nhãn), ${table.models.length} model ứng viên, ` +
-      `${totalTokens} token. ${verdictLine}`,
-  });
-
-  if (!winner) process.exitCode = 1;
+  // Ném lại SAU khi dòng log đã nằm trên đĩa: lỗi vẫn phải nổi lên cho người
+  // đọc log CI, nhưng không được nuốt mất dòng ghi số tiền đã tiêu.
+  if (failure) throw failure;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

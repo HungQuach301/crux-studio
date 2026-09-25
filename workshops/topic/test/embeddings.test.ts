@@ -16,6 +16,7 @@ import {
   measureSeparation,
   openAiEmbeddingProvider,
   readEmbeddingModelTable,
+  redactSecret,
   type EmbeddingModel,
   type ProbePair,
 } from '../src/embeddings.ts';
@@ -135,6 +136,38 @@ test('openAiEmbeddingProvider: thiếu vector thì NÉM, không trả mảng th�
     fetchImpl: fakeFetch({ data: [{ index: 0, embedding: [1, 0, 0] }], usage: { total_tokens: 5 } }),
   });
   await assert.rejects(() => provider.embed(['a', 'b']), /không ghép cặp được/);
+});
+
+test('openAiEmbeddingProvider: `usage` vắng mặt thì NÉM, không ghi $0 cho một lần gọi có hoá đơn', async () => {
+  const provider = openAiEmbeddingProvider({
+    apiKey: 'sk-x',
+    model: MODEL,
+    fetchImpl: fakeFetch({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+  });
+  await assert.rejects(() => provider.embed(['a']), /không có `usage.total_tokens`/);
+});
+
+test('redactSecret: che MỌI lần xuất hiện của khoá, và không phá thông điệp khi khoá rỗng', () => {
+  assert.equal(redactSecret('lỗi cho sk-abc và sk-abc', 'sk-abc'), 'lỗi cho *** và ***');
+  assert.equal(redactSecret('không có khoá', 'sk-abc'), 'không có khoá');
+  assert.equal(redactSecret('abc', ''), 'abc');
+});
+
+test('openAiEmbeddingProvider: thân lỗi vọng lại khoá thì khoá KHÔNG lọt vào thông điệp', async () => {
+  const leaking = (async () =>
+    ({
+      ok: false,
+      status: 401,
+      text: async () => 'Incorrect API key provided: sk-bí-mật-thật. You can find your key at ...',
+    }) as unknown as Response) as unknown as typeof fetch;
+  const provider = openAiEmbeddingProvider({ apiKey: 'sk-bí-mật-thật', model: MODEL, fetchImpl: leaking });
+  // Khoá nằm ở ĐẦU thông điệp, nên `slice(0, 200)` một mình không che được gì.
+  await assert.rejects(() => provider.embed(['a']), (error: Error) => {
+    assert.doesNotMatch(error.message, /sk-bí-mật-thật/);
+    assert.match(error.message, /HTTP 401/);
+    assert.match(error.message, /\*\*\*/);
+    return true;
+  });
 });
 
 test('openAiEmbeddingProvider: HTTP lỗi thì NÉM kèm mã, và không gọi mạng khi mảng rỗng', async () => {

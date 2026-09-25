@@ -5,34 +5,98 @@
   "description": "WP-014 mục 3c.2: contradictingCount = 0 KHÔNG chứng minh mới lạ. Vì vậy verdict không có giá trị 'novel' — chỉ 'novel-in-corpus' — và `limitation` là trường bắt buộc có chữ. `reasons` bắt buộc có ít nhất một phần tử: tiêu chí xong của T-008 đòi kiểm trả về LÝ DO, không chỉ trả về điểm.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "thesisId", "checkedAt", "corpusRef", "scope", "verdict", "reasons", "similarCount", "contradictingCount", "limitation"],
+  "required": [
+    "schemaVersion",
+    "thesisId",
+    "checkedAt",
+    "corpusRef",
+    "scope",
+    "verdict",
+    "reasons",
+    "similarCount",
+    "contradictingCount",
+    "method",
+    "limitation"
+  ],
   "properties": {
-    "schemaVersion": { "type": "integer", "minimum": 0 },
-    "thesisId": { "type": "string", "minLength": 1 },
-    "checkedAt": { "type": "string", "format": "date-time" },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "thesisId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "corpusRef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["corpusId", "builtAt", "videoCount"],
+      "required": [
+        "corpusId",
+        "builtAt",
+        "videoCount"
+      ],
       "properties": {
-        "corpusId": { "type": "string", "minLength": 1 },
-        "builtAt": { "type": "string", "format": "date-time" },
-        "videoCount": { "type": "integer", "minimum": 0 }
+        "corpusId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "builtAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "videoCount": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "scope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["regions", "languages", "windowDays", "asOf"],
+      "required": [
+        "regions",
+        "languages",
+        "windowDays",
+        "asOf"
+      ],
       "properties": {
-        "regions": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[A-Z]{2}$" } },
-        "languages": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 2 } },
-        "windowDays": { "type": "integer", "minimum": 1 },
-        "asOf": { "type": "string", "format": "date-time" }
+        "regions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 2
+          }
+        },
+        "windowDays": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "verdict": {
-      "enum": ["novel-in-corpus", "contested-in-corpus", "crowded-in-corpus", "insufficient-corpus"],
+      "enum": [
+        "novel-in-corpus",
+        "contested-in-corpus",
+        "crowded-in-corpus",
+        "insufficient-corpus"
+      ],
       "description": "Không có giá trị 'novel'. Mỗi giá trị đọc là một phát biểu về CORPUS ĐÃ KIỂM, không phải về thế giới."
     },
     "reasons": {
@@ -41,7 +105,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "detail"],
+        "required": [
+          "code",
+          "detail"
+        ],
         "properties": {
           "code": {
             "enum": [
@@ -55,7 +122,10 @@
               "scope-narrow"
             ]
           },
-          "detail": { "type": "string", "minLength": 1 }
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -69,16 +139,45 @@
       "minimum": 0,
       "description": "Số video trùng đề tài VÀ mang dấu hiệu nói ngược. Bằng 0 không chứng minh điều gì — xem `limitation`."
     },
+    "method": {
+      "description": "Phép so đã dùng để tính `matches[].overlap`. Trường MÁY ĐỌC, không phải văn xuôi: bất biến I6 đòi mỗi con số hiển thị có nguồn, và `overlap` của hai phép so là hai đại lượng khác nhau (tỷ lệ token trùng vs cosine). Bên tiêu thụ đọc trường này chứ không đọc `limitation` để biết con số kia là của ai.",
+      "enum": [
+        "lexical",
+        "semantic"
+      ]
+    },
+    "similarityModel": {
+      "description": "Model đã sinh ra bảng điểm ngữ nghĩa. Chỉ có mặt khi `method` là `semantic`; vắng mặt ở nhánh `lexical` vì không có model nào.",
+      "type": "string",
+      "minLength": 1
+    },
     "matches": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["videoId", "overlap", "stance"],
+        "required": [
+          "videoId",
+          "overlap",
+          "stance"
+        ],
         "properties": {
-          "videoId": { "type": "string", "minLength": 1 },
-          "overlap": { "type": "number", "minimum": 0, "maximum": 1 },
-          "stance": { "enum": ["similar", "contradicting"] }
+          "videoId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "overlap": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1,
+            "description": "Điểm của phép so, và MIỀN phụ thuộc `method`: `lexical` cho tỷ lệ token trùng trong [0, 1]; `semantic` cho cosine trong [-1, 1]. Cận dưới ở đây nới tới -1 để nhánh `semantic` không tự phạm contract của chính nó; cận [0, 1] của nhánh `lexical` do `overlapRatio` bảo đảm và có bài kiểm riêng. Siết lại thành hai miền tách nhau là việc của `schemaVersion` sau, khi đã có tập thật để hiệu chuẩn."
+          },
+          "stance": {
+            "enum": [
+              "similar",
+              "contradicting"
+            ]
+          }
         }
       }
     },

@@ -80,6 +80,15 @@ export interface NoveltyCheck {
   reasons: NoveltyReason[];
   similarCount: number;
   contradictingCount: number;
+  /**
+   * Phép so đã dùng, **máy đọc được**. `matches[].overlap` của hai phép so là
+   * hai đại lượng khác nhau (tỷ lệ token trùng vs cosine) và chúng có hai
+   * miền khác nhau; bất biến **I6** đòi con số hiển thị có nguồn, nên nguồn
+   * đó là một trường chứ không phải một câu trong `limitation`.
+   */
+  method: 'lexical' | 'semantic';
+  /** Model sinh ra bảng điểm ngữ nghĩa. Chỉ có mặt khi `method` là `semantic`. */
+  similarityModel?: string;
   matches?: { videoId: string; overlap: number; stance: 'similar' | 'contradicting' }[];
   limitation: string;
 }
@@ -211,10 +220,16 @@ function limitationFor(
   // Câu cuối nói về PHÉP SO đã dùng thật, không về phép so mà file này mặc
   // định. Hai nhánh cho hai phép so khác nhau: một câu chung cho cả hai sẽ
   // sai ở đúng một nửa số lần chạy.
+  // Hướng chệch phải có ở CẢ HAI nhánh. Embeddings chữa phần "khác chữ", nó
+  // KHÔNG chữa phần "không có trong metadata" — nên chiều chệch vẫn là về phía
+  // "mới lạ", chỉ nhẹ hơn. Bỏ câu đó ở nhánh ngữ nghĩa là để người đọc tưởng
+  // chỗ chệch đã hết.
   const method = similarity
     ? `Phép so là so ngữ nghĩa bằng embeddings (\`${similarity.model}\`), ngưỡng ${similarity.threshold}. ` +
       `Nó bắt được cách diễn đạt khác chữ mà so từ vựng bỏ sót, nhưng nó vẫn chỉ đọc metadata, ` +
-      `và điểm cosine là phép đo gần đúng của "nói cùng chuyện" chứ không phải bằng chứng.`
+      `và điểm cosine là phép đo gần đúng của "nói cùng chuyện" chứ không phải bằng chứng. ` +
+      `Video nói đúng chuyện mà không nhắc ở tiêu đề hay mô tả vẫn bị bỏ sót, nên kết quả vẫn ` +
+      `chệch về phía "mới lạ" — nhẹ hơn so từ vựng, không phải hết.`
     : `Phép so là so từ vựng, không phải so ngữ nghĩa, nên cách diễn đạt khác chữ bị bỏ sót ` +
       `và kết quả chệch về phía "mới lạ".`;
   return (
@@ -354,6 +369,8 @@ export function checkNovelty(
     reasons,
     similarCount: similar.length,
     contradictingCount: contradicting.length,
+    method: similarity ? 'semantic' : 'lexical',
+    ...(similarity ? { similarityModel: similarity.model } : {}),
     matches,
     limitation,
   };
