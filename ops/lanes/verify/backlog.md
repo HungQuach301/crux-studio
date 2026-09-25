@@ -301,3 +301,28 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - tiêu chí xong: trạng thái G20 trong sổ chuyển sang `đã kiểm` hoặc `sai`, kèm ngày và số đối chiếu được.
   `status: parked` vì bài kiểm cần một lần chạy có tính tiền — mở lại thành `ready` ngay khi `T-014` có
   lần chạy thật đầu tiên trong Actions.
+
+### VF-G21 · Đường xác thực YouTube và hạn mức tải lên — đo bằng một lần tải thật
+- deps: —
+- risk: high
+- status: parked
+- nguồn: `docs/assumptions.md` G21; câu trả lời của chủ dự án trên `🤖 [QĐ]` #248 (`2026-09-24T23:50:04Z`)
+- **`deps: —` là cố ý**, cùng khuôn `VF-G19` và `VF-G20`: mục kiểm một giả định không đứng sau mục dùng
+  nó, nó đứng sau **người**. Khai ngược lại sẽ thành một vòng mà `backlog-status.ts` bắt đúng ca đó.
+- kiểm: hai vế, đo riêng.
+  1. **Hạn mức.** Đọc trang Quotas của Cloud Console **ngay trước và ngay sau** một lần `videos.insert`
+     thật, lấy **hiệu số đơn vị của đúng lời gọi đó** — không cộng trừ từ con số cả ngày, vì việc khác
+     trong project cũng tiêu vào cùng bucket. Ghi cả `Video Uploads per day` (Console `2026-09-24` ghi
+     **100**) lẫn số đơn vị mỗi ngày, rồi nói rõ bucket nào chạm trước.
+  2. **Chế độ app.** Vế "In production giữ refresh token dài hạn" chỉ kiểm được bằng **thời gian**: một
+     refresh token cấp ở chế độ In production còn dùng được sau **hơn 7 ngày**. Không có đường tắt — 7
+     ngày chính là mốc mà chế độ Testing làm token hết hạn.
+- dự phòng nếu sai: **lớp một đã viết sẵn** — không con số nào của mục này được nằm trong code (khuôn
+  `G19`/`G20`), nên sai thì sửa một số trong dữ liệu. **Lớp hai chưa có code** (đọc hạn mức thật ra từ
+  `403 quotaExceeded`), và nó chỉ viết được sau khi có đường gọi API. Vế 2 sai theo hướng "In production
+  cũng không giữ token dài hạn" thì **không lớp nào đỡ** — đó là một quyết định mới, không phải dự phòng.
+- **chặn ở đâu, nói thẳng:** cả hai vế cần chủ dự án làm xong điều kiện (1) của `#248` trước — tạo kênh
+  YouTube, tạo OAuth client, cấp refresh token vào Secrets. `status: parked` vì thế, **không** vì chưa ai
+  nhận; mở lại thành `ready` ngay khi secret có mặt.
+- tiêu chí xong: trạng thái G21 trong sổ chuyển sang `đã kiểm` hoặc `sai`, kèm ngày, số đơn vị đo được
+  của một lần `videos.insert`, và bucket nào là cửa dừng thật.

@@ -57,14 +57,40 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
   Việc đầu tiên của lượt nhận `R-002` là chốt đường xác thực rồi ghi nó vào sổ giả định — chọn nhà cung
   cấp và ký điều khoản là nhóm `irreversible` số 3 của CHARTER 2.3, nên nếu nó cần một tài khoản hay một
   điều khoản mới thì mở `🤖 [QĐ]` trước, đừng tự chọn.
-- nguồn: CHARTER bất biến I5; giả định G6
+- nguồn: CHARTER bất biến I5; giả định G6; giả định **G21** (đường xác thực và hạn mức tải lên)
+- **ĐÃ CÓ CÂU TRẢ LỜI cho `🤖 [QĐ]` #248** — comment của chủ dự án `2026-09-24T23:50:04Z`, không mở đầu
+  bằng 🤖 trên issue nhãn `decision`, tức là **chỉ dẫn** theo `CLAUDE.md` mục 5. Nguyên văn: *"#248 A, với
+  ba điều kiện: (1) tôi tạo kênh YouTube trước, và anh viết hướng dẫn tạo OAuth client (scope
+  youtube.upload) cùng refresh token vào issue này; (2) app phải ở chế độ In production, vì Testing làm
+  refresh token hết hạn sau 7 ngày; (3) đo quota thật, vì Console ngày 24/09 ghi riêng "Video Uploads per
+  day 100", khác với ước tính 6 video/ngày."*
+
+  Ba điều kiện đó chia làm **hai phần có chủ khác nhau**, và trộn chúng là cách mục này kẹt tiếp:
+
+  | Điều kiện | Ai làm | Trạng thái |
+  |---|---|---|
+  | (1) hướng dẫn tạo OAuth client + refresh token, viết vào `#248` | **agent** | ✅ đã viết, comment trên `#248` |
+  | (1) tạo kênh YouTube, chạy hướng dẫn, đặt secret | **chủ dự án** | ⬜ chưa |
+  | (2) app ở chế độ **In production** | **chủ dự án** | ⬜ chưa — đã ghi thành một bước bắt buộc trong hướng dẫn, kèm lý do 7 ngày |
+  | (3) đo quota thật | **agent**, nhưng **chỉ sau** khi có secret | ⬜ chưa đo được — không có đường gọi API |
+
+  Vì vậy `#248` **giữ mở**: câu trả lời có rồi nhưng điều kiện chưa xong, và đóng nó bây giờ là giấu ba
+  ô ⬜ ở trên khỏi bản tin (bản tin chỉ đọc issue đang mở — xem `KF` của `P-050`).
+- **con số hạn mức: hai bucket, KHÔNG mâu thuẫn nhau** (giả định `G21`). `#248` phương án A ước tính
+  ~6 video/ngày, suy từ hạn mức **đơn vị** mỗi ngày của project; Console `2026-09-24` ghi
+  `Video Uploads per day 100`, là một bucket **khác**, đếm **số video**. Bucket nào chạm trước thì bucket
+  đó là cửa dừng thật, và biết được bucket nào chỉ bằng cách đo chi phí đơn vị của **một lần
+  `videos.insert` thật** — đúng điều kiện (3). Không lượt nào được ghi một trong hai số này thành hằng số
+  trong code: cả hai là **dữ liệu** kèm `source`, theo đúng khuôn `G19`/`G20`.
 - **mục này làm theo sóng, và `status` giữ `ready` cho tới sóng cuối** (cùng lối `platform/P-014`): tiêu
   chí 2 không phụ thuộc quyết định nào nên làm xong trước; tiêu chí 1 chờ đường xác thực, là nhóm
   `irreversible` số 3 của CHARTER 2.3.
 - tiêu chí xong:
-  - ⬜ Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng. **Chờ `🤖 [QĐ]` đường
-    xác thực YouTube** — không đo được quota thật khi chưa có đường gọi API. Không ước lượng thay, vì
-    chính tiêu chí này cấm.
+  - ⬜ Quota đơn vị mỗi lần tải được **đo** và ghi vào artifact, không ước lượng. `🤖 [QĐ]` #248 **đã
+    được trả lời** (A, ba điều kiện), nhưng tiêu chí này vẫn ⬜: nó chờ **secret**, không chờ quyết định.
+    Không đo được quota thật khi chưa có đường gọi API, và không ước lượng thay vì chính tiêu chí này cấm.
+    Cách đo đã chốt ở `VF-G21`: hiệu số đơn vị trước/sau đúng **một** lần `videos.insert`, không suy từ
+    con số cả ngày.
   - ✅ Không có đường nào trong code đặt `visibility` khác `private`. Contract đã khoá; test phải chứng
     minh code cũng không thử. → cổng `pnpm check:visibility` (`ops/scripts/check-visibility.ts`), nối vào
     `pnpm check`; 25 bài ở `ops/test/check-visibility.test.ts`. Cổng soát **hai** chiều mà contract một
