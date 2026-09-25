@@ -311,9 +311,12 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
   nó, nó đứng sau **người**. Khai ngược lại sẽ thành một vòng mà `backlog-status.ts` bắt đúng ca đó.
 - kiểm: hai vế, đo riêng.
   1. **Hạn mức.** Đọc trang Quotas của Cloud Console **ngay trước và ngay sau** một lần `videos.insert`
-     thật, lấy **hiệu số đơn vị của đúng lời gọi đó** — không cộng trừ từ con số cả ngày, vì việc khác
-     trong project cũng tiêu vào cùng bucket. Ghi cả `Video Uploads per day` (Console `2026-09-24` ghi
-     **100**) lẫn số đơn vị mỗi ngày, rồi nói rõ bucket nào chạm trước.
+     thật, lấy **hiệu số đơn vị của đúng lời gọi đó**. Có sẵn số để đối chiếu, nên bài kiểm này có
+     kết quả đúng/sai rõ ràng chứ không phải một phép đo treo: tài liệu (đọc `2026-09-25`, trích trong
+     `G21`) nói cấp mặc định là **100 lần `videos.insert`/ngày**, mỗi lần **1 đơn vị** trong bucket
+     `Video Uploads`, và bể **10.000 đơn vị/ngày** chỉ dành cho *các endpoint còn lại*. Console của chủ
+     dự án ngày `2026-09-24` cũng ghi **100**. Phép đo xác nhận project này đúng là đang ở cấp mặc định;
+     lệch thì một trong hai nguồn sai và `G21` chuyển `sai`.
   2. **Chế độ app.** Vế "In production giữ refresh token dài hạn" chỉ kiểm được bằng **thời gian**: một
      refresh token cấp ở chế độ In production còn dùng được sau **hơn 7 ngày**. Không có đường tắt — 7
      ngày chính là mốc mà chế độ Testing làm token hết hạn.
@@ -324,5 +327,8 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - **chặn ở đâu, nói thẳng:** cả hai vế cần chủ dự án làm xong điều kiện (1) của `#248` trước — tạo kênh
   YouTube, tạo OAuth client, cấp refresh token vào Secrets. `status: parked` vì thế, **không** vì chưa ai
   nhận; mở lại thành `ready` ngay khi secret có mặt.
-- tiêu chí xong: trạng thái G21 trong sổ chuyển sang `đã kiểm` hoặc `sai`, kèm ngày, số đơn vị đo được
-  của một lần `videos.insert`, và bucket nào là cửa dừng thật.
+- tiêu chí xong: trạng thái G21 trong sổ chuyển sang `đã kiểm` hoặc `sai`, kèm ngày và số đơn vị đo được
+  của một lần `videos.insert`, đối chiếu với **100/ngày · 1 đơn vị mỗi lần** của tài liệu.
+- **bước cuối, đừng quên** (`CLAUDE.md` mục 14): ba điều kiện của `#248` xong thì ghi quyết định lâu dài
+  vào `docs/decisions/D-C09.md` rồi mới đóng `#248`. Ghi ở cả đây lẫn `R-002` vì hai mục kết thúc ở hai
+  lượt khác nhau.

@@ -76,12 +76,26 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 
   Vì vậy `#248` **giữ mở**: câu trả lời có rồi nhưng điều kiện chưa xong, và đóng nó bây giờ là giấu ba
   ô ⬜ ở trên khỏi bản tin (bản tin chỉ đọc issue đang mở — xem `KF` của `P-050`).
-- **con số hạn mức: hai bucket, KHÔNG mâu thuẫn nhau** (giả định `G21`). `#248` phương án A ước tính
-  ~6 video/ngày, suy từ hạn mức **đơn vị** mỗi ngày của project; Console `2026-09-24` ghi
-  `Video Uploads per day 100`, là một bucket **khác**, đếm **số video**. Bucket nào chạm trước thì bucket
-  đó là cửa dừng thật, và biết được bucket nào chỉ bằng cách đo chi phí đơn vị của **một lần
-  `videos.insert` thật** — đúng điều kiện (3). Không lượt nào được ghi một trong hai số này thành hằng số
-  trong code: cả hai là **dữ liệu** kèm `source`, theo đúng khuôn `G19`/`G20`.
+- **con số hạn mức: trần thật là 100 video/ngày; ước tính "~6 video/ngày" của `#248` là SAI** (giả định
+  `G21`, có trích nguyên văn và ngày đọc). Tài liệu nhà cung cấp, đọc `2026-09-25`: cấp mặc định gồm
+  **100 lần `search.list`**, **100 lần `videos.insert`**, và **10.000 đơn vị/ngày cho *các endpoint còn
+  lại*** — `videos.insert` **không** tiêu vào bể 10.000 đó, nó tốn **1 đơn vị trong bucket
+  `Video Uploads`**. Nên trần tải lên là **100/ngày**, trùng đúng con số Console mà chủ dự án đọc.
+  Ước tính ~6/ngày suy từ `10.000 ÷ ~1.600`, tức áp mô hình quota của endpoint khác cho `videos.insert` —
+  phép chia đó không có cơ sở.
+- **⚠️ một lượt agent đã khai ngược lại chỗ này, ghi ra để không lặp.** Lượt `crux-worker-1` ~08:5xZ
+  `2026-09-25` viết trên `#248` rằng hai con số "không mâu thuẫn nhau, là hai bucket khác nhau" và rằng
+  chủ dự án chỉ cần đo để biết "con số nào có hiệu lực". **Sai, và chủ dự án đúng.** Chuỗi nhân quả:
+  lượt đó khai (chưa đo) rằng phiên cloud không đọc được tài liệu Google → thay một lần đọc 30 giây bằng
+  một suy luận → trình bày suy luận như sự thật → dùng nó để bác lời chủ dự án. Vòng soát ngữ cảnh sạch
+  của bước 6 bắt được, và bản đính chính đã đăng trên `#248`. Bài học thuộc về luật 3 của
+  `docs/assumptions.md`: đọc tài liệu trước, đừng suy.
+- **điều kiện (3) vẫn còn nguyên giá trị sau khi con số đã đúng:** tài liệu và Console mới chỉ nói về
+  **cấp mặc định**; phép đo thật xác nhận project này đúng là đang ở cấp đó. Không lượt nào được ghi các
+  số này thành hằng số trong code — chúng là **dữ liệu** kèm `source`, theo đúng khuôn `G19`/`G20`.
+- **khi ba điều kiện của `#248` xong thì còn một bước cuối** (`CLAUDE.md` mục 14): ghi quyết định lâu dài
+  vào `docs/decisions/D-C09.md` (mã trống kế tiếp — `main` đang có `D-C04`, `D-C06`, `D-C07`, `D-C08`)
+  rồi mới đóng `#248`. Ghi ở đây để lượt đó không phải tra lại.
 - **mục này làm theo sóng, và `status` giữ `ready` cho tới sóng cuối** (cùng lối `platform/P-014`): tiêu
   chí 2 không phụ thuộc quyết định nào nên làm xong trước; tiêu chí 1 chờ đường xác thực, là nhóm
   `irreversible` số 3 của CHARTER 2.3.
