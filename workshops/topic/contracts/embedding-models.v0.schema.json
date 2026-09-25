@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crux.studio/contracts/topic/embedding-models.v0.schema.json",
+  "title": "Bảng model embeddings và giá — dùng để CHỌN model trước khi gọi",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "vendor",
+    "source",
+    "asOf",
+    "assumption",
+    "models"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "vendor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "description": "Số giá lấy từ đâu. `vendor-docs` là mức thấp nhất chấp nhận được; `invoice-measured` khi đã đối chiếu hoá đơn thật.",
+      "type": "string",
+      "enum": [
+        "vendor-docs",
+        "invoice-measured"
+      ]
+    },
+    "asOf": {
+      "type": "string",
+      "minLength": 10
+    },
+    "assumption": {
+      "description": "Mã giả định trong `docs/assumptions.md` đứng dưới các con số của bảng này. Bắt buộc, và `pnpm assumptions` kiểm việc file này thật sự nhắc tới mã đó.",
+      "type": "string",
+      "pattern": "^G[0-9]+$"
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model",
+          "usdPerMillionTokens",
+          "dimensions"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "usdPerMillionTokens": {
+            "type": "number",
+            "minimum": 0
+          },
+          "dimensions": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

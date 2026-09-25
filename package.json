@@ -22,6 +22,7 @@
     "digest:metrics": "node ops/scripts/digest-metrics.ts",
     "digest:approval": "node ops/scripts/digest-approval.ts",
     "gate:flow": "node ops/scripts/gate-flow.ts",
+    "topic:novelty-trial": "node ops/scripts/novelty-embeddings-trial.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"kernel/test/**/*.test.ts\" \"workshops/**/test/**/*.test.ts\" \"ops/test/**/*.test.ts\" \"spike/**/test/**/*.test.ts\"",
     "replay": "node ops/scripts/replay.ts",

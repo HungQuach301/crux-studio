@@ -280,3 +280,24 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - hệ quả: không làn nào chặn ở đây. `T-008` giữ nguyên phần đã làm (contract, kiểm mới lạ, ba đại lượng
   nhu cầu) — phần đó chạy trên corpus có sẵn và không gọi API, nên **không** đứng trên G19. Phần **xây**
   corpus (`T-011`) thì đứng trên G19, nhưng đang chặn ở chỗ nặng hơn: repo chưa có secret nào (#36).
+
+### VF-G20 · Giá embeddings và `usage.total_tokens` có đúng là số được tính tiền không
+- deps: —
+- risk: medium
+- status: parked
+- nguồn: `docs/assumptions.md` G20; chỉ dẫn chủ dự án trên `#251` (`2026-09-25T01:28:33Z`)
+- **`deps: —` là cố ý, không phải quên.** Mục dùng giả định khai `deps` tới giả định, nên khai ngược lại
+  ở đây sẽ thành một vòng và `backlog-status.ts` bắt đúng ca đó. Cùng khuôn với `VF-G19`: mục kiểm một
+  giả định không đứng sau mục dùng nó — nó đứng sau **người** đọc hoá đơn.
+- kiểm: chạy `pnpm topic:novelty-trial` với secret thật (trong Actions, không trong phiên agent), rồi so
+  tổng `costUsd` của `ops/logs/topic/T-014.jsonl` với **hoá đơn** của khoá `EMBEDDINGS_API_KEY` trong cùng
+  kỳ. Hai vế phân biệt được: số token khớp mà tiền lệch là **giá** sai; số token không khớp số đoạn đã
+  nhúng là **`usage.total_tokens`** sai. **Chỉ chủ dự án đọc được hoá đơn** — phiên agent không có tài
+  khoản thanh toán.
+- dự phòng nếu sai: đã viết sẵn, hai lớp. Giá là **dữ liệu** (`workshops/topic/data/embeddings/*.json`,
+  `source: "vendor-docs"`, contract có sẵn `invoice-measured` cho ngày đối chiếu được), nên sai thì sửa một
+  số chứ không sửa code. Và `costUsd` tính từ `usage.total_tokens` chứ không ước lượng, nên vế thứ hai sai
+  thì sửa đúng một hàm — số token thô vẫn nằm trong dòng log nên tính lại được mà không phải gọi lại API.
+- tiêu chí xong: trạng thái G20 trong sổ chuyển sang `đã kiểm` hoặc `sai`, kèm ngày và số đối chiếu được.
+  `status: parked` vì bài kiểm cần một lần chạy có tính tiền — mở lại thành `ready` ngay khi `T-014` có
+  lần chạy thật đầu tiên trong Actions.

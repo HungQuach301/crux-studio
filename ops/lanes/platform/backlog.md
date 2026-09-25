@@ -1187,3 +1187,18 @@ Ba cách đọc sai mà nửa đọc phải chặn bằng test, không phải b�
 - ⬜ **còn lại, tách phạm vi:** khối này hiện là một lệnh riêng (`pnpm digest:approval`). Nối thẳng vào `pnpm digest:metrics` là việc của lượt sau `#223` và `#112` merge — CHARTER mục 4, hai việc cùng sửa một file.
 - **luật mềm ghi nhận (CHARTER mục 4):** diff vượt ngưỡng ~400 dòng, không tách được vì module và bộ test của cùng một tiêu chí xong gắn chặt nhau. Chạm `CHARTER.md`/`CLAUDE.md`/`package.json` — bốn nhánh đang mở cũng chạm, nhưng không trùng hunk nào (đo bằng `git merge-tree`, 13/13 PR gộp sạch ở bước 0 lượt này).
 - **mã mục nhận lúc 2026-09-24 ~12:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu cả 13 PR đang mở, cao nhất là `P-045` (`#233`), nên `P-046` không đụng ai.
+---
+
+### P-049 · fix · Báo động giả trong cửa sổ chờ `sync-workflows` sau PR sửa `ops/workflows/**`
+
+Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). Một PR sửa `ops/workflows/**` vào `main` mở một cửa sổ vài chục giây mà bản workflow đang chạy (`.github/`) lệch bản nguồn (`ops/workflows/`) cho tới khi `sync-workflows` chép sang. Trong cửa sổ đó tầng cảnh báo `@nhắc` chủ dự án dù `main` đang xanh — báo động giả (ngược nhóm Z). Đo được `2026-09-24T22:26Z` (`#229`/`a642919` → `843bbd4` sau 33 giây). Chi tiết: `ops/known-failures.md` `KF-033`.
+
+- deps: —
+- risk: medium — bản sửa chạm tầng cảnh báo (`ops/workflows/watchdog.yml` hoặc `main-ci.yml`), và ràng buộc của chủ dự án là **không nới** dấu hiệu bắt `sync-workflows` chạy hỏng thật (dấu hiệu 3). Vì thế phương án nằm ở `🤖 [QĐ]` `#254`, chưa tự làm.
+- status: parked
+- hold: chờ chủ dự án chốt phương án ở `🤖 [QĐ]` `#254` (A/B/C). Đây là `reversible`; nếu không có câu trả lời khác, lượt sau làm theo khuyến nghị **A** — bộ phân loại "đang chờ sync" hạ cấp @nhắc, giữ nguyên dấu hiệu 3.
+- nguồn: chỉ dẫn D2 `#251`; sự cố `#229`/`a642919`→`843bbd4`; `ops/known-failures.md` `KF-033`; `KF-028` (lỗi "60 giờ" riêng, do `#231`/`P-044` chữa)
+- tiêu chí xong:
+  - ✅ **Ghi KF** — `ops/known-failures.md` `KF-033` (chữ ký, nguyên nhân gốc, và lưới đỡ tạm cho lượt sau).
+  - ✅ **Mở `🤖 [QĐ]`** — `#254`, năm phần theo `CLAUDE.md` mục 14, ba phương án kèm hệ quả, khuyến nghị A.
+  - ⬜ **Bản sửa** — chờ `#254`. Bộ phân loại "đang chờ sync" tách khỏi YAML, có bài khoá **hai chiều** (một red thật vẫn @nhắc; một cửa sổ sync không @nhắc); dấu hiệu 3 (`sync` chạy hỏng) giữ nguyên, có bài âm. Bài tái hiện lỗi bắt buộc (**I2**) khi lên bản sửa mang nhãn `fix`.
