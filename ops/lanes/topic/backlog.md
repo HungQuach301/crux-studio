@@ -229,7 +229,7 @@ Mục này ở làn `topic` vì Channel Pack là vùng của `T-002`, không vì
 
 - deps: —
 - risk: medium — một con số ước tính sai **theo một chiều cố định** (cao hơn thật 43%) là loại sai không tự lộ ra: mọi bảng đều nhất quán với nhau, chỉ lệch so với thế giới. Bất biến **I6**: mọi con số hiển thị có nguồn hoặc có mô hình.
-- status: review
+- status: done
 - nguồn: chỉ dẫn chủ dự án trên `#193`; bất biến **I6**; `packs/channels/us-personal-finance/channel.json` khoá `scoringWeights.rpm` và `revenuePriorityByPhase`
 - **cửa merge:** chạm `packs/channels/**`, `kernel/src/**`, `ops/scripts/**`, `ops/test/**` — không chạm `kernel/contracts/**`, `CHARTER.md` mục 1/3, hay vùng `owner-merge` nào. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
 - tiêu chí xong:

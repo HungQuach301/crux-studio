@@ -235,7 +235,7 @@ Chỉ dẫn 5 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: issue #17, chỉ dẫn 5
 - **cửa merge: `automerge-delayed`** — sửa `CLAUDE.md`. Chạy `node ops/invariants.protected-area.ts` để xác nhận.
 - tiêu chí xong:
@@ -472,7 +472,7 @@ Rút độ trễ trả lời quyết định từ một nhịp worker xuống v�
 ### P-003 · Soát chéo bằng GPT trong CI
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER 6.4 (từ Đợt 1)
 - tiêu chí xong:
   - Cần secret `OPENAI_API_KEY`; thiếu thì **DỪNG và báo tên secret thiếu**, không tự tạo.
@@ -678,7 +678,7 @@ Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với
 ### P-006 · Bảo vệ nhánh bằng ruleset
 - deps: VF-G12
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER mục 10 (việc của chủ dự án); giả định G12
 - tiêu chí xong:
   - ✅ Danh sách status check bắt buộc được ghi vào `docs/decisions/` sau khi chủ dự án bật — `docs/decisions/D-C08.md`, năm check `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` của ruleset `protect-main`; nguồn máy đọc là `ops/scripts/required-checks.ts`.
@@ -857,7 +857,7 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
 
 - deps: —
 - risk: medium — không chặn cửa merge (`ops/invariants.merge-gate.ts` chỉ đọc `ci.yml`), nhưng vô hiệu hoá chính lưới an toàn `smoke-workflows` và làm mọi PR trông đỏ.
-- status: review
+- status: done
 - nguồn: lượt `crux-worker-2` 2026-09-22 ~19:18Z; `ops/known-failures.md` `KF-016`; 8 lần chạy `smoke-workflows.yml` (#1–#8) đều `startup_failure`.
 - **mã mục nhận lúc 2026-09-22 ~19:18Z:** `P-027` là mã cao nhất trên `main`; `P-028` không đụng ai.
 - tiêu chí xong:
@@ -1073,7 +1073,7 @@ Con số này là số để kiểm giả định `G3` (trần lượt chạy ro
 
 - deps: —
 - risk: low — số hiển thị sai, không chặn merge; nhưng giấu một tín hiệu `G3`.
-- status: review
+- status: done
 - nguồn: bản tin `#193` (câu trả lời chủ dự án 2026-09-23T14:18Z); comment doc `isStep0Line` (`platform/P-023`); `ops/known-failures.md` KF-022; `kernel/src/log.ts` (`step0LogRef`, `isStep0LogId`, `logIdFromRef`)
 - tiêu chí xong:
   - ✅ `isStep0Line` nhận **cả hai** hình dạng `ref`: file phẳng cũ (`platform/P-016`) và hình dạng P-023 mà phần mã là một `step0LogId` (`isStep0LogId(logIdFromRef(ref))`). Lọc theo phần mã, không neo vào một `ref` cứng.
@@ -1178,7 +1178,7 @@ Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQu
 
 - deps: —
 - risk: low — chỉ đổi prompt hệ thống và bài kiểm; không đụng đường gọi API, không đụng secret (vẫn ở header `Authorization`), giữ nguyên khung I7 (đóng khung DIFF là DỮ LIỆU, bỏ qua chỉ dẫn nằm trong nội dung soát).
-- status: review
+- status: done
 - nguồn: chỉ dẫn D5 `#251`; `ops/scripts/gpt-review.ts` `buildReviewPrompt`; mục gốc `platform/P-003`
 - tiêu chí xong:
   - ✅ Prompt đòi đầu ra là **DANH SÁCH PHÁT HIỆN** có nhãn mức `[CHẶN]` / `[NÊN SỬA]`; không có phát hiện thì đúng một dòng `"không phát hiện"`.

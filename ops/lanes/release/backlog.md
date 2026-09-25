@@ -9,7 +9,7 @@ Xưởng Phát hành và đo lường (S15b–S19). Đợt 1: **nâng cấp stub
 
 - deps: T-002
 - risk: low
-- status: review
+- status: done
 - nguồn: spec phần Channel Pack
 - tiêu chí xong: ✅ validator đối chiếu được `titles[].formula` với danh sách khuôn tiêu đề thật, thay vì chấp nhận mọi chuỗi.
 - **Đã làm:**
