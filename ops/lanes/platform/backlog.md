@@ -6,7 +6,7 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ### P-056 · Nhánh chờ `step0-pending` không có máy nào canh, nên 4 lượt worker mất dòng log mà không gì đỏ
 
-Tìm ra ở bước 0 lượt `crux-worker-1` `~11:39Z` `2026-09-25`, đo được chứ không suy: bốn nhánh `claude/integration/step0-pending/*` còn trên remote mà dòng log của chúng **chưa bao giờ** tới nhánh chính, nhánh cũ nhất kẹt **~35,2 giờ**. Bất biến **I8** thủng bốn lượt, và `step0Streaks(readRunLogs("ops/logs"))` đếm `totalRuns: 114` — thiếu đúng bốn. Chi tiết đầy đủ, kèm bảng bốn nhánh và lý do từng chỉ báo im: `ops/known-failures.md` `KF-041`.
+Tìm ra ở bước 0 lượt `crux-worker-1` `~11:39Z` `2026-09-25`, đo được chứ không suy: bốn nhánh `claude/integration/step0-pending/*` còn trên remote mà dòng log của chúng **chưa bao giờ** tới nhánh chính, nhánh cũ nhất kẹt **~34,9 giờ**. Bất biến **I8** thủng bốn lượt, và `step0Streaks(readRunLogs("ops/logs"))` đếm `totalRuns: 114` — thiếu đúng bốn. Chi tiết đầy đủ, kèm bảng bốn nhánh và lý do từng chỉ báo im: `ops/known-failures.md` `KF-041`.
 
 Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp"*. Cái thiếu là **người hoặc máy đọc nó**: luật nằm trong một ô ⬜ của một mục đang treo, phụ lục P1 bước 0 không nhắc tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng. Mục này biến vế hai thành thứ máy nói ra, đúng chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649): *thành bài kiểm máy khoá được, không phải lời dặn*.
 
@@ -21,7 +21,7 @@ Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR 
   - ⬜ **Ngưỡng khai thành hằng số có tên**, không phải số trần trong YAML, và có bài khoá nó — cùng hình dạng `HEARTBEAT_STALE_MINUTES`/`HEARTBEAT_SAFETY_MARGIN_MINUTES` của `step0-pr-gate.ts`.
   - ⬜ **`pnpm check` KHÔNG phải chỗ đặt.** Khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên mọi PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy — trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần.
   - ⬜ **Ô ⬜ thứ tư của `P-038` trỏ sang mục này** khi làm xong, để hai mục không nói hai chuyện.
-- mã mục: dò `### P-` trên nhánh chính **và trên đầu cả 13 PR đang mở** lúc `2026-09-25T11:5xZ` (`KF-005`, `KF-036`) — cao nhất `P-055` (`#261`), nên `P-056` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
+- mã mục: dò `### P-` trên nhánh chính **và trên đầu cả 13 PR đang mở** lúc `2026-09-25T11:39Z` (`KF-005`, `KF-036`) — cao nhất `P-055` (`#261`), nên `P-056` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
 
 ---
 

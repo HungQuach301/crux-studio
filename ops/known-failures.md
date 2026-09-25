@@ -14,14 +14,14 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 **Chữ ký:** một lượt worker đi tới `openPr: false` → ghi dòng log bước 0 → đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>` → **không lượt nào sau đó gộp nhánh ấy vào PR của mình** → dòng log không bao giờ tới nhánh chính.
 
-**Đã gặp: 4 lần.** Đo lúc `2026-09-25T11:5xZ` bằng `git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*'` rồi đối chiếu từng mã với `git cat-file -e origin/main:ops/logs/integration/<mã>.jsonl`:
+**Đã gặp: 4 lần.** Đo tại mốc `2026-09-25T11:39:23Z` (chính mốc `at` của dòng log lượt này, nên số kiểm lại được) bằng `git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*'` rồi đối chiếu từng mã với `git cat-file -e origin/main:ops/logs/integration/<mã>.jsonl`:
 
 | Nhánh chờ | Dòng log đã vào nhánh chính? | Kẹt |
 |---|---|---|
-| `step0-pending/step0-2026-09-24T004410Z-crux-worker-1` | ❌ | ~35,2 giờ |
-| `step0-pending/step0-2026-09-24T214301Z-crux-worker-1` | ❌ | ~14,2 giờ |
-| `step0-pending/step0-2026-09-25T002357Z-crux-worker-2` | ❌ | ~11,5 giờ |
-| `step0-pending/step0-2026-09-25T003923Z-crux-worker-1` | ❌ | ~11,2 giờ |
+| `step0-pending/step0-2026-09-24T004410Z-crux-worker-1` | ❌ | ~34,9 giờ |
+| `step0-pending/step0-2026-09-24T214301Z-crux-worker-1` | ❌ | ~13,9 giờ |
+| `step0-pending/step0-2026-09-25T002357Z-crux-worker-2` | ❌ | ~11,3 giờ |
+| `step0-pending/step0-2026-09-25T003923Z-crux-worker-1` | ❌ | ~11,0 giờ |
 
 **Nguyên nhân gốc — luật có hai vế, chỉ một vế có người làm.** `ops/lanes/platform/backlog.md` mục `P-038` viết đủ cả hai vế trong **một** ô ⬜:
 
