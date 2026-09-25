@@ -258,6 +258,9 @@ test('decisionDeclaresBlocked: bắt đúng dấu hiệu của `#127`, bỏ qua 
   assert.equal(decisionDeclaresBlocked('cấp kiểm 4 chặn ở một secret chưa có'), true);
   assert.equal(decisionDeclaresBlocked('tám mô hình đang chờ secret'), true);
   assert.equal(decisionDeclaresBlocked('Chọn track A hay B cho kênh'), false);
+  // Vòng soát bước 6: một `/chờ\s/` trần bắt cả "không chờ ai" — dấu hiệu bị
+  // bỏ, nên câu này KHÔNG được coi là khai chặn (chỉ "đang chờ" mới tính).
+  assert.equal(decisionDeclaresBlocked('Khuyến nghị: không chờ ai, làm ngay'), false);
 });
 
 test('decisionAgeDays: số ngày 1 số lẻ; thiếu/hỏng createdAt → null', () => {

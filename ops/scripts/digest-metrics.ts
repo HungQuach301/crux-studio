@@ -286,9 +286,14 @@ export function linkedPrNumbers(text: string): number[] {
  * *"chưa có trên repo"* và tám mô hình *"đang **chờ**"*. Mở rộng bằng cách
  * đoán (`/ok/`, `/xong/`) sẽ bắt cả câu không phải điều kiện; thêm dấu hiệu
  * mới thì thêm kèm một ca thật.
+ *
+ * ⚠️ Ba dấu hiệu, không bốn: một `/chờ\s/` trần **rộng hơn ca thật** (`#127`
+ * chỉ dùng *"đang chờ"*) và bắt cả *"không chờ ai"* — vòng soát của mục này
+ * tái hiện đúng một over-flag như vậy, nên nó bị bỏ để lời tự khai "hẹp" đúng
+ * với mã. Giữ `đang\s+chờ`, đủ cho `#127` và không đòi thêm ca nào.
  */
 export function decisionDeclaresBlocked(text: string): boolean {
-  return [/chưa\s+có/i, /chặn/i, /đang\s+chờ/i, /chờ\s/i].some((re) => re.test(text));
+  return [/chưa\s+có/i, /chặn/i, /đang\s+chờ/i].some((re) => re.test(text));
 }
 
 /** Số ngày (1 số lẻ) từ `createdAt` tới `now`; `null` khi thiếu hoặc không đọc được `createdAt`. */
