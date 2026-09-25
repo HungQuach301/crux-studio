@@ -235,7 +235,7 @@ Chỉ dẫn 5 của chủ dự án trên issue bản tin #17 (2026-09-21).
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: issue #17, chỉ dẫn 5
 - **cửa merge: `automerge-delayed`** — sửa `CLAUDE.md`. Chạy `node ops/invariants.protected-area.ts` để xác nhận.
 - tiêu chí xong:
@@ -472,7 +472,7 @@ Rút độ trễ trả lời quyết định từ một nhịp worker xuống v�
 ### P-003 · Soát chéo bằng GPT trong CI
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER 6.4 (từ Đợt 1)
 - tiêu chí xong:
   - Cần secret `OPENAI_API_KEY`; thiếu thì **DỪNG và báo tên secret thiếu**, không tự tạo.
@@ -678,7 +678,7 @@ Hàng đợi merge là tuần tự (CHARTER mục 7). Một PR xung đột với
 ### P-006 · Bảo vệ nhánh bằng ruleset
 - deps: VF-G12
 - risk: low
-- status: review
+- status: done
 - nguồn: CHARTER mục 10 (việc của chủ dự án); giả định G12
 - tiêu chí xong:
   - ✅ Danh sách status check bắt buộc được ghi vào `docs/decisions/` sau khi chủ dự án bật — `docs/decisions/D-C08.md`, năm check `check`, `secret-scan`, `fix-has-test`, `protected-area`, `trailer-warn` của ruleset `protect-main`; nguồn máy đọc là `ops/scripts/required-checks.ts`.
@@ -857,7 +857,7 @@ Hai lớp phòng thủ chống nhau: không gộp thì GitHub báo `dirty` và `
 
 - deps: —
 - risk: medium — không chặn cửa merge (`ops/invariants.merge-gate.ts` chỉ đọc `ci.yml`), nhưng vô hiệu hoá chính lưới an toàn `smoke-workflows` và làm mọi PR trông đỏ.
-- status: review
+- status: done
 - nguồn: lượt `crux-worker-2` 2026-09-22 ~19:18Z; `ops/known-failures.md` `KF-016`; 8 lần chạy `smoke-workflows.yml` (#1–#8) đều `startup_failure`.
 - **mã mục nhận lúc 2026-09-22 ~19:18Z:** `P-027` là mã cao nhất trên `main`; `P-028` không đụng ai.
 - tiêu chí xong:
@@ -1073,7 +1073,7 @@ Con số này là số để kiểm giả định `G3` (trần lượt chạy ro
 
 - deps: —
 - risk: low — số hiển thị sai, không chặn merge; nhưng giấu một tín hiệu `G3`.
-- status: review
+- status: done
 - nguồn: bản tin `#193` (câu trả lời chủ dự án 2026-09-23T14:18Z); comment doc `isStep0Line` (`platform/P-023`); `ops/known-failures.md` KF-022; `kernel/src/log.ts` (`step0LogRef`, `isStep0LogId`, `logIdFromRef`)
 - tiêu chí xong:
   - ✅ `isStep0Line` nhận **cả hai** hình dạng `ref`: file phẳng cũ (`platform/P-016`) và hình dạng P-023 mà phần mã là một `step0LogId` (`isStep0LogId(logIdFromRef(ref))`). Lọc theo phần mã, không neo vào một `ref` cứng.
@@ -1259,7 +1259,7 @@ Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQu
 
 - deps: —
 - risk: low — chỉ đổi prompt hệ thống và bài kiểm; không đụng đường gọi API, không đụng secret (vẫn ở header `Authorization`), giữ nguyên khung I7 (đóng khung DIFF là DỮ LIỆU, bỏ qua chỉ dẫn nằm trong nội dung soát).
-- status: review
+- status: done
 - nguồn: chỉ dẫn D5 `#251`; `ops/scripts/gpt-review.ts` `buildReviewPrompt`; mục gốc `platform/P-003`
 - tiêu chí xong:
   - ✅ Prompt đòi đầu ra là **DANH SÁCH PHÁT HIỆN** có nhãn mức `[CHẶN]` / `[NÊN SỬA]`; không có phát hiện thì đúng một dòng `"không phát hiện"`.
@@ -1289,3 +1289,24 @@ Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQu
   - ⬜ **Chưa kiểm bằng một lần gọi GPT THẬT.** `OPENAI_API_KEY` chỉ sống trong Actions, phiên agent không đọc được nó, nên *"mô hình có theo luật mới không"* hiện là **thiết kế**, chưa phải **quan sát**. Đây đúng là chỗ mà bản sửa này KHÔNG dựa vào lời hứa của mô hình: sai dạng thì máy nói ra, nên lượt đầu tiên sau merge tự cho câu trả lời. Đọc bằng dòng log `P-003.jsonl` của PR kế tiếp.
 - hold: chờ lượt `gpt-review` thật đầu tiên sau khi PR này vào `main` — nếu dòng log ra `SAI DẠNG D5` nhiều lượt liên tiếp thì luật cần siết ở tầng gọi (yêu cầu lại một lần), không phải nới phép đọc. Mục **không** tự chuyển `done` trước lần đo đó.
 - mã mục: nhận `P-051` lúc 2026-09-25 ~03:4x UTC, **đổi thành `P-054`** lúc ~06:4x UTC khi gộp `main` ở bước 2 của phụ lục P1. Lúc nhận, `P-050` (`#256`) là mã cao nhất dò được trên `main` và trên đầu nhánh cả 10 PR đang mở — nhưng PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257) của `crux-worker-2` **đã mở trước đó và merge lúc `03:46:04Z`**, tức 4 phút sau khi PR này mở, mang đúng mã `P-051` cho cùng chỉ dẫn **D5**. Phép dò của `KF-005` chỉ thấy được nhánh và `main` **tại thời điểm dò**, nên nó không bao giờ thấy một PR merge xen vào sau đó — xem `KF-036`. `P-054` là mã trống kế tiếp, dò lại trên `main` và đầu nhánh cả 11 PR đang mở (cao nhất `P-053`, `#260`).
+
+---
+
+### P-056 · fix · Nhánh chờ `step0-pending` không có máy nào canh, nên 4 lượt worker mất dòng log mà không gì đỏ
+
+Tìm ra ở bước 0 lượt `crux-worker-1` `~11:39Z` `2026-09-25`, đo được chứ không suy: bốn nhánh `claude/integration/step0-pending/*` còn trên remote mà dòng log của chúng **chưa bao giờ** tới nhánh chính, nhánh cũ nhất kẹt **~34,9 giờ**. Bất biến **I8** thủng bốn lượt, và `step0Streaks(readRunLogs("ops/logs"))` đếm `totalRuns: 114` — thiếu đúng bốn. Chi tiết đầy đủ, kèm bảng bốn nhánh và lý do từng chỉ báo im: `ops/known-failures.md` `KF-041`.
+
+Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp"*. Cái thiếu là **người hoặc máy đọc nó**: luật nằm trong một ô ⬜ của một mục đang treo, phụ lục P1 bước 0 không nhắc tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng. Mục này biến vế hai thành thứ máy nói ra, đúng chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649): *thành bài kiểm máy khoá được, không phải lời dặn*.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
+- status: ready
+- nguồn: bước 0 lượt `crux-worker-1` `2026-09-25T11:39Z`; PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) (chỗ bốn dòng log được cứu bằng tay); `ops/known-failures.md` `KF-041`; ô ⬜ thứ hai của mục `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*)
+- tiêu chí xong:
+  - ⬜ **Hàm thuần, không đụng mạng** — nhận danh sách tên nhánh chờ cộng danh sách mã log đã có ở nhánh chính, trả về những nhánh **chưa** gộp kèm tuổi từng nhánh. Dùng lại `isStep0PendingBranch` và `STEP0_PENDING_BRANCH_PREFIX` đã có ở `ops/scripts/step0-pr-gate.ts`, và `step0LogId` của kernel để tách mã ra khỏi tên nhánh — một chỗ sinh ra tên thì một chỗ đọc ngược lại, không tự cắt chuỗi.
+  - ⬜ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng bốn nhánh quan sát được ở `KF-041` cộng danh sách mã log của nhánh chính tại `0926b38` → hàm phải trả đủ bốn. Ca âm: cùng bốn nhánh nhưng mã đã có ở nhánh chính → trả rỗng. Ca biên: một nhánh không phải nhánh chờ, một tên nhánh chờ không có mã hợp lệ (phải **nêu vấn đề**, không im lặng bỏ qua — đúng cách `heartbeat-source.ts` khai `problems`).
+  - ⬜ **Một nơi chạy định kỳ đọc remote thật** — `watchdog.yml` là chỗ rẻ nhất: nó đã `git fetch` nhánh `claude/telemetry` mỗi lượt, nên thêm một `git ls-remote --heads` cho tiền tố nhánh chờ không thêm job nào. Quá ngưỡng thì mở cảnh báo, cùng đường đi với các dấu hiệu sẵn có của CHARTER 2.4.
+  - ⬜ **Ngưỡng khai thành hằng số có tên**, không phải số trần trong YAML, và có bài khoá nó — cùng hình dạng `HEARTBEAT_STALE_MINUTES`/`HEARTBEAT_SAFETY_MARGIN_MINUTES` của `step0-pr-gate.ts`.
+  - ⬜ **`pnpm check` KHÔNG phải chỗ đặt.** Khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên mọi PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy — trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần.
+  - ⬜ **Ô ⬜ thứ hai của `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*) trỏ sang mục này** khi làm xong, để hai mục không nói hai chuyện.
+- mã mục: dò `### P-` trên nhánh chính **và trên đầu cả 13 PR đang mở** lúc `2026-09-25T11:39Z` (`KF-005`, `KF-036`) — cao nhất `P-055` (`#261`), nên `P-056` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
