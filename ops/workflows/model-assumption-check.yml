@@ -1,0 +1,140 @@
+# 🤖 Cấp kiểm 4 (`llm-assumption-check`) cho tám mô hình của `topic/T-006`
+# — mục `topic/T-006b`, `🤖 [QĐ]` #127 phương án A.
+#
+# File này được viết vào ops/workflows/. Workflow sync-workflows.yml (do chủ
+# dự án tạo một lần) chép nó sang .github/workflows/ sau khi PR merge vào
+# main. Agent không ghi .github/ (CHARTER 3.2, giả định G10) — nên workflow
+# này KHÔNG chạy được trên chính PR sinh ra nó.
+#
+# CỐ Ý tách khỏi `ci.yml`, cùng lý do `gpt-review.yml` tách: nó dùng secret
+# thật (`OPENAI_API_KEY`), mà luật vùng bảo vệ xếp MỌI workflow dùng secret
+# vào `owner-merge`. Gộp vào `ci.yml` sẽ kéo cả file đó vào `owner-merge`
+# vĩnh viễn.
+#
+# ⚠️ WORKFLOW NÀY TIÊU TIỀN API. Ba lớp chặn một lần chạy ngoài ý muốn:
+#   1. CHỈ `workflow_dispatch` — không `push`, không `pull_request`, không
+#      `schedule`. Không sự kiện tự động nào chạm tới nó.
+#   2. `dry_run` mặc định **true**. Ngược hẳn `gpt-review.yml` (mặc định
+#      false ở đó) và có chủ đích: ở đây không có ngữ cảnh PR để phân biệt
+#      "chạy thật" với "chạy thử", nên mặc định phải là nhánh KHÔNG tốn
+#      tiền. Muốn chạy thật thì phải gõ `dry_run=false`.
+#   3. `smoke-workflows.yml` (mục P-010) gọi mọi workflow dispatchable sau
+#      khi `ops/workflows/**` đổi trên `main`. Vì khối `inputs:` dưới đây có
+#      `dry_run`, nó luôn được gọi kèm `-f dry_run=true` — xem
+#      `decideDispatch` ở `ops/scripts/smoke-workflows.ts`. BỎ `dry_run` đi
+#      là để smoke gọi thật và đốt tiền mỗi lần sửa một workflow bất kỳ.
+name: model-assumption-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Chạy thử: kiểm plumbing, KHÔNG gọi OpenAI, KHÔNG đẩy bằng chứng, KHÔNG đăng comment'
+        type: boolean
+        default: true
+
+# `contents: write` để đẩy bằng chứng lên nhánh `claude/tier4-evidence`;
+# `issues: write` để `gh issue comment` lên #127.
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: model-assumption-check
+  cancel-in-progress: false
+
+jobs:
+  tier4:
+    name: tier4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cấp kiểm 4 cho tám mô hình (thiếu OPENAI_API_KEY thì DỪNG, không tự tạo secret)
+        id: tier4
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" != "false" ]; then
+            echo "CHẠY THỬ — không gọi OpenAI, không đẩy bằng chứng, không đăng comment."
+            echo "ran=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Z5 (check-workflows.ts) đọc theo từng DÒNG và không lần theo một
+          # secret đã ánh xạ vào biến env — nên khẳng định secret không rỗng
+          # NGAY tại lần dùng đầu tiên, tham chiếu thẳng giá trị.
+          # Thiếu secret ở đây KHÔNG phải nhánh bình thường như ở
+          # `gpt-review.yml`: cấp kiểm 4 là cổng Mốc 3, nên nó phải ĐỎ chứ
+          # không được im lặng xanh.
+          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "::error::thiếu secret OPENAI_API_KEY — cấp kiểm 4 CHƯA CHẠY, không tự tạo secret."
+            exit 1
+          fi
+          # Secret truyền qua biến môi trường nên không lọt vào argv.
+          OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" node ops/scripts/model-assumption-check.ts \
+            --root . \
+            --out "$RUNNER_TEMP/tier4-summary.md"
+          echo "ran=true" >> "$GITHUB_OUTPUT"
+
+      # Bằng chứng đi lên một NHÁNH RIÊNG, không mở PR — cùng lối `P-043`
+      # dùng cho nhịp tim (`ops/scripts/telemetry-beat.ts`). Lý do: nhánh
+      # không có PR thì không chạy CI (`ci.yml` chỉ kích bằng `pull_request`
+      # và `workflow_dispatch`), và lượt worker kế tiếp lấy file về
+      # BYTE-VỚI-BYTE thay vì phải đọc số ra khỏi văn xuôi của một comment.
+      # Workflow KHÔNG tự ghi vào `main` và KHÔNG tự mở PR: bằng chứng cấp 4
+      # đi qua một lượt worker có soát, đúng CHARTER mục 3 (I2).
+      #
+      # NỐI THÊM, không `--force`: `CLAUDE.md` mục 2 cấm force-push, và lịch
+      # sử của nhánh này là bản ghi các lượt cấp 4 đã chạy — ghi đè nó là
+      # xoá bằng chứng của lượt trước.
+      #
+      # Subject của commit là chuỗi CỐ ĐỊNH, máy sinh, và
+      # `isToolCommit` ở `ops/scripts/recheck-assumptions.ts` có một dòng
+      # danh sách trắng cho đúng nó. Thiếu dòng đó thì bài kiểm giả định
+      # **G14** đọc commit này là commit của agent, thấy nó không có
+      # `Claude-Session` (một workflow không có phiên nào để ghi) và báo
+      # `sai` — một lỗi không PR nào chữa được, vì commit này không bao giờ
+      # vào `main`.
+      - name: Đẩy bằng chứng lên nhánh claude/tier4-evidence (KHÔNG mở PR, KHÔNG force)
+        if: steps.tier4.outputs.ran == 'true'
+        run: |
+          set -euo pipefail
+          EV=workshops/topic/data/models/tier4
+          cp -r "$EV" "$RUNNER_TEMP/tier4"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # Z9 — `|| true` an toàn ở đúng đây: nhánh CHƯA TỒN TẠI ở lượt cấp 4
+          # đầu tiên, và `git fetch` một ref không có trả mã khác 0. Nuốt lỗi
+          # KHÔNG che được gì: dòng `rev-parse` ngay dưới là thứ quyết định, và
+          # nó đối xử "chưa có nhánh" và "fetch hỏng" như nhau — cả hai đi vào
+          # nhánh `--orphan`. Ca thứ hai KHÔNG âm thầm xoá gì: push không có
+          # `--force`, nên đẩy một lịch sử rời lên một nhánh đang tồn tại bị
+          # GitHub TỪ CHỐI và bước này đỏ. Hướng lệch là đỏ, không phải mất.
+          git fetch --no-tags origin '+refs/heads/claude/tier4-evidence:refs/remotes/origin/tier4ev' || true
+          if git rev-parse --verify --quiet refs/remotes/origin/tier4ev >/dev/null; then
+            git checkout -B tier4-evidence refs/remotes/origin/tier4ev
+          else
+            git checkout --orphan tier4-evidence
+            git rm -rf --cached . >/dev/null
+            git clean -fdx -e node_modules >/dev/null
+          fi
+          mkdir -p "$EV"
+          cp -r "$RUNNER_TEMP/tier4/." "$EV/"
+          git add --force "$EV"
+          git commit -m 'chore: tier4 evidence from ops/scripts/model-assumption-check'
+          git push origin HEAD:refs/heads/claude/tier4-evidence
+
+      - name: Đăng bảng kết quả lên #127
+        if: steps.tier4.outputs.ran == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh issue comment 127 --body-file "$RUNNER_TEMP/tier4-summary.md"

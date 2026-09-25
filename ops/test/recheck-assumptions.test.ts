@@ -115,6 +115,43 @@ test('isToolCommit chỉ nhận đúng message do máy sinh, không nhận commi
 });
 
 /**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `topic/T-006b`.
+ *
+ * `ops/workflows/model-assumption-check.yml` đẩy bằng chứng cấp kiểm 4 lên
+ * nhánh `claude/tier4-evidence`. Commit đó do một job Actions sinh ra, nên
+ * nó **không có phiên nào** để ghi `Claude-Session`. Thiếu một dòng danh
+ * sách trắng, `judgeTrailerEvidence` đọc nó thành commit của agent và giả
+ * định **G14** báo `sai` — vì một commit KHÔNG PR NÀO CHỮA ĐƯỢC, do nhánh
+ * đó không bao giờ vào `main` (cùng cái bẫy mà CHARTER phụ lục P3 bước 0e
+ * đã nêu cho `claude/telemetry`).
+ *
+ * Bài dưới khoá CẢ HAI chiều: nhận đúng subject cố định, và KHÔNG nới ra
+ * thành `^chore: ` nói chung.
+ */
+test('T-006b · commit bằng chứng cấp 4 là commit công cụ, và luật KHÔNG nới thành mọi `chore:`', () => {
+  assert.ok(isToolCommit('chore: tier4 evidence from ops/scripts/model-assumption-check'));
+  assert.ok(isToolCommit('🤖 chore: tier4 evidence from ops/scripts/model-assumption-check'));
+  assert.ok(
+    !isToolCommit('chore: tier4 evidence from somewhere else'),
+    'danh sách trắng neo đúng subject workflow gõ cứng, không phải một mẫu mở',
+  );
+  assert.ok(!isToolCommit('chore: dọn dẹp log'), '`chore:` nói chung vẫn là commit của agent');
+});
+
+/**
+ * Chiều hỏng thật của G14, đo qua `judgeTrailerEvidence` chứ không chỉ qua
+ * `isToolCommit`: một commit bằng chứng cấp 4 thiếu `Claude-Session` không
+ * được kéo cả bài kiểm sang `sai`.
+ */
+test('T-006b · commit bằng chứng cấp 4 thiếu trailer KHÔNG làm G14 báo sai', () => {
+  const outcome = judgeTrailerEvidence([
+    { sha: 'aaa1111', subject: 'chore: tier4 evidence from ops/scripts/model-assumption-check', hasSessionTrailer: false },
+    { sha: 'bbb2222', subject: 'topic: T-006b — cấp kiểm 4', hasSessionTrailer: true },
+  ]);
+  assert.equal(outcome.verdict, 'khớp');
+});
+
+/**
  * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`, bộ đọc tiêu đề thứ tư.
  *
  * Mọi luật của `isToolCommit` neo `^`, mà `CLAUDE.md` mục 5 bắt buộc agent
