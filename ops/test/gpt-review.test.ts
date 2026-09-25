@@ -90,6 +90,15 @@ test('buildReviewPrompt · D5 (#251, mục platform/P-054): đầu ra phải là
   // vuông, và khi hai bản cài đặt của cùng chỉ dẫn D5 gặp nhau ở lần gộp
   // `main` (PR #257 và #258, `KF-036`) thì phép khớp chép tay đó ĐỎ trên một
   // prompt hoàn toàn đúng luật. Một luật chỉ có một bản (`P-043`, `KF-016`).
+  // Neo CHỮ NGUYÊN VĂN trước, rồi mới đi qua hằng số. Thiếu ba dòng này thì
+  // đổi `BLOCKING_LEVEL` thành `'X1'` vẫn cho cả bộ test xanh (đo được:
+  // 1315/1315 pass), vì MỌI khẳng định còn lại đều đọc hằng số từ chính
+  // `gpt-review.ts` — bài kiểm đi theo mã thay vì giữ mã đứng yên. Chỉ dẫn
+  // **D5** của chủ dự án gọi đích danh ba chuỗi này, nên chúng là hợp đồng
+  // với người, không phải chi tiết cài đặt đổi được. Xem `KF-038`/`P-055`.
+  assert.equal(BLOCKING_LEVEL, 'CHẶN');
+  assert.equal(ADVISORY_LEVEL, 'NÊN SỬA');
+  assert.equal(NO_FINDING_PHRASE, 'không phát hiện');
   assert.match(prompt.system, new RegExp(BLOCKING_LEVEL));
   assert.match(prompt.system, new RegExp(ADVISORY_LEVEL));
   assert.match(prompt.system, new RegExp(`"${NO_FINDING_PHRASE}"`));
@@ -106,6 +115,13 @@ test('buildReviewPrompt · D5 (#251, mục platform/P-054): đầu ra phải là
     .split('\n')
     .filter((line) => line.startsWith(`${BLOCKING_LEVEL} ${LEVEL_SEPARATOR}`) || line.startsWith(`${ADVISORY_LEVEL} ${LEVEL_SEPARATOR}`));
   assert.equal(examples.length, 2, 'prompt phải nêu đúng một ví dụ cho mỗi mức');
+  // TIÊU CHÍ của mức, không chỉ cú pháp. Lần gộp `P-054` giữ prompt của một
+  // bên và suýt bỏ mất hai vế này của bên kia (`#257`) — mất chúng thì prompt
+  // dạy hình dạng rất kỹ mà không nói cái gì LÀM một phát hiện thành `CHẶN`,
+  // và một bộ đọc chặt về cú pháp không bao giờ bắt được một mức sai. `KF-038`.
+  assert.match(prompt.system, /TRƯỚC KHI MERGE/);
+  assert.match(prompt.system, /KHÔNG chặn merge/);
+
   const verdict = parseReviewFindings(examples.join('\n'));
   assert.ok(verdict.conforms, `ví dụ trong prompt không qua được chính parser: ${verdict.problems.join(' | ')}`);
   assert.equal(verdict.findings.length, 2);
