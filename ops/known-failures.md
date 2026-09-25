@@ -75,6 +75,37 @@ Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trư
 
 ---
 
+## KF-040 · Tiền API đã tiêu, rồi lượt chạy ném — và **không dòng log nào** ghi lại số tiền đó
+
+> Số **KF-040**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất toàn cục là `KF-039` (PR `#242`), nên `KF-040` không đụng ai.
+
+- **Lần gặp: 2.** Đủ ngưỡng `CLAUDE.md` mục 13 *"lỗi cùng loại lần thứ hai → sửa spec/contract/prompt, không vá sản phẩm"*.
+- **Nhóm Z.** Không gì đỏ: script ném, job đỏ vì một lý do khác (tên file hỏng), và người đọc thấy một job đỏ chứ không thấy *"vừa tiêu N đô mà sổ chi không có dòng nào"*. Ngân sách học của CHARTER mục 8 đọc `ops/logs/**`, nên tiền đã tiêu **biến mất khỏi phép cộng**.
+- **Chữ ký:** một script gọi API trả tiền trong vòng lặp → một bước **ngoài** `try` (đọc file đầu vào, dựng prompt) ném ở lượt thứ N → ngoại lệ thoát khỏi hàm → `appendLog` không bao giờ chạy → **N-1 lần gọi đã bị tính tiền, 0 dòng log**. Bất biến **I8** đòi *mọi* lần chạy có một dòng mang `costUsd`, và nhánh ném là nhánh **đắt nhất**, tức nhánh ít được phép im lặng nhất.
+
+| Lần | Chỗ | Phát hiện bởi |
+|---|---|---|
+| 1 | `ops/scripts/novelty-embeddings-trial.ts` (mục `topic/T-014`, PR `#253`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~03:0xZ` |
+| 2 | `ops/scripts/model-assumption-check.ts` (mục `topic/T-006b`, PR `#264`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~10:0xZ` |
+
+Lần 2 xảy ra **~7 giờ sau** lần 1, trong một file **mới viết**, bởi một lượt agent **không đọc** bản sửa của lần 1. Đó là phần đáng ghi: bài học nằm trong một docblock của một file khác, và docblock không đi theo người viết file sau.
+
+- **Tái hiện, lần 2, chạy thật:**
+  ```
+  ném ở readHandCases('M-003') sau 2 lần gọi API
+  → NÉM RA NGOÀI runTier4
+  → số lần đã GỌI OPENAI (đã tính tiền): 2
+  → số dòng log ghi được (I8):            0
+  ```
+- **Nguyên nhân gốc:** `try` được đặt quanh *"lời gọi mạng"* vì đó là chỗ **trông như** có thể hỏng. Nhưng phạm vi đúng của `try` không phải "chỗ dễ hỏng" mà là **"từ lúc đồng hồ tiền bắt đầu chạy"** — mọi thứ sau lần gọi tính tiền đầu tiên, kể cả một phép đọc file trông vô hại.
+- **Máy chặn từ nay:**
+  - Lần 1: `ops/scripts/novelty-embeddings-trial.ts` ghi log trong `finally`, `costUsd` cộng dồn **ngoài** `try`.
+  - Lần 2: `ops/scripts/model-assumption-check.ts` — `runTier4` bao **cả vòng lặp** trong `try/finally`, `totalCostUsd` khai ngoài `try`, và hai lời gọi `readModel`/`readHandCases` chuyển **vào trong** `try` của từng model. Hai bài kiểm khoá hai lớp: `TÁI HIỆN C2` (file ca kiểm hỏng) và `C2 lớp 2` (ngoại lệ ngoài phạm vi một model). Phá thử: bỏ `finally` chỉ ghi ở đường trót lọt → **1 bài đỏ đúng chỗ**; đưa `readHandCases` ra ngoài `try` → **1 bài đỏ đúng chỗ**.
+- **Luật rút ra, cho mọi script gọi API trả tiền sau này:** đặt `try` từ **trước lời gọi tính tiền đầu tiên**, cộng dồn `costUsd` vào một biến khai **ngoài** `try`, và ghi dòng log trong `finally`. Ba câu đó là ba câu, không phải một gợi ý.
+- **Còn hở, khai chứ không giấu:** chưa có cổng **máy** nào bắt một script *mới* quên luật này — hai lần sửa đều do vòng soát ngữ cảnh sạch bắt, không do CI. Một bộ dò dạng *"file nào gọi `api.openai.com` mà không có `finally` chứa `appendLog`"* là một mục backlog riêng; chưa mở vì nó cần đo xem có bao nhiêu ca giả. Tới lúc đó, KF này là lưới đỡ.
+
+---
+
 ## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
 
 > Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
@@ -91,6 +122,40 @@ Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trư
 | `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
 | `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
 | lúc viết mục này | `#127` **vẫn mở**. |
+
+**Lần gặp thứ 2 — chủ dự án bảo kiểm, đã kiểm, và nó đúng là một lần lặp.** Chỉ dẫn trên `#251`
+(`2026-09-25T06:04:33Z`): *"Báo cáo D6 vẫn ghi '#127 vẫn cần anh quyết'. Kiểm: lượt đó bắt đầu trước hay
+sau câu trả lời? Nếu sau thì đây là lần lặp của `KF-035`, ghi thêm vào KF."* Đo bằng API, ba mốc:
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-24T23:49:25Z` | Chủ dự án **trả lời `#127`** ngay trên issue: *"#127 A — điều kiện đã đủ… Chạy cấp kiểm 4 … ở lượt tới…"*. Comment không mở đầu 🤖 trên issue nhãn `decision` → là **chỉ dẫn** (`CLAUDE.md` mục 5). |
+| `2026-09-25 ~04:2x–05:0xZ` | Lượt `crux-worker-2` làm **D6**, và báo cáo của nó viết `#127` *"**vẫn cần anh quyết** dù `#66` đã merge"*. |
+| chênh lệch | Lượt D6 bắt đầu **~4,5 giờ SAU** câu trả lời. |
+
+**Nên: đúng, là lần lặp** — cùng chữ ký, đổi nguồn dữ liệu. Lần 1 agent đọc một *trạng thái tồn kho*
+(`OPENAI_API_KEY` có chưa) bằng trí nhớ; lần 2 agent đọc một *câu trả lời* bằng trí nhớ. Cả hai lần, thứ
+đã đổi nằm trong một chỗ **đọc được bằng một lời gọi API** mà không lượt nào gọi.
+
+**Nguyên nhân gốc lớp 3, mới ở lần này:** `CLAUDE.md` mục 14 dặn đọc câu trả lời ở **cả hai** chỗ — issue
+`[QĐ]` và issue bản tin. Lượt D6 đọc `#127` đủ để trích **thân** issue (nó dẫn đúng phương án A) nhưng
+**không đọc comment** của issue đó. Đọc thân mà không đọc comment là một hình dạng cụ thể, lặp được, và
+nó không đỏ ở đâu cả: thân issue luôn nói "đang chờ", vì thân issue được viết lúc còn chờ.
+
+**Máy chặn từ nay:** vẫn chỉ một nửa. Bộ dò *"Quyết định điều kiện đã đủ nhưng còn mở"* mà chính D6 dựng
+(`conditionMetButOpen` ở `ops/scripts/digest-metrics.ts`) bắt được hình dạng **lần 1** (PR gate đã merge).
+Nó **không** bắt được hình dạng lần 2, vì tín hiệu của lần 2 là *"issue đã có một comment không mở đầu 🤖
+sau lần agent đọc gần nhất"* — một phép đo khác hẳn. Chưa thêm luật ở đây vì đúng **A10** của `#251`
+(chỉ thêm luật khi đã có một lỗi thật): nay đã có, nên nó đáng một mục backlog riêng, không phải một dòng
+vá trong mục `topic/T-006b`. Lưới đỡ tạm cho tới lúc đó: **đọc `get_comments` của mọi `[QĐ]` mình định
+nhắc tới**, đừng đọc mỗi thân issue.
+
+**Lần gặp thứ 2 KHÔNG tự lành ở lượt này, và đó là chủ đích.** Lượt `crux-worker-1` `2026-09-25 ~09:5xZ`
+nhận `#127 A` và dựng xong cơ chế cấp kiểm 4 (`topic/T-006b`), nhưng **chưa chạy** nó: `OPENAI_API_KEY`
+chỉ sống trong Actions (kiểm bằng chạy thật, `env` của phiên không có), và một workflow mới trong
+`ops/workflows/` chỉ có hiệu lực **sau khi** PR merge vào `main` và `sync-workflows.yml` chép xong
+(`CLAUDE.md` mục 4). Nên `#127` **giữ mở** tới sóng 2. Đóng nó ở sóng 1 để "xong việc" là dựng lại đúng
+chữ ký của chính `KF-035` theo chiều ngược: khai một việc chưa làm là đã làm.
 
 **Nguyên nhân gốc — hai lớp:**
 
