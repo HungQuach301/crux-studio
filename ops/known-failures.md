@@ -46,6 +46,38 @@ Hai tín hiệu nhận việc đang có đều không bắt được:
 - `ops/test/claim-collision.test.ts`, **29 bài**, mở đầu bằng bốn bài tái hiện đúng mốc thật của `#221`/`#222` và `#224`/`#225` (bất biến I2). Chạy thật trên ảnh chụp PR thật: đúng **2** va chạm, cả hai thật, **0** báo giả trên hai sóng của `platform/P-014`.
 
 **Còn thiếu, khai ra:** va chạm chưa nổi lên bản tin ngày (`digest-metrics.ts` đang bị `#223` sửa, để PR sau nối), và mâu thuẫn `claimed` giữa `ops/lanes/README.md` và phụ lục P1 bước 4 vẫn còn nguyên.
+## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
+
+> Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh trên cả hai PR, `main` xanh. Chỗ hỏng chỉ lộ ra ở **lần gộp `main`**, và lộ ra dưới dạng một xung đột trông như xung đột nội dung bình thường.
+
+**Chữ ký:** hai lượt worker nhận **cùng một chỉ dẫn** trong cùng một khoảng vài phút → mỗi lượt chạy phép dò mã trống của `KF-005` (`### P-` trên `main` **và** trên đầu các PR đang mở) → cả hai đều thấy cùng một mã cao nhất → **cả hai cấp cùng một mã** cho hai mục khác nhau.
+
+**Quan sát được, `P-051`, 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `~03:1xZ` | `crux-worker-2` nhận chỉ dẫn **D5**, mở PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257), cấp mã `P-051` |
+| `03:41:42Z` | `crux-worker-1` mở PR [`#258`](https://github.com/HungQuach301/crux-studio/pull/258) cho **cùng** chỉ dẫn D5, dò ra cao nhất `P-050` (`#256`) → cũng cấp `P-051` |
+| `03:46:04Z` | `#257` **merge** — `P-051` vào `main`, 4 phút sau khi `#258` mở |
+| `03:41`–`06:4x` | `#258` xung đột với `main` ở `backlog.md` **và** `gpt-review.ts`; `integrator-resolve.ts` ra `aborted-ineligible` **5 lượt liên tiếp** |
+
+**Vì sao phép dò của `KF-005` không đỡ được:** nó đúng với tồn kho **tại thời điểm chạy**. Một PR đã mở nhưng chưa được dò (`#257` không nằm trong danh sách 10 PR mà `#258` dò — nó mở gần như cùng lúc), hoặc merge **sau** lúc dò, không bao giờ xuất hiện trong kết quả. Khoảng hở bằng đúng thời gian sống của một lượt worker, và ba worker chạy chồng nhau thì khoảng hở đó được dùng thường xuyên.
+
+**Vì sao hai worker nhận cùng một việc:** đây là lớp thứ hai, và nó đã có mục riêng — `P-041` (`#225`, bộ dò va chạm đọc từ tiêu đề PR). Mục này ghi lớp **mã mục**, không thay `P-041`.
+
+**Chỗ đã sửa lần này (thủ công, ở lượt gộp):** mục của `#258` đổi mã sang `P-054`, `ops/logs/platform/P-051.jsonl` tách lại theo `D-C04` (một file cho mỗi mục — auto-merge đã trộn dòng của hai mục vào một file mà **không gì đỏ**, vì `merge=union` không biết hai mục khác nhau).
+
+**Máy chặn nào còn thiếu:** chưa có. Hai hướng, mỗi hướng một mục riêng (một mục = một PR):
+
+1. **Cấp mã bằng một nguồn nối tiếp**, không bằng phép dò — mã mục do một lệnh cấp và ghi lại, để hai lượt không bao giờ đọc ra cùng một số.
+2. **Cổng máy bắt mã trùng ở CI** — `### P-xxx` trùng giữa đầu nhánh và `main`, và dòng log có `ref` không khớp tên file, đều đỏ được ngay trong `pnpm check`. Hướng này rẻ hơn và bắt được **cả** ca `P-028` cũ (`#224`) lẫn ca này.
+
+Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trước khi commit mục**, không phải ở đầu lượt.
+
+---
+
 ## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
 
 > Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
@@ -1007,3 +1039,23 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 - **Một lỗi RIÊNG bị trộn vào cùng cảnh báo, đừng gộp:** con số "60 giờ" của cảnh báo đó **không** đo cửa sổ sync — nó đếm từ một cảnh báo cũ (`a44d265`) **chưa bao giờ được đóng**. Đó là chữ ký của `KF-028` và đang được `#231`/`P-044` chữa (đóng cảnh báo khi `main` xanh lại). Hai lỗi cộng lại thành một cảnh báo trông tệ hơn từng lỗi — tách ra thì mỗi lỗi có một đường sửa riêng.
 - **Chưa sửa — chờ quyết định `#254`:** cách chặn phải **không nới** dấu hiệu 3 của `watchdog` (bắt `sync-workflows` chạy **hỏng** thật), nên nó là một lựa chọn thiết kế, không phải bản vá hiển nhiên. `🤖 [QĐ] #254` mở ba phương án; khuyến nghị A (thêm bộ phân loại "đang chờ sync" hạ cấp @nhắc, giữ nguyên dấu hiệu 3). Mục `platform/P-049` giữ chỗ, `status: parked`.
 - **Máy chặn từ nay:** chưa có — cửa này để mở tới khi `#254` chốt phương án. KF này là lưới đỡ tạm: lượt worker/integrator gặp một cảnh báo `main` đỏ **ngay sau** một merge `ops/workflows/**` mà `pnpm check` trên `main` lại xanh thì đối chiếu mốc `sync-workflows` gần nhất trước khi coi là sự cố thật — **đừng revert một `main` vốn đang xanh**.
+
+---
+
+## KF-034 · Soát chéo GPT chạy đều, tốn tiền đều, và chưa bao giờ ra một phát hiện nào
+
+> Số **KF-034**: dò `## KF-` trên `main` (cao nhất `KF-033`) **và trên đầu cả 10 PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-034` không đụng ai.
+
+- **Lần gặp:** 1 (chỉ dẫn **D5** của chủ dự án trên `#251`).
+- **Nhóm Z.** Job `gpt-review` chạy, đăng comment, ghi dòng log có `costUsd` — mọi chỉ báo xanh. Cái thiếu là thứ không chỉ báo nào đo: comment **không chứa phát hiện nào**. Một bản tóm tắt PR đọc lướt qua trông y hệt một lượt soát chéo đã xong, nên nó đi qua mọi vòng mắt người mà không ai hỏi.
+- **Chữ ký:** comment `gpt-review` gồm các dòng đánh số mô tả PR đã đổi những gì (*"Đã thêm…"*, *"Việc định nghĩa … giúp đảm bảo…"*, *"Các test case … có vẻ đầy đủ"*), **0 dòng mang mức CHẶN/NÊN SỬA**, 0 chỗ hỏng nêu đích danh.
+  - Đo được lúc nhận mục `P-051`, **đếm lại bằng API GitHub trong vòng soát ngữ cảnh sạch**: **6/6** comment `gpt-review` trên `#249` (`5821972516`, `5822119278`, `5822426604`, `5824173496`, `5824271431`, `5826125889`) — 0 dòng mang mức. Cùng hình dạng trên `#242` (`5816275628`, `5818297000`), `#223` (`5807791978`, `5807846441`), `#224` (`5808392375`), `#39` (`5815319768`, `5815347132`, `5815417824`, `5818092517`).
+  - ⚠️ **Một con số của bản đầu KF này SAI, ghi lại chứ không lặng lẽ sửa** — nó khai *"5/5 comment trên `#249`"* và trích ID `5816275628` như thể ID đó nằm trên `#249`. Thật ra `#249` có **6** comment và `5816275628` nằm trên **`#242`**. Lượt làm chép con số đó từ mô tả PR `#256` thay vì tự đếm — đúng chữ ký `I-021` (ghi một con số không phải mình đo). Phần *định tính* (mọi comment đều là tóm tắt, 0 phát hiện có mức) thì đo lại vẫn đúng ở cả hai PR.
+- **Nguyên nhân gốc:** prompt hệ thống cũ chỉ xin *"nêu tối đa 5 phát hiện đáng chú ý nhất, mỗi phát hiện một dòng"*. *"Đáng chú ý"* không phân biệt **một chỗ hỏng** với **một thay đổi**, nên một câu mô tả thay đổi thoả yêu cầu. Mô hình đi theo đường rẻ nhất, và đường rẻ nhất khi đọc một diff là kể lại nó.
+- **Vì sao sửa prompt thôi là chưa đủ:** một prompt là lời dặn cho một mô hình xác suất, không phải lớp chặn. Chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649) — *"tất cả thành bài kiểm máy khoá được, không phải lời dặn"* — loại thẳng cách đó.
+- **Máy chặn từ nay** (`P-051`, `ops/scripts/gpt-review.ts`):
+  - `parseReviewFindings` đọc lại đầu ra thật và trả `conforms` cộng `problems` nêu **từng** dòng sai — hàm thuần, có bài kiểm.
+  - `formatComment` **không bao giờ** đăng một đầu ra sai dạng như thể nó là một lượt soát chéo: nó đăng kèm nhãn sai dạng và lý do, đầu ra thô nằm trong `<details>` đóng khung là dữ liệu (**I7**).
+  - Dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`, nên chuỗi "chưa bao giờ ra phát hiện" đếm được bằng `readRunLogs` thay vì bằng mắt.
+- **Hướng lệch đã chọn, và vì sao:** không đối xứng. Nuốt một đầu ra sai dạng thì comment biến mất và người đọc PR tưởng job không chạy; đăng trơn thì nhóm Z quay lại nguyên vẹn. Nên **đăng kèm nhãn**. Cùng lẽ đó, phép đọc cố ý **chặt** — một câu dẫn tự do cũng là sai dạng, vì đó đúng là nơi văn tóm tắt quay lại.
+- **Còn hở, khai chứ không giấu:** phép đọc bắt được *"không đúng dạng"*, **không** bắt được *"đúng dạng mà nội dung rỗng nghĩa"* — một dòng `NÊN SỬA · nên xem lại phần test` hợp dạng nhưng không nêu chỗ hỏng nào. Chưa có ca thật nào, nên chưa thêm luật (đúng **A10** của `#251`: chỉ thêm luật khi có một lỗi đã thật sự xảy ra). Thấy lần đầu thì mở mục backlog, đừng đoán trước.
