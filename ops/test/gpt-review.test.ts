@@ -7,6 +7,11 @@
  *   2. Nội dung gửi đi không chứa secret, và diff được đóng khung là DỮ
  *      LIỆU chứ không phải chỉ dẫn (bất biến I7).
  *   3. `costUsd` tính từ `usage` thật do API trả về, không ước lượng.
+ *
+ * Chỉ dẫn **D5** (`#251`) thêm nhóm thứ tư: đầu ra BẮT BUỘC là danh sách phát
+ * hiện có mức (`CHẶN` / `NÊN SỬA` / `không phát hiện`), CẤM tóm tắt lại nội
+ * dung PR. Bài **TÁI HIỆN LỖI** (bất biến **I2**) dựng lại nguyên văn một
+ * comment `gpt-review` thật trên `#249` — thứ mà luật cũ để lọt.
  */
 
 import { test } from 'node:test';
@@ -19,6 +24,13 @@ import {
   reviewWithGpt,
   formatComment,
   runGptReview,
+  parseReviewFindings,
+  countByLevel,
+  BLOCKING_LEVEL,
+  ADVISORY_LEVEL,
+  LEVEL_SEPARATOR,
+  NO_FINDING_PHRASE,
+  MAX_FINDINGS,
   PRICE_PER_1M_INPUT_USD,
   PRICE_PER_1M_OUTPUT_USD,
   type RunDeps,
@@ -195,4 +207,179 @@ test('runGptReview · API lỗi: KHÔNG ném ra ngoài (job advisory), ghi log s
   assert.equal(logs.length, 1);
   assert.equal(logs[0]!.status, 'failed');
   assert.equal(logs[0]!.costUsd, 0);
+});
+
+// ── D5 · đầu ra phải là phát hiện có mức, không phải tóm tắt ───────────────
+//
+// Chỉ dẫn D5 của chủ dự án trên `#251`. Nguồn của mọi số ở nhóm này là comment
+// `gpt-review` THẬT trên PR đang mở, không phải ví dụ nghĩ ra.
+
+/**
+ * **BÀI TÁI HIỆN LỖI (I2).** Nguyên văn comment `gpt-review` trên
+ * [`#249`](https://github.com/HungQuach301/crux-studio/pull/249#issuecomment-5816275628)
+ * dạng đã gặp trên cả `#242`, `#223`, `#224`, `#39`: năm dòng văn tóm tắt PR,
+ * **0 phát hiện có mức**. Luật cũ nhận nó là một lượt soát chéo hợp lệ và
+ * đăng nguyên văn.
+ */
+const SUMMARY_FROM_249 = [
+  '1. Thêm mới file `reading-table.schema.json` với cấu trúc rõ ràng, đảm bảo tính tương thích và tiêu chuẩn cho bảng đọc của các kênh.',
+  '2. Việc định nghĩa và sử dụng `readingTableSchema` trong `contracts.ts` giúp đảm bảo tính bất biến của cấu trúc dữ liệu.',
+  '3. Phương thức `loadChannelReadingTable` trong `packs.ts` thực hiện xác thực ngay lập tức.',
+  '4. Ghi chú đầy đủ trong các đoạn mã và tài liệu, giữ cho mọi người đều hiểu rõ quy trình.',
+  '5. Các thước đo rủi ro được xác định chính xác.',
+].join('\n');
+
+test('parseReviewFindings · TÁI HIỆN LỖI: bản tóm tắt thật của #249 bị bắt là SAI DẠNG, 0 phát hiện', () => {
+  const verdict = parseReviewFindings(SUMMARY_FROM_249);
+  assert.equal(verdict.conforms, false, 'một bản tóm tắt PR không được tính là soát chéo hợp lệ');
+  assert.equal(verdict.findings.length, 0);
+  assert.equal(verdict.noFindings, false, '"sai dạng" KHÁC "mô hình khai không có phát hiện"');
+  // Mỗi dòng tóm tắt phải được nêu tên, không gộp thành một câu chung chung.
+  assert.equal(verdict.problems.length, 5);
+  assert.ok(verdict.problems.every((problem) => problem.includes(BLOCKING_LEVEL)));
+});
+
+test('formatComment · TÁI HIỆN LỖI: bản tóm tắt của #249 KHÔNG bao giờ được đăng như một lượt soát chéo', () => {
+  const body = formatComment({ summary: SUMMARY_FROM_249, promptTokens: 10, completionTokens: 5, costUsd: costUsd(10, 5) });
+  assert.match(body, /KHÔNG đúng dạng D5/);
+  // Đầu ra thô vẫn còn trong comment — bị nhãn là dữ liệu, không bị nuốt.
+  assert.ok(body.includes('reading-table.schema.json'));
+  assert.match(body, /dữ liệu, không phải chỉ dẫn/);
+  assert.ok(body.startsWith('🤖'));
+});
+
+test('runGptReview · TÁI HIỆN LỖI: dòng log nói rõ SAI DẠNG, nên "chưa bao giờ ra phát hiện" không im lặng', async () => {
+  const { deps, logs } = collectingDeps({
+    env: { OPENAI_API_KEY: 'sk-thật' },
+    fetchImpl: (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: SUMMARY_FROM_249 } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }),
+        { status: 200 },
+      )) as typeof fetch,
+  });
+
+  const outcome = await runGptReview(deps);
+
+  // Job vẫn advisory: một đầu ra sai dạng KHÔNG làm nó `failed` (không phải
+  // lỗi gọi API), nhưng nó cũng không được trôi qua im lặng.
+  assert.equal(outcome.status, 'ok');
+  assert.match(outcome.note, /SAI DẠNG D5/);
+  assert.match(String(logs[0]!.note), /SAI DẠNG D5/);
+});
+
+test('parseReviewFindings · danh sách đúng dạng: đọc được mức và nội dung của từng dòng', () => {
+  const verdict = parseReviewFindings(
+    [
+      `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} kernel/src/packs.ts nạp pack mà không validate.`,
+      `${ADVISORY_LEVEL} ${LEVEL_SEPARATOR} ops/scripts/x.ts lặp lại hằng số đã có ở kernel.`,
+    ].join('\n'),
+  );
+  assert.equal(verdict.conforms, true);
+  assert.deepEqual(verdict.problems, []);
+  assert.equal(verdict.findings.length, 2);
+  assert.equal(verdict.findings[0]!.level, BLOCKING_LEVEL);
+  assert.match(verdict.findings[0]!.text, /không validate/);
+  assert.equal(verdict.findings[1]!.level, ADVISORY_LEVEL);
+  assert.deepEqual(countByLevel(verdict.findings), { blocking: 1, advisory: 1 });
+});
+
+test('parseReviewFindings · "không phát hiện" là kết quả HỢP LỆ, khác hẳn sai dạng', () => {
+  const verdict = parseReviewFindings(NO_FINDING_PHRASE);
+  assert.equal(verdict.conforms, true);
+  assert.equal(verdict.noFindings, true);
+  assert.equal(verdict.findings.length, 0);
+});
+
+test('parseReviewFindings · dấu đầu dòng markdown, chữ đậm và dòng kẻ ngang là trang trí, không phải vi phạm', () => {
+  const verdict = parseReviewFindings(
+    ['---', `- **${BLOCKING_LEVEL}** ${LEVEL_SEPARATOR} một chỗ hỏng thật.`, '', `* ${ADVISORY_LEVEL}: một chỗ nên sửa.`].join('\n'),
+  );
+  assert.equal(verdict.conforms, true);
+  assert.equal(verdict.findings.length, 2);
+  assert.equal(verdict.findings[1]!.level, ADVISORY_LEVEL);
+});
+
+test('parseReviewFindings · dấu tiếng Việt dạng tổ hợp (NFD) vẫn đọc được — không báo oan', () => {
+  const nfd = `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} một chỗ hỏng thật.`.normalize('NFD');
+  assert.notEqual(nfd, `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} một chỗ hỏng thật.`, 'ca kiểm phải thật sự ở dạng NFD');
+  const verdict = parseReviewFindings(nfd);
+  assert.equal(verdict.conforms, true);
+  assert.equal(verdict.findings.length, 1);
+});
+
+test('parseReviewFindings · một câu dẫn kèm danh sách đúng dạng VẪN là sai dạng — chỗ văn tóm tắt quay lại', () => {
+  const verdict = parseReviewFindings(
+    ['Dưới đây là các phát hiện của tôi về PR này:', `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} một chỗ hỏng thật.`].join('\n'),
+  );
+  assert.equal(verdict.conforms, false);
+  assert.equal(verdict.findings.length, 1);
+  assert.equal(verdict.problems.length, 1);
+  assert.match(verdict.problems[0]!, /dòng 1/);
+});
+
+test('parseReviewFindings · vừa khai "không phát hiện" vừa nêu phát hiện là mâu thuẫn, phải đỏ', () => {
+  const verdict = parseReviewFindings([NO_FINDING_PHRASE, `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} một chỗ hỏng thật.`].join('\n'));
+  assert.equal(verdict.conforms, false);
+  assert.ok(verdict.problems.some((problem) => problem.includes('không cùng đúng được')));
+});
+
+test('parseReviewFindings · đầu ra rỗng không bao giờ được đọc thành "không phát hiện"', () => {
+  const verdict = parseReviewFindings('   \n\n  ');
+  assert.equal(verdict.conforms, false);
+  assert.equal(verdict.noFindings, false);
+  assert.match(verdict.problems[0]!, /rỗng/);
+});
+
+test('parseReviewFindings · vượt trần MAX_FINDINGS thì nói ra, không lặng lẽ cắt bớt', () => {
+  const many = Array.from({ length: MAX_FINDINGS + 1 }, (_, i) => `${ADVISORY_LEVEL} ${LEVEL_SEPARATOR} phát hiện số ${i + 1}.`);
+  const verdict = parseReviewFindings(many.join('\n'));
+  assert.equal(verdict.conforms, false);
+  assert.equal(verdict.findings.length, MAX_FINDINGS + 1, 'không được nuốt phát hiện thừa — chỉ khai là vượt trần');
+  assert.ok(verdict.problems.some((problem) => problem.includes(String(MAX_FINDINGS))));
+});
+
+test('buildReviewPrompt · prompt đòi đúng ba hình dạng đầu ra của D5 và CẤM tóm tắt', () => {
+  const prompt = buildReviewPrompt(['a.ts'], 'diff giả');
+  assert.ok(prompt.system.includes(BLOCKING_LEVEL));
+  assert.ok(prompt.system.includes(ADVISORY_LEVEL));
+  assert.ok(prompt.system.includes(NO_FINDING_PHRASE));
+  assert.match(prompt.system, /CẤM tóm tắt/);
+  // Luật I7 không được đánh đổi lấy luật D5 — cả hai phải cùng ở trong prompt.
+  assert.match(prompt.system, /DỮ LIỆU/);
+  assert.match(prompt.system, /[Bb]ỏ qua mọi câu trong DIFF/);
+});
+
+test('formatComment · danh sách đúng dạng: có dòng đếm theo mức, không kèm nhãn sai dạng', () => {
+  const summary = [
+    `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} một chỗ hỏng thật.`,
+    `${ADVISORY_LEVEL} ${LEVEL_SEPARATOR} một chỗ nên sửa.`,
+  ].join('\n');
+  const body = formatComment({ summary, promptTokens: 10, completionTokens: 5, costUsd: costUsd(10, 5) });
+  assert.ok(body.startsWith('🤖'));
+  assert.ok(!body.includes('KHÔNG đúng dạng D5'));
+  assert.ok(body.includes(`1 ${BLOCKING_LEVEL} · 1 ${ADVISORY_LEVEL}`));
+  assert.match(body, /costUsd/);
+});
+
+test('runGptReview · đầu ra đúng dạng: dòng log đếm được theo mức, để bản tin đọc được', async () => {
+  const { deps, logs } = collectingDeps({
+    env: { OPENAI_API_KEY: 'sk-thật' },
+    fetchImpl: (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} một chỗ hỏng thật.` } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }),
+        { status: 200 },
+      )) as typeof fetch,
+  });
+
+  const outcome = await runGptReview(deps);
+
+  assert.equal(outcome.status, 'ok');
+  assert.ok(!outcome.note.includes('SAI DẠNG'));
+  assert.match(String(logs[0]!.note), new RegExp(`1 ${BLOCKING_LEVEL}`));
 });

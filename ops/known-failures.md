@@ -937,3 +937,22 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 - **Một lỗi RIÊNG bị trộn vào cùng cảnh báo, đừng gộp:** con số "60 giờ" của cảnh báo đó **không** đo cửa sổ sync — nó đếm từ một cảnh báo cũ (`a44d265`) **chưa bao giờ được đóng**. Đó là chữ ký của `KF-028` và đang được `#231`/`P-044` chữa (đóng cảnh báo khi `main` xanh lại). Hai lỗi cộng lại thành một cảnh báo trông tệ hơn từng lỗi — tách ra thì mỗi lỗi có một đường sửa riêng.
 - **Chưa sửa — chờ quyết định `#254`:** cách chặn phải **không nới** dấu hiệu 3 của `watchdog` (bắt `sync-workflows` chạy **hỏng** thật), nên nó là một lựa chọn thiết kế, không phải bản vá hiển nhiên. `🤖 [QĐ] #254` mở ba phương án; khuyến nghị A (thêm bộ phân loại "đang chờ sync" hạ cấp @nhắc, giữ nguyên dấu hiệu 3). Mục `platform/P-049` giữ chỗ, `status: parked`.
 - **Máy chặn từ nay:** chưa có — cửa này để mở tới khi `#254` chốt phương án. KF này là lưới đỡ tạm: lượt worker/integrator gặp một cảnh báo `main` đỏ **ngay sau** một merge `ops/workflows/**` mà `pnpm check` trên `main` lại xanh thì đối chiếu mốc `sync-workflows` gần nhất trước khi coi là sự cố thật — **đừng revert một `main` vốn đang xanh**.
+
+---
+
+## KF-034 · Soát chéo GPT chạy đều, tốn tiền đều, và chưa bao giờ ra một phát hiện nào
+
+> Số **KF-034**: dò `## KF-` trên `main` (cao nhất `KF-033`) **và trên đầu cả 10 PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-034` không đụng ai.
+
+- **Lần gặp:** 1 (chỉ dẫn **D5** của chủ dự án trên `#251`).
+- **Nhóm Z.** Job `gpt-review` chạy, đăng comment, ghi dòng log có `costUsd` — mọi chỉ báo xanh. Cái thiếu là thứ không chỉ báo nào đo: comment **không chứa phát hiện nào**. Một bản tóm tắt PR đọc lướt qua trông y hệt một lượt soát chéo đã xong, nên nó đi qua mọi vòng mắt người mà không ai hỏi.
+- **Chữ ký:** comment `gpt-review` gồm các dòng đánh số mô tả PR đã đổi những gì (*"Đã thêm…"*, *"Việc định nghĩa … giúp đảm bảo…"*, *"Các test case … có vẻ đầy đủ"*), **0 dòng mang mức CHẶN/NÊN SỬA**, 0 chỗ hỏng nêu đích danh.
+  - Đo được lúc nhận mục `P-051`: **5/5** comment trên `#249`, và cùng hình dạng trên `#242` (`5816275628`, `5818297000`), `#223` (`5807791978`, `5807846441`), `#224` (`5808392375`), `#39` (`5815319768`, `5815347132`, `5815417824`, `5818092517`).
+- **Nguyên nhân gốc:** prompt hệ thống cũ chỉ xin *"nêu tối đa 5 phát hiện đáng chú ý nhất, mỗi phát hiện một dòng"*. *"Đáng chú ý"* không phân biệt **một chỗ hỏng** với **một thay đổi**, nên một câu mô tả thay đổi thoả yêu cầu. Mô hình đi theo đường rẻ nhất, và đường rẻ nhất khi đọc một diff là kể lại nó.
+- **Vì sao sửa prompt thôi là chưa đủ:** một prompt là lời dặn cho một mô hình xác suất, không phải lớp chặn. Chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649) — *"tất cả thành bài kiểm máy khoá được, không phải lời dặn"* — loại thẳng cách đó.
+- **Máy chặn từ nay** (`P-051`, `ops/scripts/gpt-review.ts`):
+  - `parseReviewFindings` đọc lại đầu ra thật và trả `conforms` cộng `problems` nêu **từng** dòng sai — hàm thuần, có bài kiểm.
+  - `formatComment` **không bao giờ** đăng một đầu ra sai dạng như thể nó là một lượt soát chéo: nó đăng kèm nhãn sai dạng và lý do, đầu ra thô nằm trong `<details>` đóng khung là dữ liệu (**I7**).
+  - Dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`, nên chuỗi "chưa bao giờ ra phát hiện" đếm được bằng `readRunLogs` thay vì bằng mắt.
+- **Hướng lệch đã chọn, và vì sao:** không đối xứng. Nuốt một đầu ra sai dạng thì comment biến mất và người đọc PR tưởng job không chạy; đăng trơn thì nhóm Z quay lại nguyên vẹn. Nên **đăng kèm nhãn**. Cùng lẽ đó, phép đọc cố ý **chặt** — một câu dẫn tự do cũng là sai dạng, vì đó đúng là nơi văn tóm tắt quay lại.
+- **Còn hở, khai chứ không giấu:** phép đọc bắt được *"không đúng dạng"*, **không** bắt được *"đúng dạng mà nội dung rỗng nghĩa"* — một dòng `NÊN SỬA · nên xem lại phần test` hợp dạng nhưng không nêu chỗ hỏng nào. Chưa có ca thật nào, nên chưa thêm luật (đúng **A10** của `#251`: chỉ thêm luật khi có một lỗi đã thật sự xảy ra). Thấy lần đầu thì mở mục backlog, đừng đoán trước.

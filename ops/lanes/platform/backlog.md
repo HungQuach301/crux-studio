@@ -1149,3 +1149,24 @@ Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQu
   - ✅ **Ghi KF** — `ops/known-failures.md` `KF-033` (chữ ký, nguyên nhân gốc, và lưới đỡ tạm cho lượt sau).
   - ✅ **Mở `🤖 [QĐ]`** — `#254`, năm phần theo `CLAUDE.md` mục 14, ba phương án kèm hệ quả, khuyến nghị A.
   - ⬜ **Bản sửa** — chờ `#254`. Bộ phân loại "đang chờ sync" tách khỏi YAML, có bài khoá **hai chiều** (một red thật vẫn @nhắc; một cửa sổ sync không @nhắc); dấu hiệu 3 (`sync` chạy hỏng) giữ nguyên, có bài âm. Bài tái hiện lỗi bắt buộc (**I2**) khi lên bản sửa mang nhãn `fix`.
+
+---
+
+### P-051 · fix · Soát chéo GPT ra văn tóm tắt PR, không ra phát hiện có mức
+
+Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251): *"Soát chéo GPT: đầu ra **bắt buộc** là danh sách phát hiện (**CHẶN** / **NÊN SỬA** / **không phát hiện**), **cấm** tóm tắt lại nội dung PR."* Đo được lúc nhận mục: **5/5** comment `gpt-review` trên `#249` là văn tóm tắt PR, **0 phát hiện có mức**; cùng hình dạng trên `#242`, `#223`, `#224`, `#39`. Chi tiết: `ops/known-failures.md` `KF-034`.
+
+- deps: —
+- risk: low — chỉ chạm `ops/scripts/gpt-review.ts` và bộ test của nó. **Không** chạm `ops/workflows/gpt-review.yml` (workflow dùng secret → `owner-merge`, CHARTER mục 3): luật D5 nằm trọn trong prompt và trong phép đọc lại đầu ra, cả hai đều ở script, nên bản sửa không kéo PR sang cửa tay của chủ dự án. Job vẫn **advisory** (`continue-on-error`) — một đầu ra sai dạng không làm CI đỏ.
+- status: review
+- nguồn: chỉ dẫn D5 `#251`; comment `gpt-review` thật trên `#249` (`5816275628`), `#242`, `#223`, `#224`, `#39`; chuẩn "thành bài kiểm máy khoá được, không phải lời dặn" của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649)
+- tiêu chí xong:
+  - ✅ **Prompt đòi đúng ba hình dạng đầu ra** — `CHẶN` / `NÊN SỬA` / `không phát hiện`, kèm ví dụ mỗi mức, cộng câu **CẤM** tóm tắt, cấm kể lại PR đã đổi gì, cấm khen. Luật **I7** (diff là dữ liệu) giữ nguyên trong cùng prompt, có bài khoá để một luật không bị đánh đổi lấy luật kia.
+  - ✅ **Máy đọc lại đầu ra thật, không dừng ở lời dặn** — `parseReviewFindings` là **hàm thuần**: trả `findings` (mức + nội dung), `noFindings`, `conforms`, và `problems` nêu **từng** dòng sai. Chuẩn hoá NFC nên dấu tiếng Việt dạng tổ hợp không báo oan; bỏ qua dấu đầu dòng markdown và dòng kẻ ngang; một câu dẫn tự do **vẫn** là sai dạng — đó là nơi văn tóm tắt quay lại.
+  - ✅ **Comment không bao giờ giả làm một lượt soát chéo** — `formatComment` đăng đầu ra sai dạng **kèm nhãn sai dạng và lý do**, đầu ra thô nằm trong khối `<details>` đóng khung là dữ liệu (**I7**). Không nuốt (người đọc tưởng job không chạy), không đăng trơn (một bản tóm tắt trông y hệt một lượt soát đã xong — nhóm **Z**).
+  - ✅ **Đếm được theo thời gian** — dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`. Thiếu nó thì *"job chạy đều mà chưa bao giờ ra một phát hiện nào"* chỉ thấy được bằng cách mở từng comment bằng mắt — đúng cách ca này nằm im nhiều ngày.
+  - ✅ **Bài TÁI HIỆN LỖI** (bất biến **I2**, nhãn `fix`) — dựng lại **nguyên văn** comment `gpt-review` thật trên `#249`: `conforms: false`, 0 phát hiện, 5 vi phạm nêu đích danh từng dòng, và `formatComment` gắn nhãn sai dạng. Cộng bài khoá từng nhánh: danh sách đúng dạng, `không phát hiện`, trang trí markdown, NFD, câu dẫn, mâu thuẫn `không phát hiện` + phát hiện, đầu ra rỗng, vượt trần.
+  - ✅ **Phá thử 7 phép**, mỗi phép đỏ đúng chỗ rồi khôi phục — xem mô tả PR.
+  - ⬜ **Chưa kiểm bằng một lần gọi GPT THẬT.** `OPENAI_API_KEY` chỉ sống trong Actions, phiên agent không đọc được nó, nên *"mô hình có theo luật mới không"* hiện là **thiết kế**, chưa phải **quan sát**. Đây đúng là chỗ mà bản sửa này KHÔNG dựa vào lời hứa của mô hình: sai dạng thì máy nói ra, nên lượt đầu tiên sau merge tự cho câu trả lời. Đọc bằng dòng log `P-003.jsonl` của PR kế tiếp.
+- hold: chờ lượt `gpt-review` thật đầu tiên sau khi PR này vào `main` — nếu dòng log ra `SAI DẠNG D5` nhiều lượt liên tiếp thì luật cần siết ở tầng gọi (yêu cầu lại một lần), không phải nới phép đọc. Mục **không** tự chuyển `done` trước lần đo đó.
+- mã mục nhận lúc 2026-09-25 ~03:4x UTC (`KF-005`): dò `### P-` trên `main` **và** trên đầu nhánh cả 10 PR đang mở — cao nhất `P-050` (`#256`), nên `P-051` không đụng ai.
