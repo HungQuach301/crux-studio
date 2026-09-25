@@ -75,23 +75,28 @@ import { readRunLogs, type RunLogLine } from '../../kernel/src/log.ts';
 // ── Dòng bước 0: năm hình dạng `ref`, không phải ba ───────────────────────
 
 /**
- * Biểu thức nhận ra `ref` của một dòng **bước 0**, dạng chuỗi để cả `RegExp`
- * của TypeScript lẫn `test()` của `jq` trong `ops/workflows/watchdog.yml`
- * dùng **cùng một** văn bản.
+ * Biểu thức nhận ra `ref` của một dòng **bước 0**. Đây là **chỗ duy nhất**
+ * giữ luật đó; mọi bên đọc gọi `isStep0Ref` ngay dưới.
  *
- * Vì sao là một hằng chuỗi chứ không phải hai bản chép: bước 0 đã đổi chỗ
+ * Vì sao là một hằng chuỗi chứ không phải nhiều bản chép: bước 0 đã đổi chỗ
  * ghi **ba** lần và log là append-only, nên dòng cũ ở lại nguyên chỗ
- * (`P-023`). Danh sách hình dạng vì thế chỉ dài ra, không ngắn đi, và hai
- * bên đọc nó bằng hai ngôn ngữ khác nhau. Một bản chép lệch đi là một nguồn
- * nhịp tim biến mất mà không gì đỏ — nên `ops/test/lane-heartbeat.test.ts`
- * đọc thẳng `watchdog.yml` và so với hằng này.
+ * (`P-023`). Danh sách hình dạng vì thế chỉ dài ra, không ngắn đi, và một
+ * bản chép lệch đi là một nguồn nhịp tim biến mất mà không gì đỏ.
  *
- * ⚠️ **Đo được lúc viết: bản trong `watchdog.yml` đang thiếu hai hình dạng.**
- * Nó mang `(^|/)(step0|P3-run)-`, trong khi `ops/logs` thật có cả
- * `platform/P1-step0-<ngày>T<giờ>h<phút>` — chuỗi `step0-` ở đó đứng sau
- * `P1-`, không đứng sau `/`, nên không khớp. Hình dạng `P3-daily-<ngày>`
- * cũng được chính `P-023` liệt kê là một trong ba hình dạng cũ. PR này sửa
- * `watchdog.yml` cho khớp.
+ * ## Lịch sử của chính chỗ này, giữ lại vì nó là bằng chứng
+ *
+ * Trước mục `platform/P-043`, luật này tồn tại ở **hai** chỗ viết bằng hai
+ * ngôn ngữ: hằng dưới đây, và một biểu thức `test()` của `jq` chép tay trong
+ * `ops/workflows/watchdog.yml`. Bản chép **đã lệch thật**: nó mang
+ * `(^|/)(step0|P3-run)-` và thiếu hai hình dạng mà `ops/logs` thật đang có —
+ * `platform/P1-step0-…` (chuỗi `step0-` đứng sau `P1-`, không sau `/`, nên
+ * không khớp) và `P3-daily-…`. Lúc đó `ops/test/lane-heartbeat.test.ts` đọc
+ * thẳng YAML và **so chuỗi** để giữ hai bản giống nhau.
+ *
+ * `P-043` bỏ hẳn bản chép: dấu hiệu số 5 của `watchdog.yml` nay gọi
+ * `ops/scripts/heartbeat-source.ts`, và script đó gọi `isStep0Ref`. Bài kiểm
+ * vì thế đổi việc — nó **cấm** một dòng thực thi của YAML chép lại hằng này,
+ * thay vì đòi hai bản trùng nhau. Đừng đi tìm bản `jq` nữa: nó không còn.
  */
 export const STEP0_REF_PATTERN = '(^|/)(step0|P1-step0|P3-run|P3-daily)-';
 

@@ -519,7 +519,11 @@ test('watchdog và main-ci đặt @nhắc NGAY TRONG thân issue, không chờ n
   for (const file of ['watchdog.yml', 'main-ci.yml']) {
     const source = readFileSync(join(dir, file), 'utf8');
     assert.match(source, /OWNER: HungQuach301/, `${file} không khai OWNER`);
-    assert.match(source, /"@\$OWNER /, `${file} không đặt @nhắc trong thân issue`);
+    // `🤖 ` đứng trước được chấp nhận từ mục `P-034`: CLAUDE.md mục 5 đòi
+    // MỌI comment do agent viết mở đầu bằng 🤖, và khối @nhắc là một comment
+    // như thế. Vẫn neo vào dấu nháy mở của `printf`, để một `@$OWNER` nằm
+    // trong chú thích không qua được bài kiểm này.
+    assert.match(source, /"(?:🤖 )?@\$OWNER /, `${file} không đặt @nhắc trong thân issue`);
     assert.match(source, /#\s*KF-004\s+issues\s*:\s*\S/, `${file} thiếu khai báo KF-004`);
   }
 });

@@ -22,10 +22,14 @@ import {
   classifyDecision,
   collectMetrics,
   computeProgress,
+  conditionMetButOpen,
+  decisionAgeDays,
+  decisionDeclaresBlocked,
   decisionRows,
   laneFromTitle,
   laneLogBalance,
   LANE_LOG_GAP_THRESHOLD,
+  linkedPrNumbers,
   mergedByLane,
   needOwnerCount,
   openPrRows,
@@ -237,6 +241,73 @@ test('ÂM — needOwnerCount: issue `decision` thiếu nhãn phân loại VẪN 
   const rows = decisionRows([{ number: 3, title: 'c', labels: [{ name: 'decision' }] }]);
   assert.equal(needOwnerCount(rows), 1);
   assert.match(renderDigestMetrics(baseMetrics({ decisions: rows })), /#3 · c \(chưa phân loại/);
+});
+
+// --- P-052 (D6): `[QĐ]` điều kiện đã đủ nhưng vẫn mở (ca `#127`) ---
+
+test('decisionRows: KHÔNG có `opts` thì giữ nguyên hình dạng {number,title,kind} cho bên gọi cũ', () => {
+  const rows = decisionRows([{ number: 9, title: 'x', labels: [{ name: 'decision' }], body: 'chưa có #66' }]);
+  // deepEqual: không được lọt thêm khoá conditionMetPrs/ageDays khi bên gọi không xin.
+  assert.deepEqual(rows, [{ number: 9, title: 'x', kind: 'chưa phân loại' }]);
+});
+
+test('linkedPrNumbers: đọc mọi `#N` tăng dần, không lặp', () => {
+  assert.deepEqual(linkedPrNumbers('merge PR #66, xem #125 và lại #66'), [66, 125]);
+  assert.deepEqual(linkedPrNumbers('không có tham chiếu'), []);
+});
+
+test('decisionDeclaresBlocked: bắt đúng dấu hiệu của `#127`, bỏ qua câu không khai chặn', () => {
+  assert.equal(decisionDeclaresBlocked('cấp kiểm 4 chặn ở một secret chưa có'), true);
+  assert.equal(decisionDeclaresBlocked('tám mô hình đang chờ secret'), true);
+  assert.equal(decisionDeclaresBlocked('Chọn track A hay B cho kênh'), false);
+  // Vòng soát bước 6: một `/chờ\s/` trần bắt cả "không chờ ai" — dấu hiệu bị
+  // bỏ, nên câu này KHÔNG được coi là khai chặn (chỉ "đang chờ" mới tính).
+  assert.equal(decisionDeclaresBlocked('Khuyến nghị: không chờ ai, làm ngay'), false);
+});
+
+test('decisionAgeDays: số ngày 1 số lẻ; thiếu/hỏng createdAt → null', () => {
+  const now = new Date('2026-09-25T09:16:00Z');
+  assert.equal(decisionAgeDays('2026-09-22T09:16:00Z', now), 3);
+  assert.equal(decisionAgeDays(undefined, now), null);
+  assert.equal(decisionAgeDays('không-phải-ngày', now), null);
+});
+
+test('conditionMetButOpen: nêu `[QĐ]` hình dạng #127 (khai chặn + PR gate #66 đã merge)', () => {
+  const now = new Date('2026-09-25T09:16:00Z');
+  const rows = decisionRows(
+    [
+      {
+        number: 127,
+        title: '🤖 [QĐ] … cấp kiểm 4 chặn ở một secret chưa có',
+        labels: [{ name: 'decision' }, { name: 'irreversible' }],
+        body: 'Phương án A: Cấp OPENAI_API_KEY rồi merge PR #66. Xem thêm PR #125.',
+        createdAt: '2026-09-22T09:16:00Z',
+      },
+    ],
+    { mergedPrNumbers: new Set([66]), now }, // #125 CHƯA merge trong tập này
+  );
+  const flagged = conditionMetButOpen(rows);
+  assert.equal(flagged.length, 1);
+  assert.deepEqual(flagged[0]!.conditionMetPrs, [66]); // chỉ #66, không #125
+  assert.equal(flagged[0]!.ageDays, 3);
+  const text = renderDigestMetrics(baseMetrics({ decisions: rows }));
+  assert.match(text, /^Quyết định điều kiện đã đủ nhưng còn mở: 1$/m);
+  assert.match(text, /^- #127 · .+ · điều kiện đã đủ: PR #66 đã merge · đã mở 3 ngày$/m);
+});
+
+test('ÂM — conditionMetButOpen: PR gate chưa merge, hoặc không khai chặn, hoặc không nêu PR → KHÔNG nêu', () => {
+  const now = new Date('2026-09-25T00:00:00Z');
+  const issues = [
+    // khai chặn nhưng PR gate #999 CHƯA merge (không có trong tập)
+    { number: 1, title: 'chặn ở secret chưa có', labels: [{ name: 'decision' }], body: 'merge PR #999' },
+    // PR #66 đã merge nhưng KHÔNG khai chặn → không phải ca điều kiện
+    { number: 2, title: 'Chọn track', labels: [{ name: 'decision' }], body: 'so với #66 đã làm' },
+    // khai chặn nhưng KHÔNG nêu PR nào
+    { number: 3, title: 'chờ số đo, chưa có', labels: [{ name: 'decision' }], body: 'chờ kết quả' },
+  ];
+  const rows = decisionRows(issues, { mergedPrNumbers: new Set([66]), now });
+  assert.equal(conditionMetButOpen(rows).length, 0);
+  assert.match(renderDigestMetrics(baseMetrics({ decisions: rows })), /^Quyết định điều kiện đã đủ nhưng còn mở: 0$/m);
 });
 
 // --- renderDigestMetrics ---
@@ -648,7 +719,11 @@ test('P-027 · PR mang nhãn mà thiếu trong map đo hiện ra CHƯA ĐO, khô
 // --- Tiến độ (mục `platform/P-019`) ---
 
 function item(id: string, status: string): BacklogItem {
-  return { id, status, title: id, hasHoldMarker: status === 'parked', holdField: null, statusLine: 1 };
+  // `deps: null` = mục không khai dòng `- deps:`, đúng hình dạng của fixture
+  // tối giản ở đây. `computeProgress` không đọc trường này; nó có mặt vì
+  // `BacklogItem` (mục `integration/I-015`) đòi khai đủ, không mặc định.
+  // `holdField: null` cùng lý do, từ mục `integration/I-020`.
+  return { id, status, title: id, hasHoldMarker: status === 'parked', holdField: null, statusLine: 1, deps: null };
 }
 
 function step0Line(at: string): RunLogLine {
@@ -660,6 +735,67 @@ test('laneFromTitle: lấy làn từ tiêu đề `[lane] id`, null khi không th
   assert.equal(laneFromTitle('[visual] V-001 — x'), 'visual');
   assert.equal(laneFromTitle('Gộp origin/main (integrator, không xung đột)'), null);
   assert.equal(laneFromTitle('[bogus] X-1 — y'), null);
+});
+
+/**
+ * TÁI HIỆN LỖI (bất biến I2) — mục `platform/P-042`, vế thứ hai của cùng
+ * một lỗ.
+ *
+ * Ở đây cái giá là một con số gửi thẳng tới chủ dự án: PR không được tính
+ * vào "số mục done 24 giờ" thì mục **Tiến độ** của bản tin báo thông lượng
+ * thấp hơn thật và ngày dự kiến xong muộn hơn thật (bất biến I6).
+ *
+ * Hai tiêu đề dưới đây là PR THẬT đã merge vào `main`.
+ */
+test('laneFromTitle: TÁI HIỆN LỖI P-042 — tiêu đề mang tiền tố 🤖 vẫn lấy được làn', () => {
+  assert.equal(
+    laneFromTitle('🤖 [platform] P-038 — cổng quyết định: lượt bước 0 không gỡ được gì (#212)'),
+    'platform',
+  );
+  assert.equal(
+    laneFromTitle('🤖 [integration] dòng log bước 0 lượt crux-worker-2 ~07:23Z (I8) (#227)'),
+    'integration',
+  );
+  // Bỏ tiền tố KHÔNG nới luật: làn lạ vẫn `null`, không theo mẫu vẫn `null`.
+  assert.equal(laneFromTitle('🤖 [bogus] X-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Gộp origin/main (integrator, không xung đột)'), null);
+});
+
+/**
+ * Phép đo ĐẦU–CUỐI, gọi thẳng `computeProgress` — thứ thật sự sinh con số
+ * gửi tới chủ dự án (bất biến I6). Gọi hàm thật chứ không chép lại phép lọc
+ * bằng tay: một bài chép lại luật thì xanh cả khi `computeProgress` tự neo
+ * `^` lần nữa, và vòng soát ngữ cảnh sạch đã bắt đúng lỗ đó ở bản đầu.
+ *
+ * Trước bản sửa `P-042`, hai PR thật dưới đây không được đếm và bản tin báo
+ * **0** mục done — thông lượng thấp hơn thật, ngày dự kiến xong muộn hơn thật.
+ */
+test('computeProgress: PR mang tiền tố 🤖 được tính vào số mục done của bản tin', () => {
+  const now = new Date('2026-09-24T12:00:00.000Z');
+  const merged: GhPr[] = [
+    {
+      number: 212,
+      title: '🤖 [platform] P-038 — cổng quyết định (#212)',
+      headRefName: 'x',
+      mergedAt: '2026-09-24T06:00:00Z',
+    },
+    {
+      number: 227,
+      title: '🤖 [integration] I-020 — a (#227)',
+      headRefName: 'y',
+      mergedAt: '2026-09-24T07:00:00Z',
+    },
+    // Vẫn KHÔNG đếm: commit gộp mang tiền tố cũng không phải một mục done.
+    { number: 9, title: '🤖 Gộp origin/main', headRefName: 'z', mergedAt: '2026-09-24T08:00:00Z' },
+  ];
+  const p = computeProgress(new Map(), merged, [], 0, 0, now);
+  assert.equal(p.doneLast24h, 2);
+  assert.equal(p.done3d, 2);
+});
+
+test('laneFromTitle: neo `^` vẫn phải giữ — dạng đúng nằm GIỮA câu không tính', () => {
+  assert.equal(laneFromTitle('🤖 abc [platform] P-1 — y'), null);
+  assert.equal(laneFromTitle('🤖 Revert "[platform] P-1 — y"'), null);
 });
 
 test('computeProgress: đếm mục done 24h/3d và thông lượng, chỉ tính PR mang mã mục', () => {

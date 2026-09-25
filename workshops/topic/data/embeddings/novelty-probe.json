@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 0,
+  "probeId": "us-personal-finance-2026-09-25",
+  "corpusId": "us-personal-finance-2026-09-01",
+  "labelledBy": "hand-built",
+  "theses": [
+    {
+      "id": "th-lexical-overlap",
+      "statement": "Most households should top up a one month emergency fund before attacking credit card debt.",
+      "note": "Dùng gần nguyên từ vựng của yt-0001..yt-0003. So từ vựng ĐÃ bắt được nhóm này — nó ở đây làm mốc đối chứng, để một model ngữ nghĩa tệ hơn so từ vựng cũng lộ ra."
+    },
+    {
+      "id": "th-paraphrase",
+      "statement": "Clearing revolving balances should wait until a household has one month of expenses set aside.",
+      "note": "Cùng một chuyện với th-lexical-overlap, viết bằng bộ từ khác hẳn: không có `credit card`, không có `emergency fund`, không có `debt`. Đây là ca mà so từ vựng bỏ sót, và là lý do mục T-014 tồn tại."
+    },
+    {
+      "id": "th-rate-chase",
+      "statement": "Moving savings between banks to chase the top advertised rate is not worth the effort for most households.",
+      "note": "Đề tài lãi suất tiết kiệm. yt-0037 nói NGƯỢC (`myths, debunked`), nên cặp này còn canh việc điểm ngữ nghĩa cao không được kéo theo phán đoán về lập trường."
+    }
+  ],
+  "pairs": [
+    { "thesisId": "th-lexical-overlap", "videoId": "yt-0001", "sameTopic": true, "why": "Đúng câu hỏi thứ tự ưu tiên giữa quỹ khẩn cấp và nợ thẻ." },
+    { "thesisId": "th-lexical-overlap", "videoId": "yt-0002", "sameTopic": true, "why": "Cùng chuyện, gọi tên `crossover point`." },
+    { "thesisId": "th-lexical-overlap", "videoId": "yt-0003", "sameTopic": true, "why": "Cùng chuyện, nhấn phần tính toán." },
+    { "thesisId": "th-lexical-overlap", "videoId": "yt-0013", "sameTopic": false, "why": "Quỹ học phí 529, không liên quan." },
+    { "thesisId": "th-lexical-overlap", "videoId": "yt-0028", "sameTopic": false, "why": "Cửa sổ ghi danh Medicare, không liên quan." },
+    { "thesisId": "th-lexical-overlap", "videoId": "yt-0035", "sameTopic": false, "why": "Bảo hiểm thú cưng, không liên quan." },
+    { "thesisId": "th-paraphrase", "videoId": "yt-0001", "sameTopic": true, "why": "Cùng chuyện, khác hoàn toàn bộ từ." },
+    { "thesisId": "th-paraphrase", "videoId": "yt-0002", "sameTopic": true, "why": "Cùng chuyện, khác hoàn toàn bộ từ." },
+    { "thesisId": "th-paraphrase", "videoId": "yt-0003", "sameTopic": true, "why": "Cùng chuyện, khác hoàn toàn bộ từ." },
+    { "thesisId": "th-paraphrase", "videoId": "yt-0023", "sameTopic": false, "why": "Bảo hiểm trách nhiệm mở rộng, không liên quan." },
+    { "thesisId": "th-paraphrase", "videoId": "yt-0028", "sameTopic": false, "why": "Medicare, không liên quan." },
+    { "thesisId": "th-paraphrase", "videoId": "yt-0035", "sameTopic": false, "why": "Bảo hiểm thú cưng, không liên quan." },
+    { "thesisId": "th-rate-chase", "videoId": "yt-0004", "sameTopic": true, "why": "Tài khoản tiết kiệm lãi cao — đúng đề tài." },
+    { "thesisId": "th-rate-chase", "videoId": "yt-0037", "sameTopic": true, "why": "Đúng đề tài, và nói ngược — cùng chuyện vẫn là cùng chuyện." },
+    { "thesisId": "th-rate-chase", "videoId": "yt-0019", "sameTopic": false, "why": "Các kế hoạch trả nợ sinh viên, không liên quan." },
+    { "thesisId": "th-rate-chase", "videoId": "yt-0031", "sameTopic": false, "why": "Phí tài khoản thanh toán — cùng ngành ngân hàng nhưng khác chuyện; cặp KHÓ cố ý." }
+  ]
+}

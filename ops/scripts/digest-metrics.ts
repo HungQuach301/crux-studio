@@ -53,6 +53,7 @@ import {
   type LaneName,
   type RunLogLine,
 } from '@crux/kernel';
+import { stripAgentPrefix } from './agent-prefix.ts';
 import { parseBacklog, type BacklogItem } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
@@ -107,6 +108,10 @@ export interface GhIssue {
   number: number;
   title: string;
   labels?: GhLabel[];
+  /** Thân issue. Chỉ cần cho phép dò `[QĐ]` điều kiện đã đủ (`P-052`, D6); vắng mặt thì dò trên mỗi tiêu đề. */
+  body?: string;
+  /** `createdAt` của issue, để tính số ngày đã mở (`P-052`); vắng mặt thì `ageDays` là `null`. */
+  createdAt?: string;
 }
 
 export interface GithubSnapshot {
@@ -240,6 +245,17 @@ export interface DecisionRow {
   number: number;
   title: string;
   kind: DecisionKind;
+  /**
+   * PR mà issue **nêu tên** và **đã merge**, chỉ khi issue cũng **khai một
+   * điều kiện/chặn** (mục `P-052`, D6). Chỉ có mặt khi bên gọi truyền
+   * `mergedPrNumbers` — nếu không, trường vắng để `decisionRows(issues)` giữ
+   * nguyên hình dạng `{number,title,kind}` cho bên gọi cũ.
+   *
+   * Mảng rỗng ≠ vắng mặt: `[]` nghĩa "đã dò, không có PR gate nào đã merge".
+   */
+  conditionMetPrs?: number[];
+  /** Số ngày issue đã mở (làm tròn 1 số lẻ), chỉ khi bên gọi truyền `now`; `null` khi thiếu `createdAt`. */
+  ageDays?: number | null;
 }
 
 export function classifyDecision(labels: readonly string[]): DecisionKind {
@@ -249,19 +265,93 @@ export function classifyDecision(labels: readonly string[]): DecisionKind {
 }
 
 /**
+ * Mọi tham chiếu `#N` trong một đoạn (tiêu đề + thân issue), tăng dần, không lặp.
+ *
+ * Số PR và số issue **dùng chung một dải** trong một repo GitHub, nên giao
+ * tập kết quả này với **tập số PR đã merge** cho đúng những PR mà issue nêu và
+ * đã merge — một `#N` là issue không bao giờ trùng số với một PR đã merge.
+ */
+export function linkedPrNumbers(text: string): number[] {
+  const out = new Set<number>();
+  for (const m of text.matchAll(/#(\d+)/g)) out.add(Number(m[1]));
+  return [...out].sort((a, b) => a - b);
+}
+
+/**
+ * `[QĐ]` này có **khai một điều kiện/chặn** không.
+ *
+ * Danh sách dấu hiệu **cố ý hẹp** và lấy từ **ca thật `#127`** (đúng luật
+ * `A10` của `#251`: chỉ thêm luật khi có lỗi đã thật sự xảy ra) — tiêu đề nó
+ * là *"…nhưng cấp kiểm 4 **chặn** ở một secret **chưa có**"*, thân nói secret
+ * *"chưa có trên repo"* và tám mô hình *"đang **chờ**"*. Mở rộng bằng cách
+ * đoán (`/ok/`, `/xong/`) sẽ bắt cả câu không phải điều kiện; thêm dấu hiệu
+ * mới thì thêm kèm một ca thật.
+ *
+ * ⚠️ Ba dấu hiệu, không bốn: một `/chờ\s/` trần **rộng hơn ca thật** (`#127`
+ * chỉ dùng *"đang chờ"*) và bắt cả *"không chờ ai"* — vòng soát của mục này
+ * tái hiện đúng một over-flag như vậy, nên nó bị bỏ để lời tự khai "hẹp" đúng
+ * với mã. Giữ `đang\s+chờ`, đủ cho `#127` và không đòi thêm ca nào.
+ */
+export function decisionDeclaresBlocked(text: string): boolean {
+  return [/chưa\s+có/i, /chặn/i, /đang\s+chờ/i].some((re) => re.test(text));
+}
+
+/** Số ngày (1 số lẻ) từ `createdAt` tới `now`; `null` khi thiếu hoặc không đọc được `createdAt`. */
+export function decisionAgeDays(createdAt: string | undefined, now: Date): number | null {
+  if (createdAt === undefined) return null;
+  const created = Date.parse(createdAt);
+  if (Number.isNaN(created)) return null;
+  return Math.round(((now.getTime() - created) / 86_400_000) * 10) / 10;
+}
+
+/**
+ * `[QĐ]` mà **điều kiện đã đủ nhưng vẫn mở** — mục `P-052` (chỉ dẫn D6 của
+ * `#251`). Ca thật `#127`: phương án A đòi *"merge PR #66"*, `#66` đã merge,
+ * nhưng issue vẫn mở ba ngày vì agent tin sai là còn bị chặn ở secret — nhóm
+ * **Z**, không chỉ báo nào đỏ.
+ *
+ * Đây là mặt **nêu lên cho người soát**, không phải cổng tự đóng: một `[QĐ]`
+ * `irreversible` như `#127` vẫn cần chủ dự án quyết dù PR gate đã merge, nên
+ * việc **đóng** thuộc `decision-close.ts` (`platform/P-050`) với bằng chứng
+ * mạnh hơn, còn mục này chỉ kéo nó ra khỏi im lặng.
+ */
+export function conditionMetButOpen(rows: readonly DecisionRow[]): DecisionRow[] {
+  return rows.filter((row) => (row.conditionMetPrs?.length ?? 0) > 0);
+}
+
+/**
  * Tách issue `[QĐ]` đang mở theo nhãn.
  *
  * Chỉ xét issue có nhãn `decision` — bên gọi có thể đưa vào cả issue khác
  * (bản tin, cảnh báo) mà không làm hỏng số đếm.
+ *
+ * `opts` là tuỳ chọn để giữ nguyên hình dạng `{number,title,kind}` cho bên
+ * gọi cũ: truyền `mergedPrNumbers` thì mỗi hàng có thêm `conditionMetPrs`
+ * (mục `P-052`), truyền `now` thì có thêm `ageDays`.
  */
-export function decisionRows(issues: readonly GhIssue[]): DecisionRow[] {
+export function decisionRows(
+  issues: readonly GhIssue[],
+  opts: { mergedPrNumbers?: ReadonlySet<number>; now?: Date } = {},
+): DecisionRow[] {
   return issues
     .filter((issue) => labelNames(issue.labels).includes('decision'))
-    .map((issue) => ({
-      number: issue.number,
-      title: issue.title,
-      kind: classifyDecision(labelNames(issue.labels)),
-    }));
+    .map((issue) => {
+      const row: DecisionRow = {
+        number: issue.number,
+        title: issue.title,
+        kind: classifyDecision(labelNames(issue.labels)),
+      };
+      if (opts.mergedPrNumbers !== undefined) {
+        const text = `${issue.title}\n${issue.body ?? ''}`;
+        row.conditionMetPrs = decisionDeclaresBlocked(text)
+          ? linkedPrNumbers(text).filter((n) => opts.mergedPrNumbers!.has(n))
+          : [];
+      }
+      if (opts.now !== undefined) {
+        row.ageDays = decisionAgeDays(issue.createdAt, opts.now);
+      }
+      return row;
+    });
 }
 
 /**
@@ -351,9 +441,17 @@ function isStep0Line(line: Pick<RunLogLine, 'kind' | 'ref'>): boolean {
  * log-only của routine (`claude/<tên-ngẫu-nhiên>`) không mang làn. `null`
  * nếu tiêu đề không theo mẫu hoặc làn lạ — khi đó PR không được tính là
  * một mục `done`.
+ *
+ * ⚠️ **Tiền tố 🤖 được bỏ trước khi so** (mục `platform/P-042`) — cùng lỗ,
+ * cùng bản sửa như `hasCompletionCommit`. Ở đây cái giá là một con số sai
+ * gửi thẳng tới chủ dự án: PR đặt tiêu đề `🤖 [<lane>] <id> — …` (ca thật
+ * `#212`, `#227`) không được tính vào "số mục done 24 giờ", nên mục **Tiến
+ * độ** của bản tin (`platform/P-019`) báo thông lượng THẤP hơn thật và ngày
+ * dự kiến xong MUỘN hơn thật — bất biến I6 đòi con số có nguồn, và nguồn
+ * này đang đếm thiếu mà không gì đỏ.
  */
 export function laneFromTitle(title: string): LaneName | null {
-  const m = /^\[([a-z]+)\]\s+\S/.exec(title);
+  const m = /^\[([a-z]+)\]\s+\S/.exec(stripAgentPrefix(title));
   if (m === null) return null;
   const lane = m[1]!;
   return (LANES as readonly string[]).includes(lane) ? (lane as LaneName) : null;
@@ -632,6 +730,17 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
   out.push('', `Quyết định reversible đang mở: ${reversible.length}`);
   for (const row of reversible) out.push(`- #${row.number} · ${row.title}`);
 
+  // Mục `P-052` (chỉ dẫn D6 của `#251`): `[QĐ]` khai một điều kiện/chặn mà PR
+  // gate đã merge, nhưng issue vẫn mở — ca `#127`. Nêu lên để chủ dự án soát,
+  // KHÔNG tự đóng (việc đó của `decision-close.ts`, `platform/P-050`).
+  const conditionMet = conditionMetButOpen(decisions);
+  out.push('', `Quyết định điều kiện đã đủ nhưng còn mở: ${conditionMet.length}`);
+  for (const row of conditionMet) {
+    const prs = row.conditionMetPrs!.map((n) => `#${n}`).join(', ');
+    const age = row.ageDays == null ? '' : ` · đã mở ${row.ageDays} ngày`;
+    out.push(`- #${row.number} · ${row.title} · điều kiện đã đủ: PR ${prs} đã merge${age}`);
+  }
+
   const mergedCount = metrics.merged.reduce((sum, group) => sum + group.prs.length, 0);
   out.push('', `PR merged từ ${metrics.since}: ${mergedCount}`);
   for (const group of metrics.merged) {
@@ -815,7 +924,12 @@ export function collectMetrics(
         );
 
   const openPrs = openPrRows(snapshot.openPrs);
-  const decisions = decisionRows(snapshot.decisionIssues);
+  // Mục `P-052`: tập số PR đã merge, để dò `[QĐ]` điều kiện đã đủ. `mergedPrs`
+  // là 200 PR merge gần nhất (cửa sổ của `fetchSnapshot`), nên một PR gate cũ
+  // hơn cửa sổ đó không được nhận ra — hướng lệch an toàn (nêu thiếu, không nêu
+  // sai), và đủ cho ca thật `#127` (PR gate `#66` mới merge trong ngày).
+  const mergedPrNumbers = new Set(snapshot.mergedPrs.map((mpr) => mpr.number));
+  const decisions = decisionRows(snapshot.decisionIssues, { mergedPrNumbers, now });
 
   // Nút thắt (mục `platform/P-019`). Người: PR `owner-merge` đang mở, cộng
   // quyết định đang chờ chủ dự án. Máy: PR đang xung đột (đã dò), cộng PR
@@ -882,7 +996,19 @@ export function fetchSnapshot(): GithubSnapshot {
       gh(['pr', 'list', '--state', 'open', '--json', `${PR_FIELDS},statusCheckRollup`, '--limit', '200']),
     ) as GhPr[],
     decisionIssues: JSON.parse(
-      gh(['issue', 'list', '--state', 'open', '--label', 'decision', '--json', 'number,title,labels', '--limit', '200']),
+      gh([
+        'issue',
+        'list',
+        '--state',
+        'open',
+        '--label',
+        'decision',
+        '--json',
+        // `body,createdAt` cho mục `P-052` (dò `[QĐ]` điều kiện đã đủ).
+        'number,title,labels,body,createdAt',
+        '--limit',
+        '200',
+      ]),
     ) as GhIssue[],
   };
 }

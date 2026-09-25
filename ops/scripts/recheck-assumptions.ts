@@ -47,6 +47,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readRunLogs, type RunLogLine } from '@crux/kernel';
+import { stripAgentPrefix } from './agent-prefix.ts';
 import { sliceLedgerSections } from './ledger-sections.ts';
 
 export type Verdict = 'khớp' | 'sai';
@@ -190,13 +191,22 @@ export interface CommitTrailerInfo {
  * chứng ngược với G14** thay vì thành lý do loại khỏi phép đếm.
  */
 export function isToolCommit(subject: string): boolean {
+  // Mục `platform/P-042`: mọi luật dưới đây neo `^`, mà `CLAUDE.md` mục 5
+  // bắt buộc agent mở đầu bằng 🤖 — nên bỏ tiền tố TRƯỚC khi so, bằng chính
+  // hàm dùng chung. Ca thật đã có trong lịch sử repo:
+  // `🤖 Gộp origin/main vào nhánh #174 — gỡ chỗ đỏ kế thừa từ main`.
+  // Chiều hỏng ở đây là fail-CLOSED (commit công cụ bị đếm thành commit
+  // agent, nên bài kiểm G14 báo "sai" oan) — ồn chứ không im lặng, khác
+  // `hasCompletionCommit`. Vẫn sửa, vì `KF-027` tồn tại để KHÔNG có lần thứ
+  // tư, và một danh sách trắng thủng theo cách đoán trước được là nợ.
+  const bare = stripAgentPrefix(subject);
   // `integrator-resolve.ts` sinh đúng hai dạng message này.
-  if (/^Gộp .*\(integrator[,)]/.test(subject)) return true;
+  if (/^Gộp .*\(integrator[,)]/.test(bare)) return true;
   // Message mặc định do chính git sinh khi gộp.
-  if (/^Merge (branch|remote-tracking branch|commit) /.test(subject)) return true;
+  if (/^Merge (branch|remote-tracking branch|commit) /.test(bare)) return true;
   // Mục `I-012`: commit của workflow `sync-workflows` (chép `ops/workflows/**`
   // sang `.github/workflows/`, CLAUDE.md mục 4) — máy sinh, không đi qua agent.
-  if (/^chore: sync workflows from ops\/workflows\b/.test(subject)) return true;
+  if (/^chore: sync workflows from ops\/workflows\b/.test(bare)) return true;
   // Mục `I-012`: merge tay "Gộp main vào <nhánh>" / "Gộp origin/main vào
   // <nhánh>" (agent tự gõ message thay vì để git sinh mặc định, ví dụ khi
   // nhận PR ở phụ lục P1 bước 2 ca `aborted-ineligible`). Cùng bản chất cơ
@@ -205,7 +215,7 @@ export function isToolCommit(subject: string): boolean {
   // "Gộp … vào" nói chung: nới rộng hơn thế biến danh sách trắng thành danh
   // sách đen trá hình, và trật đúng ca `isToolCommit(!"Gộp hai mô hình định
   // lượng vào một bảng")` ở test bên dưới.
-  if (/^Gộp (origin\/)?main(\s*\([0-9a-f]{4,40}\))? vào /.test(subject)) return true;
+  if (/^Gộp (origin\/)?main(\s*\([0-9a-f]{4,40}\))? vào /.test(bare)) return true;
   return false;
 }
 

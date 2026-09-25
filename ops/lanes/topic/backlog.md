@@ -161,7 +161,11 @@ nên nó không chặn, chỉ làm số tiêu cần đối chiếu lại sau l�
 
 - deps: T-008, G19
 - risk: high
-- status: blocked
+- status: parked
+- **vì sao `parked`, không phải `blocked`** (mục `I-019`): `blocked` không thuộc tập hợp lệ
+  `ready · claimed · review · done · parked` (`ops/lanes/README.md`), nên mục này rơi qua cả hai phép lọc
+  của `pnpm backlog:status` và không nhóm nào nhận. Chỗ chặn thật là **secret chưa có**, thứ chỉ chủ dự án
+  cấp được — đúng hình dạng `parked` của `CLAUDE.md` mục 13, và khác hẳn một `deps` mà máy tự thả ra được.
 - nguồn: spec WP-014 mục 2b, 3, 5b; `docs/assumptions.md` G19; CHARTER 2.3 nhóm 1 và 3
 - tiêu chí xong:
   - Thiếu secret thì **DỪNG và báo tên secret thiếu**, không tự tạo secret (cùng luật với `T-003`).
@@ -215,3 +219,78 @@ Nhân đây, một lệch luật có trước mục này: `additionalProperties:
   - Nới `additionalProperties` ở `quota` và `quota.limits` cho đúng `CLAUDE.md` mục 12, hoặc ghi rõ tại chỗ vì sao ca này cố ý siết.
   - Lớp dự phòng 429 của G19: hoặc có code đọc hạn mức thật ra từ `quota.spent.searchCalls` khi nhà cung cấp trả 429, hoặc sổ giả định sửa lại cho đúng là lớp hai **chưa tồn tại**. Không để câu khai đứng một mình.
 - ✅ **Xong, 2026-09-22** (lượt `crux-worker-2`, PR đang mở): (a) `corpus.v0.schema.json` thêm `unitsPerCall`/`unitsPerDay` vào `quota.limits`; `deriveSearchCallsPerDay` (làm tròn xuống, có test kèm ca không chia hết) là chỗ duy nhất quy đổi; `corpusProblems` đỏ khi `searchCallsPerDay` lệch phép dẫn xuất. (b) `parseQuotaBudget` + `corpusProblems(corpus, budget)` buộc hai dòng hạn mức của `quota-budget.md` khớp `quota.limits` — cùng hình dạng phép soát của `spent`, test đỏ thật khi gỡ; corpus mẫu thêm `unitsPerCall: 1` khớp bảng. (c) `additionalProperties` ở `quota` và `quota.limits` nới thành `true` (CLAUDE.md mục 12). (d) G19 khai rõ lớp dự phòng 429 **chưa có code** (đo `grep 429` = 0), thuộc `T-011` đang chặn vì chưa có secret. `pnpm check` xanh 489/489, `pnpm replay` khớp tập vàng 6/6. Còn treo: hai số Console thật vẫn chờ #101 (`VF-G19` `parked`); khi có, agent điền `unitsPerDay`/`unitsPerCall` và đổi `source` sang `console-measured`.
+
+---
+
+### T-013 · Mọi ước tính doanh thu trong Channel Pack tính theo số **sau** khấu trừ 30%
+Chỉ dẫn của chủ dự án, cuối khối GIỌNG ĐỌC trong comment `2026-09-23T14:18:09Z` trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193): *"Kênh nhắm người xem Mỹ chịu khấu trừ 30% trên doanh thu từ Mỹ vì Mỹ–Việt Nam chưa có hiệp định thuế có hiệu lực. Mọi ước tính doanh thu trong Channel Pack tính theo số sau khấu trừ."*
+
+Mục này ở làn `topic` vì Channel Pack là vùng của `T-002`, không vì nó là việc về đề tài.
+
+- deps: —
+- risk: medium — một con số ước tính sai **theo một chiều cố định** (cao hơn thật 43%) là loại sai không tự lộ ra: mọi bảng đều nhất quán với nhau, chỉ lệch so với thế giới. Bất biến **I6**: mọi con số hiển thị có nguồn hoặc có mô hình.
+- status: review
+- nguồn: chỉ dẫn chủ dự án trên `#193`; bất biến **I6**; `packs/channels/us-personal-finance/channel.json` khoá `scoringWeights.rpm` và `revenuePriorityByPhase`
+- **cửa merge:** chạm `packs/channels/**`, `kernel/src/**`, `ops/scripts/**`, `ops/test/**` — không chạm `kernel/contracts/**`, `CHARTER.md` mục 1/3, hay vùng `owner-merge` nào. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+- tiêu chí xong:
+  - Hệ số khấu trừ là **dữ liệu khai trong Channel Pack**, không phải hằng số rải trong code — kênh khác thị trường khác có hệ số khác.
+  - Mọi chỗ ước tính doanh thu đọc hệ số đó; ghi rõ con số đang là **trước** hay **sau** khấu trừ, không để người đọc đoán.
+  - Một bài kiểm đỏ khi có chỗ ước tính doanh thu nào bỏ qua hệ số.
+  - Ghi lý do (chưa có hiệp định thuế Mỹ–Việt Nam có hiệu lực) ngay tại chỗ khai hệ số, kèm ngày và nguồn — để lúc hiệp định có hiệu lực thì tìm ra ngay chỗ phải sửa.
+- ✅ **Xong, 2026-09-24** (lượt `crux-worker-2`, N=2):
+  - **Dữ liệu:** `channel.json` thêm khối `revenueWithholding` — `usSourcedRate: 0.3`, `market: "US"`, và ba chú thích người đọc `$reason` (chưa có hiệp định thuế Mỹ–Việt Nam), `$asOf: 2026-09-24`, `$source` (#193). Hệ số là **dữ liệu**, không phải hằng số trong code; `$reviewWhen` chỉ chỗ sửa khi hiệp định có hiệu lực.
+  - **Đường đọc/áp duy nhất:** `kernel/src/revenue.ts` — `readRevenueWithholding(pack)` (đọc + validate `rate`/`market`) và `applyRevenueWithholding(gross, w)` trả về `{grossUsd, withholdingRate, netUsd, market}`, tức CẢ trước lẫn sau khấu trừ nên không con số nào hiển thị mà giấu mình là trước hay sau. Ở `kernel/` vì bất biến **I3** cấm xưởng import `ops/`.
+  - **Bẫy đỏ:** `ops/scripts/check-revenue-withholding.ts` — `channelWithholdingProblems` (mọi channel pack khai khối đủ/đúng, `$asOf` là ngày ISO) và `scanRevenueSites` (mọi định danh `…revenue…Usd` phải đi qua hệ số). Nối vào `pnpm contracts` (việc số 10). Chứng minh đỏ thật: cắm một file `monthlyRevenueUsd = rpm * views` → `pnpm contracts` EXIT=1 đúng dòng; gỡ ra → xanh lại.
+  - `pnpm check` xanh **1118/1118**, `pnpm replay` khớp tập vàng **6/6**.
+
+---
+
+### T-014 · So ngữ nghĩa cho `checkNovelty` bằng embeddings, đo lệch so với so từ vựng
+Chỉ dẫn của chủ dự án trên luồng chỉ dẫn [#251](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5825164876) (`2026-09-25T01:28:33Z`): *"T-011 mục 2: chọn OpenAI cho embeddings. Đã thêm secret `EMBEDDINGS_API_KEY` (key riêng, tách khỏi `OPENAI_API_KEY` để theo dõi chi phí). Chọn model embeddings rẻ nhất đủ chất lượng, chứng minh bằng chạy thật trên corpus mẫu 38 video: so kết quả `checkNovelty` giữa so từ vựng và so ngữ nghĩa, ghi `costUsd`. Đổi nhà cung cấp sau chỉ tốn chi phí nhúng lại corpus, nên coi là `reversible`. Mở khoá T-011 mục 2."*
+
+**Vì sao là mục riêng, không làm trong `T-011`:** `T-011` chặn ở **hai** secret và chủ dự án mới mở khoá **một**. Mục 1 (khoá API nền tảng cho `search.list`) vẫn chưa có, nên `T-011` giữ nguyên `status: parked`. Gộp phần đã mở khoá vào một mục đang `parked` thì `pnpm backlog:status` không bao giờ trả nó ra — đúng nhóm **Z**.
+
+Chỗ hỏng mà mục này chữa, đo được: `checkNovelty` so **từ vựng**, nên một thesis viết bằng bộ từ khác vẫn ra `similarCount: 0` dù corpus có ba video nói đúng chuyện đó. Bỏ sót video cùng chuyện làm kết luận **chệch về phía `novel-in-corpus`** — chệch đúng hướng nguy hiểm, vì nó cho phép làm một video mà corpus đã đầy.
+
+- deps: T-008, G20
+- risk: medium
+- status: review
+- hold: lần chạy THẬT chưa xảy ra — phiên agent không có `EMBEDDINGS_API_KEY` (secret chỉ sống trong
+  Actions). Gỡ treo khi `pnpm topic:novelty-trial` chạy được một lần có tính tiền và dán số vào đây; tới
+  lúc đó mục **không** tự chuyển `done`.
+- nguồn: chỉ dẫn chủ dự án trên `#251` (`2026-09-25T01:28:33Z`); spec WP-014 mục 3c.2; `docs/assumptions.md` **G20**; mục `T-011` tiêu chí xong 1 (luật "thiếu secret thì DỪNG và báo tên")
+- **cửa merge:** chạm `workshops/topic/**`, `ops/scripts/**`, `ops/test/**`, `docs/assumptions.md`, `ops/lanes/**`, `package.json` — không chạm `CHARTER.md`, `ops/invariants.*`, `.claude/**`, `ops/workflows/**`. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
+- tiêu chí xong:
+  - Giao diện nhà cung cấp **trung tính**: đổi OpenAI sang bên khác là viết một bản mới của đúng một interface, không sửa `checkNovelty`. Đó là thứ làm câu "reversible" của chủ dự án đúng trong code chứ không chỉ trong lời.
+  - `checkNovelty` vẫn **thuần** (CHARTER 6.1): nhận bảng điểm đã tính sẵn, không gọi mạng. Hệ quả: `pnpm check` và tập vàng replay không bao giờ đi qua một API trả tiền.
+  - "Rẻ nhất **đủ chất lượng**" là tiêu chí **đo được**, không phải lời khen: lọc theo phép tách hai nhóm cặp có nhãn trước, rồi mới lấy giá thấp nhất. Không ai đạt thì trả `null`, không hạ tiêu chí để có câu trả lời.
+  - Thiếu `EMBEDDINGS_API_KEY` thì **DỪNG và báo tên secret thiếu**, không tự tạo secret và **không** mượn `OPENAI_API_KEY` — hai khoá được tách cố ý để theo dõi chi phí riêng.
+  - `costUsd` tính từ `usage.total_tokens` nhà cung cấp trả về, không ước lượng. Mọi lần chạy ghi một dòng log kể cả lần dừng vì thiếu secret (bất biến **I8**).
+  - Giá nằm trong **dữ liệu**, không nằm trong code (giả định **G20**, cùng khuôn `G19`).
+- ✅ **Xong phần chạy được không cần secret, 2026-09-25** (lượt `crux-worker-1`, N=1):
+  - `workshops/topic/src/embeddings.ts` — `EmbeddingProvider` (trung tính nhà cung cấp), bản OpenAI ghép vector theo `index` chứ không theo thứ tự mảng, `costUsdFor`, `checkEmbeddingsSecret`, `measureSeparation` + `cheapestAdequateModel`.
+  - `workshops/topic/src/novelty.ts` — tham số thứ năm **tuỳ chọn** `SemanticSimilarity`; mặc định không đổi nên tập vàng không đổi byte nào. Thiếu điểm của một video thì **ném**, không im lặng coi là 0.
+  - `ops/scripts/novelty-embeddings-trial.ts` (`pnpm topic:novelty-trial`) — chạy cả ba model ứng viên trên 38 video, in bảng so hai phép so ba mức (`≠` khác verdict · `±` cùng verdict khác số đếm · trống), chọn model, ghi `costUsd`.
+  - Dữ liệu: `data/embeddings/openai-2026-09-25.json` (bảng giá, `source: "vendor-docs"`, `assumption: "G20"`) và `data/embeddings/novelty-probe.json` (16 cặp có nhãn người đặt), mỗi file một contract trong `workshops/topic/contracts/`.
+- ✅ **Soát chéo subagent ngữ cảnh sạch (P1 bước 6) — 2 CHẶN, đã sửa cả hai:**
+  - `main()` của script không có `try`/`finally`, nên model 3 ném **sau khi** model 1 và 2 đã bị tính tiền
+    thì không dòng log nào được ghi — tiền đã tiêu mà bất biến **I8** thủng, và không gì đỏ. Nay `costUsd`
+    cộng dồn ngoài vòng lặp và dòng log ghi ở `finally`, lỗi ném lại **sau** khi log đã nằm trên đĩa.
+  - `payload.usage?.total_tokens ?? 0` biến một lần gọi **có hoá đơn** thành `costUsd: 0` im lặng — và xoá
+    mất chính tín hiệu mà vế 2 của **G20** cần để bị bác bỏ. Nay `usage` vắng mặt thì **ném**.
+- ✅ **4 trong 6 mục NÊN SỬA, đã sửa:** contract `novelty-check` nới cận dưới `overlap` về `-1` (cosine nằm
+  trong `[-1, 1]` còn contract khoá `[0, 1]` — nhánh ngữ nghĩa tự phạm contract của chính nó, chứng minh
+  bằng ca `threshold: -0.5` nay là một bài kiểm) và thêm trường **máy đọc** `method`/`similarityModel`
+  (bất biến **I6**: `overlap` của hai phép so là hai đại lượng, nguồn phải là trường chứ không phải một câu
+  trong `limitation`) · `readNoveltyProbe()` validate tập thăm dò, đối xứng với `readEmbeddingModelTable`
+  (thiếu nó thì `sameTopic: "false"` là chuỗi truthy → chọn sai model, không gì đỏ) · `redactSecret` thay
+  khoá bằng `***` trong thân lỗi trước khi cắt (`slice` cắt đuôi, mà khoá vọng lại nằm ở **đầu**) ·
+  `limitation` nhánh ngữ nghĩa **giữ lại** hướng chệch: embeddings chữa phần "khác chữ", không chữa phần
+  "không có trong metadata".
+- ⬜ **2 mục NÊN SỬA còn lại, tách thành mục anh em** (một mục = một PR): `lint-deps.ts` chỉ đếm specifier
+  `@crux/workshop-*` nên một script `ops/` import `workshops/<tên>/src/` bằng **đường dẫn tương đối** đi
+  qua **I3** mà không dòng nào đỏ (PR này là tiền lệ đầu tiên, và nó chỉ chạm **một** xưởng nên chưa phạm
+  phần thực chất của I3) · `CLAUDE.md` mục 5 mới kể **ba** chỗ mà comment không-🤖 là lệnh, trong khi luồng
+  `[Chỉ dẫn]` `#251` do chính chủ dự án lập là chỗ **thứ tư** — chính là mục **E2** mà danh sách `#251` đang
+  nợ.
+- ⬜ **CÒN TREO — lần chạy thật chưa xảy ra.** Chủ dự án đòi "chứng minh bằng chạy thật", và phiên agent **không có** `EMBEDDINGS_API_KEY` (secret chỉ sống trong Actions). Script dừng đúng luật và ghi dòng log `status: "skipped"`. Đường tới lần chạy thật là một workflow `workflow_dispatch` dùng secret đó — workflow **dùng secret** nằm trong vùng `owner-merge` (CHARTER mục 3), nên nó là **mục anh em riêng**, không gộp vào PR này. Tới khi nó chạy: `VF-G20` giữ `parked`, và câu "`costUsd` từ `usage` thật" là **thiết kế**, chưa phải quan sát.

@@ -15,6 +15,7 @@ import type { RunLogLine } from '../../kernel/src/log.ts';
 import { readRunLogs } from '../../kernel/src/log.ts';
 import { LANES } from '../../kernel/src/envelope.ts';
 import {
+  FUTURE_TOLERANCE_HOURS,
   LANE_THRESHOLD_HOURS,
   LaneHeartbeatUnreadable,
   STEP0_LEGACY_REF,
@@ -128,26 +129,46 @@ test('Z7 · `isStep0Ref` KHÔNG nhận nhầm `ref` nào NGOÀI file dùng chung
   assert.equal(isStep0Ref(STEP0_LEGACY_REF), true);
 });
 
-test('Z7 · ĐÚNG DÒNG `jq` của `watchdog.yml` mang hằng `STEP0_REF_PATTERN` — không phải chỉ đâu đó trong file', () => {
+test('Z7 · `watchdog.yml` KHÔNG còn bản chép thứ hai của bộ lọc bước 0 — nó gọi TypeScript', () => {
+  // ## Bài này đã đổi việc, và vì sao đổi là phần đáng đọc
+  //
+  // Bản trước khẳng định điều yếu hơn: *đúng một dòng `jq` của `watchdog.yml`
+  // phải chép NGUYÊN VĂN hằng `STEP0_REF_PATTERN`*. Nó canh được một bản chép
+  // lệch, và nó đã bắt thật hai hình dạng bị thiếu (`P1-step0-`, `P3-daily-`).
+  // Nhưng nó cũng **hợp pháp hoá** chính bản chép đó: luật lọc tồn tại ở hai
+  // chỗ, viết bằng hai ngôn ngữ, và bài kiểm chỉ giữ cho chúng giống nhau.
+  //
+  // Mục `platform/P-043` bỏ bản chép: dấu hiệu số 5 của `watchdog.yml` nay gọi
+  // `ops/scripts/heartbeat-source.ts`, và script đó gọi `isStep0Ref` ngay dưới
+  // đây. Một chỗ giữ luật thì không còn hai bản để lệch — nên bài kiểm đổi từ
+  // *"hai bản phải giống nhau"* sang *"chỉ được có một bản"*.
+  //
+  // ⚠️ **Không phải "chặt hơn" trên mọi chiều, và bản đầu của chú thích này khai
+  // quá lời.** Vòng soát ngữ cảnh sạch của PR #229 đo được: bài CŨ đòi dòng `jq`
+  // mang **nguyên văn** hằng, nên nó đỏ cả khi dòng đó bị **viết lại** bằng một
+  // biểu thức tương đương; bài này chỉ cấm bản chép nguyên văn, nên một biểu
+  // thức viết lại đi qua tự do. Lỗ đó được bịt ở `ops/test/heartbeat-source.test.ts`
+  // (bài `LAST_BEAT` PHẢI đến từ output của script), không bằng lời khẳng định ở
+  // đây.
   const yml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
-  // So trên CẢ FILE là một chiều fail-open thật: một dòng chú thích chép
-  // nguyên văn hằng cũng giữ bài kiểm xanh, trong khi `jq` thật lọc bằng
-  // một biểu thức khác hẳn. Vòng soát ngữ cảnh sạch dựng đúng ca đó và bài
-  // kiểm bản đầu vẫn 17/17 xanh. Nên chỉ đọc dòng THỰC THI.
-  const jqLines = yml
-    .split('\n')
-    .filter((raw) => raw.includes('jq ') && !raw.trimStart().startsWith('#'));
-  assert.ok(jqLines.length > 0, '`watchdog.yml` không còn dòng `jq` nào — dấu hiệu số 5 đã biến mất?');
+  const execLines = yml.split('\n').filter((raw) => !raw.trimStart().startsWith('#'));
 
-  const step0Filter = jqLines.filter((raw) => raw.includes(STEP0_LEGACY_REF));
-  assert.equal(
-    step0Filter.length,
-    1,
-    `Cần đúng MỘT dòng \`jq\` lọc dòng bước 0 (nhận ra bằng ${JSON.stringify(STEP0_LEGACY_REF)}), thấy ${step0Filter.length}.`,
+  // Ca âm quan trọng nhất: một lượt sau tiện tay chép biểu thức trở lại vào
+  // `jq` (ví dụ để "khỏi phải gọi node"), và từ đó hai bản lại lệch được.
+  const copies = execLines.filter((raw) => raw.includes(STEP0_REF_PATTERN) || raw.includes(STEP0_LEGACY_REF));
+  assert.deepEqual(
+    copies,
+    [],
+    'Một dòng THỰC THI của `watchdog.yml` đang chép lại bộ lọc dòng bước 0. ' +
+      'Luật đó chỉ được tồn tại ở `isStep0Ref`; hai bản là hai chỗ để lệch nhau im lặng (Z7).',
   );
+
+  // Và chiều ngược lại: bỏ bản chép mà cũng không gọi script thì dấu hiệu số
+  // 5 đã biến mất hẳn — im lặng, không gì đỏ.
+  const calls = execLines.filter((raw) => raw.includes('heartbeat-source.ts'));
   assert.ok(
-    step0Filter[0]!.includes(STEP0_REF_PATTERN),
-    `Dòng \`jq\` của dấu hiệu số 5 không lọc bằng nguyên văn ${JSON.stringify(STEP0_REF_PATTERN)}:\n${step0Filter[0]}`,
+    calls.length > 0,
+    '`watchdog.yml` không gọi `ops/scripts/heartbeat-source.ts` — dấu hiệu số 5 không còn nguồn nhịp tim nào.',
   );
 });
 
@@ -265,4 +286,58 @@ test('Z7 · trên `ops/logs` thật: đủ mười làn, và không ô nào lấ
       `mốc của làn ${beat.lane} tới từ một dòng bước 0 — luật loại dòng bước 0 đã hỏng`,
     );
   }
+});
+
+test('Z7 · trên `ops/logs` thật: KHÔNG làn nào ra `future` — mốc tương lai tắt báo động mà không gì đỏ', () => {
+  // TÁI HIỆN LỖI (bất biến I2), mục `I-021`. Bài `mốc Ở TƯƠNG LAI ra future`
+  // ở trên chạy trên log DỰNG, nên nó khoá *hàm*. Không bài nào khoá *dữ
+  // liệu thật* — và đó là chỗ thủng, đo được:
+  //
+  // Lượt `crux-worker-1` 2026-09-24 ghi tay `at: 2026-09-24T07:05:00.000Z`
+  // vào một commit tạo lúc `06:51:27Z`. Trong ~14 phút sau đó,
+  // `laneHeartbeats` trả cho làn `integration`:
+  //     {"verdict":"future","hoursSinceLastBeat":-0.1}
+  // Số âm nhỏ hơn MỌI ngưỡng, nên làn đó **không bao giờ `stale` được** —
+  // đúng dấu hiệu số 5 của CHARTER 2.4 bị tắt. `pnpm check` vẫn xanh
+  // (21/21 ở file này), `watchdog.yml` vẫn im. Nhóm **Z**: hỏng mà mọi chỉ
+  // báo đều xanh.
+  //
+  // Ca đó tự hết sau `07:05Z`, nên bài này KHÔNG bắt được nó hôm nay. Nó
+  // bắt lần sau — và lần sau là chuyện gần như chắc: ba mốc tròn trịa
+  // `04:05:00.000` / `04:35:00.000` / `07:05:00.000` trong cùng một file
+  // cho thấy đây là thói quen ghi tay, không phải một lần lỡ.
+  //
+  // Cách chữa khi bài này đỏ luôn là **ghi `at` bằng đồng hồ thật**, không
+  // phải nới dung sai: `FUTURE_TOLERANCE_HOURS` đã có sẵn cho lệch đồng hồ
+  // vài giây, nên một mốc vượt qua nó là mốc đặt tay.
+  const lines = readRunLogs('ops/logs');
+  const now = new Date().toISOString();
+
+  const future = laneHeartbeats(lines, now).filter((beat) => beat.verdict === 'future');
+  assert.deepEqual(
+    future.map((beat) => `${beat.lane} ${beat.lastBeatAt}`),
+    [],
+    'có dòng log mang mốc Ở TƯƠNG LAI — làn đó không bao giờ stale được; sửa mốc `at`, đừng nới dung sai',
+  );
+
+  // `laneHeartbeats` cố ý LOẠI dòng bước 0 (luật thiết kế 1), nên phép khẳng
+  // định trên KHÔNG phủ chúng — và chỗ tiêu thụ mốc bước 0 có ĐÚNG cùng lỗ,
+  // ở nhánh sát bên: `ops/workflows/watchdog.yml` dấu hiệu 5 tính
+  // `AGE_MIN=$(( (NOW - LAST_BEAT) / 60 ))` **không kẹp sàn**, rồi hỏi
+  // `-gt 180`. Một mốc bước 0 ở tương lai cho `AGE_MIN` âm, phép so sai, và
+  // dấu hiệu 5 của CHARTER 2.4 im VĨNH VIỄN.
+  //
+  // Nên phủ cả dòng bước 0 ở đây. Khẳng định trên `laneHeartbeats` một mình
+  // là một phép đo khai phạm vi rộng hơn phạm vi thật — đúng lỗi `S6` mà
+  // cùng mục này đang sửa ở `ops/test/backlog-status.test.ts`.
+  const toleranceMs = FUTURE_TOLERANCE_HOURS * 3_600_000;
+  const futureStep0 = lines
+    .filter((line) => isStep0Ref(line.ref))
+    .filter((line) => Date.parse(line.at) - Date.parse(now) > toleranceMs)
+    .map((line) => `${line.ref} ${line.at}`);
+  assert.deepEqual(
+    futureStep0,
+    [],
+    'dòng BƯỚC 0 mang mốc Ở TƯƠNG LAI — `AGE_MIN` của watchdog.yml không kẹp sàn nên dấu hiệu 5 im vĩnh viễn',
+  );
 });

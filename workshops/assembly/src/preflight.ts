@@ -68,6 +68,14 @@ export interface PreflightInput {
   limits: PreflightLimits;
   shotSizeMix: ShotSizeMix;
   /**
+   * ID layout hợp lệ của genre pack cho đúng hướng khung hình đang dựng
+   * (mục `V-001` — `layoutIdsFor` trong `kernel/src/packs.ts`). Bỏ trống
+   * hoặc rỗng thì check `layout-id-known` KHÔNG chạy — đây là cách bên gọi
+   * chưa nối `layouts.json` (chưa xảy ra thay đổi golden snapshot) mà
+   * không phải sửa file này.
+   */
+  validLayoutIds?: readonly string[];
+  /**
    * Ở `stub`, các kiểm về KHỐI LƯỢNG nội dung (số từ kịch bản, số thiết bị)
    * hạ xuống `warn`: stub không viết nội dung thật, và một cổng luôn đỏ là
    * một cổng bị bỏ qua. Các kiểm về CẤU TRÚC vẫn chặn như thường.
@@ -231,6 +239,25 @@ export function preflight(input: PreflightInput): {
     actual: overused.map(([k, n]) => `${k}×${n}`).join(' ') || 'trong ngưỡng',
     rootCauseStage: 'visual',
   });
+
+  // 9b · layoutId có trong layouts.json của genre pack không (mục V-001).
+  // Chỉ chạy khi bên gọi đưa `validLayoutIds` — chưa nối vào pipeline thật
+  // ở mục này, vì stub hiện sinh layoutId giả (`L-1`…`L-5`) và nối cứng sẽ
+  // đổi golden snapshot của xưởng assembly, việc đó phải đi PR riêng
+  // (CHARTER 6.1). Xưởng `visual` lên `impl: v1` (mục V-006) là chỗ tự
+  // nhiên để nối, vì khi đó snapshot đã phải ghi lại.
+  if (input.validLayoutIds !== undefined && input.validLayoutIds.length > 0) {
+    const known = new Set(input.validLayoutIds);
+    const unknown = scenes.filter((s) => !known.has(s.layoutId));
+    checks.push({
+      id: 'layout-id-known',
+      verdict: verdictOf(unknown.length === 0, soft),
+      expected: 'layoutId có trong layouts.json của genre pack',
+      actual: [...new Set(unknown.map((s) => s.layoutId))].join(' ') || 'tất cả hợp lệ',
+      sceneIds: unknown.slice(0, 10).map((s) => s.id),
+      rootCauseStage: 'visual',
+    });
+  }
 
   // 10 · Phủ claim — bất biến I6
   const uncovered = scenes.filter((s) => NUMERIC_KINDS.has(s.kind) && s.claimIds.length === 0);
