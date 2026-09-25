@@ -1002,9 +1002,9 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 
 ---
 
-## KF-036 · Cổng cú pháp của `I-018` **cho qua** cây union có khai báo trùng — `resolved` lần thứ hai cho một cây Node không nạp được
+## KF-039 · Cổng cú pháp của `I-018` **cho qua** cây union có khai báo trùng — `resolved` lần thứ hai cho một cây Node không nạp được
 
-> Số **KF-036**: cao nhất đang dùng là `KF-035`, dò `^## KF-` trên `main` **và** trên đầu cả 10 nhánh PR đang mở. Nhận mã trước khi viết (KF-005).
+> Số **KF-039**: `KF-036` là mã mà mục này nhận lúc viết, nhưng `main` đã cấp cùng số cho một chỗ hỏng khác (`KF-036 · Phép dò mã mục trống…`, mục `platform/P-054`, PR `#258`, vào `main` lúc `2026-09-25T06:53:33Z`) — tức **đúng chỗ hỏng mà `KF-036` của `main` mô tả**, xảy ra với chính mục này. Lượt `crux-worker-1` ~07:5xZ 2026-09-25 gộp `main` vào nhánh này ở bước 0 và phát hiện va chạm, nên đổi số ở đây. `KF-039` là mã trống kế tiếp, dò `^## KF-` trên `main` **và** trên đầu nhánh cả 11 PR đang mở (cao nhất `KF-038`, PR `#261`) — `KF-005`.
 
 - **Lần gặp:** 2 của **cùng một lớp hỏng** với `KF-016` (`integrator-resolve.ts` trả `resolved` cho một cây không đọc được), nhưng **chữ ký khác** nên cổng của `I-018` không bắt. Lần này: PR `#242` (`claude/dreamy-ride-ynixo1`, mục `audio/AU-007`), lượt `crux-worker-1` ~04:41Z ngày 2026-09-25, sau khi `#39`/`V-001` vào `main` lúc `04:36:59Z` (`b1063a9`).
 - **Chữ ký:** `node ops/scripts/integrator-resolve.ts origin/main` in `{"outcome":"resolved","files":["kernel/src/packs.ts"]}` và thoát `0`, nhưng cổng **đầu tiên** của `pnpm check` (`pnpm contracts`) đỏ ngay ở tầng **nạp module**, không phải ở `typecheck`:
