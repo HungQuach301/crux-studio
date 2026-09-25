@@ -4,6 +4,28 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-052 · Bản tin phát hiện `[QĐ]` có điều kiện đã đủ nhưng vẫn mở, và KF cho ca `#127` (D6)
+
+Chỉ dẫn **D6** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn `#131` lúc `2026-09-24T23:54:32Z`): *"Ghi KF: `#127` nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy. Bản tin phải phát hiện được `[QĐ]` có điều kiện đã đủ nhưng vẫn mở."*
+
+Ca thật, đo bằng API chứ không đọc bằng mắt: `#127` là `[QĐ]` (nhãn `decision` + `irreversible`) mở `2026-09-22T09:16Z`, phương án A nêu điều kiện *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**"*. **`#66` đã merge `2026-09-24T04:31:51Z`** — điều kiện dạng-PR đã đủ — nhưng `#127` **vẫn mở** tới giờ. Không chỉ báo nào đỏ; nó chỉ nằm trong danh sách *"Cần anh quyết"* của bản tin như thể còn chờ người. Đúng nhóm **Z**, và cùng họ với `platform/P-050` (`decision-close.ts`, `#256`) đang chờ merge — chỉ ngược dấu: `P-050` **đóng** `[QĐ]` đã có bằng chứng mạnh; mục này **nêu lên** `[QĐ]` mà điều kiện dạng-PR đã đủ để chủ dự án soát và hành động, chứ không tự đóng (một `[QĐ]` `irreversible` như `#127` vẫn cần người quyết dù `#66` đã merge).
+
+- deps: —
+- risk: low — chỉ **thêm** một mục vào bản tin (`renderDigestMetrics`) và các hàm thuần đọc-thêm; không đổi số đếm *"Cần anh quyết"* đang có, không tự đóng issue nào, không chạm vùng bảo vệ. Hướng lệch an toàn: bản tin là mặt người đọc, nên nêu thừa một dòng thấy ngay và bỏ qua được; nuốt mất một `[QĐ]` đã đủ điều kiện mới là chiều đắt.
+- status: review
+- hold: chưa **quan sát** bản tin thật nêu `#127` — bộ dò đã có mã và test khoá, nhưng routine `crux-digest` (20:30, phụ lục P2) chưa chạy sau khi mục này vào `main`; lượt `crux-digest` kế tiếp là quan sát đầu tiên (cùng hình dạng hold của D5/`P-051`). Mục **không** tự chuyển `done` tới khi có quan sát đó.
+- nguồn: `#251` D6 · `#127` (thân + trạng thái) · `#66` `merged_at 2026-09-24T04:31:51Z` · `ops/known-failures.md`
+- tiêu chí xong:
+  - ✅ `ops/known-failures.md`: mục **KF-035** cho ca `#127` — `[QĐ]` có điều kiện đã đủ (PR gate `#66` đã merge) nhưng vẫn mở, agent tin sai là còn bị chặn, nằm 3 ngày, mọi chỉ báo xanh (nhóm Z), kèm chữ ký.
+  - ✅ `ops/scripts/digest-metrics.ts`: hàm thuần `linkedPrNumbers` (đọc `#N` từ tiêu đề + thân), `decisionDeclaresBlocked` (ba dấu hiệu "chặn"/"chưa có"/"đang chờ" lấy nguyên văn từ `#127` — vòng soát bước 6 bỏ một `/chờ\s/` trần vì nó rộng hơn ca thật), `decisionAgeDays`, và `conditionMetButOpen` (mở + khai chặn + có PR gate đã merge). `DecisionRow` mang thêm `conditionMetPrs`/`ageDays` **chỉ khi** bên gọi xin (giữ hình dạng cũ cho `decisionRows(issues)`). Không đổi `needOwnerCount`.
+  - ✅ `renderDigestMetrics`: mục mới *"Quyết định điều kiện đã đủ nhưng còn mở"* liệt kê từng `[QĐ]` kèm PR gate đã merge và số ngày đã mở. Dòng đầu bản tin vẫn là *"Cần anh quyết: N việc"*.
+  - ✅ `collectMetrics`/`fetchSnapshot`: lấy thêm `body,createdAt` của issue `decision`, dựng tập số PR đã merge, truyền vào `decisionRows`.
+  - ✅ `ops/test/digest-metrics.test.ts`: 6 bài mới, gồm fixture hình dạng `#127` (khai chặn + `#66` merged → nêu) và ca âm (PR gate chưa merge → không nêu; không khai chặn → không nêu; không nêu PR → không nêu; `decisionRows(issues)` không opts giữ nguyên hình dạng).
+  - ✅ `pnpm check` EXIT=0 · 1283 test/1283 pass · `pnpm replay` khớp tập vàng 6/6.
+  - ⬜ Cập nhật trạng thái D6 trên `#251` (làm khi chuyển PR khỏi nháp) và **quan sát bản tin thật** (xem `- hold:`).
+
+---
+
 ### P-045 · fix · Một PR không merge được **giết cả hàng đợi**, nên mọi PR xếp sau không bao giờ được xét
 
 `ops/workflows/automerge.yml` duyệt cả hàng đợi trong một vòng `for` dưới `set -euo pipefail`, và lời gọi merge nằm **trần**. Một PR mà GitHub từ chối merge làm `gh` thoát khác 0, `set -e` giết cả bước, và mọi PR xếp sau **không có một dòng log nào**.

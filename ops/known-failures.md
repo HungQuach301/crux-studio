@@ -6,6 +6,36 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
+
+> Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Cái thiếu là thứ không chỉ báo nào đo: một câu hỏi đã hết cần hỏi vẫn nằm trong danh sách *"Cần anh quyết"* của bản tin.
+
+**Chữ ký:** một issue `[QĐ]` khai một điều kiện (một secret, một PR gate) → agent tin điều kiện **chưa đủ** → không đẩy nhánh việc đi tiếp và không nêu lại → issue nằm mở trong khi điều kiện **đã đủ từ lâu**. Mọi chỉ báo xanh vì bản thân "một issue mở" không làm gì đỏ.
+
+**Quan sát được, `#127`, đo bằng API 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-22T09:16Z` | `#127` mở — `[QĐ]` (nhãn `decision` + `irreversible`), tiêu đề *"…cấp kiểm 4 **chặn** ở một secret **chưa có**"*. Phương án A: *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**."* |
+| `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
+| `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
+| lúc viết mục này | `#127` **vẫn mở**. |
+
+**Nguyên nhân gốc — hai lớp:**
+
+1. **Agent đọc một trạng thái tồn kho bằng trí nhớ, không bằng chạy thật.** Câu *"`OPENAI_API_KEY` chưa có trên repo"* trong thân `#127` là đúng **lúc viết** (2026-09-22) và **sai** sau đó, nhưng không lượt nào đo lại. Đây là biến thể của chính luật CHARTER 11.1 *"kiểm bằng chạy thật, không bằng đọc tài liệu"* — một dòng văn trong thân issue cũng là "tài liệu".
+2. **Bản tin không có bộ dò cho hình dạng này.** Nó chỉ tách `[QĐ]` đang mở theo nhãn `reversible`/`irreversible` (mục "Cần anh quyết"), không hỏi *"điều kiện của nó đã đủ chưa"*. Nên một `[QĐ]` đã đủ điều kiện trông giống hệt một `[QĐ]` còn chờ người thật.
+
+**Chỗ đã sửa (mục `platform/P-052`, chỉ dẫn D6 của `#251`):** `renderDigestMetrics` thêm mục *"Quyết định điều kiện đã đủ nhưng còn mở"* — một `[QĐ]` khai chặn (`decisionDeclaresBlocked`, dấu hiệu lấy nguyên văn từ `#127`) mà có PR gate đã merge (`linkedPrNumbers` giao với tập PR đã merge) được **nêu lên** kèm số ngày đã mở. Bài kiểm `ops/test/digest-metrics.test.ts` khoá bằng fixture hình dạng `#127`.
+
+**Vì sao nêu lên chứ không tự đóng:** `#127` là `[QĐ]` `irreversible` (chi tiền + chọn nhà cung cấp) — nó **vẫn cần chủ dự án quyết** dù `#66` đã merge; điều kiện dạng-PR đủ chỉ nghĩa "hết cớ để nằm im", không nghĩa "đã quyết". Việc **đóng** một `[QĐ]` khi có bằng chứng mạnh thuộc `decision-close.ts` (`platform/P-050`); mục này ngược dấu — kéo một `[QĐ]` đã đủ điều kiện ra khỏi im lặng để chủ dự án soát. Hai mục cùng họ, không đè nhau.
+
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "đừng dùng điều kiện trong `[QĐ]`". Đọc thành: *một điều kiện đã khai thì phải có máy đo lại nó, nếu không nó thành một lời khẳng định đóng băng ở thời điểm viết.*
+
+---
+
 ## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
 
 > Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.
