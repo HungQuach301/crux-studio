@@ -13,15 +13,16 @@ Ca thật, đo bằng API chứ không đọc bằng mắt: `#127` là `[QĐ]` (
 - deps: —
 - risk: low — chỉ **thêm** một mục vào bản tin (`renderDigestMetrics`) và các hàm thuần đọc-thêm; không đổi số đếm *"Cần anh quyết"* đang có, không tự đóng issue nào, không chạm vùng bảo vệ. Hướng lệch an toàn: bản tin là mặt người đọc, nên nêu thừa một dòng thấy ngay và bỏ qua được; nuốt mất một `[QĐ]` đã đủ điều kiện mới là chiều đắt.
 - status: review
+- hold: chưa **quan sát** bản tin thật nêu `#127` — bộ dò đã có mã và test khoá, nhưng routine `crux-digest` (20:30, phụ lục P2) chưa chạy sau khi mục này vào `main`; lượt `crux-digest` kế tiếp là quan sát đầu tiên (cùng hình dạng hold của D5/`P-051`). Mục **không** tự chuyển `done` tới khi có quan sát đó.
 - nguồn: `#251` D6 · `#127` (thân + trạng thái) · `#66` `merged_at 2026-09-24T04:31:51Z` · `ops/known-failures.md`
 - tiêu chí xong:
-  - ⬜ `ops/known-failures.md`: mục KF cho ca `#127` — `[QĐ]` có điều kiện đã đủ (PR gate đã merge) nhưng vẫn mở, agent tin sai là còn bị chặn, nằm 3 ngày, mọi chỉ báo xanh (nhóm Z), kèm chữ ký.
-  - ⬜ `ops/scripts/digest-metrics.ts`: hàm thuần `linkedPrNumbers` (đọc `#N` từ tiêu đề + thân), `decisionDeclaresBlocked` (dấu hiệu "chặn/chưa có" lấy từ nguyên văn `#127`), và `conditionMetButOpen` (mở + khai chặn + có PR gate đã merge). `DecisionRow` mang thêm `conditionMetPrs: number[]`. Không đổi `needOwnerCount`.
-  - ⬜ `renderDigestMetrics`: mục mới *"Quyết định điều kiện đã đủ nhưng còn mở"* liệt kê từng `[QĐ]` kèm PR gate đã merge và số ngày đã mở. Dòng đầu bản tin vẫn là *"Cần anh quyết: N việc"*.
-  - ⬜ `collectMetrics`/`fetchSnapshot`: lấy thêm `body,createdAt` của issue `decision`, dựng tập số PR đã merge, truyền vào `decisionRows`.
-  - ⬜ `ops/test/digest-metrics.test.ts`: bài kiểm cho các hàm thuần, gồm fixture hình dạng `#127` (khai chặn + `#66` merged → nêu) và các ca âm (PR gate chưa merge → không nêu; không khai chặn → không nêu; không nêu PR → không nêu).
-  - ⬜ `pnpm check` EXIT=0 và `pnpm replay` khớp tập vàng.
-  - ⬜ Cập nhật trạng thái D6 trên `#251`.
+  - ✅ `ops/known-failures.md`: mục **KF-035** cho ca `#127` — `[QĐ]` có điều kiện đã đủ (PR gate `#66` đã merge) nhưng vẫn mở, agent tin sai là còn bị chặn, nằm 3 ngày, mọi chỉ báo xanh (nhóm Z), kèm chữ ký.
+  - ✅ `ops/scripts/digest-metrics.ts`: hàm thuần `linkedPrNumbers` (đọc `#N` từ tiêu đề + thân), `decisionDeclaresBlocked` (dấu hiệu "chặn/chưa có/chờ" lấy từ nguyên văn `#127`), `decisionAgeDays`, và `conditionMetButOpen` (mở + khai chặn + có PR gate đã merge). `DecisionRow` mang thêm `conditionMetPrs`/`ageDays` **chỉ khi** bên gọi xin (giữ hình dạng cũ cho `decisionRows(issues)`). Không đổi `needOwnerCount`.
+  - ✅ `renderDigestMetrics`: mục mới *"Quyết định điều kiện đã đủ nhưng còn mở"* liệt kê từng `[QĐ]` kèm PR gate đã merge và số ngày đã mở. Dòng đầu bản tin vẫn là *"Cần anh quyết: N việc"*.
+  - ✅ `collectMetrics`/`fetchSnapshot`: lấy thêm `body,createdAt` của issue `decision`, dựng tập số PR đã merge, truyền vào `decisionRows`.
+  - ✅ `ops/test/digest-metrics.test.ts`: 6 bài mới, gồm fixture hình dạng `#127` (khai chặn + `#66` merged → nêu) và ca âm (PR gate chưa merge → không nêu; không khai chặn → không nêu; không nêu PR → không nêu; `decisionRows(issues)` không opts giữ nguyên hình dạng).
+  - ✅ `pnpm check` EXIT=0 · 1283 test/1283 pass · `pnpm replay` khớp tập vàng 6/6.
+  - ⬜ Cập nhật trạng thái D6 trên `#251` (làm khi chuyển PR khỏi nháp) và **quan sát bản tin thật** (xem `- hold:`).
 
 ---
 
