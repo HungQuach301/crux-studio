@@ -61,12 +61,17 @@ node ops/invariants.hotfix-lane.ts /tmp/hotfix.json
 # → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
 
 # Mục này đã có ai nhận chưa (P-041, KF-025)? Chạy ở bước 3 VÀ lại ở bước 4, đừng đoán.
-# File JSON: {prs:[{number,title,createdAt,closedAt,mergedAt,isDraft,updatedAt}], lane?, id?, now?}
+# File JSON: {prs:[{number,title,createdAt,closedAt,mergedAt,isDraft,updatedAt}], lane?, id?, now?, tree?, changedFiles?}
+#   `tree` bỏ trống thì CLI tự đọc `ops/lanes/*/backlog.md` của cây đang chạy. `changedFiles` có thì tool suy
+#   nhóm bí danh — dựng nó từ ảnh chụp MỞ LẪN ĐÃ ĐÓNG, ảnh chụp nhỏ làm nó báo nhầm và tool nói ra ở `warnings`.
 # `prs` dựng thẳng từ một lần liệt kê PR (mở LẪN đã đóng), đủ bảy trường — thiếu một trường thì tool NÉM,
 # không trả `free`. `mergedAt` lấy từ `merged_at`: endpoint liệt kê trả `merged:false` cho cả PR đã merge.
 pnpm claims /tmp/prs.json
 # → {"verdict":"open-pr"} ĐI MỤC KHÁC · {"verdict":"recently-merged"} đọc lại backlog, mục có thể vừa xong
 # → {"verdict":"abandoned-draft"} PR nháp bỏ quá 24 giờ, nhận được · {"verdict":"free"} rảnh
+# → {"verdict":"stale-id"} KHÔNG KẾT LUẬN ĐƯỢC — đọc lại backlog, đừng bao giờ đọc nó thành `free` (mục `P-058`).
+#   `staleReason` nói vì sao: `duplicate-id` (cây có mã này HAI lần) · `absent-from-tree` (cây không có mã này)
+#   · `no-tree` (không ai đưa ảnh chụp cây — CLI tự đọc `ops/lanes/*/backlog.md` nên ca này chỉ gặp khi gọi hàm).
 # Trường `unreadable` khác rỗng = ảnh chụp có PR vô hình với phép đếm; một `free` khi đó là `free` chưa chắc.
 
 # Phạm vi sự cố của một `main` đỏ, dạng máy đọc (nguồn duy nhất cho điều kiện 2):
@@ -80,7 +85,7 @@ node ops/scripts/heartbeat-source.ts --source main=ops/logs --source telemetry=<
 # Bước 0e: kiểm một file log bước 0 trước khi đẩy bản sao lên nhánh `claude/telemetry` (KHÔNG mở PR):
 node ops/scripts/telemetry-beat.ts ops/logs/integration/step0-<mốc>-<routine>.jsonl
 
-# Bước 0f (mục P-056, `KF-041`): nhánh chờ nào của lượt log-only trước còn giữ một dòng log CHƯA tới
+# Bước 0f (mục P-056, `KF-048`): nhánh chờ nào của lượt log-only trước còn giữ một dòng log CHƯA tới
 # `main`? Chạy, đừng đọc `git branch -r` bằng mắt — và đừng coi "không in gì" là lành, lệnh này ném lỗi
 # khi không đo được chứ không trả danh sách rỗng:
 pnpm step0:pending
@@ -100,6 +105,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 - Nhận việc: tạo nhánh và **PR nháp** ngay từ đầu, tiêu đề `[<lane>] <id> — <tóm tắt>`. Đó là cách báo cho các worker khác biết mục đã có người nhận.
 - Thấy PR đang mở cho một mục thì **không nhận lại** mục đó. Ngoại lệ: PR nháp không có commit mới quá 24 giờ thì coi như bỏ.
 - **Đừng đọc bằng mắt, chạy `claimCheck`** (`ops/scripts/claim-collision.ts`, lệnh `pnpm claims`). Nó đọc chữ ký nhận việc từ **tiêu đề PR**, không từ tên nhánh — phiên cloud được gán nhánh ngẫu nhiên nên tên nhánh không nói được gì. Và chạy **ba lần**: lúc chọn mục, lại ngay trước khi push commit đầu tiên, rồi lần nữa trước khi bỏ nháp. Các mốc đó cách nhau cả một lượt làm việc; đúng khoảng trống ấy đã cho hai worker nhận cùng mục `I-020` cách nhau 89 giây, rồi cùng ngày lặp lại với mã `P-040` (#224/#225, 9,75 phút — lần đó phép hỏi trước khi bỏ nháp là thứ bắt được). Xem `KF-025`, mục `P-041`. Phán quyết `abandoned-draft` chính là ngoại lệ 24 giờ ở gạch đầu dòng trên, nay máy đọc chứ không phải mắt; tool **ném** khi đầu vào thiếu, và "ném" không bao giờ đọc thành `free`.
+- **Một `free` là `free` CHƯA CHẮC ở ba chỗ, và cả ba nay máy nói ra** (mục `P-058`, `KF-042`). `claimCheck` đọc mã từ **tiêu đề PR** còn `readyNow` đọc mã từ **cây `main`**; một lần **đổi mã đang bay** làm hai chuỗi lệch, và phép hỏi trả `free` cho một mục đang có người giữ — đo được `2026-09-26T02:2xZ`: `pnpm claims` ra `free` cho `platform/P-028` trong khi `#224` (`P-040`) và `#274` (`P-057`) cùng mở, cùng ba file. Ba chỗ: (a) phán quyết **`stale-id`** — mã nằm trong `duplicateIds`, hoặc cây không có mã đó; (b) `unreadable` khác rỗng — ảnh chụp có PR vô hình với phép đếm; (c) `duplicateClaims` báo 0 mà vẫn có hai PR **khác mã** cùng làm một việc — đưa thêm `changedFiles` vào file JSON để tool tự suy nhóm bí danh rồi đọc cột *quy về cùng một mục vì*. Gặp `stale-id` thì **đọc lại backlog**, không nhận ngay.
 - Commit sớm và thường xuyên, push sau mỗi bước có ý nghĩa. Phiên có thể dừng bất cứ lúc nào; việc đã push thì lần chạy sau làm tiếp được.
 - `git push -u origin <branch>`. Lỗi mạng thì thử lại tối đa 4 lần, giãn 2s/4s/8s/16s.
 - Xong việc: chạy `pnpm check`, cập nhật backlog (`status: review`) và `ops/logs/<lane>/<id>.jsonl` **trong cùng PR đó**, rồi chuyển PR khỏi trạng thái nháp.

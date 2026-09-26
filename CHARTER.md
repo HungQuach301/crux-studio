@@ -182,7 +182,7 @@ Cơ chế: mốc `<!-- crux-escalate-* -->` thôi mang nghĩa "đã nhắc thì 
   - lần chạy gần nhất của `sync-workflows` thất bại. Nguyên nhân thường gặp nhất là PAT đã hết hạn;
   - chi phí tích luỹ trong `ops/logs/**/*.jsonl` (bất biến I8) vượt **80%** cận dưới của ngân sách học;
   - không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim quá **3 giờ** — dấu hiệu một routine có lượt chạy lỗi hoặc đã ngừng chạy (mục `P-020`). Nhịp tim là dòng `at` mới nhất trong **các dòng log bước 0** (phụ lục P1/P3 ghi một dòng ở mọi lượt). Từ mục `P-023` các dòng đó nằm rải ở nhiều file, nên watchdog quét cả `ops/logs` rồi lọc theo trường `ref` — **không neo vào một tên file**.
-  - một nhánh chờ `claude/integration/step0-pending/*` mang dòng log bước 0 **chưa vào `main`** quá ngưỡng (mục `platform/P-056`, `ops/known-failures.md` `KF-041`). Lượt bước 0 không gỡ được PR nào được quyền không mở PR (mục `P-038`), nhưng dòng log của nó vẫn phải tới `main` qua PR của một lượt sau — vế đó đã hỏng **bốn** lần liên tiếp, tức bất biến I8 thủng bốn lượt mà mọi chỉ báo đều xanh. Ngưỡng giờ nằm ở `STEP0_PENDING_STALE_HOURS` của `ops/scripts/step0-pending-branches.ts`, suy từ khoảng chờ merge chứ không phải một số trần.
+  - một nhánh chờ `claude/integration/step0-pending/*` mang dòng log bước 0 **chưa vào `main`** quá ngưỡng (mục `platform/P-056`, `ops/known-failures.md` `KF-048`). Lượt bước 0 không gỡ được PR nào được quyền không mở PR (mục `P-038`), nhưng dòng log của nó vẫn phải tới `main` qua PR của một lượt sau — vế đó đã hỏng **bốn** lần liên tiếp, tức bất biến I8 thủng bốn lượt mà mọi chỉ báo đều xanh. Ngưỡng giờ nằm ở `STEP0_PENDING_STALE_HOURS` của `ops/scripts/step0-pending-branches.ts`, suy từ khoảng chờ merge chứ không phải một số trần.
 
 ### 2.5 Bản tin ngày — hộp quyết định duy nhất
 
@@ -713,7 +713,7 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
        pnpm step0:pending
    Nhánh nào còn trong `pending` thì `git cherry-pick` dòng log của nó vào PR của lượt này rồi xoá nhánh
    đã gộp — đó là vế hai của luật P-038, và nó đã hỏng BỐN lần liên tiếp vì không chỗ nào nhắc nó
-   (`ops/known-failures.md` KF-041). Lượt này KHÔNG mở PR thì không gộp được; để nguyên, lượt sau làm.
+   (`ops/known-failures.md` KF-048). Lượt này KHÔNG mở PR thì không gộp được; để nguyên, lượt sau làm.
    Đây là đường DUY NHẤT gỡ dấu hiệu số 7 của watchdog.yml: nó báo cho tới khi dòng log tới nhánh chính.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
 2. Ưu tiên (mục P-022 và P-025, cơ chế ở ops/scripts/pr-triage.ts, hàm pickPrToHandle — gọi hàm đó,
@@ -750,9 +750,16 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    mở (PR nháp không có commit mới quá 24 giờ coi như đã bỏ). Phép hỏi "đã có ai giữ mục này chưa" chạy bằng
    `claimCheck` của `ops/scripts/claim-collision.ts`, đừng đọc bằng mắt: nó đọc chữ ký từ TIÊU ĐỀ PR
    (`[<lane>] <id> — …`), vì nền tảng gán nhánh ngẫu nhiên nên tên nhánh không nói được gì (mục `P-041`).
-   Bốn phán quyết: `open-pr` → đi mục khác; `abandoned-draft` → PR nháp bỏ quá 24 giờ, nhận được (đó là ngoại lệ
-   ngay trên, nay máy đọc chứ không phải mắt); `recently-merged` → đọc lại backlog, mục có thể vừa xong; `free`
-   → nhận. Tool NÉM khi đầu vào thiếu, và "ném" không bao giờ được đọc thành `free`. Chỉ in "idle" khi `readyNow`
+   NĂM phán quyết: `open-pr` → đi mục khác; `abandoned-draft` → PR nháp bỏ quá 24 giờ, nhận được (đó là ngoại lệ
+   ngay trên, nay máy đọc chứ không phải mắt); `recently-merged` → đọc lại backlog, mục có thể vừa xong;
+   `stale-id` → KHÔNG kết luận được, đọc lại backlog và đừng bao giờ đọc nó thành `free`; `free` → nhận.
+   Tool NÉM khi đầu vào thiếu, và "ném" không bao giờ được đọc thành `free`.
+   `stale-id` là phán quyết thứ năm của mục `platform/P-058` (`KF-042`): `claimCheck` đọc mã từ TIÊU ĐỀ PR còn
+   `readyNow` đọc mã từ CÂY, nên một lần đổi mã đang bay làm hai chuỗi lệch và phép hỏi trả `free` cho một mục
+   đang có người giữ — đo được `2026-09-26T02:2xZ` với `platform/P-028` trong khi `#224` và `#274` cùng mở dưới
+   hai mã khác. `staleReason` nói vì sao: `duplicate-id`, `absent-from-tree`, hay `no-tree`.
+   Và một `free` vẫn là `free` CHƯA CHẮC khi `unreadable` khác rỗng, hoặc khi hai PR khác mã đang làm cùng một
+   việc — ca sau đo bằng `changedFiles` trong chính file JSON, xem `CLAUDE.md` mục 2. Chỉ in "idle" khi `readyNow`
    rỗng, hoặc mọi mục trong đó đều đã có nhánh hay PR — và khi in `idle`, dán luôn `readyNow` để lượt sau biết đó
    là hàng đợi thật chứ không phải một phép đọc sai. Không có mục nào thì kết thúc, không commit gì.
 4. Nhận mục: tạo nhánh claude/<lane>/<id>, push, mở PR nháp tiêu đề "[<lane>] <id> …", mô tả PR bắt đầu bằng 🤖.
@@ -988,7 +995,7 @@ Làn integration của Crux Studio.
       I8 đỏ, bước e hỏng thì nhịp tim rơi về nguồn `main` như trước `P-043` — hướng lệch an toàn, và
       `heartbeat-source.ts` in ra nguồn nào đã trả lời nên chỗ rơi đó không im lặng.
 
-   f. **Gộp lại các nhánh chờ của những lượt log-only trước** (mục `P-056`, `KF-041`). Chạy
+   f. **Gộp lại các nhánh chờ của những lượt log-only trước** (mục `P-056`, `KF-048`). Chạy
       `pnpm step0:pending` — nó liệt kê nhánh `claude/integration/step0-pending/*` nào còn giữ một dòng log
       **chưa** tới nhánh chính, kèm tuổi từng nhánh. Nhánh nào còn trong `pending` thì `git cherry-pick`
       dòng log của nó vào PR của lượt này rồi **xoá** nhánh đã gộp (vế hai của `P-038`).

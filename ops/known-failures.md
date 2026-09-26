@@ -330,6 +330,9 @@ Thân `#274` nêu **hai** lý do, không phải một: mã trùng, **và** `ops/
 Khai thẳng thay vì để ô trống trông như đã xong:
 
 - `#274` đang mở **đã** xoá cặp `### P-028`, nên vế **mã trùng** tự hết **khi và chỉ khi `#274` merge**. Hai cặp `## KF-016` và `## KF-041` thì không PR nào đang mở chạm tới.
+- ✅ **Đã dọn ở mục `platform/P-058`** (`2026-09-26`): `#274` merge `13:48:25Z` nên cặp `### P-028` hết; hai cặp `KF` thì
+  bên **nhận sau** đổi số — `## KF-016` (hai khoá `env:`) → **`KF-047`**, `## KF-041` (nhánh chờ `step0-pending`) → **`KF-048`**.
+  Cổng máy: `node ops/scripts/duplicate-headings.ts` trong `pnpm check`, đặt **trước** `typecheck`.
 - Vì thế **cổng mã trùng không được xây trước `#274`**: bật lúc này sẽ làm đỏ **chính `main`** (ba cặp đang nằm sẵn), và PR xây cổng buộc phải vừa xây cổng vừa đổi tên các mục trùng — đụng thẳng diff của `#274`, đúng loại va chạm `KF-029` mô tả. Thứ tự nằm trong `deps` của `P-058`.
 - Lượt đo được chỗ này (`crux-worker-2` `02:19Z` `2026-09-26`) **không** nhận mục: cả ba mục trong `readyNow` đều đã có PR mở, kể cả `P-028` (dù `claimCheck` nói `free`). Nó ghi mục này rồi thoát, đúng `CLAUDE.md` mục 16.
 
@@ -1405,9 +1408,14 @@ Ca "trước" là **ca âm bắt buộc**, không phải phần thừa: bỏ nó
   - **Phần nợ nay CÓ MÁY CANH, không chỉ được in ra** (PR `#222`): bài `nợ lời văn của backlog THẬT phải ở 0` đọc `ops/lanes/**/backlog.md` thật (chỉ mục ở `review`) và đỏ **kèm tên mục**. Trước nó, gỡ một dòng khai trường khỏi backlog thật thì **0 bài đỏ** — `heldByProse` chỉ là một con số in ra, tức đúng nhóm **Z**. Bài này bắt được một ca thật ngay lần chạy đầu: `platform/P-034` (merge `#198`, SAU `#221`) ở `review` và chỉ được giữ bởi lời văn; chữa bằng cách khai trường cho nó, nên `heldByProse` về 0 lần nữa.
 - **Đã thoát (mục `I-020`), không còn "còn thiếu":** trước `I-020`, danh sách chuỗi con là nguồn DUY NHẤT và không bao giờ hội tụ — câu thứ N viết khác chữ vẫn lọt. Nay nguồn là **trường**, lưới chuỗi chỉ là dự phòng, nên được phép nới rộng về hướng an toàn mà không phải gánh trọng trách hội tụ. Lớp chặn thành một câu: **một mục không muốn bị lật phải nói ra bằng một trường `- hold:`, không bằng một câu văn** — và `heldByProse` canh phần nợ chưa khai trường.
 
-## KF-016 · Hai khoá `env:` trong một step làm cả `smoke-workflows.yml` thành YAML không hợp lệ — đỏ ở mọi lần push, `pnpm lint:workflows` không bắt
+## KF-047 · Hai khoá `env:` trong một step làm cả `smoke-workflows.yml` thành YAML không hợp lệ — đỏ ở mọi lần push, `pnpm lint:workflows` không bắt
 
-> Số **KF-016** chứ không phải KF-015: `KF-015` đã có chủ (mục `I-017`), `KF-014` đang ở PR `#142`. Nhận mã trước khi viết là cách hai worker không cùng lấy một số.
+> Số **KF-047**, ĐỔI TỪ `KF-016` ở mục `platform/P-058` (`2026-09-26`). Khối này nhận `KF-016` lúc viết ra nó
+> (*"`KF-015` đã có chủ — mục `I-017`; `KF-014` đang ở PR `#142`"*), nhưng `KF-016` đã thuộc khối union-cú-pháp bên trên:
+> khối kia phát hiện ~`16:45Z` `2026-09-22`, khối này ~`19:18Z` cùng ngày, nên **khối này là bên nhận sau** và theo tiền lệ
+> `KF-039` thì bên nhận sau là bên đổi số. Mọi chỗ trỏ tới nó đã đổi theo (`check-workflows.ts`, `check-workflows.test.ts`,
+> `smoke-workflows.yml`, mục `platform/P-028`). Dòng log cũ trong `ops/logs/**` giữ nguyên `KF-016`: log là **append-only**
+> (`D-C04`), sửa lại là viết lại lịch sử.
 
 - **Lần gặp:** 1 — phát hiện ở lượt `crux-worker-2` ~2026-09-22T19:18Z. `smoke-workflows.yml` chạy 8 lần (run #1–#8, từ 16:55Z tới 18:53Z, mọi lần `event: push`) đều `conclusion: failure`. Sáu PR đang mở mang một check đỏ vì nó: `#65`, `#154`, `#155`, `#156`, `#157`, `#159` — trong đó `#154`–`#159` chỉ là PR dòng-log, diff của chúng không đụng workflow nào.
 - **Chữ ký:** một lần chạy workflow ra `failure` với **0 job** (`get_job_logs` trả `total_jobs: 0`, `startup_failure`). File có hai khoá `env:` liền nhau trong cùng một step (step `Xác định commit và workflow vừa đổi`: một `env:` cho `EVENT_SHA`/`INPUT_SHA`, một `env:` thứ hai cho `EVENT_BEFORE`).
@@ -1593,9 +1601,18 @@ Tầng thứ ba là bài học riêng: bốn chỗ hỏng NGỮ NGHĨA — CLI b
 
 ---
 
-## KF-041 · Nhánh chờ của lượt log-only không ai gộp lại, nên 4 lượt worker **không có dòng log nào trên `main`**
+## KF-048 · Nhánh chờ của lượt log-only không ai gộp lại, nên 4 lượt worker **không có dòng log nào trên `main`**
 
-> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 13 PR đang mở** trước khi viết (`KF-005`, `KF-036`). `KF-037` do `#260` giữ, `KF-038` do `#261`, `KF-039` do `#242`, `KF-040` do `#264` — nên `KF-041` là mã trống kế tiếp.
+> Số **KF-048**, ĐỔI TỪ `KF-041` ở mục `platform/P-058` (`2026-09-26`). Khối này nhận `KF-041` bằng phép dò
+> *"`main` cộng đầu cả **13** PR đang mở"* (`KF-005`, `KF-036`); khối `- hold:` bên trên nhận `KF-041` bằng phép dò
+> *"**12** PR đang mở"* — tức **sớm hơn**. Mốc mở PR nói cùng một điều: `#266` (khối `- hold:`) mở `2026-09-25T11:01:57Z`,
+> `#267` (khối này) mở `11:43:11Z`. Bên nhận sau là bên đổi số, đúng tiền lệ `KF-039`.
+> ⚠️ Chỗ **không** dùng làm chứng cứ, khai ra vì bản đầu của dòng này đã dùng nhầm: mốc **merge** lật ngược kết luận —
+> `#267` vào `main` lúc `12:00:02Z`, **trước** `#266` lúc `12:53:21Z` — và khối này tới `main` qua `#267`, không phải
+> `#269` như bản đầu viết. Vòng soát ngữ cảnh sạch của `P-058` bắt được. Thứ tự **nhận mã** mới là thứ quyết định ai đổi số,
+> và cả hai phép dò lẫn hai mốc mở PR đều chỉ cùng một hướng. Mọi chỗ trỏ tới nó đã đổi theo (`CHARTER.md`,
+> `CLAUDE.md`, `watchdog.yml`, `step0-pending-branches.ts` và bài kiểm của nó, `step0-pr-gate.ts`, `telemetry-beat.ts`,
+> `kernel/src/log.ts`, mục `platform/P-056`). Dòng log cũ trong `ops/logs/**` giữ nguyên `KF-041`: log là **append-only** (`D-C04`).
 
 **Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, `watchdog.yml` im. Cái thiếu là thứ không chỉ báo nào đo — một dòng log **đã được ghi và đã được đẩy đi**, chỉ là đẩy vào chỗ không ai đọc.
 
@@ -1726,4 +1743,4 @@ Bất biến còn thiếu phát biểu được thành một câu: **đầu nhá
 
 ### Ghi chú về chỗ đặt khối này
 
-Cả **6** PR đang mở lúc `07:2xZ` chạm `ops/lanes/platform/backlog.md`, **5/6** chạm file này (chỉ `#274` không), và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown (*"union sẽ trộn lẫn hai mục thành một mục hỏng mà vẫn merge được — đúng nhóm lỗi Z"*). Chèn ở **đầu** file — chỗ `KF-042` nằm — là đẩy tới 5 PR vào xung đột phải giải **bằng tay** ngay sau khi hàng đợi vừa sạch ba lượt liên tiếp. Nên khối đặt ở **cuối** file, và lượt đó **đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa** chứ không tin lập luận. Thứ tự các mục trong file này vốn không mang nghĩa (`KF-041` đã nằm cuối trước lượt này), nên đặt ở cuối không phá quy ước nào.
+Cả **6** PR đang mở lúc `07:2xZ` chạm `ops/lanes/platform/backlog.md`, **5/6** chạm file này (chỉ `#274` không), và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown (*"union sẽ trộn lẫn hai mục thành một mục hỏng mà vẫn merge được — đúng nhóm lỗi Z"*). Chèn ở **đầu** file — chỗ `KF-042` nằm — là đẩy tới 5 PR vào xung đột phải giải **bằng tay** ngay sau khi hàng đợi vừa sạch ba lượt liên tiếp. Nên khối đặt ở **cuối** file, và lượt đó **đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa** chứ không tin lập luận. Thứ tự các mục trong file này vốn không mang nghĩa (`KF-048` đã nằm cuối trước lượt này), nên đặt ở cuối không phá quy ước nào.
