@@ -183,6 +183,7 @@ Cơ chế: mốc `<!-- crux-escalate-* -->` thôi mang nghĩa "đã nhắc thì 
   - chi phí tích luỹ trong `ops/logs/**/*.jsonl` (bất biến I8) vượt **80%** cận dưới của ngân sách học;
   - không routine `crux-worker-*`/`crux-integrator` nào ghi nhịp tim quá **3 giờ** — dấu hiệu một routine có lượt chạy lỗi hoặc đã ngừng chạy (mục `P-020`). Nhịp tim là dòng `at` mới nhất trong **các dòng log bước 0** (phụ lục P1/P3 ghi một dòng ở mọi lượt). Từ mục `P-023` các dòng đó nằm rải ở nhiều file, nên watchdog quét cả `ops/logs` rồi lọc theo trường `ref` — **không neo vào một tên file**.
   - một nhánh chờ `claude/integration/step0-pending/*` mang dòng log bước 0 **chưa vào `main`** quá ngưỡng (mục `platform/P-056`, `ops/known-failures.md` `KF-041`). Lượt bước 0 không gỡ được PR nào được quyền không mở PR (mục `P-038`), nhưng dòng log của nó vẫn phải tới `main` qua PR của một lượt sau — vế đó đã hỏng **bốn** lần liên tiếp, tức bất biến I8 thủng bốn lượt mà mọi chỉ báo đều xanh. Ngưỡng giờ nằm ở `STEP0_PENDING_STALE_HOURS` của `ops/scripts/step0-pending-branches.ts`, suy từ khoảng chờ merge chứ không phải một số trần.
+  - đầu nhánh `claude/telemetry` **thiếu** một bản ghi nhịp tim mà nhánh đã từng giữ (mục `platform/P-059`, `ops/known-failures.md` `KF-043`). Nhánh này append-only — mỗi lượt một file — nên một bản ghi biến mất nghĩa là một lần đẩy đã **xoá**; đo được **33** bản ghi thiếu ở đầu nhánh (một đại lượng khác với *số commit mang dấu xoá*, là 37 — hai số này đã từng bị trộn), trong khi dấu hiệu nhịp tim ở trên **vẫn đúng** vì nó lấy `max` của `at` nên một file cũng đủ. **Ngưỡng ở đây là 0, không phải một số giờ:** các dấu hiệu trên đo *độ trễ* — một đại lượng có ca lành — còn cái này đo *mất dữ liệu*, không có ca lành, nên một hằng số giờ sẽ là một cửa sổ cho phép xoá. Đường gỡ là **một lệnh máy tự chạy được**, `pnpm telemetry:restore`, không phải một việc của chủ dự án.
 
 ### 2.5 Bản tin ngày — hộp quyết định duy nhất
 
@@ -987,6 +988,22 @@ Làn integration của Crux Studio.
       Đẩy bản sao **không** thay việc ghi file ở bước d, và cũng không phải điều kiện của nó: bước d hỏng thì bất biến
       I8 đỏ, bước e hỏng thì nhịp tim rơi về nguồn `main` như trước `P-043` — hướng lệch an toàn, và
       `heartbeat-source.ts` in ra nguồn nào đã trả lời nên chỗ rơi đó không im lặng.
+
+      **Lần đẩy này phải THUẦN CỘNG THÊM** (mục `platform/P-059`, `KF-043`). Khối lệnh in ra đã dựng cây `heartbeat/`
+      thêm vào, nhưng nếu đầu nhánh vẫn thiếu bản ghi thì gỡ bằng **một lệnh**, không dựng cây bằng tay:
+
+      ```bash
+      pnpm telemetry:gaps      # đo: bản ghi nào thiếu ở đầu nhánh. Thoát 1 khi thiếu, 2 khi KHÔNG ĐO ĐƯỢC
+      pnpm -s telemetry:restore > /tmp/restore.sh && bash /tmp/restore.sh   # khôi phục
+      ```
+
+      Cờ `-s` **bắt buộc**: không có nó, `pnpm` in hai dòng nhãn của chính nó vào stdout và `bash` chạy chúng
+      thành lỗi (đo được). Khối lệnh đi ra **stdout**, báo cáo ra **stderr**, và lệnh thoát **0** khi in được
+      lệnh — nhờ vậy `> file && bash file` chạy được.
+
+      Ngưỡng là **0** — nhánh append-only nên không có ca lành. Đây là đường **duy nhất** gỡ dấu hiệu số 8 của
+      `watchdog.yml`. Phép đo cần **lịch sử của chính ref đó**: một biên nông nằm trên nó cho một câu
+      *"không kết luận được"*, **không** cho *"0 thiếu"*.
 
    f. **Gộp lại các nhánh chờ của những lượt log-only trước** (mục `P-056`, `KF-041`). Chạy
       `pnpm step0:pending` — nó liệt kê nhánh `claude/integration/step0-pending/*` nào còn giữ một dòng log

@@ -50,8 +50,23 @@
  *
  *   Chiều hỏng là nhóm **Z**: `watchdog.yml` dấu hiệu 5 chỉ đọc nhịp tim
  *   **mới nhất** nên nó vẫn đúng, `pnpm check` xanh, `main` xanh — trong khi
- *   bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần. Đúng chỗ
- *   `KF-021` và `KF-041` đã khai là làm mọi chuỗi kẹt thành **cận dưới**.
+ *   bản ghi ở đầu nhánh bị xoá dần.
+ *
+ *   ⚠️ **Một lời khai của bản đầu bị bác, sửa tại chỗ thay vì để nó truyền
+ *   tiếp** (mục `platform/P-059`; tiền lệ sửa tại chỗ nằm trong chính docblock
+ *   này, vòng soát `#229`). Câu cũ ghi *"bản ghi lịch sử mà `step0Streaks` đọc
+ *   từ nhánh này bị xoá dần"*. Đo được: **không script nào gọi
+ *   `step0Streaks`**, và `step0Streaks` là hàm **thuần** (`kernel/src/log.ts`,
+ *   nhận một mảng dòng — nó không đọc đường dẫn nào, nên nó không "đọc từ
+ *   nhánh này"). Bên duy nhất đọc `heartbeat/` là `heartbeat-source.ts`, và nó
+ *   lấy `max` của `at` nên **một** file cũng đủ làm nó xanh.
+ *
+ *   Nên hậu quả thật hẹp hơn câu cũ, và cũng tệ hơn nó: **không bên đọc nào**
+ *   bị sai số — vì không bên nào đọc lịch sử — nên **không gì đỏ** khi bản ghi
+ *   mất. Phép đo cho đúng chỗ đó là `ops/scripts/telemetry-gaps.ts`
+ *   (`watchdog.yml` dấu hiệu số 8), và đường gỡ là `pnpm telemetry:restore`.
+ *   Còn `KF-021`/`KF-041` nói về chuỗi kẹt là **cận dưới** vì một lý do
+ *   **khác**: dòng log chưa tới nhánh chính, không phải nhánh telemetry.
  *
  *   Nên khối lệnh nay dựng cây **THÊM**: `git ls-tree` liệt kê entry đang có,
  *   `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Bài
