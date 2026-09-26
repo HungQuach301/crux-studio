@@ -1293,6 +1293,34 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ⬜ **Điều kiện THÊM cho `P-038`, vòng soát ngữ cảnh sạch tìm ra:** nhánh `claude/telemetry` là một đường ghi vào repo **không đi qua cổng nào** — `ci.yml` chỉ kích bằng `pull_request: branches:[main]` và `workflow_dispatch`, nên push vào nhánh này không qua gitleaks (**I1**), không qua `no-model-name`, không qua `protected-area`. Hôm nay rủi ro thấp vì **cùng nội dung** cũng đi qua PR log của lượt chạy và được quét ở đó. Nó thành chỗ chịu tải đúng lúc `P-038` bỏ PR log, khi nhánh telemetry là đích **duy nhất**. Trường `note` của dòng log là văn xuôi tự do do agent viết và đi lên nguyên văn, nên đây không phải lo xa. Ghi thành điều kiện của `P-038`, không phải việc của PR này.
 - **mã mục nhận lúc 2026-09-24 ~08:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở — cao nhất là `P-042` (`main`), `P-041` (`#225`) và `P-040` (`#224`), nên `P-043` không đụng ai.
 
+### P-044 · fix · cảnh báo `main` đỏ không bao giờ được đóng, nên lần đỏ SAU có thể im 4 giờ
+
+CHARTER 2.4 viết "nhắc lại mỗi **4 giờ** tới khi `main` **xanh lại**". Vế "xanh lại" **không có ai thực thi**: không workflow nào trong repo đóng một issue nhãn `alert`. Đo được trên `main` `2329988` lúc `2026-09-24T09:38Z` — `#131` (`main` đỏ tại `a44d265`, mở `2026-09-22T10:14Z`, 17 comment) vẫn **mở**, trong khi `main-ci` xanh liên tiếp ba lượt từ `04:41Z` cùng ngày và `pnpm check` trên `main` xanh (1094 bài).
+
+Hệ quả không phải "một issue thừa trong danh sách". Nó là một lần **`main` đỏ mà không ai được gọi**:
+
+1. `main-ci.yml` **dùng lại** issue cảnh báo: `gh issue list --label alert --state open --search "main đỏ in:title"` lấy issue đầu tiên, **không** so `sha`. Một issue không bao giờ đóng thì mọi sự cố về sau rơi vào nó.
+2. `decideMention` (`ops/scripts/alert-escalation.ts`, mục `P-034`) đọc `createdAt` của mục mang mốc `<!-- crux-escalate-main-do -->` **mới nhất** trên **cả** thân issue và comment — tức trên cả hai sự cố gộp lại.
+3. Nên: `main` đỏ → @nhắc → sửa xong, `main` xanh → **đỏ lại vì một commit khác** trong vòng 4 giờ → `decideMention` thấy lần nhắc gần nhất mới 1 giờ → **`quiet`**. Sự cố mới không gọi ai cho tới hết 4 giờ của sự cố **cũ**.
+
+Đây đúng là chỗ hỏng mà `P-034` sinh ra để chữa (cảnh báo `#131` im 13 giờ), quay lại bằng một cửa khác — và lần này thì `pnpm check` xanh, CI xanh, `watchdog` xanh, issue vẫn nằm đó: nhóm **Z** của `ops/known-failures.md`.
+
+- deps: —
+- risk: high — chiều hỏng là **im lặng trên một `main` đỏ**, tức đúng chiều mà CHARTER 2.4 xếp vào bốn cảnh báo khẩn.
+- status: review
+- hold: kiểm bằng chạy thật — `ops/workflows/**` chỉ có hiệu lực sau khi merge và `sync-workflows` chép sang `.github/`, nên job `resolve-alert` chưa từng chạy thật lần nào. Chỉ đóng khi một lượt sau dispatch `main-ci` (`dry_run = true`) và dán kết quả; không đóng khi PR merge
+- nguồn: đo bằng chạy thật ở lượt `crux-worker-1` `2026-09-24 ~09:38Z` (bước 3 phụ lục P1); CHARTER 2.4 luật 1 và 2; `ops/scripts/alert-escalation.ts`; `ops/workflows/main-ci.yml` (job `alert`, bước dùng lại issue); `#131` còn mở
+- tiêu chí xong:
+  - ✅ `ops/scripts/alert-resolution.ts` (mới): `incidentSha` (khối máy đọc `crux-hotfix-scope` trước, tiêu đề `main đỏ tại <sha>` là lưới dự phòng cho cảnh báo mở trước `D-C07` như `#131`) và `decideClosure`. Phần **quyết định** nằm trong TypeScript chứ không trong khối `run:` — cùng lý do `P-034` đã chốt.
+  - ✅ `main-ci.yml` job `resolve-alert`: `if: success()` cộng chốt `github.ref == 'refs/heads/main'`, `fetch-depth: 0`, lọc tác giả `github-actions[bot]` (bất biến **I7**), tôn trọng `dry_run` (`P-010`), đọc danh sách qua fd 3, `--limit 100`, và **mọi** lệnh `gh` đều được bọc.
+  - ✅ Bài **tái hiện lỗi** (bất biến I2) dựng đúng cảnh hai sự cố cách nhau 1 giờ bằng hàm thật: `quiet` khi cảnh báo cũ còn mở, `mention` khi nó đã đóng.
+  - ✅ Ba tầng bài kiểm, và tầng thứ ba chỉ có vì vòng soát đo được hai tầng đầu **không đủ** — xem bảng ở `ops/known-failures.md` **KF-028**. 33 bài mới.
+  - ✅ **Phá thật, mỗi phép đỏ đúng chỗ rồi khôi phục** (15 phép): gỡ `fetch-depth: 0` · gỡ lọc tác giả · `success()`→`always()` · gỡ chốt `github.ref` · `unknown`→close · `not-ancestor`→close · đóng cả cảnh báo khác loại · `sha` null vẫn đóng · bỏ lưới tiêu đề · `parseScope` lấy khối ĐẦU · `decideClosure` luôn `keep` · **CLI biến `ancestry` lạ thành `ancestor`** · **đảo thứ tự tham số `merge-base`** · **đổi tên trường JSON `jq` đọc** · **đổi định dạng tiêu đề**. Bốn phép in đậm cho **20/20 xanh** trước vòng soát; phép `fetch-depth` cũng xanh ở bản đầu vì bài kiểm khớp cả chữ trong chú thích.
+  - ✅ Phạm vi **chỉ** cảnh báo `main` đỏ. Ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) có điều kiện kết thúc khác nhau — một mục, một mục tiêu (`CLAUDE.md` mục 11). Có bài canh, không phải một thiếu sót.
+  - ⬜ **Kiểm bằng chạy thật, chưa làm được ở lượt này:** `ops/workflows/**` chỉ có hiệu lực sau khi PR merge và `sync-workflows` chép sang `.github/`. Lượt worker sau khi PR này vào `main` dispatch `main-ci` với `dry_run = true` và dán kết quả — đó mới là bằng chứng job chạy thật, chứ không phải bằng chứng về logic. **Không** tự chuyển `done` trước khi có nó.
+  - ⬜ Còn một chỗ mà bản sửa này **không** che: mắt xích "đóng issue → sự cố sau thấy danh sách rỗng → `mention`" nằm trong `gh issue list --state open` của bash, không trong code — bài kiểm phải đặt danh sách rỗng bằng tay. Khai ở `KF-028`.
+- **mã mục nhận lúc 2026-09-24 ~09:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của các PR đang mở, cao nhất là `P-043` (`#229`), nên `P-044` không đụng ai.
+
 ### P-046 · Bản tin chưa có khối "sẵn sàng duyệt", và chưa máy nào đọc được câu trả lời `Duyệt`
 
 Chỉ dẫn của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193),
