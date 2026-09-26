@@ -21,8 +21,7 @@
  * **Vì sao xoá biến, không đặt tường minh một mức in khác:** mức mặc định
  * của `pnpm` là mức mà `ERR_PNPM_*` đã được đo là có mặt (bài `TÁI HIỆN
  * I-006`). Đặt một giá trị cụ thể là chọn thay cho `pnpm` một mức mà chưa
- * lần chạy nào đo — và `append-only`/`ndjson` đổi cả hình dạng đầu ra. Xoá
- * thì về đúng mức đã đo.
+ * lần chạy nào đo. Xoá thì về đúng mức đã đo.
  *
  * **Vì sao chặn ở tầng hàm, không cấm `-s` ở tầng luật:** `pnpm -s check`
  * vẫn là một cách gọi hợp lệ và vẫn xanh sau bản sửa. Một luật trong
@@ -37,9 +36,10 @@
  */
 
 /**
- * Tên biến bị xoá, so **không phân biệt hoa thường**: `pnpm` đọc cấu hình
- * `npm_config_*` theo cả hai dạng (cùng quy ước với `npm`), nên chỉ xoá dạng
- * thường là để lọt `NPM_CONFIG_REPORTER`.
+ * Tên biến bị xoá, so **không phân biệt hoa thường**. Đo bằng pnpm 10.33.0
+ * trên một gói rỗng (vòng soát bước 6 của `P-061`): không đặt biến → 54B;
+ * `npm_config_reporter`, `NPM_CONFIG_REPORTER` hay `Npm_Config_Reporter`
+ * bằng `silent` → cả ba **0B**. Chỉ xoá dạng thường là để lọt hai dạng kia.
  */
 const INHERITED_REPORTER = /^npm_config_reporter$/i;
 
@@ -63,7 +63,7 @@ export interface UnguardedSpawn {
 }
 
 /** Các hàm của `node:child_process` chạy được một lệnh ngoài. */
-const SPAWN_CALL = /\b(spawnSync|spawn|execFileSync|execFile)\(\s*/g;
+const SPAWN_CALL = /\b(spawnSync|spawn|execFileSync|execFile|execSync|exec)\(\s*/g;
 
 /**
  * Cắt đoạn lời gọi bắt đầu ở `open` (ngay sau dấu `(`) tới dấu `)` khớp
@@ -111,7 +111,12 @@ function callText(source: string, open: number): string {
  * Phép quét là **văn bản**, nên nó có hai giới hạn khai trước: một lệnh
  * `pnpm` dựng qua nhiều bước gán (hoặc qua `shell: true` với chuỗi lệnh)
  * thì lọt; và một lời gọi có chữ `env: pnpmEnv(` trong một chuỗi thì được
- * cho qua. Cả hai chưa có ca thật trong kho — hôm nay cổng này
+ * cho qua. Vòng soát bước 6 đo thêm ba dạng lọt, khai ra chứ không nhận là
+ * đã che: lệnh lấy từ **tham số mặc định** (`f(cmd = 'pnpm')`); `pnpm` là
+ * **đối số** chứ không phải lệnh (`spawnSync('npx', ['pnpm', …])`,
+ * `corepack`); và `{ env: pnpmEnv(), ...opts }` khi `opts` đè được `env`.
+ * Dạng thứ tư nó đo — `execSync` với một chuỗi lệnh mở đầu bằng `pnpm ` —
+ * thì nay bắt được. Các dạng lọt chưa có ca thật trong kho — hôm nay cổng này
  * tìm ra đúng **ba** lời gọi, cả ba ở `integrator-lockfile.ts` (mục khai
  * hai — phép `grep` một dòng lúc mở mục không thấy lời gọi viết trên nhiều
  * dòng ở bước kiểm lại của `regenerateLockfile`), nên nó là cổng **phòng
@@ -127,7 +132,7 @@ export function findUnguardedPnpmSpawns(source: string): UnguardedSpawn[] {
   for (const m of source.matchAll(SPAWN_CALL)) {
     const open = m.index! + m[0].length;
     const text = callText(source, open);
-    const first = /^(?:(['"`])pnpm\1|(\w+))\s*[,)]?/.exec(text);
+    const first = /^(?:(['"`])pnpm(?:\s[^'"`]*)?\1|(\w+))\s*[,)]?/.exec(text);
     if (first === null) continue;
     const runsPnpm = first[1] !== undefined || (first[2] !== undefined && pnpmNames.has(first[2]));
     if (!runsPnpm) continue;

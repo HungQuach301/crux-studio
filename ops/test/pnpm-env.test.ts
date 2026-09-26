@@ -74,10 +74,11 @@ test('findUnguardedPnpmSpawns: bắt lời gọi `pnpm` thiếu `env: pnpmEnv(�
     "execFileSync(\"pnpm\", ['-v']);",
     "spawnSync('pnpm', ['-v'], { cwd, // TODO env: pnpmEnv() sau",
     '});',
+    "execSync('pnpm install --frozen-lockfile', { cwd });",
   ].join('\n');
   assert.deepEqual(
     findUnguardedPnpmSpawns(source).map((f) => f.line),
-    [1, 3, 8, 9],
+    [1, 3, 8, 9, 11],
   );
 });
 
@@ -121,7 +122,9 @@ test('cổng phòng xa: không lời gọi `pnpm` nào trong kernel/ops/workshop
     for (const f of findUnguardedPnpmSpawns(source)) {
       problems.push(`${relative(ROOT, path)}:${f.line} ${f.snippet}`);
     }
-    guarded += (source.match(/\benv\s*:\s*pnpmEnv\(/g) ?? []).length;
+    // Chỉ đếm ở bên dùng: `pnpm-env.ts` tự nhắc chữ này trong chú thích và
+    // regex, nên đếm cả nó thì con số không bao giờ tụt (vòng soát bước 6).
+    if (!path.endsWith('pnpm-env.ts')) guarded += (source.match(/\benv\s*:\s*pnpmEnv\(/g) ?? []).length;
   }
   assert.deepEqual(
     problems,
