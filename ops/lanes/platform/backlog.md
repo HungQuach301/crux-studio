@@ -515,8 +515,16 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     đó; gộp vào đây là tự tạo một xung đột cho hàng đợi merge. Cả hai đáng một PR riêng.
   - `status` giữ **`ready`**: Z2, Z6, Z8 và Z14 vẫn đang chờ.
 
-### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
+### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
+
+> **Đổi mã từ `P-028` sang `P-057`** (lượt `crux-worker-3`, 2026-09-26): mục này
+> lỡ mang mã `P-028` — đã có một mục **`done`** khác giữ mã đó (bản sửa hai khoá
+> `env:` của `smoke-workflows.yml`, cùng file này), nên `pnpm backlog:status`
+> báo `duplicateIds: ["platform/P-028 ↔ platform/P-028"]` và file log
+> `ops/logs/platform/P-028.jsonl` đã tồn tại của mục kia sẽ đụng `D-C04`
+> (một file cho mỗi mục). Mã cao nhất của làn là `P-056`, nên mục này lấy
+> `P-057`. Đổi mã một mục chưa nhận là `reversible` (nằm trong git).
 
 `ops/workflows/ci.yml` gắn nhãn `cross-lane` bằng `grep -Eo '^(workshops|ops/lanes)/[a-z]+'` trên danh sách file
 đã đổi. Hai tiền tố đó **không phủ `ops/logs/<làn>/`** — mà từ `D-C04` thì mỗi mục có một file log riêng dưới
@@ -528,15 +536,27 @@ phần còn lại của `P-014`.
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát của `P-014` sóng 2; CHARTER mục 4; `D-C04`
 - tiêu chí xong:
   - Bộ dò đếm cả `ops/logs/<làn>/`, và **không** đếm trùng khi một PR chạm cả `ops/lanes/x/` lẫn `ops/logs/x/`
-    (cùng một làn `x`, không phải hai làn).
+    (cùng một làn `x`, không phải hai làn). ✅
   - Có test âm: một tập file đã đổi chạm `ops/lanes/platform/` và `ops/logs/integration/` phải ra **2** làn;
-    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**.
+    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**. ✅
   - Luật tách khỏi YAML sang một script có test, cùng lý do đã ghi ở `check-golden-pr.ts`: `ci.yml` chạy theo
-    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test.
+    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test. ✅
+- ✅ **Đã làm, 2026-09-26 (lượt `crux-worker-3`):**
+  - `ops/scripts/cross-lane.ts` — quy mỗi đường dẫn về **tên làn** (`laneOfPath`) từ ba gốc
+    `workshops/<làn>/`, `ops/lanes/<làn>/`, `ops/logs/<làn>/`, rồi gom vào `Set` (`lanesTouched`) và đếm
+    (`countLanesTouched`). Đoạn tên phải khớp `LANES` của kernel — đoạn lạ quy về `null`, không dựng làn ma.
+    Bỏ dấu ngoặc `core.quotePath` (`unquote`) để file tên tiếng Việt không biến mất — cùng lỗi fail-open mà
+    `check-golden-pr.ts` đã chặn. CLI đọc stdin, in **số làn** ra stdout (máy đọc) và danh sách làn ra stderr
+    (không im lặng).
+  - `ops/test/cross-lane.test.ts` — 10 test, gồm hai ca âm tiêu chí đòi và ca hay gặp nhất (mục platform +
+    dòng log bước 0 của `integration` → 2), ca gộp `workshops/x`+`ops/lanes/x` → 1, và ca dấu ngoặc.
+  - `ops/workflows/ci.yml` — bước "Gắn nhãn theo cửa merge, và cross-lane" nay gọi
+    `node ops/scripts/cross-lane.ts < changed.txt` thay cho dòng `grep` cũ (chỉ thấy `workshops|ops/lanes`,
+    đếm theo chuỗi tiền tố nên vừa bỏ sót `ops/logs/<làn>/` vừa báo động giả `workshops/x`+`ops/lanes/x`).
 
 ### P-002 · `decision-relay.yml` và routine `crux-decision`
 Rút độ trễ trả lời quyết định từ một nhịp worker xuống vài phút.
