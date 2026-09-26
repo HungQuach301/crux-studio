@@ -1603,10 +1603,14 @@ Tầng thứ ba là bài học riêng: bốn chỗ hỏng NGỮ NGHĨA — CLI b
 
 ## KF-048 · Nhánh chờ của lượt log-only không ai gộp lại, nên 4 lượt worker **không có dòng log nào trên `main`**
 
-> Số **KF-048**, ĐỔI TỪ `KF-041` ở mục `platform/P-058` (`2026-09-26`). Khối này nhận `KF-041` bằng một phép dò
-> *"`main` cộng đầu cả **13** PR đang mở"* (`KF-005`, `KF-036`), nhưng khối `- hold:` bên trên đã nhận `KF-041` bằng phép dò
-> *"**12** PR đang mở"* — tức **sớm hơn**, và `#266` (khối kia) merge `2026-09-25T12:53:21Z` **trước khi** `#269` (khối này)
-> được mở lúc `13:48:37Z`. Bên nhận sau là bên đổi số, đúng tiền lệ `KF-039`. Mọi chỗ trỏ tới nó đã đổi theo (`CHARTER.md`,
+> Số **KF-048**, ĐỔI TỪ `KF-041` ở mục `platform/P-058` (`2026-09-26`). Khối này nhận `KF-041` bằng phép dò
+> *"`main` cộng đầu cả **13** PR đang mở"* (`KF-005`, `KF-036`); khối `- hold:` bên trên nhận `KF-041` bằng phép dò
+> *"**12** PR đang mở"* — tức **sớm hơn**. Mốc mở PR nói cùng một điều: `#266` (khối `- hold:`) mở `2026-09-25T11:01:57Z`,
+> `#267` (khối này) mở `11:43:11Z`. Bên nhận sau là bên đổi số, đúng tiền lệ `KF-039`.
+> ⚠️ Chỗ **không** dùng làm chứng cứ, khai ra vì bản đầu của dòng này đã dùng nhầm: mốc **merge** lật ngược kết luận —
+> `#267` vào `main` lúc `12:00:02Z`, **trước** `#266` lúc `12:53:21Z` — và khối này tới `main` qua `#267`, không phải
+> `#269` như bản đầu viết. Vòng soát ngữ cảnh sạch của `P-058` bắt được. Thứ tự **nhận mã** mới là thứ quyết định ai đổi số,
+> và cả hai phép dò lẫn hai mốc mở PR đều chỉ cùng một hướng. Mọi chỗ trỏ tới nó đã đổi theo (`CHARTER.md`,
 > `CLAUDE.md`, `watchdog.yml`, `step0-pending-branches.ts` và bài kiểm của nó, `step0-pr-gate.ts`, `telemetry-beat.ts`,
 > `kernel/src/log.ts`, mục `platform/P-056`). Dòng log cũ trong `ops/logs/**` giữ nguyên `KF-041`: log là **append-only** (`D-C04`).
 

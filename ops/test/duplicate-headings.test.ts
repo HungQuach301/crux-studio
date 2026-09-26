@@ -16,7 +16,10 @@
  * không còn canh gì.
  */
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -29,6 +32,25 @@ import {
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = (rel: string): string => readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
+
+/**
+ * Chạy tầng CLI **thật** trên một cây dựng tạm. Không có nó thì bốn phép
+ * phá thử sống sót được — đổi `exit(1)` thành `exit(0)`, đổi `exit(2)`
+ * thành `exit(0)`, bỏ `backlog.md` khỏi `targets`, soát backlog sai cấp —
+ * và cổng lặng lẽ thôi đỏ mà không chỉ báo nào thấy. Đúng nhóm **Z** mà
+ * chính mục `platform/P-058` sinh ra để chặn; vòng soát ngữ cảnh sạch
+ * (bước 6) bắt được.
+ *
+ * CLI suy gốc kho từ `import.meta.url`, nên cây tạm phải có một bản sao của
+ * script ở đúng chỗ tương đối (`<gốc>/ops/scripts/`).
+ */
+function runCli(root: string): { status: number; stdout: string; stderr: string } {
+  const script = join(root, 'ops', 'scripts', 'duplicate-headings.ts');
+  mkdirSync(join(root, 'ops', 'scripts'), { recursive: true });
+  writeFileSync(script, readFileSync(new URL('../scripts/duplicate-headings.ts', import.meta.url), 'utf8'));
+  const run = spawnSync(process.execPath, [script], { encoding: 'utf8' });
+  return { status: run.status ?? -1, stdout: run.stdout, stderr: run.stderr };
+}
 
 // ── Bài tái hiện lỗi — ba hình dạng thật đã đo được ──────────────────────
 
@@ -129,12 +151,17 @@ test('ca âm · mã nằm trong khối ``` không phải một tiêu đề — k
   assert.deepEqual(duplicateHeadings(content, 2), []);
 });
 
-test('ca âm · khối ``` chỉ đóng bằng CÙNG loại dấu — ~~~ không đóng ```', () => {
+test('ca âm · khối ``` chỉ đóng bằng CÙNG loại dấu — ~~~ không khép được nó', () => {
+  // Fixture phải có HAI tiêu đề cùng mã nằm SAU dòng `~~~` và TRƯỚC dấu
+  // ``` đóng. Bản đầu chỉ có một tiêu đề lọt ra ngoài, nên cả luật đúng lẫn
+  // luật "đóng bằng dấu bất kỳ" đều ra `[]` và phép phá thử sống sót — vòng
+  // soát ngữ cảnh sạch bắt được. Nay bản đột biến ra hai dòng, bài này đỏ.
   const content = [
     '```',
     '## KF-042 · trong khối',
     '~~~',
-    '## KF-042 · vẫn trong khối, vì ~~~ không đóng ```',
+    '## KF-042 · vẫn trong khối — `~~~` không khép được một khối mở bằng ```',
+    '## KF-042 · và dòng này nữa',
     '```',
     '## KF-042 · ra ngoài rồi — đây là lần đầu tiên được đếm',
   ].join('\n');
@@ -218,4 +245,90 @@ test('phép đọc cây thật trỏ đúng gốc kho — nếu không thì mọ
   // trỏ vào một cây khác lại lặng lẽ xanh — đúng hình dạng nhóm Z.
   assert.match(read('package.json'), /"name": "crux-studio"/);
   assert.equal(root.endsWith('/'), true, '`root` phải là một thư mục');
+});
+
+// ── Vòng soát ngữ cảnh sạch (bước 6) · CHẶN-1 — báo nhầm trên tiêu đề Việt
+
+test('CHẶN-1 · tiêu đề KHÔNG mang mã thì không đếm — tiếng Việt không bị cắt thành "mã"', () => {
+  // Bản đầu cắt ở khoảng trắng bằng `[A-Za-z0-9._-]*`, và lớp ký tự đó dừng
+  // ở chữ có dấu. Hai tiêu đề khác hẳn nhau ra CÙNG một "mã":
+  //   '## Cách thêm một mục' + '## Cấu trúc một khối' → [{ id: 'C',  … }]
+  //   '## Nhóm Z · …'        + '## Nhóm Y · …'        → [{ id: 'Nh', … }]
+  assert.deepEqual(duplicateHeadings('## Cách thêm một mục\n## Cấu trúc một khối', 2), []);
+  assert.deepEqual(duplicateHeadings('## Nhóm Z · a\n## Nhóm Y · b', 2), []);
+  assert.deepEqual(duplicateHeadings('## Nhóm Z · a\n## Nhóm Z · b', 2), [], 'trùng NGUYÊN VĂN cũng không phải mã');
+  assert.deepEqual(duplicateHeadings('### Bối cảnh\n### Bản sửa\n### Bản đầu', 3), []);
+});
+
+test('CHẶN-1 · ca thật trên `ops/known-failures.md`: thêm một mục "## Nhóm Y" KHÔNG làm cổng đỏ', () => {
+  // `## Nhóm Z ·` và `## Cách thêm một mục` đã nằm sẵn trong file thật, nên
+  // luật cũ biến một mục hợp lệ mới thành một cổng đỏ chặn MỌI PR của MỌI làn.
+  const real = read('ops/known-failures.md');
+  assert.match(real, /^## Nhóm Z /mu, 'tiền đề của ca: file thật CÓ tiêu đề đó');
+  assert.deepEqual(duplicateHeadings(`${real}\n\n## Nhóm Y · một chỗ hỏng mới, tên bằng tiếng Việt\n`, 2), []);
+});
+
+test('CHẶN-1 · MỌI hình dạng mã đang dùng trong kho vẫn bắt được', () => {
+  for (const id of ['KF-047', 'P-058', 'I-018', 'VF-G1', 'VF-G13', 'V-004', 'V-004b', 'T-006b', 'AU-007', 'R-002', 'K-002']) {
+    assert.deepEqual(
+      duplicateHeadings(`## ${id} · một\n## ${id} · hai`, 2),
+      [{ id, lines: [1, 2] }],
+      `hình dạng "${id}" phải còn bắt được`,
+    );
+  }
+});
+
+// ── Vòng soát ngữ cảnh sạch · tầng CLI — bốn phép phá thử từng SỐNG SÓT ──
+
+test('CLI: cây bẩn → thoát 1, và báo cáo ra stderr', () => {
+  const dirty = join(tmpdir(), `crux-dup-${process.pid}-ban`);
+  mkdirSync(join(dirty, 'ops', 'lanes', 'platform'), { recursive: true });
+  writeFileSync(join(dirty, 'ops', 'known-failures.md'), '## KF-001 · a\n## KF-001 · b\n');
+  writeFileSync(join(dirty, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · a\n');
+  const run = runCli(dirty);
+  assert.equal(run.status, 1, 'mã trùng thì cổng phải ĐỎ');
+  assert.match(run.stderr, /KF-001/);
+  assert.match(run.stderr, /dòng 1, 2/);
+  rmSync(dirty, { recursive: true, force: true });
+});
+
+test('CLI: cây sạch → thoát 0, và VẪN in ra (im lặng là thứ `Z15` cấm)', () => {
+  const clean = join(tmpdir(), `crux-dup-${process.pid}-sach`);
+  mkdirSync(join(clean, 'ops', 'lanes', 'platform'), { recursive: true });
+  writeFileSync(join(clean, 'ops', 'known-failures.md'), '## KF-001 · a\n## KF-002 · b\n');
+  writeFileSync(join(clean, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · a\n');
+  const run = runCli(clean);
+  assert.equal(run.status, 0);
+  assert.match(run.stdout, /Mã trùng: 0/);
+  assert.match(run.stdout, /đã soát 2 file/, 'số file soát phải tới từ `targets` thật, không phải một số chép tay');
+  rmSync(clean, { recursive: true, force: true });
+});
+
+test('CLI: một file trong danh sách KHÔNG đọc được → thoát 2, KHÁC hẳn "sạch"', () => {
+  // Một làn có thư mục mà không có `backlog.md`. "Không đọc được" phải khác
+  // "sạch" ở cả mã thoát — nếu không, một file biến mất làm cổng im lặng.
+  const missing = join(tmpdir(), `crux-dup-${process.pid}-thieu`);
+  mkdirSync(join(missing, 'ops', 'lanes', 'platform'), { recursive: true });
+  mkdirSync(join(missing, 'ops', 'lanes', 'topic'), { recursive: true });
+  writeFileSync(join(missing, 'ops', 'known-failures.md'), '## KF-001 · a\n');
+  writeFileSync(join(missing, 'ops', 'lanes', 'platform', 'backlog.md'), '### P-001 · a\n');
+  const run = runCli(missing);
+  assert.equal(run.status, 2, 'không đọc được thì thoát 2, không phải 0 và cũng không phải 1');
+  assert.match(run.stderr, /KHÔNG SOÁT ĐƯỢC/);
+  assert.match(run.stderr, /topic/);
+  rmSync(missing, { recursive: true, force: true });
+});
+
+test('CLI: backlog soát ở CẤP 3, sổ chỗ hỏng ở CẤP 2 — không lẫn cấp', () => {
+  // Soát backlog ở cấp 2 thì `### P-001` × 2 lọt, và `## Nhóm …` lại bị ngó tới.
+  const mixed = join(tmpdir(), `crux-dup-${process.pid}-cap`);
+  mkdirSync(join(mixed, 'ops', 'lanes', 'platform'), { recursive: true });
+  writeFileSync(join(mixed, 'ops', 'known-failures.md'), '## KF-001 · a\n');
+  writeFileSync(join(mixed, 'ops', 'lanes', 'platform', 'backlog.md'), '## P-002 · cấp hai\n### P-001 · a\n### P-001 · b\n');
+  const run = runCli(mixed);
+  assert.equal(run.status, 1);
+  assert.match(run.stderr, /P-001/);
+  assert.match(run.stderr, /tiêu đề cấp 3/);
+  assert.doesNotMatch(run.stderr, /P-002/, 'cấp 2 trong backlog không thuộc phạm vi cổng này');
+  rmSync(mixed, { recursive: true, force: true });
 });

@@ -29,6 +29,17 @@
  * `claim-collision.ts`, và có lý do: cổng này **chặn merge** trên một file
  * mà **mọi** làn đều ghi vào (`ops/known-failures.md`, `ops/lanes/<làn>/backlog.md`),
  * nên một luật quá rộng chặn oan mọi PR; còn `claimCheck` chỉ **đo**.
+ *
+ * Hướng lệch đó **không tự có**: bản đầu của chính file này báo nhầm trên
+ * tiêu đề tiếng Việt, và vòng soát ngữ cảnh sạch bắt được. Xem docblock của
+ * `ID` ngay dưới — chỗ luật được siết lại cho khớp lời khai này.
+ *
+ * ## Một ca đỏ CỐ Ý, để lượt sau khỏi mất một lượt đi tìm
+ *
+ * CLI thoát **2** khi một file trong danh sách không đọc được, kể cả khi lý
+ * do là một thư mục mới dưới `ops/lanes/` chưa có `backlog.md`. Đó là luật
+ * *"không đọc được KHÁC sạch"* chạy đúng, không phải một lỗi: một làn mới
+ * phải có backlog của nó, và im lặng ở đây là đúng thứ nhóm **Z** cấm.
  */
 
 /** Một mã xuất hiện hơn một lần trong cùng một file. */
@@ -39,12 +50,32 @@ export interface DuplicateHeading {
 }
 
 /**
- * Mã lấy từ tiêu đề: đoạn ngay sau dấu `#`, cắt ở khoảng trắng đầu tiên.
+ * Mã lấy từ tiêu đề — và tiêu đề **không mang mã** thì bỏ qua hẳn.
  *
- * `### P-058 · claimCheck …` → `P-058`. Dấu phân cách đứng sau (`·`, `—`)
- * không bao giờ lọt vào mã vì phép cắt dừng ở khoảng trắng.
+ * `### P-058 · claimCheck …` → `P-058`. `## KF-047 · Hai khoá env: …` →
+ * `KF-047`. `## Cách thêm một mục` → **không có mã**, không đếm.
+ *
+ * ## Vì sao đòi đúng HÌNH DẠNG mã, không phải "chữ đầu tiên"
+ *
+ * Bản đầu cắt ở khoảng trắng bằng `^[A-Za-z0-9][A-Za-z0-9._-]*`, và nó
+ * **báo nhầm** trên tiêu đề tiếng Việt vì lớp ký tự dừng ở chữ có dấu — đo
+ * được, vòng soát ngữ cảnh sạch của chính mục `P-058` bắt được:
+ *
+ * ```
+ * '## Cách thêm một mục' + '## Cấu trúc một khối'  → [{ id: 'C',  lines: [1, 2] }]
+ * '## Nhóm Z · …'        + '## Nhóm Y · …'         → [{ id: 'Nh', lines: [1, 2] }]
+ * ```
+ *
+ * `ops/known-failures.md` **đã** có sẵn `## Nhóm Z ·` và `## Cách thêm một
+ * mục`, nên một mục mới tên `## Nhóm Y · …` làm `pnpm check` đỏ cho **mọi
+ * PR của mọi làn**, kèm một lời dặn vô nghĩa (*"đổi mã của lần sau"* cho
+ * một thứ không phải mã). Đó đúng là chiều hỏng mà docblock đầu file khai
+ * là đã tránh — nên luật phải hẹp lại, không phải lời khai nới ra.
+ *
+ * Hình dạng phủ mọi mã đang dùng trong kho: `KF-047` · `P-058` · `I-018` ·
+ * `VF-G1` · `V-004b` · `T-006b` · `AU-007` · `R-002` · `K-002`.
  */
-const ID = /^([A-Za-z0-9][A-Za-z0-9._-]*)/;
+const ID = /^([A-Za-z]{1,3}-[A-Za-z]?\d+[a-z]?)(?=\s|$)/;
 
 /** Mở hoặc đóng một khối ``` — ba dấu huyền trở lên, cho phép thụt lề. */
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;

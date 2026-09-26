@@ -61,7 +61,9 @@ node ops/invariants.hotfix-lane.ts /tmp/hotfix.json
 # → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
 
 # Mục này đã có ai nhận chưa (P-041, KF-025)? Chạy ở bước 3 VÀ lại ở bước 4, đừng đoán.
-# File JSON: {prs:[{number,title,createdAt,closedAt,mergedAt,isDraft,updatedAt}], lane?, id?, now?}
+# File JSON: {prs:[{number,title,createdAt,closedAt,mergedAt,isDraft,updatedAt}], lane?, id?, now?, tree?, changedFiles?}
+#   `tree` bỏ trống thì CLI tự đọc `ops/lanes/*/backlog.md` của cây đang chạy. `changedFiles` có thì tool suy
+#   nhóm bí danh — dựng nó từ ảnh chụp MỞ LẪN ĐÃ ĐÓNG, ảnh chụp nhỏ làm nó báo nhầm và tool nói ra ở `warnings`.
 # `prs` dựng thẳng từ một lần liệt kê PR (mở LẪN đã đóng), đủ bảy trường — thiếu một trường thì tool NÉM,
 # không trả `free`. `mergedAt` lấy từ `merged_at`: endpoint liệt kê trả `merged:false` cho cả PR đã merge.
 pnpm claims /tmp/prs.json

@@ -5,16 +5,20 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import {
   ABANDONED_DRAFT_HOURS,
+  ALIAS_MIN_SNAPSHOT_PRS,
   ClaimInputError,
   RECENT_MERGE_MINUTES,
+  aliasWarnings,
   aliasesFromChangedFiles,
   assertSnapshots,
   claimCheck,
   claimKeyFromText,
   claimKeyFromTitle,
   duplicateClaims,
+  readClaimTree,
   renderDuplicateClaims,
   unreadableTitles,
   type ClaimTree,
@@ -684,4 +688,115 @@ test('P-058 tiêu chí 6 · CA ÂM: hai mã khác nhau, chung đủ file, nhưng
     'nối tiếp nhau thì không phải va chạm, dù chung cả ba file và khác mã',
   );
   assert.deepEqual(duplicateClaims(sequential, aliasesFromChangedFiles(sequential, changed)), []);
+});
+
+// ── Vòng soát ngữ cảnh sạch (bước 6) — ba lỗ nó tìm được ────────────────
+
+test('CHẶN-2 · cùng `id` nhưng KHÁC `lane` là hai mục — bảng phải nói ra phép quy', () => {
+  // Bản đầu so `.id` một mình, nên `platform/P-030` và `kernel/P-030` bị
+  // coi là "cùng mã trong tiêu đề" và cột `via` ra `null`: người đọc thấy
+  // `#11` bị gọi là `platform/P-030` mà không cãi lại được (bất biến I6).
+  const prs = [
+    pr({ number: 10, title: '[platform] P-030 — a', createdAt: '2026-09-26T01:00:00Z' }),
+    pr({ number: 11, title: '[kernel] P-030 — b', createdAt: '2026-09-26T02:00:00Z' }),
+  ];
+  const changed = [
+    { number: 10, files: ['ops/scripts/x.ts', 'ops/test/x.test.ts'] },
+    { number: 11, files: ['ops/scripts/x.ts', 'ops/test/x.test.ts'] },
+  ];
+  const aliases = aliasesFromChangedFiles(prs, changed);
+  assert.equal(aliases.length, 1);
+
+  const found = duplicateClaims(prs, aliases);
+  assert.equal(found.length, 1);
+  assert.notEqual(found[0]!.via, null, '`lane` khác nhau nên đây KHÔNG phải "cùng mã trong tiêu đề"');
+  assert.match(renderDuplicateClaims(found), /quy về cùng một mục vì:/);
+});
+
+test('CHẶN-3 · nhóm BA PR: không luật nối nào mồ côi khi union-find đổi gốc', () => {
+  // A–C chung file, B–C chung file, A–B thì không. Bản đầu ghim lý do vào
+  // gốc TẠI THỜI ĐIỂM ĐÓ, nên lần hợp sau đổi gốc và luật nối `A ↔ C` biến
+  // mất — `because` vẫn khác rỗng nên `assertAliases` không ném, và bảng in
+  // ra một lý do KHÔNG nhắc tới `#1`.
+  const prs = [
+    pr({ number: 1, title: '[platform] P-001 — a', createdAt: '2026-09-26T01:00:00Z' }),
+    pr({ number: 2, title: '[platform] P-002 — b', createdAt: '2026-09-26T02:00:00Z' }),
+    pr({ number: 3, title: '[platform] P-003 — c', createdAt: '2026-09-26T03:00:00Z' }),
+  ];
+  const changed = [
+    { number: 1, files: ['x1.ts', 'x2.ts'] },
+    { number: 2, files: ['y1.ts', 'y2.ts'] },
+    { number: 3, files: ['x1.ts', 'x2.ts', 'y1.ts', 'y2.ts'] },
+  ];
+  const aliases = aliasesFromChangedFiles(prs, changed);
+  assert.equal(aliases.length, 1, 'ba PR phải nằm trong ĐÚNG một nhóm');
+  assert.deepEqual(aliases[0]!.prs, [1, 2, 3]);
+  assert.equal(aliases[0]!.claim, 'platform/P-001', 'mã quy chuẩn là mã của PR ra đời TRƯỚC');
+
+  // Cả HAI luật nối phải còn, không cái nào mồ côi.
+  assert.match(aliases[0]!.because, /#1 .* và #3 /u, 'thiếu luật nối #1 ↔ #3');
+  assert.match(aliases[0]!.because, /#2 .* và #3 /u, 'thiếu luật nối #2 ↔ #3');
+
+  // Và mọi hàng của bảng đều nhắc tới đúng hai PR của chính hàng đó.
+  for (const row of duplicateClaims(prs, aliases)) {
+    assert.notEqual(row.via, null);
+    assert.match(row.via!, new RegExp(`#${row.first}\\b|#${row.second}\\b`, 'u'));
+  }
+});
+
+test('readClaimTree đọc CÂY THẬT — cây rỗng thì mọi `free` lặng lẽ thành `stale-id`', async () => {
+  // Không có lưới này thì một `readClaimTree` trả `{ids: [], duplicateIds: []}`
+  // sống sót: hướng lệch an toàn, nhưng làn bị chặn oan ở MỌI lượt và không
+  // gì đỏ. Vòng soát ngữ cảnh sạch bắt được.
+  const here = await readClaimTree(fileURLToPath(new URL('../..', import.meta.url)));
+  assert.ok(here.ids.length > 100, `cây thật phải có hàng trăm mã, đo được ${here.ids.length}`);
+  assert.ok(here.ids.includes('platform/P-058'), 'mục của chính lượt này phải có trong cây');
+  assert.ok(here.ids.includes('integration/I-018'));
+  assert.deepEqual(here.duplicateIds, [], 'sau bản dọn của mục này, cây không còn mã trùng');
+  assert.deepEqual(here.ids, [...here.ids].sort(), '`ids` phải ổn định, không phụ thuộc thứ tự đọc thư mục');
+
+  // Và nối vào `claimCheck` thì một mã CÓ THẬT trong cây ra `free`, không
+  // phải `absent-from-tree` — tức cây đọc được thật chứ không rỗng.
+  assert.equal(claimCheck([], 'integration', 'I-018', '2026-09-26T15:00:00Z', here).verdict, 'free');
+});
+
+test('NÊN SỬA-5 · ảnh chụp `changedFiles` quá nhỏ thì tool NÓI RA, không im', () => {
+  // Phép lọc "file mà quá 3 PR cùng chạm" chỉ chạy khi ảnh chụp đủ lớn.
+  // Trên 5 PR đang mở nó cho 2 cặp báo nhầm; thêm các PR đã merge thì hết.
+  const small = [1, 2, 3].map((n) => ({ number: n, files: ['CHARTER.md', 'CLAUDE.md'] }));
+  const warnings = aliasWarnings(small);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /CÓ THỂ BÁO NHẦM/);
+  assert.match(warnings[0]!, /mở LẪN đã đóng/);
+
+  const big = Array.from({ length: ALIAS_MIN_SNAPSHOT_PRS }, (_, i) => ({
+    number: i + 1,
+    files: ['CHARTER.md'],
+  }));
+  assert.deepEqual(aliasWarnings(big), [], 'ảnh chụp đủ lớn thì không cảnh báo');
+  assert.deepEqual(aliasWarnings([]), [], 'không khai `changedFiles` thì không phải cảnh báo gì');
+});
+
+test('NÊN SỬA-5 · phép lọc file chung CHỈ đứng vững khi ảnh chụp đủ lớn — đo cả hai chiều', () => {
+  const prs = [
+    pr({ number: 1, title: '[platform] P-040 — a', createdAt: '2026-09-24T05:41:17Z' }),
+    pr({ number: 2, title: '[platform] P-057 — b', createdAt: '2026-09-26T01:43:52Z' }),
+  ];
+  const twoShared = ['CHARTER.md', 'CLAUDE.md'];
+
+  // Ảnh chụp NHỎ: hai file đó chỉ được 2 PR chạm → dưới ngưỡng 3 → không bị
+  // lọc → hai PR "chung 2 file" → BÁO NHẦM. Và `aliasWarnings` nói ra.
+  const small = prs.map((p) => ({ number: p.number, files: [...twoShared] }));
+  assert.equal(aliasesFromChangedFiles(prs, small).length, 1, 'ảnh chụp nhỏ thì nó báo nhầm — đó là tiền đề');
+  assert.equal(aliasWarnings(small).length, 1, 'và tool phải nói ra đúng lúc đó');
+
+  // Ảnh chụp ĐỦ LỚN: thêm các PR khác cùng chạm hai file ấy → vượt ngưỡng →
+  // cả hai rơi ra → không còn file nội dung chung nào.
+  const big = [
+    ...small,
+    // Đủ để vượt CẢ ngưỡng lọc file chung LẪN `ALIAS_MIN_SNAPSHOT_PRS`.
+    ...Array.from({ length: ALIAS_MIN_SNAPSHOT_PRS, }, (_, i) => ({ number: 100 + i, files: [...twoShared] })),
+  ];
+  assert.deepEqual(aliasesFromChangedFiles(prs, big), [], 'ảnh chụp đủ lớn thì file chung tự rơi ra');
+  assert.deepEqual(aliasWarnings(big), []);
 });

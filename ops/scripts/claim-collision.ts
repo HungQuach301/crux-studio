@@ -305,6 +305,18 @@ export interface AliasFromFilesOptions {
    * một danh sách cứng: `ops/logs/**`, `ops/known-failures.md` và
    * `ops/lanes/<làn>/backlog.md` tự rơi ra vì mọi PR đều chạm chúng, và một
    * file chung MỚI cũng tự rơi ra mà không ai phải nhớ thêm nó vào đâu.
+   *
+   * ⚠️ **Điều kiện của câu trên, đo được chứ không suy** — vòng soát ngữ
+   * cảnh sạch của `P-058` bắt được, và bản đầu của docblock này nói rộng
+   * hơn số đo: phép "tự rơi ra" chỉ chạy khi ảnh chụp **đủ lớn**. Trên một
+   * ảnh chụp chỉ-PR-đang-mở (5 PR) nó cho **2 cặp báo nhầm**; bơm thêm tập
+   * file của các PR đã merge vào `changedFiles` thì cả hai biến mất. Đếm
+   * trên `main` lúc `2026-09-26`: `CHARTER.md` 22 PR · `package.json` 18 ·
+   * `CLAUDE.md` 15 · `digest-metrics.ts` 8 — đều **vượt** ngưỡng 3, nhưng
+   * chỉ khi ảnh chụp có đủ PR để đếm ra con số đó. Nên `changedFiles` phải
+   * dựng từ ảnh chụp **mở LẪN đã đóng**, đúng như `CLAUDE.md` mục 1 dặn cho
+   * `prs`. `aliasWarnings` dưới đây nói ra khi ảnh chụp quá nhỏ, thay vì để
+   * bên gọi tự nhớ.
    */
   sharedFileMaxPrs?: number;
   /** Số file nội dung chung tối thiểu để quy hai PR về cùng một mục. */
@@ -313,6 +325,37 @@ export interface AliasFromFilesOptions {
 
 export const DEFAULT_SHARED_FILE_MAX_PRS = 3;
 export const DEFAULT_MIN_SHARED_FILES = 2;
+
+/**
+ * Dưới ngần này PR trong `changedFiles` thì phép lọc *"file mà quá nhiều PR
+ * cùng chạm"* **không có gì để đếm**, nên nó lọc hụt và `aliasesFromChangedFiles`
+ * báo nhầm. Mốc là `sharedFileMaxPrs × 4`: cần đủ PR để một file chung vượt
+ * ngưỡng một cách chắc chắn, chứ không phải vừa đúng chạm nó.
+ */
+export const ALIAS_MIN_SNAPSHOT_PRS = DEFAULT_SHARED_FILE_MAX_PRS * 4;
+
+/**
+ * Chỗ mà phép suy nhóm bí danh **không đứng vững**, nói ra bằng câu chứ
+ * không để bên gọi tự nhớ — cùng hình dạng `unreadable` của `ClaimCheck`,
+ * và cùng lý do: một danh sách bí danh dựng trên ảnh chụp quá nhỏ trông y
+ * hệt một danh sách chắc chắn.
+ */
+export function aliasWarnings(
+  changed: readonly PrChangedFiles[],
+  options: AliasFromFilesOptions = {},
+): string[] {
+  const out: string[] = [];
+  if (changed.length > 0 && changed.length < ALIAS_MIN_SNAPSHOT_PRS) {
+    const max = options.sharedFileMaxPrs ?? DEFAULT_SHARED_FILE_MAX_PRS;
+    out.push(
+      `Ảnh chụp \`changedFiles\` chỉ có ${changed.length} PR (< ${ALIAS_MIN_SNAPSHOT_PRS}). ` +
+        `Phép lọc "file mà quá ${max} PR cùng chạm" chưa có đủ dữ liệu để đếm, nên nhóm bí danh ` +
+        `ở đây CÓ THỂ BÁO NHẦM — đo được: 5 PR đang mở cho 2 cặp sai, thêm các PR đã merge thì cả hai biến mất. ` +
+        `Dựng \`changedFiles\` từ ảnh chụp mở LẪN đã đóng, như \`CLAUDE.md\` mục 1 dặn cho \`prs\`.`,
+    );
+  }
+  return out;
+}
 
 /**
  * Suy nhóm bí danh từ **tập file nội dung chồng nhau** — một cách quy đã
@@ -373,7 +416,12 @@ export function aliasesFromChangedFiles(
     while (parent.get(root) !== root) root = parent.get(root)!;
     return root;
   };
-  const reasons = new Map<number, string[]>();
+  // Lý do gom theo CẶP, không theo gốc-tại-thời-điểm-đó. Bản đầu ghim vào
+  // `find(first)` ngay lúc hợp, nên một lần hợp SAU đổi gốc và lý do cũ
+  // thành mồ côi: nhóm ba PR (A–C chung file, B–C chung file, A–B không)
+  // mất hẳn luật nối `A ↔ C`, `because` vẫn khác rỗng nên `assertAliases`
+  // không ném và không bài nào đỏ. Vòng soát ngữ cảnh sạch bắt được.
+  const reasons: { prs: [number, number]; note: string }[] = [];
 
   for (let i = 0; i < sorted.length; i += 1) {
     for (let j = i + 1; j < sorted.length; j += 1) {
@@ -394,10 +442,12 @@ export function aliasesFromChangedFiles(
       const rootA = find(first.number);
       const rootB = find(second.number);
       if (rootA !== rootB) parent.set(rootB, rootA);
-      const note =
-        `#${first.number} (\`${claimKeyText(a)}\`) và #${second.number} (\`${claimKeyText(b)}\`) ` +
-        `chung ${shared.length} file nội dung (${shared.join(', ')}) và sống chồng nhau`;
-      reasons.set(find(first.number), [...(reasons.get(find(first.number)) ?? []), note]);
+      reasons.push({
+        prs: [first.number, second.number],
+        note:
+          `#${first.number} (\`${claimKeyText(a)}\`) và #${second.number} (\`${claimKeyText(b)}\`) ` +
+          `chung ${shared.length} file nội dung (${shared.join(', ')}) và sống chồng nhau`,
+      });
     }
   }
 
@@ -413,10 +463,16 @@ export function aliasesFromChangedFiles(
       const oldest = members
         .map((n) => byNumber.get(n)!)
         .sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0) || a.number - b.number)[0]!;
+      // Gán lý do theo gốc CUỐI CÙNG, sau khi mọi lần hợp đã xong — nên
+      // không luật nối nào mồ côi, kể cả trong nhóm từ ba PR trở lên.
+      const because = reasons
+        .filter((entry) => find(entry.prs[0]) === root)
+        .map((entry) => entry.note)
+        .join(' · ');
       return {
         claim: claimKeyText(claimKeyFromTitle(oldest.title)!),
         prs: members.slice().sort((a, b) => a - b),
-        because: (reasons.get(root) ?? []).join(' · '),
+        because,
       };
     })
     .sort((a, b) => a.claim.localeCompare(b.claim));
@@ -485,9 +541,15 @@ export function duplicateClaims(
         // `via` nói ra luật đã quy hai PR về một mục. Hai tiêu đề mang cùng
         // một mã thì không cần luật nào — `null`. Khác mã thì phải có một
         // nhóm bí danh, và câu `because` của nó đi thẳng vào bảng.
+        // So CẢ `lane` lẫn `id`, không chỉ `id`: hai PR mang `platform/P-030`
+        // và `kernel/P-030` là hai mục khác nhau, nên nếu một nhóm bí danh
+        // quy chúng về một thì bảng PHẢI nói ra phép quy đó. Bản đầu so
+        // `.id` một mình và `via` ra `null` ở đúng ca ấy — vòng soát ngữ
+        // cảnh sạch bắt được, và nó là một lỗ của bất biến **I6**.
+        const left = claimKeyFromTitle(first.title);
+        const right = claimKeyFromTitle(second.title);
         const sameTitleClaim =
-          claimKeyFromTitle(first.title)?.id === claimKeyFromTitle(second.title)?.id &&
-          claimKeyFromTitle(first.title) !== null;
+          left !== null && right !== null && claimKeyText(left) === claimKeyText(right);
         const alias = override.get(first.number) ?? override.get(second.number);
         found.push({
           claim,
@@ -765,6 +827,7 @@ if (isMain) {
     assertSnapshots(prs);
     const aliases =
       raw.changedFiles === undefined ? [] : aliasesFromChangedFiles(prs, raw.changedFiles);
+    const warnings = raw.changedFiles === undefined ? [] : aliasWarnings(raw.changedFiles);
     const duplicates = duplicateClaims(prs, aliases);
     const unreadable = unreadableTitles(prs);
     // Hỏi mục nào thì phải trả lời được mục đó: khai `lane`/`id` mà thiếu
@@ -784,9 +847,12 @@ if (isMain) {
         : claimCheck(prs, raw.lane, raw.id!, raw.now ?? new Date().toISOString(), tree);
 
     if (process.argv.includes('--json')) {
-      process.stdout.write(`${JSON.stringify({ duplicates, unreadable, aliases, check })}\n`);
+      process.stdout.write(`${JSON.stringify({ duplicates, unreadable, aliases, warnings, check })}\n`);
     } else {
       process.stdout.write(`${renderDuplicateClaims(duplicates, unreadable)}\n`);
+      // Cảnh báo ra stderr, không nuốt: một danh sách bí danh dựng trên ảnh
+      // chụp quá nhỏ trông y hệt một danh sách chắc chắn.
+      for (const warning of warnings) process.stderr.write(`⚠ ${warning}\n`);
       if (check !== null) process.stdout.write(`${JSON.stringify(check)}\n`);
     }
     // Thoát 0 kể cả khi CÓ va chạm: đây là phép ĐO cho bên gọi (worker, bản
