@@ -6,6 +6,126 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-046 · `automerge.yml` đọc `draft` **tươi** rồi hành động **vài giây sau** mà không đọc lại — và endpoint của GitHub nhận một PR vừa chuyển nháp
+
+> Số **KF-046**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** (26 ref) trước khi viết. Cao nhất tìm được là `KF-045`, nên `KF-046` không đụng ai.
+
+**Lần gặp: 1.** Đo trên PR `#288` lúc `2026-09-26T13:0xZ`. PR đó vào `main` thành `215c827` với nội dung **đã qua vòng soát bước 6**, nên lần này **không có gì vào `main` mà chưa soát** — đó là may, không phải do lớp chặn nào.
+
+⚠️ **Hình dạng chính KHÔNG mới, và mục này không được đọc như thể nó mới.** `KF-026` đã ghi *"nội dung vào `main` với 0 vòng soát vì `automerge.yml` chạy quá nhanh"* ba lần (`#94`, `#222`, `#258`), và bản sửa bằng máy đã có chủ ở **`integration/I-021`** (⬜, `hold:` vì chạm vùng `owner-merge`). Đóng góp thật của mục này là **hai phép đo mới** cộng **một chỗ sai trong lời dặn** — không phải một hình dạng thứ hai.
+
+### Đóng góp 1 — cuộc đua *đọc-rồi-hành-động* bên trong `automerge.yml`, hẹp và sửa được bằng máy
+
+Nháp **có** chặn được, và lớp chặn đó đang chạy đúng: danh sách ứng viên (`automerge.yml:108`) lọc **chỉ theo nhãn**, nhưng trong vòng lặp từng PR, `DATA=$(gh api "repos/$REPO/pulls/$NUM")` (`:213`) đọc **tươi**, `draft: $pr.draft` đi vào `state.json` (`:307`), và `ops/invariants.merge-gate.ts:141` trả `skip` khi `draft`. **Phản chứng dứt điểm, cùng PR, 3 phút trước:**
+
+```
+lượt automerge #934 (runs/36244015834), log job `merge`:
+  13:05:53.241  ──────────── PR #288
+  13:05:56.006    skip — PR còn ở trạng thái nháp.
+```
+
+Chỗ thủng **không** phải "ảnh chụp đầu lượt". Nó là khoảng giữa lần đọc `draft` và lời gọi ở `automerge.yml:350`, trong đó **không ai đọc lại**:
+
+```
+lượt automerge #935 (runs/36244162203):
+  13:08:23.0    lượt bắt đầu (run_started_at)
+  13:08:33.044  "Ứng viên: 288 284 274 260 249 231"
+  13:08:34.788  ──────────── PR #288          ← vòng lặp tới #288
+  ~13:08:35–36    DATA=$(gh api …/pulls/288)  ← ĐÂY là lúc `draft` được đọc
+  13:08:36.502    lối nhanh=normal
+  13:08:37.429    (quyết định: PR không chạm vùng bảo vệ, CI xanh trên đầu nhánh)
+  13:08:39.946    "đã merge #288"
+  --- convert_to_draft là 13:08:37Z, tức NẰM TRONG khoảng này ---
+```
+
+Từ lần đọc `draft` tới lời gọi cuối là **~1–4,5 giây** không đọc lại. Bản sửa là **một lần đọc lại `draft` ngay trước `automerge.yml:350`** — cùng vùng `owner-merge` và cùng chủ với `I-021`, nên nó là **một ô thêm vào `I-021`**, không phải một mục mới.
+
+**Mốc chốt tuỳ VỊ TRÍ TRONG HÀNG ĐỢI**, nên "hết cứu sau khi lượt bắt đầu" là sai. Cùng lượt #935, hàng đợi 6 PR:
+
+```
+#288 +11,8s   #284 +17,0s   #274 +20,0s   #260 +28,1s   #249 +46,3s   #231 +54,7s
+```
+
+`#288` đứng **đầu** hàng nên nó là ca ngặt nhất; một PR ở vị trí 6 còn **54,7 giây** sau khi lượt bắt đầu để chuyển nháp, và sẽ chặn được.
+
+### Đóng góp 2 — endpoint của GitHub nhận một PR đang ở trạng thái nháp
+
+`automerge.yml:350` dùng REST (`gh api -X PUT "repos/$REPO/pulls/$NUM/..."`), **không** `gh pr` và **không** `--admin`. Lời gọi đó chạy trong khoảng `13:08:37.429 → 13:08:39.946`, tức **sau** `convert_to_draft` lúc `13:08:37Z`, và GitHub **nhận**.
+
+Nên: **lớp chặn nháp phía GitHub không tức thời.** Đây là một quan sát **một lần** — thử lại nghĩa là cho một PR nữa vào `main`, mà agent không làm việc đó (`CLAUDE.md` mục 3) — nên nó đáng một dòng trong `docs/assumptions.md` chứ không đáng một lời khẳng định. Không kiểm được: `convert_to_draft` có hiệu lực phía GitHub lúc nào (`events` chỉ cho tới giây), và lời gọi chạy ở giây nào trong khoảng 2,5 giây đó.
+
+### Đóng góp 3 — một lời dặn tự vô hiệu hoá, và một lời dặn chỉ thiếu thời điểm
+
+`#261` (mục `P-055`, vào `main` thành `1b407e6`) thêm hai gạch đầu dòng vào **`CLAUDE.md` mục 2, dòng 106–107** (*không* phải mục 6 — mục 6 là trailer). Lượt này làm theo **cả hai**. Chúng **không** cùng sức khoẻ:
+
+- **`GỠ NHÃN trước khi push` — tự vô hiệu hoá.** `ops/workflows/ci.yml:20` khai `types: [opened, synchronize, reopened, labeled, unlabeled]`, nên **thao tác gỡ nhãn chính là một sự kiện `unlabeled`**: nó kích một lượt `ci.yml`, lượt đó chạy khối *"Gắn nhãn theo cửa merge"* và **gắn lại** nhãn. Đo được **17 giây**, chưa push gì. (Nhãn do `GITHUB_TOKEN` gắn thì **không** kích lượt nào, đúng khối chú thích `KF-004` ở `ci.yml:31-40`, nên vòng dừng ở đó chứ không lặp vô hạn — nhưng nó dừng ở trạng thái **có nhãn**.)
+- **`Giữ PR ở trạng thái nháp` — dùng được, chỉ thiếu MỘT CÂU về thời điểm.** Nó chặn thật (#934 ở trên). Câu thiếu là: *chuyển nháp **trước** khi push, đừng chờ tới sau khi CI xanh* — vì sau đó thì cửa sổ chỉ còn vài giây với PR đầu hàng đợi.
+
+**Vậy lời dặn không "vô dụng"**, và một mục sổ lỗi nói thế sẽ khiến lượt sau tháo một lớp chặn còn dùng được. Đúng **một** trong hai vế tự vô hiệu hoá.
+
+### Đóng góp 4 — thứ kích cả chuỗi là **nhãn `cross-lane` gắn tay**, không phải việc bỏ nháp
+
+Đây là chỗ ngược trực giác nhất của phép đo. `ready_for_review` **không** có trong `ci.yml:20` `types:`, nên **bỏ nháp không kích được lượt `ci.yml` nào**:
+
+```
+13:07:32Z  labeled cross-lane by HungQuach301      ← thao tác của worker
+13:07:34Z  ci #36244117942 created                 ← 2s sau NHÃN, và 1s TRƯỚC ready_for_review
+13:07:35Z  ready_for_review
+13:08:22Z  ci xong  →  workflow_run  →  automerge #935 lúc 13:08:23Z
+```
+
+`ci` bắt đầu **trước** khi PR bỏ nháp, nên chỉ sự kiện `labeled` lúc `13:07:32` giải thích được nó. Tức **chính cái nhãn tay mà worker gắn để tuân một luật mềm (`cross-lane`) là thứ khởi động chuỗi đã đưa PR vào `main`**. Không có nhãn đó thì `6b5b0ba` không có lượt `ci` mới nào và PR nằm chờ tới nhịp `cron` của `automerge.yml`.
+
+Và nhãn ấy **không** giữ được: `ci.yml:269` đếm làn bằng `grep -Eo '^(workshops|ops/lanes)/[a-z]+'`, `:272` gắn khi `>1`, `:274` gỡ khi `≤1`. `#288` chạm `ops/logs/integration/**` **và** `ops/lanes/platform/**` — **hai** làn thật, bộ dò trả **1** (log ci in `số làn bị chạm: 1`), nên nhãn bị gỡ sau **14 giây**. Đó là mục `platform/P-028` (PR `#274`, mã `P-057`); phần **mới** là *"gắn tay bù cho bộ dò"* **không chạy được**, vì `ci.yml` **chủ động gỡ** chứ không chỉ bỏ sót — và tệ hơn, nó **tốn một lượt CI và khởi động hàng đợi** trước khi bị gỡ.
+
+### Ba con số, gắn đúng đại lượng
+
+Bản đầu của mục này khai *"15 giây từ khi `ci.yml` xong tới khi `automerge.yml` bắt đầu"* — **sai 15×**, và vòng soát bắt được:
+
+```
+ci xong 13:08:22Z → automerge bắt đầu 13:08:23Z          =  1 giây
+   (kiểm thêm hai cặp cùng hình dạng: 13:00:54→13:00:56 = 2s · 13:05:43→13:05:45 = 2s)
+automerge bắt đầu 13:08:23Z → commit 215c827 13:08:38Z    = 15 giây
+cả cửa sổ: CI xanh 13:08:22Z → 13:08:39Z                  = 17 giây
+```
+
+`1 giây` làm luận điểm **mạnh hơn**, không yếu hơn: `workflow_run` gần như không có độ trễ, nên toàn bộ 15 giây là thời gian `automerge.yml` tự chạy, và nó xếp hàng đợi theo thứ tự PR.
+
+### Phép đo đầy đủ — mốc từ `issues/288/events`, `actions/runs` và log lượt chạy
+
+```
+12:42:30Z  PR #288 mở (nháp)
+12:42:44Z  labeled   automerge  by github-actions[bot]   ← 14s sau khi mở; PR nháp nên KHÔNG bị lấy
+13:00:00Z  unlabeled automerge  by HungQuach301          ← làm theo CLAUDE.md mục 2 dòng 107
+13:00:02Z  ci created (event `unlabeled`; gpt-review KHÔNG chạy → loại `synchronize`)
+13:00:16Z    ##[notice]cửa merge = open
+13:00:17Z  labeled   automerge  by github-actions[bot]   ← 17 GIÂY, chưa push gì
+13:05:56Z  automerge #934: "skip — PR còn ở trạng thái nháp."   ← NHÁP CHẶN ĐƯỢC
+13:07:32Z  labeled   cross-lane by HungQuach301          ← thứ kích cả chuỗi dưới đây
+13:07:34Z  ci created                                    ← 1s TRƯỚC ready_for_review
+13:07:35Z  ready_for_review     by HungQuach301          ← không có trong ci.yml:20 types
+13:07:46Z  unlabeled cross-lane by github-actions[bot]   ← 14 giây
+13:08:22Z  ci xong (8/8 xanh trên 6b5b0ba)
+13:08:23Z  automerge #935 bắt đầu                        ← 1 giây sau
+13:08:34.8   ──────────── PR #288                        ← +11,8s; đầu hàng đợi 6 PR
+~13:08:35    đọc `draft` (automerge.yml:213 → :307)
+13:08:37Z  convert_to_draft     by HungQuach301          ← RƠI VÀO khoảng không đọc lại
+13:08:37.4   (quyết định của lượt automerge)
+13:08:38Z  commit 215c827                                ← 1 giây sau convert_to_draft
+13:08:39.9   "đã merge #288"                             ← 2 giây sau convert_to_draft
+```
+
+**Chữ ký:** trên một PR cửa `open`, `convert_to_draft by <người>` rồi `merged by github-actions[bot]` cách đó **dưới 5 giây**; **hoặc** `unlabeled <nhãn cửa merge> by <người>` rồi `labeled <cùng nhãn> by github-actions[bot]` cách vài chục giây **không** có `synchronize` ở giữa.
+
+- **Đã sửa ở đâu:** **chưa sửa.** Chủ của bản sửa bằng máy là **`integration/I-021`** (⬜, `owner-merge`); mục này thêm vào đó **một ô**: đọc lại `draft` ngay trước `automerge.yml:350`. Cộng một sửa **một dòng** ở `CLAUDE.md` mục 2 (vùng `automerge-delayed`): thêm câu về **thời điểm** chuyển nháp. Hai việc đó **chưa có mục backlog** — lượt đo được nó đã mở `platform/P-061` rồi, và `CLAUDE.md` mục 2 đòi một mục = một PR, nên **lượt sau mở**.
+- **Máy chặn từ nay:** không có mới. Lớp chặn **đang** có là trạng thái nháp, và nó đủ **nếu** chuyển nháp trước khi cửa sổ mở.
+
+Mục này đi bằng PR **#290**. Cố ý **không** ghi SHA của commit: bản đầu ghi `674e180`, rồi nhánh
+được dựng lại trên nền mới và `674e180` thành commit **mồ côi** — một SHA không ref nào với tới là
+một lời khai không kiểm lại được, và `git gc` xoá nó. Số PR thì `git log --grep` và GitHub đều tra được.
+
+---
+
 ## KF-045 · `pnpm -s check` **đỏ** trên đúng cây mà `pnpm check` **xanh** — `-s` xuất `npm_config_reporter=silent`, và `pnpm` lồng bên trong im theo
 
 > Số **KF-045**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-044`, nên `KF-045` không đụng ai.
@@ -62,7 +182,7 @@ CI GitHub: main-ci trên b9f8b25 → success (2026-09-26T09:46:04Z)
 
 ### Vì sao "song song" là chẩn đoán SAI, và nó đã suýt được ghi vào đây
 
-Bốn vòng đầu đều gọi `pnpm -s test`, và vòng đối chứng đầu tiên lại gọi `node --test` một file — nên hai biến (cách gọi cổng, và số bài chạy cùng lúc) đổi **cùng lúc**, và chẩn đoán dễ nhất là *"bài kiểm nhạy với tải, 4 CPU nên tranh nhau"*. Vòng `node --test` trên **toàn bộ** 1565 bài, song song, mặc định — **xanh** — mới tách được hai biến ra, và phép đo một file ở đầu mục này mới khoá được nhân quả. Ghi lại ở đây vì đó là đúng cái bẫy mà `I-021` đếm: một con số đo được ghép với một lời giải thích chưa đo. Bảng 13 vòng ở trên là **đối chứng**, không phải bằng chứng — bằng chứng là hai dòng một biến.
+Bốn vòng đầu đều gọi `pnpm -s test`, và vòng đối chứng đầu tiên lại gọi `node --test` một file — nên hai biến (cách gọi cổng, và số bài chạy cùng lúc) đổi **cùng lúc**, và chẩn đoán dễ nhất là *"bài kiểm nhạy với tải, 4 CPU nên tranh nhau"*. Vòng `node --test` trên **toàn bộ** 1565 bài, song song, mặc định — **xanh** — mới tách được hai biến ra, và phép đo một file ở đầu mục này mới khoá được nhân quả. Ghi lại ở đây vì đó là cái bẫy *một con số đo được ghép với một lời giải thích chưa đo*. (Bản đầu của mục này gọi nó là *"chữ ký `I-021`"* — **trích sai**: `integration/I-021` là mục *fix · ghi `KF-026` và dọn sáu chỗ sót của `I-020`*, tức chủ của bản sửa bằng máy cho `KF-026`, không phải một chữ ký về con số. Chữ ký đó **chưa có mã riêng** trong kho, nên đừng gắn nó vào `I-021`.) Bảng 13 vòng ở trên là **đối chứng**, không phải bằng chứng — bằng chứng là hai dòng một biến.
 
 ---
 
