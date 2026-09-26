@@ -30,6 +30,34 @@
  *   (`step0LogPath` của kernel sinh ra nó). Hai worker chạy chồng nhau
  *   (CHARTER 2.1) không bao giờ chạm cùng một file, nên không có gì để
  *   xung đột — cùng lập luận `D-C04`, áp cho một nhánh dùng chung.
+ *
+ *   ⚠️ **"Không xung đột" KHÔNG có nghĩa là "không mất dữ liệu", và bản đầu
+ *   của khối lệnh dưới đây trộn hai điều đó.** Nó dựng cây `heartbeat/` lại
+ *   **từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây
+ *   đó với `-p $PARENT`. Không lần push nào bị từ chối — nhưng mỗi commit
+ *   **xoá** nhịp tim của mọi lượt trước. Git không báo gì: một cây hợp lệ
+ *   trỏ tới đúng một file vẫn là một cây hợp lệ.
+ *
+ *   **Đo trên chính nhánh này (2026-09-26T06:4xZ, 58 commit không kể commit
+ *   của lượt này):** **37** commit có `-1` file hoặc hơn. Nhánh đứng ở **đúng
+ *   một** file **27,7 giờ liền** — từ `a6f071c` (`2026-09-24T08:54:58Z`, commit
+ *   gốc) tới `1bb6594` (`2026-09-25T12:38:27Z`), lần đầu tiên nó có hơn một
+ *   file — rồi `715aab9` đạp về một file và nó ở đó thêm **15,0 giờ** nữa tới
+ *   `c74534b`. Hai commit phải đi chữa bằng tay, tên chúng nói ra chỗ
+ *   hỏng: `1bb6594` *"khôi phục nhịp tim 11:39:23Z bị lần đẩy trước ghi đè"*
+ *   và `c74534b` *"khôi phục dòng của crux-worker-1 03:38Z bị lần đẩy trước
+ *   ghi đè"*. Một commit còn xoá **hai** file một lúc (`715aab9`).
+ *
+ *   Chiều hỏng là nhóm **Z**: `watchdog.yml` dấu hiệu 5 chỉ đọc nhịp tim
+ *   **mới nhất** nên nó vẫn đúng, `pnpm check` xanh, `main` xanh — trong khi
+ *   bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần. Đúng chỗ
+ *   `KF-021` và `KF-041` đã khai là làm mọi chuỗi kẹt thành **cận dưới**.
+ *
+ *   Nên khối lệnh nay dựng cây **THÊM**: `git ls-tree` liệt kê entry đang có,
+ *   `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Bài
+ *   kiểm `ops/test/telemetry-beat.test.ts` chạy thật hai lần đẩy nối nhau
+ *   trên một kho tạm và đòi **cả hai** file còn sống; file này trước đó
+ *   **không có bài kiểm nào**, và đó là lý do chỗ hỏng sống được 33 lần.
  * - **Chỉ dòng bước 0 được vào.** `beatFileProblems` chặn mọi dòng khác.
  *
  *   ⚠️ Đây là **lớp phòng thủ thứ hai, không phải lớp duy nhất** — bản đầu của
@@ -56,6 +84,7 @@
 
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { isStep0LogId } from '../../kernel/src/log.ts';
 import { isStep0Ref } from './lane-heartbeat.ts';
 
 /** Nhánh giữ bản sao nhịp tim. Không bao giờ mở PR cho nhánh này. */
@@ -77,6 +106,21 @@ export function telemetryTargetPath(logPath: string): string {
   const name = basename(logPath);
   if (!name.endsWith('.jsonl') || name.length <= '.jsonl'.length) {
     throw new Error(`File log bước 0 phải là một file \`.jsonl\`, nhận ${JSON.stringify(logPath)}.`);
+  }
+  // Tên này đi thẳng vào **shell** và vào phép so trường của `awk` trong
+  // `telemetryPushCommands`, nên hình dạng của nó là chỗ chịu tải, không phải
+  // hình thức. `isStep0LogId` của kernel đã chặn `/`, `..` và mọi ký tự ngoài
+  // `[A-Za-z0-9._-]`, tức chặn luôn khoảng trắng, TAB, `$`, backtick và ký tự
+  // ngoài ASCII — ba thứ lần lượt làm `git ls-tree` **quote** tên (nên `$2`
+  // của `awk` không còn bằng tên), làm shell nội suy, và làm `git mktree`
+  // nhận HAI entry cùng tên rồi trả `exit 0` cho một cây hỏng (đo được).
+  // Không suy đoán "chắc không ai gọi sai": ném ở đây rẻ hơn một cây hỏng.
+  const id = name.slice(0, -'.jsonl'.length);
+  if (!isStep0LogId(id)) {
+    throw new Error(
+      `Tên file log bước 0 không đúng hình dạng \`step0LogId\`: ${JSON.stringify(name)}. ` +
+        'Tên phải do `step0LogPath`/`step0LogId` của kernel sinh ra.',
+    );
   }
   return `${TELEMETRY_DIR}/${name}`;
 }
@@ -143,6 +187,31 @@ export function beatContent(raw: string): string {
 }
 
 /**
+ * Số **byte** UTF-8 của nội dung sẽ nằm trên nhánh telemetry.
+ *
+ * Tồn tại vì bản đầu in `beatContent(raw).length` — `String.length`, tức số
+ * đơn vị mã **UTF-16**, không phải byte. Dòng log bước 0 là tiếng Việt có
+ * dấu cộng ký tự 🤖, nên hai con số không bao giờ bằng nhau và chênh lệch
+ * lệch theo hướng **báo nhỏ hơn thật**. Cặp số minh hoạ **cố ý không** lấy
+ * từ một file log: một dòng log là **tự tham chiếu** — sửa `note` là đổi
+ * chính số byte của nó, nên mọi cặp số trích từ đó hết đúng ở lần sửa
+ * `note` kế tiếp (đã xảy ra thật trong lượt thêm hàm này, và trước đó là
+ * cặp `6763`/`8214` không còn tái lập được ở đâu trong kho). Cặp ổn định,
+ * tái lập được bằng một dòng `node` ở bất cứ lúc nào:
+ *
+ *     beatContent('🤖 nhịp tim bước 0').length   // 19  (đơn vị mã UTF-16)
+ *     beatBytes('🤖 nhịp tim bước 0')            // 26  (byte UTF-8)
+ *
+ * 🤖 là một cặp surrogate (2 đơn vị UTF-16, 4 byte), và mỗi nguyên âm có dấu
+ * là 1 đơn vị UTF-16 nhưng 2–3 byte. Một trường tên `bytes` mang một
+ * đại lượng khác là đúng họ **I6** (mọi con số hiển thị phải có nguồn), và
+ * đây là con số duy nhất mà bước 0e in ra cho người đọc bản ghi lượt chạy.
+ */
+export function beatBytes(raw: string): number {
+  return Buffer.byteLength(beatContent(raw), 'utf8');
+}
+
+/**
  * Các lệnh git mà bên gọi chạy để đẩy bản sao lên nhánh telemetry.
  *
  * Script **in** chúng ra thay vì tự chạy, và đó là chủ đích: mọi thao tác ghi
@@ -159,33 +228,88 @@ export function beatContent(raw: string): string {
  *
  * `--force-with-lease` vắng mặt có chủ ý: không có `--force` nào ở đây cả.
  * Hai worker chạy chồng nhau ghi hai **file khác nhau** (tên mang mốc tới giây
- * cộng tên routine), nên lần push thứ hai chỉ cần `git fetch` lại rồi dựng
- * commit trên đầu mới — vòng `while` dưới đây làm đúng việc đó.
+ * cộng tên routine), nên không ai phải thua: lần push bị từ chối chỉ cần
+ * `git fetch` lại rồi **dựng lại** cây trên đầu mới và push lại.
+ *
+ * ⚠️ Vòng thử lại đó **phải tồn tại thật**, và một thời gian nó không: khối
+ * này từng khai *"vòng `while` dưới đây làm đúng việc đó"* trong khi
+ * `grep -n while` trên chính file chỉ ra đúng dòng chú thích ấy. Vòng soát
+ * ngữ cảnh sạch của PR #281 dựng ca thật — worker B push xen vào giữa lúc A
+ * đã dựng commit — và đo được `! [rejected] (fetch first)`, khối lệnh thoát
+ * `1`, **nhịp tim của A mất**. Cùng họ với chỗ hỏng mà docblock này kể là
+ * vòng soát PR #229 đã bắt: *hứa trong chú thích rồi không có lệnh nào làm*.
+ * Nay vòng `while` có thật, có **trần 4 lần**, và không `--force` nào.
+ *
+ * ## Vì sao KHÔNG nuốt mã thoát của `git ls-tree`
+ *
+ * Bản đầu của phép "dựng thêm" viết `git ls-tree … 2>/dev/null | awk …`. Dưới
+ * `sh -e`, mã thoát của pipeline là mã thoát của `awk` (0), nên ca *"nhánh
+ * chưa tồn tại"* chạy được — **nhờ một tác dụng phụ không dòng nào nói ra**.
+ * Cùng cơ chế đó giấu chiều ngược lại: `ls-tree` lỗi trong khi nhánh **có**
+ * dữ liệu (thư mục `heartbeat` là blob chứ không phải tree, ref hỏng) cũng
+ * thành "danh sách entry rỗng" ⇒ cây một entry ⇒ đúng chỗ hỏng ở trên, `exit
+ * 0`, không ai biết. Nên nay: `PARENT` tính **trước**, ca "nhánh chưa có"
+ * phân nhánh **tường minh**, và mọi lỗi `ls-tree` khác **ném**.
  */
 export function telemetryPushCommands(logPath: string, sessionUrl: string): string[] {
   const target = telemetryTargetPath(logPath);
   const name = basename(target);
+  const q = (value: string): string => JSON.stringify(value);
   return [
     `# Đẩy nhịp tim lên nhánh ${TELEMETRY_BRANCH} — KHÔNG mở PR, nên không chạy CI.`,
-    `git fetch --no-tags origin "+refs/heads/${TELEMETRY_BRANCH}:refs/crux/telemetry" || true`,
-    `BLOB=$(git hash-object -w ${JSON.stringify(logPath)})`,
-    `INNER=$(printf '100644 blob %s\\t%s\\n' "$BLOB" ${JSON.stringify(name)} | git mktree)`,
-    `ROOT=$(printf '040000 tree %s\\t${TELEMETRY_DIR}\\n' "$INNER" | git mktree)`,
+    `BLOB=$(git hash-object -w ${q(logPath)})`,
     '# Trailer BẮT BUỘC, và nó không có PR nào để sửa về sau: commit trên nhánh này',
     '# không bao giờ vào `main`, nên `no-model-name`/`check-commit-trailers` không',
     '# quét nó, mà bài kiểm giả định G14 của `recheck-assumptions.ts` CÓ quét mọi',
     '# nhánh `claude/*`. Một lần đẩy thiếu trailer là một giả định báo `sai` vì một',
     '# commit không ai sửa được nữa.',
-    'PARENT=$(git rev-parse --verify --quiet refs/crux/telemetry || true)',
     'MSG=$(printf \'%s\\n\' "🤖 [integration] nhịp tim bước 0" "" \\',
     '  "Co-Authored-By: Claude <noreply@anthropic.com>" \\',
     `  "Claude-Session: ${sessionUrl}")`,
-    'if [ -n "$PARENT" ]; then',
-    '  COMMIT=$(echo "$MSG" | git commit-tree "$ROOT" -p "$PARENT")',
-    'else',
-    '  COMMIT=$(echo "$MSG" | git commit-tree "$ROOT")',
-    'fi',
-    `git push origin "$COMMIT:refs/heads/${TELEMETRY_BRANCH}"`,
+    '# Vòng thử lại có TRẦN: hai worker chạy chồng nhau thì lần push sau bị từ chối',
+    '# (`fetch first`), và cách chữa đúng là dựng LẠI cây trên đầu mới rồi push lại.',
+    '# Không `--force` nào — hai lượt ghi hai file khác nhau nên không ai phải thua.',
+    'ATTEMPT=0',
+    'while :; do',
+    '  ATTEMPT=$((ATTEMPT + 1))',
+    `  git fetch --no-tags origin "+refs/heads/${TELEMETRY_BRANCH}:refs/crux/telemetry" || true`,
+    '  PARENT=$(git rev-parse --verify --quiet refs/crux/telemetry || true)',
+    '  # Nhánh CHƯA có: hai danh sách entry rỗng. Nhánh CÓ: lỗi `ls-tree` phải NÉM,',
+    '  # không được nuốt thành "rỗng" — nuốt nó là dựng lại đúng cây một entry.',
+    '  if [ -n "$PARENT" ]; then',
+    '    OLD_ROOT=$(git ls-tree "$PARENT") || exit 1',
+    `    HB_TYPE=$(printf '%s\\n' "$OLD_ROOT" | awk -F'\\t' '$2 == ${q(TELEMETRY_DIR)} { split($1, f, " "); print f[2] }')`,
+    '    if [ -z "$HB_TYPE" ]; then',
+    '      OLD_INNER=""',
+    '    elif [ "$HB_TYPE" != "tree" ]; then',
+    `      printf '⚠ %s trên %s là %s, không phải tree — DỪNG thay vì dựng lại cây.\\n' ${q(TELEMETRY_DIR)} "$PARENT" "$HB_TYPE" >&2`,
+    '      exit 1',
+    '    else',
+    `      OLD_INNER=$(git ls-tree "$PARENT:${TELEMETRY_DIR}") || exit 1`,
+    '    fi',
+    '  else',
+    '    OLD_ROOT=""',
+    '    OLD_INNER=""',
+    '  fi',
+    `  # Cây \`${TELEMETRY_DIR}/\`: giữ MỌI entry đang có, bỏ đúng entry cùng tên (để lần`,
+    '  # đẩy lại của cùng một lượt ghi đè chính nó), rồi thêm nhịp tim của lượt này.',
+    '  # KHÔNG được rút về một `git mktree` chỉ mang một entry — xem khối đầu file.',
+    `  INNER=$({ printf '%s\\n' "$OLD_INNER" | awk -F'\\t' -v n=${q(name)} 'NF && $2 != n'; printf '100644 blob %s\\t%s\\n' "$BLOB" ${q(name)}; } | git mktree)`,
+    `  # Cây GỐC cũng dựng THÊM, cùng một lý do: một \`mktree\` chỉ mang entry`,
+    `  # \`${TELEMETRY_DIR}\` sẽ xoá mọi thứ khác ở gốc nhánh (một \`README\` giải thích`,
+    '  # nhánh là ca dễ xảy ra nhất, vì nhánh này không bao giờ có PR để ai soát).',
+    `  ROOT=$({ printf '%s\\n' "$OLD_ROOT" | awk -F'\\t' -v n=${q(TELEMETRY_DIR)} 'NF && $2 != n'; printf '040000 tree %s\\t%s\\n' "$INNER" ${q(TELEMETRY_DIR)}; } | git mktree)`,
+    '  if [ -n "$PARENT" ]; then',
+    '    COMMIT=$(echo "$MSG" | git commit-tree "$ROOT" -p "$PARENT")',
+    '  else',
+    '    COMMIT=$(echo "$MSG" | git commit-tree "$ROOT")',
+    '  fi',
+    `  if git push origin "$COMMIT:refs/heads/${TELEMETRY_BRANCH}"; then break; fi`,
+    '  if [ "$ATTEMPT" -ge 4 ]; then',
+    '    printf \'⚠ push nhịp tim bị từ chối %s lần — DỪNG.\\n\' "$ATTEMPT" >&2',
+    '    exit 1',
+    '  fi',
+    'done',
   ];
 }
 
@@ -225,7 +349,7 @@ if (isMain) {
 
   const target = telemetryTargetPath(logPath);
   process.stdout.write(
-    `${JSON.stringify({ branch: TELEMETRY_BRANCH, target, bytes: beatContent(raw).length }, null, 2)}\n`,
+    `${JSON.stringify({ branch: TELEMETRY_BRANCH, target, bytes: beatBytes(raw) }, null, 2)}\n`,
   );
 
   if (argv.includes('--commands')) {

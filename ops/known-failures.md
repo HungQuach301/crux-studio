@@ -6,6 +6,66 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-044 · PR mở, CI xanh, **không mang nhãn cửa merge nào** — `automerge.yml` lọc theo nhãn nên nó không chậm, nó KHÔNG BAO GIỜ vào hàng đợi
+
+> Số **KF-044**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-043` (`#282`), nên `KF-044` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` EXIT=0, CI **8/8 xanh**, `main` xanh, PR **gộp sạch** nên bước 0a không nhìn tới, `pickPrToHandle` không có lý do nào khớp, và `pnpm claims` thấy PR đó "đang giữ mục" nên worker khác cũng tránh nó.
+
+- **Lần gặp: 1** cho *nguyên nhân gốc này*, nhưng **lần thứ 2** cho *chữ ký quan sát* — và hai cách đếm đó phải nói ra cùng lúc, vì ngưỡng CHARTER 6.6 đếm theo chữ ký. `KF-032` ghi cùng một quan sát (*PR mở, CI xanh, không nhãn, không vào hàng đợi*) trên **cùng ca #223** với nguyên nhân gốc khác (nhánh `*)` của `case "$GATE"` thiếu `--add-label`); mục này là nguyên nhân gốc **thứ hai** cho đúng quan sát đó (không sự kiện nào gắn lại nhãn cho PR đã xanh từ trước). Theo chữ ký thì ngưỡng *"lần thứ hai thì sửa spec, contract hoặc prompt — không vá sản phẩm"* **đã chạm**, và đó là lý lẽ mạnh thêm cho việc ô ⬜ "chỗ chạy định kỳ" của `P-060` là sửa ở **tầng luật**, không chỉ là một phép đo.
+- **Nguyên nhân gốc:** nhãn cửa merge chỉ được gắn trong một lượt `pull_request` của `ops/workflows/ci.yml` (`types: [opened, synchronize, reopened, labeled, unlabeled]`; `workflow_dispatch` chạy đúng `check` và `secret-scan`, **không** chạy khối gắn nhãn). **Không cron nào, không routine nào gắn lại nhãn cho một PR đang mở.** Nên một PR đã xanh **trước** khi luật gắn nhãn đổi đứng lại không nhãn nào, và không sự kiện nào tới để gắn.
+- **Đã sửa ở đâu:** **chưa sửa** — mục này ghi phép đo và mở `platform/P-060`. `P-048` đã sửa *luật gắn nhãn*; phần **tồn đọng** (PR xanh từ trước) thì `P-048` tự khai bằng lời ở ô ⬜ cuối (*"#223 không tự thoát nhờ PR này"*) mà không đặt hạn và không chỉ báo nào.
+- **Máy chặn từ nay:** `ops/scripts/merge-queue-orphans.ts` (`pnpm queue:orphans`) **đo** được nó — hàm thuần `queueOrphans`, 28 bài kiểm, thoát 1 khi có PR quá ngưỡng hoặc có `problems`. Chỗ **chạy định kỳ** vẫn ⬜ (`P-060`): tool có mà không lượt nào gọi thì vẫn là văn xuôi.
+
+**Chữ ký:** một PR đang mở, `isDraft: false`, mọi check `success`, mà `labels` **không chứa** nhãn nào trong `automerge` / `automerge-delayed` / `owner-merge`.
+
+### Phép đo, bước 0 lượt `crux-worker-2` `2026-09-26T08:2xZ`
+
+```
+gh pr list --state open  → 7 PR: #223 #231 #249 #260 #261 #274 #282
+nhãn:  #231 #249 #261 [fix, automerge-delayed] · #260 #274 [automerge-delayed] · #282 [automerge]
+       #223 → []                                  ← rỗng, PR duy nhất
+#223:  isDraft false · CI 8/8 success (lượt 36098801723, 2026-09-25T05:29:54→05:30:40Z)
+       git merge-tree --write-tree origin/main <đầu nhánh> → EXIT=0 (gộp SẠCH)
+       đầu nhánh e0970d0 đứng yên từ 2026-09-25T05:28:04Z  → 27,0 giờ
+ops/workflows/automerge.yml:109
+  select(.labels | map(.name) | (index("automerge") != null or index("automerge-delayed") != null))
+```
+
+Một PR không mang nhãn nào trong hai nhãn đó **không bao giờ** vào danh sách ứng viên, nên phép tính lại cửa merge của `automerge.yml` (`CLAUDE.md` mục 3) không bao giờ chạy cho nó.
+
+### Vì sao 27 giờ, khi bản sửa `P-048` đã nằm trên `main` từ 13,7 giờ trước
+
+| Mốc | Chuyện gì |
+|---|---|
+| `2026-09-25T05:28:04Z` | lượt `crux-worker-2` gộp `main` vào #223, push `e0970d0` — lần đổi đầu nhánh **cuối cùng** |
+| `2026-09-25T05:30:40Z` | CI 8/8 xanh trên `e0970d0`; luật gắn nhãn khi đó còn **thiếu** nhánh `open` (`KF-032`) |
+| `2026-09-25T18:46:27Z` | `P-048` (`#252`) vào `main`: nhánh `*)` của `case "$GATE"` nay `--add-label automerge` |
+| `2026-09-26T08:2xZ` | #223 **vẫn** `labels: []` — 13,7 giờ sau bản sửa, không một lượt `ci.yml` nào chạy trên nó |
+
+Bản sửa đúng và không thiếu gì; nó chỉ **không có đường tới các PR đã xanh từ trước** — cần một sự kiện `pull_request` mà không ai sinh ra. `workflow_dispatch` cũng không gỡ được: khối gắn nhãn khoá sau `if: github.event_name == 'pull_request'`.
+
+### Vì sao không phép đếm nào hiện có thấy nó
+
+| Bộ đếm | Vì sao mù |
+|---|---|
+| bước 0a (phụ lục P3) | chỉ liệt kê PR **đang xung đột**; #223 gộp sạch |
+| `pickPrToHandle` (P1 bước 2) | bốn lý do là `ci-red`, `unhandled-comment`, `red-after-merge`, `aborted-ineligible` — #223 không khớp lý do nào |
+| `gate-flow.ts` / `gateFlowVerdict` | `delayedCount` chỉ đếm PR **đã mang** nhãn `automerge-delayed`; PR không nhãn rơi ra ngoài cả mẫu số |
+| bản tin "Đang chờ merge" (phụ lục P2) | liệt kê PR `automerge-delayed` và PR kẹt ở hàng đợi; PR chưa từng vào hàng đợi không thuộc nhóm nào |
+| `watchdog.yml` bảy dấu hiệu | không dấu hiệu nào đọc nhãn PR |
+| `pnpm claims` | trả `open-pr` cho mục `platform/P-014` — đúng, nhưng nó nói "có người nhận", không nói "PR đó không đi đâu được" |
+
+### Chiều hỏng, và vì sao nó đắt hơn một PR đứng yên
+
+PR càng **sạch** (cửa `open`, không chạm vùng bảo vệ) thì càng chắc chắn kẹt theo cách này — cùng nhận xét `P-048` đã ghi. Và nó **giữ luôn mã mục**: `claimCheck` đọc chữ ký từ tiêu đề PR, nên chừng nào #223 còn mở, mục `platform/P-014` còn ở `readyNow` mà mọi worker đều "đi mục khác". Một PR kẹt vì thế khoá một mục `ưu tiên cao` chứ không chỉ khoá chính nó — đo được: `P-014` đứng ở `readyNow` suốt ba lượt worker liên tiếp (`05:34Z`, `06:29Z`, `07:25Z`) với đúng lý do đó.
+
+### Chỗ đã sửa
+
+Chưa có. Bản gỡ #223 **không** nằm trong mục này: gắn `automerge` cho một PR cửa `open` đã xanh là merge nó gần như tức thì, mà `CLAUDE.md` mục 13 đòi một vòng soát ngữ cảnh sạch trước khi gắn nhãn merge — nên nó là việc của một lượt nhận đúng PR #223, hoặc của chủ dự án. Mục này làm chỗ kẹt **thấy được**; `platform/P-060` giữ phần còn lại.
+
+---
+
 ## KF-042 · `claimCheck` trả `free` cho một mục đang có **hai** PR mở làm nó, vì mã trong tiêu đề PR lệch mã trong cây `main`
 
 > Số **KF-042**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-041`, nên `KF-042` không đụng ai.
@@ -1377,3 +1437,82 @@ Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó c
 **Và ngưỡng bản đầu sai theo số của chính kho.** Bản đầu để `STEP0_PENDING_MARGIN_HOURS = 6` (ngưỡng 18 giờ) với lý do *"một lượt worker nhận, cộng hàng đợi chạy trơn"*. Nhưng CHARTER 3.3 ghi phép đo `2026-09-23`: *"hàng đợi merge đứng ~8,6 giờ, 9 PR xung đột, 0 push (`KF-020`)"* — nên `12 + 8,6 = 20,6 > 18`, tức một hàng đợi tắc **đúng như đã từng xảy ra** sẽ tự sinh cảnh báo dù không có gì hỏng, đúng ca mà docblock nói ngưỡng phải tránh. Nay margin **12** giờ, ngưỡng **24**, nằm giữa `20,6` và `34,9`, và bài kiểm ghim cả hai cận bằng hai hằng số mang tên phép đo. Cận trên **không tồn tại** cho ca nhánh chờ được `cherry-pick` vào một PR `owner-merge` — khoảng chờ khi đó là thời gian chủ dự án, không có trần; khai ra trong docblock thay vì giả vờ đã che.
 
 **Đường tự gỡ cảnh báo — phần bản đầu thiếu hẳn.** Dấu hiệu số 7 `add` vào cảnh báo `[CẢNH BÁO] Nhà máy im lặng`, và cảnh báo đó @nhắc chủ dự án mỗi **4 giờ** chừng nào tập dấu hiệu còn nguyên. Bản đầu không thêm đường nào để **máy** gỡ nó: không script nào, không prompt nào `cherry-pick` nhánh chờ, và phụ lục P1 bước 0 lẫn `CLAUDE.md` mục 1 — đúng hai chỗ mà mục này khai là nguyên nhân — vẫn không nhắc tới nhánh chờ. Tức một cảnh báo gọi **chủ dự án** cho một việc chỉ **worker** làm được, ngược thước đo CHARTER 1.3 và ngược chính lập luận của dấu hiệu số 6 ngay phía trên (nó **cố ý không** `add` vì lý do đó). Nay đóng vòng: **bước 0f** trong phụ lục P1 và P3 của CHARTER, lệnh `pnpm step0:pending` trong `CLAUDE.md` mục 1, và lệnh đó **ném lỗi** khi không đo được chứ không trả danh sách rỗng.
+
+---
+
+## KF-043 · Mỗi lần đẩy nhịp tim **xoá** nhịp tim của các lượt trước, và 33 bản ghi vẫn thiếu ở đầu nhánh
+
+> Số **KF-043**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** ngay trước khi commit (`KF-005`, `KF-036` — không dò "các PR đang mở", nguồn đó đã đo được là cũ/thiếu). Cao nhất tìm được là `KF-042`, nên `KF-043` không đụng ai.
+>
+> **Vì sao mục này ra đời muộn hơn bản sửa mã.** Bản sửa đi trong [`#281`](https://github.com/HungQuach301/crux-studio/pull/281) (lượt `crux-worker-2` `06:29Z` `2026-09-26`), và chính lượt đó tự khai là còn nợ: *"chỗ hỏng này VẪN chưa có dòng nào trong `ops/known-failures.md` và chưa có mục backlog, nên sau khi PR này merge thì không chỉ báo MÁY nào trỏ vào chỗ thiếu — chỉ đoạn văn xuôi này"*. Lý do hoãn đo được (7/8 PR đang mở khi đó chạm `ops/lanes/platform/backlog.md`, và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown), nhưng một món nợ hoãn mà không ai ghi là đúng hình dạng *"nguồn để đếm không tồn tại"* của `KF-021`/`P-033`. Lượt `07:25Z` trả nợ đó.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: không lần đẩy nào bị từ chối, `pnpm check` **EXIT=0**, CI xanh, nhánh chính xanh, và `watchdog.yml` dấu hiệu số 5 **vẫn đúng** suốt thời gian đó.
+
+- **Lần gặp: 37** — đếm theo đúng chữ ký dưới đây, tức **số commit** mang dấu xoá, không phải số bản ghi mất. Hai đại lượng này khác nhau và đã từng bị trộn: tiêu đề `#281` ghi `(33/58 commit)` trong khi `note` của chính nó ghi 37, và **37 là số đúng cho chữ ký** (`git diff-tree --name-status` đếm `^D` trên từng commit, hai cách đếm độc lập cùng ra 37). Con số **33** ở khối ⚠️ dưới là *số bản ghi còn thiếu ở đầu nhánh* — đại lượng khác, đừng dùng nó cho ngưỡng CHARTER 6.6.
+- **Chữ ký:** một commit trên `claude/telemetry` có `-1` file hoặc hơn trong `git show --stat`, tức cây `heartbeat/` ở đầu nhánh mang **ít** entry hơn tổng số file mà nhánh đã từng giữ.
+- **Nguyên nhân gốc:** khối lệnh `--commands` của `ops/scripts/telemetry-beat.ts` dựng cây `heartbeat/` **lại từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây đó với `-p $PARENT`. Một cây hợp lệ trỏ tới đúng một file vẫn là một cây hợp lệ, nên git không có gì để báo. "Hai worker không bao giờ chạm cùng một file" (`D-C04`) đúng — nhưng nó bảo đảm **không xung đột**, không bảo đảm **không mất dữ liệu**, và bản đầu của khối lệnh trộn hai điều đó.
+- **Đã sửa ở đâu:** `ops/scripts/telemetry-beat.ts` (`#281`) — khối lệnh nay dựng cây **THÊM** ở **cả hai** tầng: `git ls-tree` liệt kê entry đang có, `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Cộng ba chỗ hỏng cùng họ mà vòng soát của `#281` tìm ra: cây **gốc** cũng dựng thêm (một `README` ở gốc nhánh từng bị xoá im lặng được), `ls-tree` hỏng nay **NÉM** thay vì bị `2>/dev/null | awk` nuốt thành "danh sách rỗng" — tức đúng chỗ hỏng vừa sửa — và vòng thử lại khi lần đẩy bị từ chối nay **có thật**, trần 4 lần, không `--force` nào.
+- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ⚠️ Lớp chặn này che vế **ghi**; vế **đo lại đầu nhánh** còn thiếu — xem khối ⚠️ dưới và mục `platform/P-059`.
+
+### Bảng: chữ ký sống bao lâu, đo trên chính nhánh đó
+
+| Phép đo | Số | Nguồn |
+|---|---|---|
+| Commit có `-1` file hoặc hơn | **37 / 58** (không kể 6 commit của lượt sửa và lượt ghi mục này) | `git diff-tree --no-commit-id --name-status -r` đếm `^D` từng commit; `git log --diff-filter=D` ra cùng số |
+| Nhánh đứng ở **đúng một** file | **27,7 giờ liền** — `a6f071c` (`2026-09-24T08:54:58Z`, commit gốc) → `1bb6594` (`2026-09-25T12:38:27Z`, lần đầu có hơn một file) | `git log --format=%cI` trên nhánh (27h43m29s) |
+| Rồi bị đạp về một file lần nữa | **15,0 giờ** — `715aab9` (`12:46:19Z`) → `c74534b` (`03:47:33Z`) | cùng nguồn (15h01m14s) |
+| Commit phải đi chữa **bằng tay** | **2**, và tên chúng nói ra chỗ hỏng: `1bb6594` *"khôi phục nhịp tim 11:39:23Z bị lần đẩy trước ghi đè"*, `c74534b` *"khôi phục dòng của crux-worker-1 03:38Z bị lần đẩy trước ghi đè"* | `git log --format=%s` |
+| Commit xoá **hai** file một lúc | **1** (`715aab9`) | `git diff-tree --name-status` |
+
+### ⚠️ Khúc nhân quả mà một bộ đọc dễ nối sai — các lần đẩy NGỪNG xoá TRƯỚC bản sửa 3 giờ 22 phút
+
+Đây là chỗ dễ kể thành một câu chuyện gọn mà sai, nên ghi ra bằng mốc:
+
+```
+9acbc16  2026-09-26T03:47:01Z  D=1  tip=1   ← commit CUỐI CÙNG còn xoá
+c74534b  2026-09-26T03:47:33Z  D=0  tip=2   ← commit chữa TAY, và từ đây tip leo đơn điệu
+6a6d4de  2026-09-26T04:25:29Z  D=0  tip=3
+…        14 commit liền D=0, tip 2 → 12
+d1461b8  2026-09-26T07:09:45Z          ← bản sửa mã (#281) MỚI lên `main` ở mốc này
+```
+
+Nên câu *"bản sửa làm các lần đẩy thôi xoá"* **không** được dữ liệu này chống đỡ: chuỗi sạch bắt đầu từ `03:47:33Z`, tức **3 giờ 22 phút trước** khi bản sửa vào `main`, và trong khoảng đó `main` vẫn mang khối lệnh cũ. Hai cách đọc còn mở, cả hai đều đáng biết:
+
+1. các lượt từ `04:25Z` **không chạy khối `--commands` đúng như nó nằm trên `main`** (các commit chữa tay cho thấy worker đã tự thấy chỗ hỏng và tự dựng cây thêm vào) — nếu vậy thì 9 bài kiểm mới đang khoá một đường mà lần đẩy thật không đi qua;
+2. hoặc nguyên nhân gốc rộng hơn khối lệnh đó.
+
+Điều bản sửa **thật sự** bảo đảm, và đo được: khối lệnh trên `main` từ `07:09:45Z` không còn dựng lại cây từ một entry, và 9 bài kiểm khoá hành vi đó. Lượt `07:25Z` là lần đẩy đầu tiên **sau** bản sửa, và nó đưa đầu nhánh **11 → 12** không xoá gì — một điểm dữ liệu nhất quán, **không** phải bằng chứng nhân quả. Phân biệt hai điều đó chính là thứ `KF-021` đòi.
+
+### ⚠️ Vế CHƯA sửa — 33 bản ghi vẫn thiếu ở đầu nhánh, và không phép đo nào nói ra
+
+```
+tip = claude/telemetry
+file heartbeat/ ở ĐẦU nhánh                → 12   (đo lại lúc 08:0xZ: 14, hai lượt sau đã đẩy)
+file heartbeat/ riêng biệt qua MỌI commit   → 45   (đo lại: 47)
+thiếu ở đầu nhánh                           → 33   ← ỔN ĐỊNH ở cả hai mốc
+khoảng phủ: 2026-09-24T083916Z … 2026-09-26T033126Z
+```
+
+Con số **33 không đổi** khi nhánh mọc thêm, vì mỗi lượt mới thêm đúng một file vào cả hai phép đếm — đó là dấu hiệu nó đo một đống nợ đứng yên, không phải một đại lượng đang trôi.
+
+**Không chỉ báo nào nói ra con số đó**, vì không bên đọc nào đo nó:
+
+- `heartbeat-source.ts` lấy **`max`** của `at` (dòng 141–146), nên nó đúng với **một** file cũng như với 45. Đó là lý do `watchdog.yml` dấu hiệu 5 xanh suốt 37 lần.
+- **Không script nào trong kho gọi `step0Streaks`**, và mọi bên gọi `readRunLogs` trong `ops/scripts/*` (`digest-metrics`, `update-metrics`, `lane-heartbeat`, `recheck-assumptions`) đều truyền thư mục **`ops/logs`**; bên duy nhất đọc `heartbeat/` là `heartbeat-source.ts` và nó không gọi `step0Streaks`. Nên nhánh này **chưa bao giờ** góp dòng nào cho phép đếm chuỗi kẹt. **Điều này BÁC một lời khai rộng hơn số đo** đang nằm trong docblock `ops/scripts/telemetry-beat.ts` (*"bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần"*) — `step0Streaks` là hàm **thuần**, nó không đọc đường dẫn nào. Sửa docblock đó là **tiêu chí 8** của `P-059`, không phải một câu để đây rồi quên: vòng soát `#229` đã có tiền lệ sửa tại chỗ một lời khai sai trong đúng file đó.
+- `pnpm step0:pending` đo *"dòng log đã tới nhánh chính chưa"*, một câu hỏi khác.
+
+**"Dữ liệu chưa mất" đúng, nhưng chia làm hai phần rất khác nhau về độ khẩn:**
+
+```
+trong 33 bản ghi thiếu, đã có trên `main` (ops/logs/integration/)   → 25
+chỉ còn trên đầu nhánh của các PR ĐANG MỞ                            →  8
+    #231 (2) · #249 · #223 · #260 · #261 (2) · #274 — mỗi tên đúng một nhánh
+```
+
+Tám bản ghi đó phụ thuộc vào việc sáu PR kia **merge được**. Một PR đóng-không-merge mang theo dòng log của nó ra khỏi mọi nhánh còn sống — và điều đó **đã xảy ra** trong ngày (xem mục dưới), nên tám bản ghi này không phải chuyện lý thuyết.
+
+Bất biến còn thiếu phát biểu được thành một câu: **đầu nhánh `claude/telemetry` phải là tập cha của mọi file `heartbeat/` mà nhánh đã từng giữ** (nhánh append-only). Một lần vi phạm nghĩa là một lần đẩy đã xoá. Mục `platform/P-059` mang vế đó cộng việc khôi phục.
+
+### Ghi chú về chỗ đặt khối này
+
+Cả **6** PR đang mở lúc `07:2xZ` chạm `ops/lanes/platform/backlog.md`, **5/6** chạm file này (chỉ `#274` không), và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown (*"union sẽ trộn lẫn hai mục thành một mục hỏng mà vẫn merge được — đúng nhóm lỗi Z"*). Chèn ở **đầu** file — chỗ `KF-042` nằm — là đẩy tới 5 PR vào xung đột phải giải **bằng tay** ngay sau khi hàng đợi vừa sạch ba lượt liên tiếp. Nên khối đặt ở **cuối** file, và lượt đó **đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa** chứ không tin lập luận. Thứ tự các mục trong file này vốn không mang nghĩa (`KF-041` đã nằm cuối trước lượt này), nên đặt ở cuối không phá quy ước nào.
