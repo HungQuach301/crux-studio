@@ -260,3 +260,20 @@ export function step0PendingBranch(step0LogId: string): string {
 export function isStep0PendingBranch(branch: string): boolean {
   return branch.startsWith(`${STEP0_PENDING_BRANCH_PREFIX}/`);
 }
+
+/**
+ * Mã log nằm trong một tên nhánh chờ — **phép đảo của `step0PendingBranch`**,
+ * đứng ngay cạnh nó cùng lý do docblock trên đã ghi: một chỗ ghép tên thì
+ * một chỗ tách tên, không nơi nào tự `slice` theo độ dài tiền tố.
+ *
+ * Trả `null` khi nhánh không phải nhánh chờ, hoặc khi phần đuôi rỗng
+ * (`<tiền tố>/` trơn) — bên gọi **phải nói ra** chỗ `null` chứ không im
+ * lặng bỏ qua. Nó KHÔNG kiểm mã có hợp lệ không: việc đó là của
+ * `parseStep0LogId`, và trộn hai phép kiểm vào một hàm là cách một trong
+ * hai thành mã chết (`KF-041`, vòng soát của `P-056`).
+ */
+export function step0LogIdFromPendingBranch(branch: string): string | null {
+  if (!isStep0PendingBranch(branch)) return null;
+  const id = branch.slice(`${STEP0_PENDING_BRANCH_PREFIX}/`.length);
+  return id.length === 0 ? null : id;
+}
