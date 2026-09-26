@@ -115,6 +115,37 @@ Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trư
 
 ---
 
+## KF-040 · Tiền API đã tiêu, rồi lượt chạy ném — và **không dòng log nào** ghi lại số tiền đó
+
+> Số **KF-040**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất toàn cục là `KF-039` (PR `#242`), nên `KF-040` không đụng ai.
+
+- **Lần gặp: 2.** Đủ ngưỡng `CLAUDE.md` mục 13 *"lỗi cùng loại lần thứ hai → sửa spec/contract/prompt, không vá sản phẩm"*.
+- **Nhóm Z.** Không gì đỏ: script ném, job đỏ vì một lý do khác (tên file hỏng), và người đọc thấy một job đỏ chứ không thấy *"vừa tiêu N đô mà sổ chi không có dòng nào"*. Ngân sách học của CHARTER mục 8 đọc `ops/logs/**`, nên tiền đã tiêu **biến mất khỏi phép cộng**.
+- **Chữ ký:** một script gọi API trả tiền trong vòng lặp → một bước **ngoài** `try` (đọc file đầu vào, dựng prompt) ném ở lượt thứ N → ngoại lệ thoát khỏi hàm → `appendLog` không bao giờ chạy → **N-1 lần gọi đã bị tính tiền, 0 dòng log**. Bất biến **I8** đòi *mọi* lần chạy có một dòng mang `costUsd`, và nhánh ném là nhánh **đắt nhất**, tức nhánh ít được phép im lặng nhất.
+
+| Lần | Chỗ | Phát hiện bởi |
+|---|---|---|
+| 1 | `ops/scripts/novelty-embeddings-trial.ts` (mục `topic/T-014`, PR `#253`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~03:0xZ` |
+| 2 | `ops/scripts/model-assumption-check.ts` (mục `topic/T-006b`, PR `#264`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~10:0xZ` |
+
+Lần 2 xảy ra **~7 giờ sau** lần 1, trong một file **mới viết**, bởi một lượt agent **không đọc** bản sửa của lần 1. Đó là phần đáng ghi: bài học nằm trong một docblock của một file khác, và docblock không đi theo người viết file sau.
+
+- **Tái hiện, lần 2, chạy thật:**
+  ```
+  ném ở readHandCases('M-003') sau 2 lần gọi API
+  → NÉM RA NGOÀI runTier4
+  → số lần đã GỌI OPENAI (đã tính tiền): 2
+  → số dòng log ghi được (I8):            0
+  ```
+- **Nguyên nhân gốc:** `try` được đặt quanh *"lời gọi mạng"* vì đó là chỗ **trông như** có thể hỏng. Nhưng phạm vi đúng của `try` không phải "chỗ dễ hỏng" mà là **"từ lúc đồng hồ tiền bắt đầu chạy"** — mọi thứ sau lần gọi tính tiền đầu tiên, kể cả một phép đọc file trông vô hại.
+- **Máy chặn từ nay:**
+  - Lần 1: `ops/scripts/novelty-embeddings-trial.ts` ghi log trong `finally`, `costUsd` cộng dồn **ngoài** `try`.
+  - Lần 2: `ops/scripts/model-assumption-check.ts` — `runTier4` bao **cả vòng lặp** trong `try/finally`, `totalCostUsd` khai ngoài `try`, và hai lời gọi `readModel`/`readHandCases` chuyển **vào trong** `try` của từng model. Hai bài kiểm khoá hai lớp: `TÁI HIỆN C2` (file ca kiểm hỏng) và `C2 lớp 2` (ngoại lệ ngoài phạm vi một model). Phá thử: bỏ `finally` chỉ ghi ở đường trót lọt → **1 bài đỏ đúng chỗ**; đưa `readHandCases` ra ngoài `try` → **1 bài đỏ đúng chỗ**.
+- **Luật rút ra, cho mọi script gọi API trả tiền sau này:** đặt `try` từ **trước lời gọi tính tiền đầu tiên**, cộng dồn `costUsd` vào một biến khai **ngoài** `try`, và ghi dòng log trong `finally`. Ba câu đó là ba câu, không phải một gợi ý.
+- **Còn hở, khai chứ không giấu:** chưa có cổng **máy** nào bắt một script *mới* quên luật này — hai lần sửa đều do vòng soát ngữ cảnh sạch bắt, không do CI. Một bộ dò dạng *"file nào gọi `api.openai.com` mà không có `finally` chứa `appendLog`"* là một mục backlog riêng; chưa mở vì nó cần đo xem có bao nhiêu ca giả. Tới lúc đó, KF này là lưới đỡ.
+
+---
+
 ## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
 
 > Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
@@ -131,6 +162,40 @@ Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trư
 | `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
 | `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
 | lúc viết mục này | `#127` **vẫn mở**. |
+
+**Lần gặp thứ 2 — chủ dự án bảo kiểm, đã kiểm, và nó đúng là một lần lặp.** Chỉ dẫn trên `#251`
+(`2026-09-25T06:04:33Z`): *"Báo cáo D6 vẫn ghi '#127 vẫn cần anh quyết'. Kiểm: lượt đó bắt đầu trước hay
+sau câu trả lời? Nếu sau thì đây là lần lặp của `KF-035`, ghi thêm vào KF."* Đo bằng API, ba mốc:
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-24T23:49:25Z` | Chủ dự án **trả lời `#127`** ngay trên issue: *"#127 A — điều kiện đã đủ… Chạy cấp kiểm 4 … ở lượt tới…"*. Comment không mở đầu 🤖 trên issue nhãn `decision` → là **chỉ dẫn** (`CLAUDE.md` mục 5). |
+| `2026-09-25 ~04:2x–05:0xZ` | Lượt `crux-worker-2` làm **D6**, và báo cáo của nó viết `#127` *"**vẫn cần anh quyết** dù `#66` đã merge"*. |
+| chênh lệch | Lượt D6 bắt đầu **~4,5 giờ SAU** câu trả lời. |
+
+**Nên: đúng, là lần lặp** — cùng chữ ký, đổi nguồn dữ liệu. Lần 1 agent đọc một *trạng thái tồn kho*
+(`OPENAI_API_KEY` có chưa) bằng trí nhớ; lần 2 agent đọc một *câu trả lời* bằng trí nhớ. Cả hai lần, thứ
+đã đổi nằm trong một chỗ **đọc được bằng một lời gọi API** mà không lượt nào gọi.
+
+**Nguyên nhân gốc lớp 3, mới ở lần này:** `CLAUDE.md` mục 14 dặn đọc câu trả lời ở **cả hai** chỗ — issue
+`[QĐ]` và issue bản tin. Lượt D6 đọc `#127` đủ để trích **thân** issue (nó dẫn đúng phương án A) nhưng
+**không đọc comment** của issue đó. Đọc thân mà không đọc comment là một hình dạng cụ thể, lặp được, và
+nó không đỏ ở đâu cả: thân issue luôn nói "đang chờ", vì thân issue được viết lúc còn chờ.
+
+**Máy chặn từ nay:** vẫn chỉ một nửa. Bộ dò *"Quyết định điều kiện đã đủ nhưng còn mở"* mà chính D6 dựng
+(`conditionMetButOpen` ở `ops/scripts/digest-metrics.ts`) bắt được hình dạng **lần 1** (PR gate đã merge).
+Nó **không** bắt được hình dạng lần 2, vì tín hiệu của lần 2 là *"issue đã có một comment không mở đầu 🤖
+sau lần agent đọc gần nhất"* — một phép đo khác hẳn. Chưa thêm luật ở đây vì đúng **A10** của `#251`
+(chỉ thêm luật khi đã có một lỗi thật): nay đã có, nên nó đáng một mục backlog riêng, không phải một dòng
+vá trong mục `topic/T-006b`. Lưới đỡ tạm cho tới lúc đó: **đọc `get_comments` của mọi `[QĐ]` mình định
+nhắc tới**, đừng đọc mỗi thân issue.
+
+**Lần gặp thứ 2 KHÔNG tự lành ở lượt này, và đó là chủ đích.** Lượt `crux-worker-1` `2026-09-25 ~09:5xZ`
+nhận `#127 A` và dựng xong cơ chế cấp kiểm 4 (`topic/T-006b`), nhưng **chưa chạy** nó: `OPENAI_API_KEY`
+chỉ sống trong Actions (kiểm bằng chạy thật, `env` của phiên không có), và một workflow mới trong
+`ops/workflows/` chỉ có hiệu lực **sau khi** PR merge vào `main` và `sync-workflows.yml` chép xong
+(`CLAUDE.md` mục 4). Nên `#127` **giữ mở** tới sóng 2. Đóng nó ở sóng 1 để "xong việc" là dựng lại đúng
+chữ ký của chính `KF-035` theo chiều ngược: khai một việc chưa làm là đã làm.
 
 **Nguyên nhân gốc — hai lớp:**
 
@@ -1064,6 +1129,16 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 
 ---
 
+## KF-032 · Cửa `open` không được `ci.yml` gắn nhãn `automerge`, nên PR sạch không bao giờ vào hàng đợi merge — CI vẫn 8/8 xanh
+
+> Số **KF-032**: dò `## KF-` trên `main` **và mọi** nhánh PR đang mở (KF-005), cao nhất đang dùng là `KF-031` (#249), nên `KF-032` không đụng ai.
+
+- **Lần gặp:** 1 (#223 — mở `2026-09-24T04:38:39Z`, CI 8/8 xanh từ `04:46Z`, cửa `open`, đứng yên ~20 giờ mà không chỉ báo nào đỏ). Chỉ dẫn của chủ dự án ở #251 mục **D4a**.
+- **Chữ ký:** một PR có CI đủ xanh, `mergeable_state` không `blocked`, cửa `protected-area.ts` là `open`, nhưng **không mang nhãn** `automerge` — và `automerge.yml` lọc hàng đợi theo `automerge`/`automerge-delayed`, nên nó vô hình với máy merge. Càng "sạch" (không chạm vùng bảo vệ) thì càng chắc chắn kẹt.
+- **Nguyên nhân gốc:** khối `case "$GATE"` của job `protected-area` trong `ops/workflows/ci.yml` có ba nhánh, nhưng chỉ hai nhánh `owner-merge)` và `automerge-delayed)` `--add-label` nhãn của mình; nhánh `*)` — tức cửa `open`, giá trị thứ ba và duy nhất còn lại của `Gate` — chỉ **gỡ** hai nhãn kia mà không bao giờ `--add-label automerge`. Hai luật đúng riêng lẻ (gắn nhãn theo cửa · lọc hàng đợi theo nhãn) cắn nhau ở đúng cửa không ai gắn. Nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+- **Đã sửa ở đâu:** `ops/workflows/ci.yml` — thêm `gh pr edit "$PR" --add-label automerge` vào nhánh `*)`, cân xứng với hai nhánh kia. Không đụng `automerge.yml` (bộ lọc theo nhãn vốn đúng); chỗ hỏng là bên **sinh** nhãn, không phải bên đọc.
+- **Máy chặn từ nay:** `ops/scripts/check-workflows.ts` — `mergeGateLabelProblems` đọc khối `case "$GATE"` và đòi **cả ba** cửa `--add-label` đúng nhãn của mình (`owner-merge`→`owner-merge`, `automerge-delayed`→`automerge-delayed`, `open`/`*)`→`automerge`), chạy trong `pnpm lint:workflows`. Luật chỉ áp cho workflow mang khối gắn nhãn theo cửa merge (nhận diện bằng `case "$GATE"` cộng cả hai nhánh `owner-merge)`/`automerge-delayed)`) nên không kêu oan. `ops/test/check-workflows.test.ts` — bài **TÁI HIỆN LỖI** dựng đúng khối `*)` thiếu nhãn của #223 (bất biến I2), cộng bài khoá từng nhánh, bài thiếu nhánh, bài không-kêu-oan, và bài đọc `ci.yml` **thật** đòi cả ba cửa đủ nhãn.
+- **Còn lại, tách phạm vi (không nống mục này):** #223 **không tự thoát** nhờ PR này — workflow chỉ có hiệu lực sau khi merge và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4), và nhãn phải do một lượt `ci.yml` mới trên #223 gắn (một sự kiện `synchronize`/`labeled` bất kỳ). Chủ dự án merge tay hoặc một lượt sau gắn `automerge` sau khi soát vẫn là đường ngắn hơn. Hai mục anh em D4b (`protected-area.ts` chưa coi `ci.yml` là hạ tầng merge) và D4c (bước tải gitleaks không phân biệt "quét rồi sạch" với "chưa quét được") là hai PR riêng.
 ## KF-033 · PR sửa `ops/workflows/**` gây **báo động giả** trong cửa sổ chờ `sync-workflows` — @nhắc chủ dự án dù nhà máy chạy đúng
 
 > Số **KF-033**: dò `## KF-` trên `main` (cao nhất `KF-030`) **và trên đầu các PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-033` không đụng ai.
@@ -1079,6 +1154,33 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 
 ---
 
+## KF-039 · Cổng cú pháp của `I-018` **cho qua** cây union có khai báo trùng — `resolved` lần thứ hai cho một cây Node không nạp được
+
+> Số **KF-039**: `KF-036` là mã mà mục này nhận lúc viết, nhưng `main` đã cấp cùng số cho một chỗ hỏng khác (`KF-036 · Phép dò mã mục trống…`, mục `platform/P-054`, PR `#258`, vào `main` lúc `2026-09-25T06:53:33Z`) — tức **đúng chỗ hỏng mà `KF-036` của `main` mô tả**, xảy ra với chính mục này. Lượt `crux-worker-1` ~07:5xZ 2026-09-25 gộp `main` vào nhánh này ở bước 0 và phát hiện va chạm, nên đổi số ở đây. `KF-039` là mã trống kế tiếp, dò `^## KF-` trên `main` **và** trên đầu nhánh cả 11 PR đang mở (cao nhất `KF-038`, PR `#261`) — `KF-005`.
+
+- **Lần gặp:** 2 của **cùng một lớp hỏng** với `KF-016` (`integrator-resolve.ts` trả `resolved` cho một cây không đọc được), nhưng **chữ ký khác** nên cổng của `I-018` không bắt. Lần này: PR `#242` (`claude/dreamy-ride-ynixo1`, mục `audio/AU-007`), lượt `crux-worker-1` ~04:41Z ngày 2026-09-25, sau khi `#39`/`V-001` vào `main` lúc `04:36:59Z` (`b1063a9`).
+- **Chữ ký:** `node ops/scripts/integrator-resolve.ts origin/main` in `{"outcome":"resolved","files":["kernel/src/packs.ts"]}` và thoát `0`, nhưng cổng **đầu tiên** của `pnpm check` (`pnpm contracts`) đỏ ngay ở tầng **nạp module**, không phải ở `typecheck`:
+
+  ```
+  file:///home/user/crux-studio/kernel/src/packs.ts:13
+  import { assertValid,                 } from './validate.ts';
+           ^^^^^^^^^^^
+  SyntaxError: Identifier 'assertValid' has already been declared
+  ```
+
+- **Nguyên nhân gốc:** hai phía cùng **thêm** một dòng `import … assertValid …` vào cùng khối import — `main` viết `import { assertValid, type JsonSchema } from './validate.ts';` (V-001), nhánh viết `import { assertValid } from './validate.ts';` (AU-007). Union thuần cộng thêm giữ **cả hai** dòng. Không bên nào xoá dòng nào, nên phép đếm dòng xoá của `integrator-resolve.ts` lại không thấy gì — **y hệt `KF-016`**.
+- **Vì sao cổng `I-018` không bắt — và đây mới là phần mới:** `mergedSyntaxProblem` (`ops/scripts/merge-syntax.ts`) kiểm file script bằng `ts.transpileModule(..., { reportDiagnostics: true })`, phép này **chỉ báo lỗi PARSE**. Hai dòng `import` trùng ký hiệu **parse hoàn toàn hợp lệ** — lỗi là lỗi *khai báo trùng*, phát sinh ở tầng **liên kết module** của ESM, sau khi parse xong. Nên cổng trả `null` (cho qua) trên đúng file mà Node từ chối nạp. Đo được, hai chiều, bởi vòng soát ngữ cảnh sạch của phụ lục P1 bước 6:
+
+  ```
+  mergedSyntaxProblem(<file có 2 dòng import trùng>)  → null            # cổng CHO QUA
+  node -e "await import('…/kernel/src/packs.ts')"     → SyntaxError…    # Node TỪ CHỐI
+  ```
+
+- **Phân loại SAI, không chỉ là một lần bỏ sót:** CHARTER phụ lục P3 bước 0b nói ca "cây sau khi union không còn đọc được" là **`aborted-ineligible`**, *không* phải "PR đỏ" — và hai ca đi **hai đường khác nhau** ở lượt sau (phụ lục P1 bước 2: `aborted-ineligible` thì worker giải xung đột bằng phán đoán; `red-after-merge` thì worker đọc chỗ đỏ rồi sửa code). Tool trả `resolved`, nên `pickPrToHandle` xếp `#242` vào ca `red-after-merge`. Kết quả cuối vẫn đúng ở lượt này, nhưng đường đi là đường sai.
+- **Vì sao nó đắt:** nhóm **Z** ở đúng công cụ mà cả hàng đợi merge dựa vào. Phần *"Thiên lệch, khai trước"* của `KF-016` liệt kê các lỗ còn lại của cổng — nó kể đường gộp `clean` và phép kiểm YAML hẹp, **không** kể ca khai báo trùng. Nên tới trước dòng này, sổ đang nói **sai phạm vi lỗ** của chính cổng đó. Lượt integrator kế tiếp gặp lại hình dạng này sẽ lại nhận `resolved` và push một cây đỏ lên nhánh PR.
+- **Đã sửa ở đâu:** *chỉ mới phần vá sản phẩm.* Lượt `crux-worker-1` 04:41Z reset về `66ab9b8` (không push cây đỏ — P3 bước 0b), rồi gộp lại bằng `git merge` thường và **giải tay** đúng một khối import: gộp hai danh sách thành một, giữ đủ `readingTableSchema` (AU-007) lẫn `fileURLToPath` + `type JsonSchema` (V-001), `assertValid` đúng **một** lần. Đo không nuốt bên nào: `git diff origin/main -- kernel/src/packs.ts` **0 dòng xoá**; `git diff 66ab9b8 -- …` xoá **đúng 1 dòng**, là dòng import trùng; 19/19 export còn nguyên. Theo `CLAUDE.md` mục 13 thì đó **vẫn là vá sản phẩm**, không phải sửa cơ chế.
+- **Máy chặn từ nay:** **chưa có** — và đây là chỗ để mở có chủ đích, khai ra thay vì im. Phần siết `ops/scripts/merge-syntax.ts` chạm **tầng luật** đang bắt lỗi, nên `CLAUDE.md` mục 13 đòi **tách PR riêng**: *"Bản sửa vừa sửa chỗ hỏng vừa siết thêm luật thì tách hai PR"*. PR `#242` chỉ mang dòng tài liệu này. Mục backlog cho phần cơ chế cần: mở rộng `mergedSyntaxProblem` bắt khai báo trùng ở phạm vi đỉnh của module (nạp thử, hoặc soát tên trùng của `import`/`const`/`let`/`function`/`class`), kèm **test tái hiện lỗi** đúng hình dạng "hai bên cùng thêm một dòng import cùng ký hiệu" (bất biến **I2**), và đo **hai chiều** như `I-018` đã làm: đỏ trên bản trước khi sửa, xanh sau bản sửa. Giữ nguyên thiên lệch của `merge-syntax.ts` (báo sai đắt hơn bỏ sót): chỉ báo khi cây **chắc chắn** không nạp được.
+- **Lưới đỡ tới khi có máy chặn:** bước 0 phải chạy `pnpm check` **đủ** trước khi push (P3 bước 0b đã đòi), và một cây gộp `resolved` mà `pnpm check` đỏ ở lỗi *nạp module* hay *cú pháp* thì đọc là **`aborted-ineligible`**, không phải một PR đỏ bình thường — cùng dòng lưới đỡ mà `KF-016` đã đặt, nay nói rõ là nó phủ cả lỗi khai báo trùng.
 ## KF-034 · Soát chéo GPT chạy đều, tốn tiền đều, và chưa bao giờ ra một phát hiện nào
 
 > Số **KF-034**: dò `## KF-` trên `main` (cao nhất `KF-033`) **và trên đầu cả 10 PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-034` không đụng ai.
