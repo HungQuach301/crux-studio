@@ -58,7 +58,6 @@
  * git fetch --no-tags --depth=1 origin +refs/heads/claude/telemetry:refs/crux/telemetry
  * git rev-list --count refs/crux/telemetry   → 1      (lịch sử thật: 70)
  * ever = tip = 18  ⇒  phép đo trả "0 thiếu"  (sự thật: 33)
- * git rev-parse --is-shallow-repository      → true   ← tín hiệu dò được
  * ```
  *
  * Đó đúng ca **BÁO YÊN** mà `KF-041` cấm — *"không im lặng, nó KHẲNG ĐỊNH LÀ
@@ -68,14 +67,52 @@
  * | Lựa chọn | Chi phí | Vì sao không chọn |
  * |---|---|---|
  * | `--depth=1` (bản cũ) | rẻ nhất | **báo yên**, đo được ở trên |
- * | `--depth=N` đủ lớn | bị chặn | "đủ lớn" hết đúng một cách im lặng; nhánh mọc ~1 commit mỗi 20 phút (70 commit sau hai ngày) nên mọi N đều hết hạn |
- * | **lịch sử đầy đủ** (đã chọn) | ~70 commit lúc chọn, mỗi commit một blob nhỏ cộng hai tree; mọi giờ một lần | tăng theo thời gian, khai ở dòng dưới |
+ * | `--depth=N` đủ lớn | bị chặn | "đủ lớn" hết đúng một cách im lặng; nhánh mọc ~1 commit mỗi 20 phút (74 commit sau hai ngày) nên mọi N đều hết hạn |
+ * | **lịch sử đầy đủ** (đã chọn) | ~74 commit lúc chọn, mỗi commit một blob nhỏ cộng hai tree; mọi giờ một lần | tăng theo thời gian, khai ở dòng dưới |
  * | chuyển sang một nơi chạy thưa hơn | rẻ hơn | phát hiện muộn hơn cho một chỗ hỏng **mất dữ liệu**; đáng cân nhắc lại khi lịch sử vượt ~5000 commit |
  *
- * **Lối thoát đã cài sẵn cho lượt sau:** nếu một lượt sau phải đặt lại một
- * trần độ sâu, `historyCommits` cộng ca 2 của hàm dưới biến việc đó thành
- * một câu trong `problems` — **không** thành *"0 thiếu"*. Tức chi phí giảm
- * được mà không mua lại chỗ hỏng.
+ * ## `--is-shallow-repository` là phép đo SAI ở đây, và vòng soát bắt đúng chỗ
+ *
+ * Bản đầu của mục này dò kho nông bằng `git rev-parse --is-shallow-repository`.
+ * Đó là một cờ của **cả kho**, và nó không nói gì về **ref này**. Đo thật trên
+ * kho trắng, đúng cách `actions/checkout@v7` làm (mặc định `fetch-depth: 1`),
+ * `2026-09-26T09:5xZ`:
+ *
+ * ```
+ * git fetch --no-tags --depth=1 origin +refs/heads/main:…      # = actions/checkout
+ * git rev-parse --is-shallow-repository                → true
+ * git fetch --no-tags origin +refs/heads/claude/telemetry:…    # KHÔNG --depth
+ * git rev-list --count refs/crux/telemetry             → 74    ← ĐẦY ĐỦ
+ * git rev-list --max-parents=0 refs/crux/telemetry     → a6f071c (gốc thật)
+ * git merge-base <telemetry> <main>                    → (không có tổ tiên chung)
+ * ```
+ *
+ * Nên cờ kho cho `true` trong khi lịch sử của ref này **đầy đủ** — nhánh
+ * telemetry có gốc riêng nên biên nông của `main` không cắt được nó. Dùng cờ
+ * đó sẽ cho một câu *"không đo được"* ở **mọi** lượt watchdog, tức gọi chủ dự
+ * án mỗi 4 giờ cho một nhánh đang lành (ngược thước đo CHARTER 1.3).
+ *
+ * Phép đo **đúng** là hẹp hơn: *"có một biên nông nào nằm trên lịch sử của
+ * CHÍNH ref này không"* — giao của `git rev-list <ref>` với file
+ * `$(git rev-parse --git-path shallow)`. Đo thật, cùng kho trên:
+ *
+ * ```
+ * biên nông ∩ lịch sử telemetry (fetch không --depth)  → RỖNG   ⇒ đầy đủ
+ * git fetch --no-tags --depth=5 origin +…:refs/crux/telemetry2
+ * biên nông ∩ lịch sử telemetry2                       → CÓ     ⇒ bị cắt
+ * ```
+ *
+ * **Lối thoát đã cài sẵn cho lượt sau, và nó đúng với MỌI N.** Trường
+ * `historyTruncated` là **bắt buộc**, nên một lượt sau đặt lại trần độ sâu —
+ * `--depth=5`, `--depth=1000`, bất cứ N nào — cho một câu trong `problems`,
+ * **không** thành *"0 thiếu"*. Ca 2 dưới (`historyCommits === 1`) giữ lại làm
+ * lưới **thứ hai**, độc lập: nó bắt cả một bên gọi quên tính `historyTruncated`.
+ *
+ * ⚠️ Vòng soát bước 6 của mục này báo một **CHẶN** rộng hơn số đo: nó khai
+ * rằng trong kho nông, lần fetch không `--depth` **cũng** bị cắt (dẫn tới
+ * `rev-list` = 1). Lượt làm tái lập lại trên remote **thật** và điều đó
+ * **không** xảy ra — xem phép đo ở trên. Phần đúng và chịu tải của phát hiện
+ * đó là *"lưới chỉ bắt N = 1"*, và `historyTruncated` là bản sửa cho nó.
  *
  * **`pnpm check` KHÔNG phải chỗ đặt**, khai ra để lượt sau không "tiện tay"
  * thêm vào: cổng đó chạy trên **mọi** PR và không có remote trong CI nếu
@@ -125,6 +162,19 @@ export interface TelemetryGapsInput {
    * chi phí ở đầu file.
    */
   historyCommits: number;
+  /**
+   * `true` khi có một **biên nông** nằm trên lịch sử của **chính ref này**,
+   * tức `ever` là **cận dưới** chứ không phải sự thật.
+   *
+   * **Bắt buộc**, và đó là cả điểm của nó: đây là lưới duy nhất đúng với
+   * **mọi** trần độ sâu. Ca 2 dưới chỉ bắt được `--depth=1`; một `--depth=5`
+   * hay `--depth=1000` cho `historyCommits` > 1 và đi qua lưới đó. Vòng soát
+   * bước 6 đo được đúng chỗ ấy (N = 2, 5, 30 đều cho *"giữ đủ"*).
+   *
+   * **KHÔNG** phải `git rev-parse --is-shallow-repository`: cờ đó nói về cả
+   * kho và cho `true` trong khi ref này đầy đủ — xem phép đo ở đầu file.
+   */
+  historyTruncated: boolean;
 }
 
 export interface TelemetryGapRow {
@@ -150,6 +200,8 @@ export interface TelemetryGapsReport {
   tipCount: number;
   everCount: number;
   historyCommits: number;
+  /** Nguyên văn đầu vào, để `renderTelemetryGaps` không tự khẳng định ca lành. */
+  historyTruncated: boolean;
   /**
    * Mọi thứ **không đo được**, khai riêng từng câu — cùng hình dạng
    * `problems` của `step0-pending-branches.ts` và `heartbeat-source.ts`.
@@ -179,6 +231,25 @@ export interface TelemetryGapsReport {
 export function telemetryTipGaps(input: TelemetryGapsInput): TelemetryGapsReport {
   const problems: string[] = [];
 
+  // Thiếu trường thì NÉM, không mặc định `false`: một mặc định "lịch sử đầy
+  // đủ" là đúng chiều báo yên mà cả mục này sinh ra để chặn.
+  if (typeof input.historyTruncated !== 'boolean') {
+    throw new TelemetryGapsInputError(
+      '`historyTruncated` phải là boolean — bên gọi phải TRẢ LỜI được câu "lịch sử ref này có ' +
+        'đầy đủ không". Không có mặc định, vì mặc định duy nhất nghe hợp lý (`false`) là đúng ' +
+        'chiều BÁO YÊN.',
+    );
+  }
+
+  if (input.historyTruncated) {
+    problems.push(
+      'Lịch sử của ref này bị CẮT (có một biên nông nằm trên nó), nên `everCount` là CẬN DƯỚI và ' +
+        'số bản ghi thiếu dưới đây có thể THẤP hơn sự thật. Đây không phải "đầu nhánh giữ đủ". ' +
+        'Gỡ bằng một lần fetch KHÔNG có `--depth` cho ref này — xem bảng chi phí ở ' +
+        '`ops/scripts/telemetry-gaps.ts`.',
+    );
+  }
+
   if (!Number.isInteger(input.historyCommits) || input.historyCommits < 1) {
     throw new TelemetryGapsInputError(
       `\`historyCommits\` phải là số nguyên ≥ 1, nhận ${JSON.stringify(input.historyCommits)}. ` +
@@ -192,10 +263,11 @@ export function telemetryTipGaps(input: TelemetryGapsInput): TelemetryGapsReport
   const tipNames = new Set(input.tip);
   const everNames = new Set(input.ever);
 
-  // Ca đắt nhất, và nó KHÔNG phải giả thuyết: một `git fetch --depth=1` cho
-  // `rev-list --count` = 1 và `ever` = `tip` với một danh sách KHÔNG rỗng, nên
-  // phép trừ trả rỗng và mọi thứ trông lành. Đo thật ở bảng chi phí đầu file:
-  // 1 commit, ever = tip = 18, sự thật 33 thiếu.
+  // Lưới THỨ HAI, độc lập với `historyTruncated`: nó bắt cả một bên gọi quên
+  // tính trường kia. Chỉ phủ `--depth=1` — vòng soát bước 6 đo được rằng N = 2,
+  // 5, 30 đi qua nó — nên nó KHÔNG thay `historyTruncated`, chỉ cộng thêm.
+  // Ca này không phải giả thuyết: `--depth=1` cho `rev-list --count` = 1 và
+  // `ever` = `tip` với một danh sách KHÔNG rỗng, nên phép trừ trả rỗng.
   //
   // Điều kiện là `tipNames.size > 1`, không phải `> 0`: một nhánh vừa sinh
   // THẬT có đúng một commit và đúng một file, và ca đó lành.
@@ -260,6 +332,7 @@ export function telemetryTipGaps(input: TelemetryGapsInput): TelemetryGapsReport
     tipCount: tipNames.size,
     everCount: everNames.size,
     historyCommits: input.historyCommits,
+    historyTruncated: input.historyTruncated,
     problems,
   };
 }
@@ -276,7 +349,15 @@ export function renderTelemetryGaps(report: TelemetryGapsReport): string {
     `đầu nhánh ${report.tipCount} file · lịch sử ${report.everCount} file ` +
     `qua ${report.historyCommits} commit`;
 
-  if (report.gaps.length === 0) {
+  if (report.gaps.length === 0 && report.historyTruncated) {
+    // KHÔNG được nói "giữ đủ" ở đây: `ever` là cận dưới, nên "0 thiếu" là một
+    // câu chưa kết luận được, không phải một câu lành. Bản đầu in đúng câu của
+    // ca lành cộng một dòng `problems` mâu thuẫn với nó.
+    lines.push(
+      `Nhịp tim \`${TELEMETRY_BRANCH}\`: KHÔNG kết luận được — lịch sử ref bị cắt nên không ` +
+        `so được đầy đủ (${scope}).`,
+    );
+  } else if (report.gaps.length === 0) {
     lines.push(
       `Nhịp tim \`${TELEMETRY_BRANCH}\`: đầu nhánh giữ đủ mọi bản ghi nhánh đã từng có (${scope}).`,
     );
@@ -295,10 +376,7 @@ export function renderTelemetryGaps(report: TelemetryGapsReport): string {
 }
 
 /** Kết quả một lần đọc nhánh telemetry từ một kho git đã fetch sẵn. */
-export interface TelemetryBranchScan extends TelemetryGapsInput {
-  /** `true` khi kho git đang nông — lịch sử **không** đầy đủ. */
-  shallow: boolean;
-}
+export type TelemetryBranchScan = TelemetryGapsInput;
 
 function git(args: readonly string[]): string {
   const run = spawnSync('git', args, { encoding: 'utf8', maxBuffer: 1 << 28 });
@@ -312,36 +390,75 @@ function git(args: readonly string[]): string {
 }
 
 /**
+ * Lịch sử của **ref này** có bị một biên nông cắt không.
+ *
+ * KHÔNG dùng `git rev-parse --is-shallow-repository`: cờ đó nói về cả kho và
+ * cho `true` trong khi ref này đầy đủ — nhánh telemetry có gốc riêng nên biên
+ * nông của `main` không cắt được nó (phép đo ở đầu file). Phép đúng là **giao**
+ * của lịch sử ref với danh sách biên nông.
+ *
+ * Fail-closed: không đọc được danh sách biên nông thì trả `true` ("có thể bị
+ * cắt"), vì hướng lệch duy nhất được phép ở đây là *báo nhầm*, không bao giờ là
+ * *bỏ sót* (`Z15`).
+ */
+export function refHistoryTruncated(ref: string): boolean {
+  const shallowPath = git(['rev-parse', '--git-path', 'shallow']).trim();
+  let boundaries: string[];
+  try {
+    boundaries = readFileSync(shallowPath, 'utf8')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  } catch (error) {
+    // File vắng mặt là ca THƯỜNG và LÀNH: kho chưa bao giờ fetch nông.
+    if ((error as { code?: string }).code === 'ENOENT') return false;
+    return true;
+  }
+  if (boundaries.length === 0) return false;
+
+  const onRef = new Set(
+    git(['rev-list', ref])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
+  return boundaries.some((sha) => onRef.has(sha));
+}
+
+/**
  * Đọc đầu nhánh và lịch sử của một ref đã fetch sẵn.
  *
  * **Ném** khi `git` thoát khác 0, cùng lý do `listPendingBranchesFromRemote`
  * ném: một danh sách rỗng đi vào `telemetryTipGaps` cho ra đúng từng byte
  * câu của ca lành.
  *
- * Kho nông bị bắt ở **hai** tầng, có chủ đích: `shallow` ở đây (dò được
- * trực tiếp) và ca 2 của `telemetryTipGaps` (suy từ `historyCommits`). Tầng
- * thứ hai là tầng chịu tải, vì nó còn sống khi bên gọi không phải một kho
- * git — ví dụ một bài kiểm, hay một lượt đã có sẵn hai danh sách.
+ * Lịch sử bị cắt bị bắt ở **hai** tầng độc lập, có chủ đích:
+ * `historyTruncated` (đúng với **mọi** trần độ sâu) và ca 2 của
+ * `telemetryTipGaps` (chỉ `--depth=1`, nhưng còn sống khi bên gọi không phải
+ * một kho git — một bài kiểm, hay một lượt đã có sẵn hai danh sách).
  */
 export function scanTelemetryBranch(ref: string): TelemetryBranchScan {
-  const shallow = git(['rev-parse', '--is-shallow-repository']).trim() === 'true';
   const commits = git(['rev-list', ref])
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
   const listDir = (rev: string): string[] => {
-    // `ls-tree` trên một revision KHÔNG có thư mục đó thoát khác 0 — đó là ca
-    // thường (commit gốc của nhánh có thể chưa có `heartbeat/`), nên nó không
-    // đi qua `git()` ở trên. Lỗi khác vẫn im ở đây; bù lại `historyCommits`
-    // đếm từ `rev-list` chứ không từ số lần `ls-tree` thành công, nên một lần
-    // trượt không làm phép đo trông đầy đủ hơn nó thật.
-    const run = spawnSync('git', ['ls-tree', '--name-only', `${rev}:${TELEMETRY_DIR}`], {
+    // Hai ca phải phân biệt, và bản đầu trộn chúng (vòng soát bước 6 bắt đúng
+    // chỗ này):
+    //
+    // - `heartbeat/` KHÔNG tồn tại ở revision đó — ca THƯỜNG và LÀNH, vì commit
+    //   gốc của nhánh có thể chưa có thư mục. Trả rỗng.
+    // - `ls-tree` trượt vì lý do khác (object thiếu, kho hỏng) — nuốt nó làm
+    //   `ever` NHỎ đi, tức `gaps` nhỏ đi, tức đúng chiều BÁO YÊN. Phải NÉM.
+    //
+    // `git cat-file -e` phân biệt được hai ca đó, nên lời khai ở đây không còn
+    // rộng hơn số đo.
+    const exists = spawnSync('git', ['cat-file', '-e', `${rev}:${TELEMETRY_DIR}`], {
       encoding: 'utf8',
-      maxBuffer: 1 << 28,
     });
-    if (run.status !== 0) return [];
-    return (run.stdout ?? '')
+    if (exists.status !== 0) return [];
+    return git(['ls-tree', '--name-only', `${rev}:${TELEMETRY_DIR}`])
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
@@ -354,7 +471,7 @@ export function scanTelemetryBranch(ref: string): TelemetryBranchScan {
     tip: listDir(ref),
     ever: [...ever],
     historyCommits: commits.length,
-    shallow,
+    historyTruncated: refHistoryTruncated(ref),
   };
 }
 
@@ -398,7 +515,7 @@ export function renderRestoreCommands(scan: TelemetryBranchScan, ref: string): s
     '# Trailer BẮT BUỘC và không sửa được về sau (CLAUDE.md mục 6): commit trên nhánh này',
     '# không bao giờ vào nhánh chính nên CI không quét nó, mà bài kiểm G14 của',
     '# recheck-assumptions.ts CÓ quét mọi nhánh claude/*.',
-    `MSG=$(printf '%s\\n' "🤖 [integration] khôi phục ${scan.ever.length - scan.tip.length} bản ghi nhịp tim thiếu ở đầu nhánh (P-059)" "" \\`,
+    `MSG=$(printf '%s\\n' "🤖 [integration] khôi phục ${new Set(scan.ever).size - new Set(scan.tip).size} bản ghi nhịp tim thiếu ở đầu nhánh (P-059)" "" \\`,
     '  "Co-Authored-By: Claude <noreply@anthropic.com>" \\',
     `  "Claude-Session: ${sessionUrl}")`,
     'COMMIT=$(echo "$MSG" | git commit-tree "$ROOT" -p "$(git rev-parse "$REF")")',
@@ -409,12 +526,14 @@ export function renderRestoreCommands(scan: TelemetryBranchScan, ref: string): s
 function usage(): never {
   process.stderr.write(
     'Dùng: node ops/scripts/telemetry-gaps.ts (--from-remote | --tip <file> --ever <file> ' +
-      '--history-commits <N>) [--ref <ref>] [--restore] [--json]\n' +
+      '--history-commits <N> --history-truncated <true|false>) [--ref <ref>] [--restore] [--json]\n' +
       '  --from-remote      fetch nhánh telemetry với LỊCH SỬ ĐẦY ĐỦ rồi đo (dạng `pnpm telemetry:gaps`).\n' +
       '  --tip/--ever       file văn bản, mỗi dòng một tên file trong `heartbeat/`.\n' +
       '  --history-commits  số commit mà phép đo `ever` đọc được. BẮT BUỘC khi khai --tip/--ever.\n' +
-      '  --restore          in ra các lệnh git khôi phục (dạng `pnpm telemetry:restore`), cần --from-remote.\n' +
-      'Thoát 1 khi có bản ghi thiếu HOẶC có `problems`; thoát 2 khi tham số sai hoặc không đo được.\n',
+      '  --history-truncated  `true` khi có biên nông nằm trên lịch sử ref. BẮT BUỘC, không mặc định.\n' +
+      '  --restore          in KHỐI LỆNH khôi phục ra stdout, báo cáo ra stderr (dạng `pnpm telemetry:restore`).\n' +
+      '                     Cần --from-remote, và thoát 0 khi in được lệnh — để `> r.sh && bash r.sh` chạy được.\n' +
+      'Không --restore: thoát 1 khi có bản ghi thiếu HOẶC có `problems`; thoát 2 khi tham số sai hoặc không đo được.\n',
   );
   process.exit(2);
 }
@@ -431,6 +550,7 @@ function main(argv: readonly string[]): void {
   let tipFile: string | undefined;
   let everFile: string | undefined;
   let historyCommits: number | undefined;
+  let historyTruncated: boolean | undefined;
   let ref = 'refs/crux/telemetry';
   let restore = false;
   let asJson = false;
@@ -448,10 +568,16 @@ function main(argv: readonly string[]): void {
       ref = value;
     } else if (arg === '--history-commits') {
       const value = argv[(index += 1)];
-      // `--history-commits` thiếu giá trị KHÔNG được rơi im lặng về một mặc
-      // định: đó chính là trường làm nên lưới của ca 2.
+      // Thiếu giá trị KHÔNG được rơi im lặng về một mặc định: đó chính là
+      // trường làm nên lưới thứ hai.
       if (value === undefined) usage();
       historyCommits = Number(value);
+    } else if (arg === '--history-truncated') {
+      const value = argv[(index += 1)];
+      // Chỉ nhận đúng hai chuỗi. Một giá trị lạ đọc thành `false` là đúng
+      // chiều báo yên, nên nó là tham số SAI, không phải một mặc định.
+      if (value !== 'true' && value !== 'false') usage();
+      historyTruncated = value === 'true';
     } else usage();
   }
 
@@ -465,12 +591,22 @@ function main(argv: readonly string[]): void {
       git(['fetch', '--no-tags', 'origin', `+refs/heads/${TELEMETRY_BRANCH}:${ref}`]);
       scan = scanTelemetryBranch(ref);
     } else {
-      if (tipFile === undefined || everFile === undefined || historyCommits === undefined) usage();
+      // `--history-truncated` BẮT BUỘC ở chế độ này: bên gọi phải trả lời được
+      // "lịch sử ref này có đầy đủ không", và không có mặc định vì mặc định
+      // duy nhất nghe hợp lý (`false`) là đúng chiều BÁO YÊN.
+      if (
+        tipFile === undefined ||
+        everFile === undefined ||
+        historyCommits === undefined ||
+        historyTruncated === undefined
+      ) {
+        usage();
+      }
       scan = {
         tip: readNames(tipFile),
         ever: readNames(everFile),
         historyCommits,
-        shallow: false,
+        historyTruncated,
       };
     }
   } catch (error) {
@@ -490,24 +626,22 @@ function main(argv: readonly string[]): void {
     process.exit(2);
   }
 
-  if (scan.shallow) {
-    report.problems.push(
-      'Kho git đang NÔNG (`git rev-parse --is-shallow-repository` → `true`), nên lịch sử nhánh ' +
-        'KHÔNG đầy đủ và `everCount` là CẬN DƯỚI. Đây không phải "0 bản ghi thiếu" — xem bảng ' +
-        'chi phí ở `ops/scripts/telemetry-gaps.ts`.',
-    );
+  if (restore) {
+    // Khối lệnh đi MỘT MÌNH ra stdout, báo cáo đi stderr, và thoát **0** khi
+    // đã in được lệnh. Bản đầu in cả hai ra stdout rồi thoát 1, nên
+    // `pnpm telemetry:restore > r.sh && bash r.sh` KHÔNG BAO GIỜ chạy và
+    // `| bash` thì chạy cả các dòng báo cáo — vòng soát bước 6 bắt đúng chỗ
+    // này. Tiêu chí xong thứ 6 đòi đường gỡ là MỘT lệnh, nên nó phải dùng được.
+    process.stderr.write(`${renderTelemetryGaps(report)}\n`);
+    process.stdout.write(`${renderRestoreCommands(scan, ref)}\n`);
+    return;
   }
 
-  if (restore) {
-    process.stdout.write(`${renderTelemetryGaps(report)}\n\n`);
-    process.stdout.write(`${renderRestoreCommands(scan, ref)}\n`);
-  } else {
-    process.stdout.write(
-      asJson
-        ? `${JSON.stringify({ ...report, shallow: scan.shallow, render: renderTelemetryGaps(report) })}\n`
-        : `${renderTelemetryGaps(report)}\n`,
-    );
-  }
+  process.stdout.write(
+    asJson
+      ? `${JSON.stringify({ ...report, render: renderTelemetryGaps(report) })}\n`
+      : `${renderTelemetryGaps(report)}\n`,
+  );
 
   // Thoát 1 khi có bản ghi thiếu HOẶC có `problems` — một phép đo không đo
   // được thì KHÔNG báo xanh. Cùng luật `merge-queue-orphans.ts` (`P-060`).

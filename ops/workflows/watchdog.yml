@@ -468,12 +468,24 @@ jobs:
           # `|| true` nuốt. Mọi nhánh "không đo được" dưới đây rơi về một câu
           # PHÂN BIỆT ĐƯỢC với ca lành, không rơi về một danh sách rỗng.
           #
-          # `refs/crux/telemetry` có thể KHÔNG tồn tại (nhánh chưa sinh, hay lần
-          # fetch ở trên trượt — nó có `|| true` đúng chủ đích). Ca đó là "chưa
-          # biết", và dấu hiệu số 5 đã nói ra nó qua trường `missing` của
-          # `heartbeat-source.ts`, nên ở đây im đúng MỘT ca này và chỉ ca này.
+          # `refs/crux/telemetry` có thể không tồn tại vì HAI lý do rất khác
+          # nhau, và vòng soát bước 6 bắt đúng chỗ bản đầu trộn chúng:
+          #
+          #  - nhánh CHƯA sinh trên remote — ca thường, lành, im đúng ở đây;
+          #  - lần fetch ở trên TRƯỢT (nó có `|| true` đúng chủ đích) trong khi
+          #    nhánh CÓ trên remote — ca "không đo được", phải GỌI `add`.
+          #
+          # `git ls-remote --exit-code --heads` phân biệt hai ca đó, cùng cách
+          # dấu hiệu số 7 đã dùng. Lời biện "dấu hiệu số 5 đã nói nguồn vắng
+          # mặt" KHÔNG đủ: `$BEAT_REPORT` chỉ tới thân issue khi một dấu hiệu
+          # KHÁC đã bật.
           if ! git rev-parse --verify --quiet refs/crux/telemetry >/dev/null; then
-            GAPS_REPORT="Nhịp tim \`$TELEMETRY_BRANCH\`: chưa có ref để đo bản ghi thiếu (dấu hiệu số 8, mục \`platform/P-059\`). Dấu hiệu số 5 ở trên đã nói nguồn nào vắng mặt."
+            if git ls-remote --exit-code --heads origin "refs/heads/$TELEMETRY_BRANCH" >/dev/null 2>&1; then
+              GAPS_REPORT="⚠ Không đo được bản ghi nhịp tim thiếu (\`KF-043\`, mục \`platform/P-059\`) — nhánh \`$TELEMETRY_BRANCH\` CÓ trên remote mà lượt này không nạp được nó về. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"; xem log của lượt chạy này."
+              GAPS_PROBLEMS=1
+            else
+              GAPS_REPORT="Nhịp tim \`$TELEMETRY_BRANCH\`: nhánh chưa sinh trên remote, chưa có gì để đo (dấu hiệu số 8, mục \`platform/P-059\`)."
+            fi
           elif ! git rev-list refs/crux/telemetry > "$GAPS_TMP/commits.txt"; then
             GAPS_REPORT="⚠ Không đo được bản ghi nhịp tim thiếu (\`KF-043\`, mục \`platform/P-059\`) — \`git rev-list\` thoát khác 0. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"; xem log của lượt chạy này."
             GAPS_PROBLEMS=1
@@ -482,17 +494,36 @@ jobs:
             GAPS_PROBLEMS=1
           else
             # `ls-tree` trên một commit CHƯA có `heartbeat/` thoát khác 0, và ca
-            # đó là ca thường (commit gốc của nhánh) — nên `|| true` ở ĐÚNG đây
-            # là đúng, không phải một lần nuốt. Phép đếm lịch sử lấy từ
-            # `commits.txt` chứ KHÔNG từ số lần `ls-tree` thành công, nên một lần
-            # trượt không làm lịch sử trông đầy đủ hơn nó thật.
+            # đó là ca thường (commit gốc của nhánh). `git cat-file -e` tách nó
+            # ra khỏi một lần trượt THẬT, nên `|| true` ở đây không còn nuốt một
+            # lỗi làm `ever` nhỏ đi — tức làm số bản ghi thiếu nhỏ đi.
             while read -r C; do
-              # Z9 · `|| true` ĐÚNG ở đây: xem khối ngay trên — commit chưa có
-              # `heartbeat/` là ca thường, và lịch sử đếm từ `commits.txt`.
-              git ls-tree --name-only "$C:heartbeat" 2>/dev/null || true
+              if git cat-file -e "$C:heartbeat" 2>/dev/null; then
+                git ls-tree --name-only "$C:heartbeat"
+              fi
             done < "$GAPS_TMP/commits.txt" | sort -u > "$GAPS_TMP/ever.txt"
 
             GAPS_COMMITS=$(wc -l < "$GAPS_TMP/commits.txt" | tr -d ' ')
+
+            # LỊCH SỬ CỦA REF NÀY có bị cắt không — phép đo HẸP theo ref, không
+            # phải cờ nông của cả kho. Đo được (vòng soát bước 6 làm rõ chỗ
+            # này): `actions/checkout@v7` mặc định `fetch-depth: 1` nên
+            # `git rev-parse --is-shallow-repository` trả `true` ở MỌI lượt, trong
+            # khi lần fetch không `--depth` ở trên lấy ĐẦY ĐỦ 74 commit của nhánh
+            # — nhánh telemetry có gốc riêng, không chung lịch sử với `main`, nên
+            # biên nông của `main` không cắt được nó. Dùng cờ kho ở đây sẽ báo
+            # "không đo được" mỗi giờ cho một nhánh đang lành, tức @nhắc chủ dự
+            # án mỗi 4 giờ cho một chuyện không có (ngược thước đo CHARTER 1.3).
+            #
+            # Phép đúng: GIAO của `git rev-list <ref>` với danh sách biên nông.
+            # Đo thật: fetch không `--depth` → giao RỖNG; `--depth=5` → giao CÓ.
+            # Nhờ vậy lưới này đúng với MỌI trần độ sâu, không chỉ `--depth=1`.
+            GAPS_SHALLOW_FILE=$(git rev-parse --git-path shallow)
+            GAPS_TRUNCATED=false
+            if [ -s "$GAPS_SHALLOW_FILE" ] \
+                && grep -qxF -f "$GAPS_SHALLOW_FILE" "$GAPS_TMP/commits.txt"; then
+              GAPS_TRUNCATED=true
+            fi
 
             # `set +e` TƯỜNG MINH, không `|| VAR=…`: script thoát **1** khi CÓ
             # bản ghi thiếu — một phán quyết bình thường, không phải lỗi — và
@@ -502,7 +533,8 @@ jobs:
             GAPS_JSON=$(node ops/scripts/telemetry-gaps.ts --json \
               --tip "$GAPS_TMP/tip.txt" \
               --ever "$GAPS_TMP/ever.txt" \
-              --history-commits "$GAPS_COMMITS")
+              --history-commits "$GAPS_COMMITS" \
+              --history-truncated "$GAPS_TRUNCATED")
             GAPS_STATUS=$?
             set -e
 
@@ -514,12 +546,13 @@ jobs:
               # một JSON lạ làm `jq` thoát khác 0, và dưới `set -euo pipefail`
               # thì cả job đỏ — tức nuốt bảy dấu hiệu kia. Rỗng đi vào nhánh
               # `-z` ngay dưới và thành một câu "không đo được", KHÔNG thành một
-              # câu báo yên.
+              # câu báo yên. `// empty` chứ KHÔNG để `null|length` ra 0: một JSON
+              # thiếu `gaps` phải thành "không đo được", không thành "0 thiếu".
               GAPS_REPORT=$(echo "$GAPS_JSON" | jq -r '.render // empty' 2>/dev/null || true)
               # Z9 · cùng lý do khối ngay trên: rỗng đi vào nhánh `-z` dưới.
-              GAPS_MISSING=$(echo "$GAPS_JSON" | jq -r '.gaps | length' 2>/dev/null || true)
+              GAPS_MISSING=$(echo "$GAPS_JSON" | jq -r 'if has("gaps") then (.gaps | length) else empty end' 2>/dev/null || true)
               # Z9 · cùng lý do — rỗng đi vào nhánh `-z`, không vào phép so `-gt`.
-              GAPS_PROBLEMS=$(echo "$GAPS_JSON" | jq -r '.problems | length' 2>/dev/null || true)
+              GAPS_PROBLEMS=$(echo "$GAPS_JSON" | jq -r 'if has("problems") then (.problems | length) else empty end' 2>/dev/null || true)
               if [ -z "$GAPS_REPORT" ] || [ -z "$GAPS_MISSING" ] || [ -z "$GAPS_PROBLEMS" ]; then
                 GAPS_REPORT="⚠ Không đọc được báo cáo bản ghi nhịp tim thiếu (\`KF-043\`) — JSON không có \`render\`/\`gaps\`/\`problems\`. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"."
                 GAPS_MISSING=0

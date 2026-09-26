@@ -83,8 +83,9 @@ node ops/scripts/telemetry-beat.ts ops/logs/integration/step0-<mốc>-<routine>.
 # Bước 0e, vế đo lại (mục P-059, `KF-043`): đầu nhánh `claude/telemetry` có còn giữ ĐỦ mọi bản ghi
 # nhịp tim nhánh đã từng giữ? Chạy, đừng tin dấu hiệu nhịp tim — nó lấy `max` của `at` nên MỘT file
 # cũng đủ làm nó xanh, và 33 bản ghi đã mất trong khi nó xanh:
-pnpm telemetry:gaps      # thoát 1 khi CÓ bản ghi thiếu · thoát 2 khi KHÔNG ĐO ĐƯỢC (hai ca khác nhau)
-pnpm telemetry:restore   # in ra các lệnh khôi phục về HỢP của mọi bản ghi. Chạy chúng
+pnpm telemetry:gaps                          # thoát 1 khi CÓ bản ghi thiếu · thoát 2 khi KHÔNG ĐO ĐƯỢC
+pnpm -s telemetry:restore > /tmp/r.sh && bash /tmp/r.sh   # khôi phục. `-s` BẮT BUỘC: không có nó,
+#   pnpm in hai dòng nhãn của chính nó vào stdout và `bash` chạy chúng thành lỗi (đo được).
 # → Ngưỡng là 0: nhánh append-only nên không có ca lành. Đây là đường DUY NHẤT gỡ dấu hiệu số 8
 #   của `watchdog.yml`, và phép đo cần LỊCH SỬ nhánh nên nó không chạy trên một kho fetch nông.
 
