@@ -248,6 +248,16 @@ jobs:
               rm_label automerge
               ;;
             *)
+              # Cửa `open` (Gate của `protected-area.ts` chỉ có ba giá trị:
+              # owner-merge · automerge-delayed · open, nên `*)` LÀ `open`).
+              # Nhánh này TRƯỚC đây chỉ gỡ hai nhãn kia mà KHÔNG gắn
+              # `automerge` — trong khi `automerge.yml` lọc hàng đợi theo đúng
+              # hai nhãn `automerge`/`automerge-delayed`. Hậu quả (D4a của #251,
+              # KF-032): PR cửa `open` không bao giờ vào hàng đợi merge — không
+              # phải chậm, là KHÔNG BAO GIỜ — mà CI vẫn 8/8 xanh, đúng nhóm Z.
+              # #223 đứng yên ~20 giờ vì đúng chỗ này. Cả ba nhánh `case` nay
+              # đều gắn đúng nhãn của cửa mình (bài kiểm khoá cả ba).
+              gh pr edit "$PR" --add-label automerge
               rm_label owner-merge
               rm_label automerge-delayed
               ;;

@@ -41,6 +41,27 @@ Nhóm **Z** đúng định nghĩa: `pnpm check` xanh, CI xanh, `main` xanh, bả
 
 ---
 
+### P-048 · fix · Cửa `open` không được `ci.yml` gắn nhãn `automerge`, nên PR sạch không bao giờ vào hàng đợi merge (D4a của #251, KF-032)
+
+Job `protected-area` của `ops/workflows/ci.yml` gắn nhãn theo cửa merge bằng khối `case "$GATE"`. `Gate` của `ops/invariants.protected-area.ts` chỉ có ba giá trị (`owner-merge`, `automerge-delayed`, `open`), nhưng chỉ hai nhánh `owner-merge)` và `automerge-delayed)` `--add-label` nhãn của mình; nhánh `*)` — tức cửa `open` — chỉ **gỡ** hai nhãn kia mà không bao giờ `--add-label automerge`. `ops/workflows/automerge.yml` lọc hàng đợi theo **nhãn** (`automerge`/`automerge-delayed`), nên PR cửa `open` không bao giờ vào hàng đợi merge — không phải chậm, là **không bao giờ**. Đo được: #223 mở `04:38Z`, CI 8/8 xanh, cửa `open`, đứng yên ~20 giờ mà không chỉ báo nào đỏ. Nhóm **Z**, và càng "sạch" (không chạm vùng bảo vệ) thì càng chắc chắn kẹt.
+
+Chỉ dẫn của chủ dự án ở [#251](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5824819912) mục **D4a**, ưu tiên cao ("nó chặn mọi PR sạch").
+
+- deps: —
+- risk: medium — chạm `ops/workflows/ci.yml` (cửa `automerge-delayed`, không dùng secret, không phát hành). Bản sửa **không** nới cổng nào: chỉ **thêm** một `--add-label` cân xứng với hai nhánh kia, không đụng `automerge.yml` (bộ lọc theo nhãn vốn đúng) và không đụng `ops/invariants.*`.
+- status: review
+- hold: chờ một phép đo sau khi merge và `sync-workflows` chép sang `.github/` — một PR cửa `open` có được gắn `automerge` và vào hàng đợi không. Workflow chỉ có hiệu lực sau khi merge (`CLAUDE.md` mục 4), nên không tự chuyển `done` ở đây.
+- nguồn: `ops/known-failures.md` `KF-032`; #251 mục D4a; comment `crux-worker-1` trên [#223](https://github.com/HungQuach301/crux-studio/pull/223#issuecomment-5824814993)
+- tiêu chí xong:
+  - ✅ `ops/workflows/ci.yml` — nhánh `*)` của `case "$GATE"` nay `gh pr edit "$PR" --add-label automerge`, cân xứng với hai nhánh kia. Ba cửa, ba nhãn.
+  - ✅ Máy chặn tách khỏi YAML: `ops/scripts/check-workflows.ts` `mergeGateLabelProblems` đòi cả ba cửa `--add-label` đúng nhãn của mình, chạy trong `pnpm lint:workflows`. Nhận diện đúng khối gắn nhãn theo cửa merge (bằng `case "$GATE"` cộng cả hai nhánh `owner-merge)`/`automerge-delayed)`) nên không kêu oan trên workflow khác.
+  - ✅ **Bài tái hiện lỗi** (bất biến **I2**, nhãn `fix`): `ops/test/check-workflows.test.ts` dựng đúng khối `*)` thiếu `automerge` của #223, cộng bài khoá từng nhánh, bài thiếu hẳn nhánh, bài không-kêu-oan, và bài đọc `ci.yml` **thật**.
+  - ✅ Phá thử: gỡ dòng `--add-label automerge` khỏi `ci.yml` thật → bài "ci.yml THẬT" **đỏ**; khôi phục → xanh (đo bằng chạy thật, không đọc lời khai).
+  - ⬜ **Chờ phép đo sau khi áp:** #223 **không tự thoát** nhờ PR này — nhãn phải do một lượt `ci.yml` MỚI trên #223 gắn (sự kiện `synchronize`/`labeled`), sau khi workflow được sync. Chủ dự án merge tay hoặc một lượt sau gắn `automerge` sau khi soát vẫn là đường ngắn hơn.
+- **vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) — 0 CHẶN, 1 nên sửa (đã sửa):** reviewer tự chạy `pnpm check`/`pnpm replay` (1248/1248, 6/6 — khớp), đột biến `mergeGateLabelProblems` (thân hàm `return []` → 5/9 bài đỏ; gỡ dòng khỏi `ci.yml` thật → bài "ci.yml THẬT" đỏ), xác nhận `Gate` đúng ba giá trị và `automerge.yml:109` lọc theo nhãn. **Nên sửa đã sửa:** regex guard neo bằng `\b` cho `automerge` — vì `automerge` là tiền tố của `automerge-delayed` nên một cửa `open` gắn NHẦM `automerge-delayed` vẫn lọt. Đổi sang `(?![-\w])` và thêm bài khoá ca gắn-nhầm (đo bằng chạy thật: regex cũ → bài mới đỏ, regex mới → xanh). Nên sửa còn lại (nhãn `cross-lane` cho file log `integration`) là luật mềm CI tự gắn.
+- **ngoài phạm vi, tách mục — không tự nống PR:**
+  - **D4b** (`ops/invariants.protected-area.ts` chưa coi `ops/workflows/ci.yml` là hạ tầng merge, nên nhãn `owner-merge` tay không đứng được trên #249) — bản sửa chạm `ops/invariants.*` nên tự nó là **`owner-merge`**, một PR riêng chủ dự án merge.
+  - **D4c** (bước tải gitleaks trong `secret-scan` không phân biệt "quét rồi sạch" với "chưa quét được" — HTTP 500 làm job đỏ) — một PR `fix` riêng.
 ### P-052 · Bản tin phát hiện `[QĐ]` có điều kiện đã đủ nhưng vẫn mở, và KF cho ca `#127` (D6)
 
 Chỉ dẫn **D6** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251) (nguồn `#131` lúc `2026-09-24T23:54:32Z`): *"Ghi KF: `#127` nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy. Bản tin phải phát hiện được `[QĐ]` có điều kiện đã đủ nhưng vẫn mở."*
@@ -1193,6 +1214,59 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ⬜ **Điều kiện THÊM cho `P-038`, vòng soát ngữ cảnh sạch tìm ra:** nhánh `claude/telemetry` là một đường ghi vào repo **không đi qua cổng nào** — `ci.yml` chỉ kích bằng `pull_request: branches:[main]` và `workflow_dispatch`, nên push vào nhánh này không qua gitleaks (**I1**), không qua `no-model-name`, không qua `protected-area`. Hôm nay rủi ro thấp vì **cùng nội dung** cũng đi qua PR log của lượt chạy và được quét ở đó. Nó thành chỗ chịu tải đúng lúc `P-038` bỏ PR log, khi nhánh telemetry là đích **duy nhất**. Trường `note` của dòng log là văn xuôi tự do do agent viết và đi lên nguyên văn, nên đây không phải lo xa. Ghi thành điều kiện của `P-038`, không phải việc của PR này.
 - **mã mục nhận lúc 2026-09-24 ~08:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở — cao nhất là `P-042` (`main`), `P-041` (`#225`) và `P-040` (`#224`), nên `P-043` không đụng ai.
 
+### P-046 · Bản tin chưa có khối "sẵn sàng duyệt", và chưa máy nào đọc được câu trả lời `Duyệt`
+
+Chỉ dẫn của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193),
+comment `2026-09-23T14:18:09Z`, khối **TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI**, mục (1), mở đầu bằng đúng hai chữ
+**"Làm ngay"**:
+
+> cuối bản tin có bản nháp comment tổng hợp mọi khuyến nghị. Tôi trả lời "Duyệt" = chấp nhận toàn bộ khuyến
+> nghị; "Duyệt, trừ #N B" = chấp nhận trừ mục nêu. Mục reversible đã tự làm chỉ liệt kê, không hỏi lại. Mục
+> irreversible vẫn liệt kê riêng, ghi rõ hệ quả nếu tôi không trả lời.
+
+Chỉ dẫn nằm đó **hơn 22 giờ** và chưa mục backlog nào giữ nó — dò `### ` trên `main` **và** trên đầu cả 13 PR
+đang mở, không chỗ nào nhắc tới `sẵn sàng duyệt`, `bản nháp comment` hay `Duyệt, trừ`. Cùng hình dạng với khối
+`GIỌNG ĐỌC` của chính comment đó, thứ đã đi qua bốn lượt `idle` trước khi lượt `~11:39Z` nhận nó thành `AU-006`.
+
+Hai nửa, và nửa thứ hai mới là chỗ hỏng im lặng:
+
+- **Nửa viết.** Bản tin chưa có khối cuối nào tổng hợp khuyến nghị. Phụ lục P2 hiện kết thúc ở một dòng
+  *"Trả lời tất cả trong MỘT comment ngay dưới đây."* — đúng nhưng bắt chủ dự án tự gõ lại từng mã số.
+- **Nửa đọc.** `Duyệt` là **hình dạng câu trả lời thứ ba**, sau `#19 A, #14 B` và `hoàn tác #N`. Cả ba hình dạng
+  hiện **không có bộ đọc bằng máy nào** — `grep -rn` trên `ops/scripts/` chỉ thấy chúng trong văn xuôi
+  (`recheck-assumptions.ts:157`, `step0-pr-gate.ts:62`), không thấy một hàm nào phân tích chúng. Agent đọc bằng
+  mắt ở mỗi lượt. Thêm một hình dạng nữa vào một chỗ không có máy canh là mời đúng nhóm **Z**: một chữ `Duyệt`
+  bị đọc sót thì không gì đỏ, và chủ dự án tưởng đã trả lời xong.
+
+Ba cách đọc sai mà nửa đọc phải chặn bằng test, không phải bằng lời hứa:
+
+1. `Duyệt` **không** được chấp nhận một mục mà chính bản tin đó không liệt kê.
+2. `Duyệt, trừ #N` (không nêu phương án) **không** được rơi về khuyến nghị của `#N` — chữ "trừ" nói ngược lại.
+   Mục đó phải ra `chưa trả lời`, ồn chứ không im.
+3. Comment mở đầu bằng 🤖 **không bao giờ** là câu trả lời (`CLAUDE.md` mục 5) — kể cả khi nó chứa chữ `Duyệt`.
+   Agent dùng danh tính chủ dự án, nên đây là dấu vết duy nhất phân biệt.
+
+- deps: —
+- risk: medium — không chặn merge, nhưng nó là hộp quyết định **duy nhất** (CHARTER 2.5): đọc sót một câu trả lời ở đây là chặn một nhánh việc mà không chỉ báo nào đỏ.
+- status: review
+- hold: còn lại, tách phạm vi — nối khối vào `pnpm digest:metrics` sau khi `#223` và `#112` merge; hai PR đó đang sửa `ops/scripts/digest-metrics.ts` (CHARTER mục 4)
+- nguồn: chỉ dẫn chủ dự án trên `#193` comment `2026-09-23T14:18:09Z` khối TỰ ĐỘNG HOÁ VÒNG DUYỆT BUỔI TỐI mục (1); `CLAUDE.md` mục 5 và mục 14; CHARTER 2.5 và phụ lục P2; vòng soát ngữ cảnh sạch của PR [#238](https://github.com/HungQuach301/crux-studio/pull/238)
+- tiêu chí xong:
+  - ✅ `ops/scripts/digest-approval.ts` (mới) giữ **cả hai** nửa, tách khỏi `ops/scripts/digest-metrics.ts` — file đó đang bị `#223` và `#112` sửa, và CHARTER mục 4 cấm hai việc cùng sửa một file.
+  - ✅ Nửa viết (`renderApprovalDraft`): khối "Sẵn sàng duyệt" cuối bản tin. `reversible` đã tự làm **chỉ liệt kê** kèm lối `hoàn tác #N`; `irreversible` liệt kê riêng, **mỗi mục ghi hệ quả nếu không trả lời**; thiếu trường nào thì in `**THIẾU**`, không im.
+  - ✅ Nửa đọc (`parseApprovalReply`): cả ba hình dạng (`Duyệt`, `Duyệt, trừ #N B`, `#19 A, #14 B`) cộng `hoàn tác #N` (nhận cả `hoàn tác #7 và #8`), chuẩn hoá NFC, `choices` xếp theo số issue nên thứ tự tất định.
+  - ✅ `parseDecisionBody` đọc được **cả hai** hình dạng thân `[QĐ]` đang có thật: viết tay (`#213`) và máy sinh (`formatDecisionIssue` của `ops/scripts/recheck-assumptions.ts`). Vòng soát đo được bản đầu chỉ đọc được hình dạng viết tay — tức tính năng **không dùng được** cho nguồn `[QĐ]` duy nhất đang có máy sinh. `itemsFromIssues` dựng mục thẳng từ issue, nên câu "không chép tay" của phụ lục P2 là câu đúng chứ không phải lời dặn suông.
+  - ✅ **Sáu** luật đọc, mỗi luật một bài kiểm âm. Ba luật đầu có từ bản đầu; **ba luật sau do vòng soát ngữ cảnh sạch tìm ra**, cả ba tái hiện được bằng chạy thật trước khi sửa:
+    - **L4 · phủ định** — `Không duyệt, để mai tính` ra `approve-all` với `problems: []`, tức chốt trọn gói mọi `irreversible` trong khi chủ dự án vừa nói ngược lại. Nay phủ định xét theo **cả câu** (`không có gì để duyệt` cũng trượt) và không bao giờ thành `approve-all`.
+    - **L5 · trích dẫn (bất biến I7)** — bấm "Quote reply" thì chính khối agent in ra quay lại thành câu trả lời: câu thật *"Tôi chưa quyết, để mai."* cho ra `vetoes: [7]`, một hành động có hậu quả từ một câu nói là chưa quyết. Ba lớp: bóc dòng `>` trước khi phân tích · kiểm 🤖 **sau** khi bóc · phần hướng dẫn của khối dùng `#N`/`#M` chứ không dùng số issue thật. Lớp thứ tư cho ca dán không kèm `>`: thấy nguyên khối thì không phân tích, hỏi lại.
+    - **L6 · hai phương án ngược nhau** — `#19 A, #19 B` ra `choices` có **cả hai**, mà `CLAUDE.md` mục 5 dặn agent "làm theo `choices`". Nay vào `problems` và `unresolved`; nhắc lại cùng một phương án hai lần thì không tính là mâu thuẫn.
+  - ✅ Comment mở đầu 🤖 trả `unresolved` **đủ** danh sách, không trả rỗng: bên gọi chỉ đọc comment mới nhất không được hiểu nhầm "không còn gì chờ".
+  - ✅ `Duyệt #14 B` (thiếu chữ `trừ`) ra `unresolved`, **không** rơi về khuyến nghị — bản đầu đoán về khuyến nghị và có một bài kiểm **khoá đúng hành vi sai đó**; vòng soát chỉ ra nó tự mâu thuẫn với luật 2 của chính file. Bài kiểm đã sửa theo.
+  - ✅ CHARTER phụ lục **P2 bước 3** (nửa viết) **và P2 bước 1 + P1 bước 8** (nửa đọc — chỗ máy thật sự đọc câu trả lời), cộng `CLAUDE.md` mục 5. Vòng soát chỉ ra bản đầu chỉ sửa nửa viết, nên routine digest vẫn đọc bằng mắt: tiêu chí xong mới đạt một nửa.
+  - ✅ **Phá thử, mỗi phép đỏ đúng chỗ rồi khôi phục** (7 phép của lượt làm, cộng 11 phép đột biến độc lập của vòng soát): 10/11 bị bắt ngay ở bản đầu; phép lọt duy nhất là lookahead của `parseRecommendation` — nay đã có bài kiểm (`Khuyến nghị: Anh` không được đọc thành `A`).
+- ⬜ **còn lại, tách phạm vi:** khối này hiện là một lệnh riêng (`pnpm digest:approval`). Nối thẳng vào `pnpm digest:metrics` là việc của lượt sau `#223` và `#112` merge — CHARTER mục 4, hai việc cùng sửa một file.
+- **luật mềm ghi nhận (CHARTER mục 4):** diff vượt ngưỡng ~400 dòng, không tách được vì module và bộ test của cùng một tiêu chí xong gắn chặt nhau. Chạm `CHARTER.md`/`CLAUDE.md`/`package.json` — bốn nhánh đang mở cũng chạm, nhưng không trùng hunk nào (đo bằng `git merge-tree`, 13/13 PR gộp sạch ở bước 0 lượt này).
+- **mã mục nhận lúc 2026-09-24 ~12:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu cả 13 PR đang mở, cao nhất là `P-045` (`#233`), nên `P-046` không đụng ai.
 ---
 
 ### P-049 · fix · Báo động giả trong cửa sổ chờ `sync-workflows` sau PR sửa `ops/workflows/**`
@@ -1209,6 +1283,54 @@ Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQu
   - ✅ **Mở `🤖 [QĐ]`** — `#254`, năm phần theo `CLAUDE.md` mục 14, ba phương án kèm hệ quả, khuyến nghị A.
   - ⬜ **Bản sửa** — chờ `#254`. Bộ phân loại "đang chờ sync" tách khỏi YAML, có bài khoá **hai chiều** (một red thật vẫn @nhắc; một cửa sổ sync không @nhắc); dấu hiệu 3 (`sync` chạy hỏng) giữ nguyên, có bài âm. Bài tái hiện lỗi bắt buộc (**I2**) khi lên bản sửa mang nhãn `fix`.
 
+---
+
+### P-050 · `[QĐ]` đã xử lý xong vẫn nằm mở, nên bản tin báo "cần anh quyết" cho việc không còn chờ ai
+
+Chỉ dẫn **D3** của chủ dự án, nguyên văn trên [#131](https://github.com/HungQuach301/crux-studio/issues/131#issuecomment-5824249496) lúc `2026-09-24T23:54:32Z` (sao sang [#251](https://github.com/HungQuach301/crux-studio/issues/251)):
+
+> Đóng #234, #175, #169, #88, #70, #73; kèm link PR hoặc commit chứng minh đã xử lý. Từ nay [QĐ] tự đóng khi việc gắn với nó đã xong.
+
+Hai vế, hai loại việc. Vế đầu là sáu lần đóng bằng tay. Vế sau — *"từ nay"* — là một **luật**, và chuẩn cho luật do chính chủ dự án chốt ở câu trả lời [#169](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649): *"tất cả thành bài kiểm máy khoá được, không phải lời dặn"*.
+
+Nhóm **Z** thuần. Một `[QĐ]` đã xong mà còn mở không làm gì đỏ: `pnpm check` xanh, CI xanh, `main` xanh. Nó chỉ làm một việc — nằm trong danh sách *"Cần anh quyết"* của bản tin sáng (CHARTER 2.5) như thể còn chờ người. Nên con số *"nút thắt hiện tại là máy hay người"* (phụ lục P2, mục `platform/P-019`) ra **sai**, và thước đo *"thời gian của anh"* (CHARTER 1.3) đếm thừa. Cùng chữ ký với mục **C4** của #251 (*"bản tin báo nút thắt người = 2 trong khi thực tế nhiều hơn"*), chỉ ngược dấu.
+
+Số đo lúc nhận mục (`2026-09-25` ~`02:4x`Z): **21 issue nhãn `decision` đang mở**, trong đó 6 đã xử lý xong từ 1–4 ngày trước. `#88` mang câu *"Đóng issue"* của chính chủ dự án nằm đó **10 giờ** mà không lượt nào đóng — vì không lượt nào có việc đọc nó.
+
+**Hướng lệch ở đây KHÔNG đối xứng, nên mặc định nghiêng về giữ.** Đóng thừa một `[QĐ]` còn chờ người là **xoá một câu hỏi chặn đường** — bản tin chỉ đọc issue đang mở, nên chủ dự án không bao giờ thấy nó nữa. Giữ thừa một `[QĐ]` đã xong chỉ là một dòng rác, thấy ngay và sửa được ở lượt sau. Nên `keep` là mặc định và mỗi `close` **phải** mang bằng chứng; `assertEvidence` ném chứ không cảnh báo.
+
+- deps: —
+- risk: medium — máy đóng issue của chủ dự án. Chiều nguy hiểm (đóng một câu hỏi còn chờ người) được chặn bằng ba lớp: mặc định `keep`; `OWNER_DONE_PHRASES` đo *"đã xong"* chứ không đo *"đã trả lời"* (ca thật `#248` có bài khoá riêng); và mọi lần đóng đăng comment bằng chứng **trước** khi đóng, nên đóng sai thì thấy được và mở lại được.
+- status: review
+- hold: còn lại — một lần chạy `decision-close.yml` thật (dispatch `dry_run: true`) sau khi PR này merge và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4)
+- nguồn: chỉ dẫn **D3** của chủ dự án ([#131](https://github.com/HungQuach301/crux-studio/issues/131#issuecomment-5824249496) `2026-09-24T23:54:32Z`, comment KHÔNG mở đầu 🤖 — `CLAUDE.md` mục 5), sao sang [#251](https://github.com/HungQuach301/crux-studio/issues/251); chuẩn "bài kiểm máy khoá được" từ câu trả lời [#169](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649); `CLAUDE.md` mục 14 (*"ghi quyết định lâu dài vào `docs/decisions/D-Cxx.md` rồi đóng issue"*)
+- tiêu chí xong:
+  - ✅ **Vế đầu — sáu issue đã đóng, mỗi lần kèm bằng chứng máy đọc được:** `#234` (PR [#233](https://github.com/HungQuach301/crux-studio/pull/233) merge, `f5c47ab`) · `#175` và `#169` (PR [#168](https://github.com/HungQuach301/crux-studio/pull/168) merge, `1bb2024`, cộng `docs/decisions/D-C07.md`) · `#88` (câu *"C: xác nhận, không hoàn tác. Đóng issue."* của chủ dự án) · `#73` (PR [#71](https://github.com/HungQuach301/crux-studio/pull/71) merge, `71e1ce5`) · `#72` (PR [#70](https://github.com/HungQuach301/crux-studio/pull/70) merge `2026-09-22T14:45:00Z`).
+  - ✅ **`#70` trong chỉ dẫn được đọc thành `#72`, và lý do khai ở đây chứ không giấu:** `#70` là một **PR**, đã merge từ `2026-09-22`, nên nó không phải thứ đóng được. Năm số còn lại trong danh sách đều là issue nhãn `decision`, và `#72` là đúng issue `[QĐ]` của PR `#70` (*"cần anh tự merge"*) — nó là số duy nhất khớp cả hình dạng danh sách lẫn nội dung. Đóng nó là đảo được (mở lại), và chính luật vế sau cũng sẽ đóng nó ở lượt kế tiếp.
+  - ✅ **Vế sau — phần quyết định là hàm thuần, có `pnpm test` khoá:** `ops/scripts/decision-close.ts`, 24 bài kiểm. Ba nguồn bằng chứng theo thứ tự: (1) chủ dự án nói xong · (2) mọi PR issue nêu tên đều đã merge · (3) có `docs/decisions/D-Cxx.md` ghi issue là nguồn.
+  - ✅ **Bất biến `close ⇔ có bằng chứng` do máy giữ, không do docblock:** `assertEvidence` ném ở **cả hai** chiều (`close` mà rỗng, và `keep` mà lại có). Một bất biến chỉ được nhắc trong lời văn là bất biến sẽ bị phá ở lần sửa thứ ba.
+  - ✅ **`OWNER_DONE_PHRASES` cố ý HẸP, và mỗi câu có một ca thật đỡ:** `đóng issue` (`#88`) · `đã thực hiện qua` (`#169`, `#175`) · `đã xử lý xong`. Đúng luật `A10` của #251 — chỉ thêm luật khi có một lỗi đã thật sự xảy ra. Bài khoá chiều ngược: `#248` trả lời *"A, với ba điều kiện"* mà cả ba chưa làm → `keep`. **Một câu trả lời của chủ dự án KHÔNG đồng nghĩa với "xong"**, và đó là chỗ dễ sai nhất của mục này.
+  - ✅ **Một PR đóng mà KHÔNG merge chặn nguồn 2 và 3** (bản thực hiện bị bác ⇒ quyết định quay về vạch xuất phát), nhưng **không** chặn nguồn 1 — chủ dự án nói xong thì xong, kể cả khi đường đi đã đổi.
+  - ✅ **`linkedPrNumbers` chỉ bắt `#N` đi ngay sau chữ `PR`**, kể cả dạng liên kết Markdown. Bắt mọi `#N` sẽ nuốt cả issue trích dẫn làm bối cảnh — `#234` dẫn `#232`, `#226`, `#229`, `#39`, `#84`, `#112` mà chỉ `#233` là PR nó chờ — và một issue không bao giờ `merged`, nên nguồn 2 sẽ **không bao giờ** đủ điều kiện. Có bài khoá đúng ca đó.
+  - ✅ **Luật đọc tên PR và luật dựng comment chỉ có MỘT bản.** `decision-close.yml` gọi `--linked-prs` và `--attach-prs` của script, và lấy thân comment từ trường `comment` của `verdict.json` — **không** chép biểu thức `\bPR\s*\[?#(\d+)` hay thân comment sang `jq`. Mục `P-043` đã trả giá đúng một lần cho hình dạng này: hằng `STEP0_REF_PATTERN` có một bản chép tay trong YAML và bản chép lệch thật (thiếu hai tiền tố) mà không gì đỏ.
+  - ✅ **PR không đo được ≠ PR chưa merge.** `gh api` hỏng hoặc `#N` hoá ra là issue thì PR đó **vắng mặt** khỏi `linkedPrs`, không phải vào đó với `merged: false`. Gộp hai trạng thái là cách giữ mãi một issue đã xong mà không ai biết vì sao — cùng luật ba trạng thái mà `heartbeat-source.ts` của `P-043` đã đặt.
+  - ✅ **Chạy thật, ba lượt đúng như workflow làm**, trên ảnh chụp thật của sáu issue: `--attach-prs` → phán quyết → `tổng 6 · đóng 6 · giữ 0`, mỗi phán quyết một dòng bằng chứng, và máy ra **đúng** cùng kết luận mà lượt này đã đo bằng tay từ trước. `pnpm check` `EXIT=0` **1300/1300**, `pnpm replay` 6/6.
+  - ✅ **Lịch chạy 20:00 UTC, ngay TRƯỚC bản tin** (phụ lục P2 chạy 20:30 theo số đo của mục `B12`). Thứ tự là chủ đích: bản tin đếm *"cần anh quyết"* từ issue đang mở, nên dọn trước khi đếm thì con số gửi tới chủ dự án là con số đúng; dọn sau thì bản tin vẫn báo thừa đủ 24 giờ nữa.
+  - ✅ **Vòng soát ngữ cảnh sạch (bước 6) nêu 4 CHẶN + 5 nên sửa — đã sửa hết, mỗi ca một bài khoá.** Cả chín đều nghiêng về **chiều đắt** mà mục này tự khai là không được sai, nên không có ca nào "ghi nhận rồi để đó":
+    - **C1 · câu phủ định đọc thành "xong".** Bảy câu thật đều ra `close` ở bản đầu: *"Chưa đóng issue được"*, *"Đừng đóng issue này"*, *"Không đóng issue nhé"*, *"Làm xong A rồi hãy đóng issue"*, *"Sau khi có số đo thì đóng issue"*, một comment **trích lại** lời 🤖 của agent, và *"Việc kia đã xử lý xong, nhưng câu hỏi ở issue này thì tôi chưa quyết"*. Nay có `OWNER_DONE_BLOCKERS` ở mức **câu** (không mức comment — ca thật `#88` cần đúng thế), cộng bỏ dòng trích dẫn và mốc ẩn HTML trước khi tìm 🤖.
+    - **C1b · `\b` của JavaScript chỉ biết ASCII.** Bản sửa đầu của C1 dùng `/\bđừng\b/` và `/\bchớ\b/`, và chúng **im lặng không khớp** vì `đ` ở đầu và `ớ` ở cuối không phải ký tự từ theo ASCII — trong khi `chưa`/`không` (viền ASCII) vẫn khớp. Tức bản sửa hỏng **một phần**, kiểu khó thấy nhất; đo được rồi mới chuyển sang `(?<!\p{L})` với cờ `u`. Một luật chống nhóm Z mà tự nó hỏng theo kiểu nhóm Z.
+    - **C2 · `hasDecisionDoc` grep cả file, không phải dòng `Nguồn:`.** Đo trên `main`: **7/7** số thử đều khớp oan — `#19` khớp *chỉ vì* `D-C06.md` in ví dụ **định dạng trả lời** `#19 A, #14 B`; `#120`/`#167`/`#29`/`#42` khớp vì `D-C04`/`D-C07` dẫn chúng làm **bối cảnh**. Mỗi ca là một issue bị đóng kèm dòng bằng chứng **nói sai sự thật**. Nay `markDecisionDocs` (hàm thuần, có bài kiểm) chỉ đọc các dòng `- **Nguồn:**`, và neo cuối số nên `#16` không khớp `#169`.
+    - **C3 · thiếu `pull-requests: read`** cho `gh api repos/…/pulls/N`, mà lời gọi có lưới `|| echo ''` nên một **403** trông y hệt *"`#N` không phải PR"*. Đây là **lần thứ hai** của chữ ký `KF-017`, nên sửa **tầng luật** theo `CLAUDE.md` mục 13: thêm một `PERMISSION_RULE` cho `gh api …/pulls/` vào `ops/scripts/check-workflows.ts`. **Bài kiểm tác động (`A3`) chạy trước khi thêm: 0 file đỏ** — hai workflow còn lại gọi endpoint này (`automerge.yml`, `ci.yml`) đã khai `pull-requests: write`. Chứng minh luật **có cắn**: bỏ dòng quyền ra → đỏ đúng một dòng, trả lại → xanh.
+    - **C3b · bản đầu của chính luật đó viết `\/pulls\/\d`** và **không khớp** lời gọi nó sinh ra để bắt, vì URL thật là `"repos/$REPO/pulls/$PR"` — sau `/pulls/` là một **biến bash**, không phải chữ số. Đo được: bỏ quyền ra mà `lint:workflows` vẫn xanh. Đã bỏ `\d`.
+    - **C4 · lớp an toàn thứ ba không tồn tại.** Backlog trước đó khai *"đóng sai thì thấy được"*, nhưng `ops/scripts/digest-metrics.ts` gọi `gh issue list --state open --label decision` — bản tin **chỉ đọc issue đang mở**, nên comment bằng chứng nằm trên issue đã đóng là chỗ không ai đi qua, và một hành động `reversible` do máy tự làm mất cửa sổ `hoàn tác #N` 24 giờ mà CHARTER 2.3/2.5 đòi. Nay mỗi lượt có đóng thật để lại **một dòng trên issue bản tin đang mở** (mục *"Đã tự làm"*). Không có bản tin nào mở thì **bỏ qua**, không tạo issue mới — `notify.yml` @nhắc cho mọi issue nhãn `digest` mới, tức gọi chủ dự án ngoài nhịp vì một việc máy tự lo.
+    - **N1 · `linkedPrNumbers` bỏ sót, và một ca là ĐÓNG NON.** *"merge PR #233 và #234"* ra `[233]`, nên `#234` không bao giờ được đo và `every(merged)` ra `close` dù `#234` còn mở. Ba ca bỏ sót khác: nháy ngược ``PR `#120` `` (đúng style `D-C07.md` và `CHARTER.md` dùng), `PR: #233, #234`, và `[#168](…/pull/168)`. Nay bắt cả **dải** số sau `PR`/`PRs` cộng `/pull/<N>`, mà **vẫn không** nuốt issue trích dẫn làm bối cảnh (có bài khoá cả hai chiều).
+    - **N2 · `--paginate` in một mảng CHO MỖI TRANG**, nên chỉ trang đầu được đọc và mọi issue > 30 comment im lặng mất bằng chứng — tức đúng các `[QĐ]` sống lâu. Chính `automerge.yml` đã ghi lại cái bẫy này; nay dùng `--jq '.[]' | jq -s '.'`.
+    - **N3 · trạng thái thứ ba.** `unmeasuredPrs` khai riêng, và nó **chặn cả nguồn 3** — thiếu nó thì một PR không đo được làm nguồn 2 lẫn chốt `closed && !merged` im lặng tắt rồi nguồn 3 đóng issue phía sau lưng. Cùng luật ba trạng thái `heartbeat-source.ts` của `P-043` đã đặt.
+    - **N4 · issue bị đóng oan rồi mở lại sẽ bị đóng lại mỗi ngày.** Nay `closeComment` nhét `AUTOCLOSE_MARKER`, và dấu đó **thắng CẢ nguồn 1** — mở lại là hành động cố ý của người, nên nó phải thắng cả câu *"xong"* cũ vốn đã đóng issue lần đầu. Đặt sau nguồn 1 thì đường thoát duy nhất của chủ dự án là bỏ nhãn `decision`, mà bỏ nhãn cũng đẩy issue ra khỏi bản tin.
+    - **N5 · `đã xử lý xong` không có ca thật** → **bỏ khỏi** `OWNER_DONE_PHRASES`, đúng luật `A10` của `#251`. Nó cũng là câu dễ lọt nhất vào comment nhiều mục.
+  - ✅ **Đo lại sau khi sửa, bốn lượt đúng như workflow làm**, trên ảnh chụp thật bảy issue (sáu issue của D3 cộng `#248` làm đối chứng): `tổng 7 · đóng 6 · giữ 1` — sáu phán quyết khớp đúng kết luận đo bằng tay, và `#248` bị giữ. Ba ca đối kháng reviewer dựng (`#19` doc oan · `#900` đóng non · `#901` câu phủ định) nay `đóng 0 · giữ 3`. `pnpm check` `EXIT=0` **1316/1316**, `pnpm replay` 6/6.
+  - ⬜ **Còn lại, tách phạm vi:** 15 issue `decision` khác đang mở chưa được lượt này xét — lượt đầu tiên của `decision-close.yml` sau merge sẽ xét, và `dry_run: true` cho xem trước phán quyết trước khi nó đóng gì. Không đóng thêm issue nào ngoài danh sách chủ dự án nêu ở lượt này: luật mới nên tự chạy lần đầu dưới mắt chủ dự án, không dưới tay agent.
+- **mã mục nhận lúc 2026-09-25 ~02:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu nhánh của cả 10 PR đang mở — cao nhất là `P-049` (`#255`), `P-048` (`#252`), `P-047` (`#249`), `P-046` (`#238`), nên `P-050` không đụng ai.
 ### P-051 · fix · Soát chéo GPT ra bản tóm tắt PR thay vì danh sách phát hiện có mức
 
 Chỉ dẫn **D5** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). `ops/scripts/gpt-review.ts` (`buildReviewPrompt`) dặn model *"nêu tối đa 5 phát hiện đáng chú ý"*, nên mọi comment `gpt-review` là **tóm tắt lại nội dung PR** — năm gạch đầu dòng mô tả PR làm gì — với **0 phát hiện có mức**. Vô dụng cho người soát và cho worker sở hữu PR: không phân biệt được "phải sửa trước khi merge" với "nên sửa". Đo được: 5 comment `gpt-review` trên `#249`, cùng dạng trên `#242`/`#223`/`#238`/`#231`, đều là tóm tắt.

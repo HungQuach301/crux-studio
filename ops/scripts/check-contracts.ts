@@ -60,6 +60,8 @@ import {
 } from './check-title-formulas.ts';
 import { scanGoldenFactRisk } from './check-fact-risk.ts';
 import { revenueWithholdingProblems, channelPackFiles } from './check-revenue-withholding.ts';
+import { readingTableProblems, readingTablePackFiles } from './check-reading-table.ts';
+import { audioPipelineProblems, AUDIO_STAGE_ORDER } from './check-audio-pipeline.ts';
 
 const root = process.cwd();
 const problems: string[] = [];
@@ -223,6 +225,16 @@ notes.push(...factRisk.notes);
 // bỏ qua hệ số. Logic thuần ở check-revenue-withholding.ts để có test độc lập.
 problems.push(...revenueWithholdingProblems(root));
 
+// 11 · Bảng đọc của kênh (audio/AU-007, bất biến I6 — cách đọc số/viết tắt là
+// dữ liệu của kênh): mỗi reading-table.json hợp contract, channel khớp thư mục,
+// id không trùng, pattern biên dịch được. Logic thuần ở check-reading-table.ts
+// để có test độc lập; ca kiểm HÀNH VI từng luật nằm trong test của xưởng audio.
+problems.push(...readingTableProblems(root));
+
+// 12 · Thứ tự công đoạn của xưởng audio (audio/AU-007, kiến trúc (a)):
+// workshops/audio/pipeline.v0.json hợp contract của nó VÀ đúng thứ tự chuẩn.
+problems.push(...audioPipelineProblems(root));
+
 if (problems.length > 0) {
   process.stderr.write(`Contract có vấn đề:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
   process.exit(1);
@@ -244,7 +256,9 @@ process.stdout.write(
     `${modelFiles.length} file mô hình định lượng hợp model.schema.json, ` +
     `${genresChecked} layouts.json, ${channelsChecked} visual-tokens.json, ` +
     `Fact & Risk Pass qua ${factRisk.episodes} tập vàng, ` +
-    `khấu trừ doanh thu khai đủ trên ${channelPackFiles(root).length} channel pack (topic/T-013).\n`,
+    `khấu trừ doanh thu khai đủ trên ${channelPackFiles(root).length} channel pack (topic/T-013), ` +
+    `${readingTablePackFiles(root).length} reading-table.json (audio/AU-007), ` +
+    `pipeline audio ${AUDIO_STAGE_ORDER.length} công đoạn đúng thứ tự.\n`,
 );
 
 if (notes.length > 0) {

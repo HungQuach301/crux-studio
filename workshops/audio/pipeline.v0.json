@@ -1,0 +1,12 @@
+{
+  "$note": "🤖 Thứ tự công đoạn của xưởng Âm thanh (mục audio/AU-007, kiến trúc (a)). Máy đọc được, kiểm ở ops/scripts/check-audio-pipeline.ts và workshops/audio/test/pipeline.test.ts. Chỉ 'normalize' chạy được ở Đợt 0 (usesProvider=false); 'tts' và 'retry' chờ nhà cung cấp (providers.tts, đang null — giả định G7 và CHARTER 2.3 nhóm 3).",
+  "version": 0,
+  "runsBefore": "storyboard-preflight",
+  "stages": [
+    { "id": "normalize", "description": "Chuẩn hoá văn bản bằng bảng đọc của kênh (reading-table.json).", "usesProvider": false },
+    { "id": "tts", "description": "Sinh giọng bằng TTS với giọng khoá trong Channel Pack.", "usesProvider": true },
+    { "id": "verify", "description": "Kiểm ASR nghe lại, độ to, độ dài.", "usesProvider": false },
+    { "id": "retry", "description": "Làm lại tối đa theo tham số R7d khi kiểm không đạt.", "usesProvider": true, "retryParam": "R7d" },
+    { "id": "timestamps", "description": "Xuất mốc thời gian từng từ.", "usesProvider": false }
+  ]
+}

@@ -20,6 +20,7 @@
     "backlog:status": "node ops/scripts/backlog-status.ts",
     "lanes:heartbeat": "node ops/scripts/lane-heartbeat.ts",
     "digest:metrics": "node ops/scripts/digest-metrics.ts",
+    "digest:approval": "node ops/scripts/digest-approval.ts",
     "gate:flow": "node ops/scripts/gate-flow.ts",
     "topic:novelty-trial": "node ops/scripts/novelty-embeddings-trial.ts",
     "typecheck": "tsc --noEmit",
