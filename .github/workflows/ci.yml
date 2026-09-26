@@ -263,10 +263,13 @@ jobs:
               ;;
           esac
 
-          # Z9: `grep` trả 1 khi không khớp dòng nào, và dưới `set -o pipefail`
-          # điều đó giết cả job — một PR không chạm thư mục làn nào sẽ làm
-          # job gắn nhãn đỏ vì lý do không liên quan gì tới nội dung PR.
-          LANES=$( (grep -Eo '^(workshops|ops/lanes)/[a-z]+' "$RUNNER_TEMP/changed.txt" || true) | sort -u | wc -l)
+          # Luật cross-lane tách sang `ops/scripts/cross-lane.ts` (mục
+          # `platform/P-057`): script quy mỗi đường dẫn về TÊN LÀN rồi đếm số
+          # làn KHÁC NHAU, nên nó thấy cả `ops/logs/<làn>/` (bộ dò `grep` cũ
+          # không thấy — đúng ca hay gặp nhất từ D-C04) và không đếm trùng khi
+          # một PR chạm cả `ops/lanes/x` lẫn `ops/logs/x` (cùng làn `x` → 1).
+          # In số làn trần ra stdout; danh sách làn ra stderr (không im lặng).
+          LANES=$(node ops/scripts/cross-lane.ts < "$RUNNER_TEMP/changed.txt")
           echo "số làn bị chạm: $LANES"
           if [ "$LANES" -gt 1 ]; then
             gh pr edit "$PR" --add-label cross-lane

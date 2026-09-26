@@ -260,3 +260,143 @@ jobs:
             "🤖 @$OWNER \`main\` đã đỏ $AGE giờ mà máy chưa tự sửa được." \
             "" \
             "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4 — bốn loại đó là thứ duy nhất được phép gọi anh ngoài bản tin sáng. Nhắc lại mỗi 4 giờ tới khi \`main\` xanh lại (mục \`platform/P-034\`).")"
+
+  # `P-044` · ĐÓNG cảnh báo khi `main` xanh lại. CHARTER 2.4 viết "nhắc lại
+  # mỗi 4 giờ tới khi `main` XANH LẠI", và trước mục này vế "xanh lại" không
+  # có ai thực thi — không workflow nào trong repo đóng một issue `alert`.
+  #
+  # Một issue thừa nghe như chuyện dọn dẹp. Nó không phải:
+  #
+  #   1. Bước "Mở issue main đỏ" ở trên DÙNG LẠI mọi issue `alert` đang mở
+  #      khớp `main đỏ in:title`, không so `sha`.
+  #   2. `decideMention` đọc mốc `<!-- crux-escalate-main-do -->` MỚI NHẤT
+  #      trên cả thân lẫn comment — tức trên cả hai sự cố gộp lại.
+  #   3. Nên: đỏ 10:00 → @nhắc → xanh 10:30 → ĐỎ LẠI vì commit khác 11:00
+  #      → rơi vào issue cũ → mốc mới nhất mới 1 giờ → `quiet`. `main` đỏ,
+  #      chủ dự án KHÔNG được gọi tới 14:00, và mọi chỉ báo xanh suốt khoảng
+  #      đó. Nhóm Z.
+  #
+  # Đóng ở đây làm sự cố sau có issue MỚI, chưa mốc nào, nên nhánh TẠO issue
+  # của bước trên chạy và thân nó mang sẵn @nhắc (`P-034`).
+  #
+  # Phần quyết định nằm ở `ops/scripts/alert-resolution.ts`, không ở khối
+  # `run:` — cùng lý do `P-034` đã chốt: một phép so trong bash chỉ kiểm
+  # được bằng cách để `main` đỏ thật.
+  resolve-alert:
+    name: resolve-alert
+    needs: check
+    # `github.ref` KHÔNG thừa: `workflow_dispatch` ở đầu file không giới hạn
+    # nhánh, nên một lần gọi tay trên nhánh làm việc cho `GREEN_SHA` = đầu
+    # nhánh đó — và `sha` sự cố trên `main` vẫn là tổ tiên của nó, nên job
+    # này sẽ ĐÓNG cảnh báo kèm câu "`main` đã xanh lại" trong khi `main` còn
+    # đỏ. Vòng soát ngữ cảnh sạch tái hiện được đúng ca đó.
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # `fetch-depth: 0` là BẮT BUỘC, không phải cho chắc: `git merge-base
+      # --is-ancestor` cần lịch sử, và mặc định của `checkout` là depth 1 —
+      # với nó mọi `sha` sự cố đều thành `unknown`, tức job này thành một
+      # job không bao giờ đóng gì mà vẫn xanh. Đúng nhóm Z mà nó đang chữa.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Đóng cảnh báo main đỏ đã xong
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          GREEN_SHA: ${{ github.sha }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+
+          # `--limit` tường minh: mặc định của `gh` là 30, và một danh sách
+          # bị cắt ở đây chỉ làm vài cảnh báo cũ không bao giờ được đóng —
+          # im lặng, đúng hình dạng mục này đang chữa.
+          if ! OPEN=$(gh issue list --repo "$REPO" --label alert --state open \
+            --limit 100 \
+            --search "main đỏ in:title" --json number,title \
+            --jq '.[] | "\(.number)\t\(.title)"'); then
+            echo "Không liệt kê được cảnh báo đang mở (gh lỗi) — không đóng gì."
+            exit 0
+          fi
+          if [ -z "$OPEN" ]; then
+            echo "Không có cảnh báo \`main\` đỏ nào đang mở."
+            exit 0
+          fi
+
+          # Đọc qua fd 3, KHÔNG qua stdin: `gh` và `node` trong thân vòng lặp
+          # đều đọc stdin, và một trong hai nuốt phần còn lại của danh sách
+          # thì các issue sau biến mất trong im lặng.
+          while IFS=$'\t' read -r -u 3 NUM TITLE; do
+            [ -n "$NUM" ] || continue
+
+            # I7 · CHỈ thân issue và comment của `github-actions[bot]`, y như
+            # `automerge.yml` và bước @nhắc ở trên. Agent comment được lên
+            # issue cảnh báo bằng danh tính chủ dự án, nên không lọc thì một
+            # comment chứa khối `crux-hotfix-scope` tự chọn được `sha` cho
+            # phép đóng — tức tự cấp phép cho chính mình.
+            if ! BOT_TEXT=$(gh issue view "$NUM" --repo "$REPO" --json author,body,comments \
+              --jq '[select(.author.login == "github-actions[bot]") | .body] + [.comments[] | select(.author.login == "github-actions[bot]") | .body] | join("\n\n")'); then
+              echo "#$NUM: không đọc được nội dung (gh lỗi) — GIỮ lại, hướng an toàn."
+              continue
+            fi
+
+            FOUND=$(printf '%s' "$BOT_TEXT" | node ops/scripts/alert-resolution.ts sha "$TITLE")
+            SHA_I=$(echo "$FOUND" | jq -r '.sha // ""')
+            SRC=$(echo "$FOUND" | jq -r '.source // ""')
+
+            # Ba giá trị, và `unknown` là mặc định: object thiếu (sự cố ở một
+            # nhánh đã xoá, hay một lần force-push) phải ra `keep`, không ra
+            # `close`. Cả hai lệnh `git` nằm trong `if` nên mã thoát khác 0
+            # của chúng là DỮ LIỆU, không phải lỗi giết `set -e`.
+            ANCESTRY=unknown
+            if [ -n "$SHA_I" ] && git cat-file -e "${SHA_I}^{commit}" 2>/dev/null; then
+              # THỨ TỰ THAM SỐ LÀ CƠ CHẾ, không phải văn phong: `--is-ancestor
+              # <tổ tiên> <hậu duệ>`. Đảo hai biến thì `main` luôn chạy tới nên
+              # phép thử luôn sai, mọi cảnh báo ra `keep`, và job này chạy xanh
+              # mà KHÔNG BAO GIỜ đóng gì — đúng nhóm Z nó sinh ra để chữa.
+              # `ops/test/alert-resolution-workflow.test.ts` canh đúng thứ tự này.
+              if git merge-base --is-ancestor "$SHA_I" "$GREEN_SHA"; then
+                ANCESTRY=ancestor
+              else
+                ANCESTRY=not-ancestor
+              fi
+            fi
+
+            DECISION=$(node ops/scripts/alert-resolution.ts verdict "$TITLE" "$SHA_I" "$SRC" "$ANCESTRY")
+            echo "#$NUM ($TITLE) → $DECISION"
+
+            if [ "$(echo "$DECISION" | jq -r '.verdict')" != "close" ]; then
+              continue
+            fi
+
+            BODY=$(printf '%s\n' \
+              "🤖 \`main\` đã xanh lại tại \`${GREEN_SHA:0:7}\` — đóng cảnh báo này (CHARTER 2.4: nhắc lại mỗi 4 giờ **tới khi \`main\` xanh lại**)." \
+              "" \
+              "Nhật ký lần chạy xanh: $RUN" \
+              "" \
+              "Đóng chứ không để mở là một luật, không phải dọn dẹp (mục \`platform/P-044\`): bước mở cảnh báo DÙNG LẠI mọi issue \`alert\` đang mở khớp \`main đỏ in:title\`, và nhịp @nhắc 4 giờ đọc mốc mới nhất trên cả issue. Một cảnh báo không đóng làm sự cố đỏ KẾ TIẾP rơi vào đây và có thể im tới 4 giờ.")
+
+            if [ "$DRY_RUN" = "true" ]; then
+              printf 'CHẠY THỬ — KHÔNG đóng issue nào.\nĐỊNH đóng #%s kèm:\n────────\n%s\n' "$NUM" "$BODY"
+              continue
+            fi
+
+            # Z9 · bọc y như `gh issue list` và `gh issue view` ở trên. Không
+            # bọc thì một lỗi vặt của `gh` giết cả bước dưới `set -euo
+            # pipefail`, và hậu quả KHÔNG phải "một issue chưa đóng": lượt
+            # `main-ci` này thành ĐỎ trong khi `pnpm check` XANH, job `alert`
+            # (`if: failure()`, `needs: check`) không chạy vì `check` xanh —
+            # nên có một lần chạy đỏ mà KHÔNG có cảnh báo nào, cộng một
+            # `mainCiRed` giả cho điều kiện 1 của `D-C07`. Cùng luật mà job
+            # `alert` đã chốt cho `alert-escalation.ts`.
+            if ! gh issue close "$NUM" --repo "$REPO" --reason completed --comment "$BODY"; then
+              echo "#$NUM: đóng không thành công (gh lỗi) — bỏ qua, lượt sau đóng lại."
+              continue
+            fi
+            echo "Đã đóng #$NUM."
+          done 3<<< "$OPEN"
