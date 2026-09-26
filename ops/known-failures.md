@@ -6,6 +6,170 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-041 · Trường máy đọc `- hold:` bị đọc **cắt giữa câu** khi lý do xuống dòng, và chữ bị mất đi thẳng tới mắt chủ dự án
+
+> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất tìm được là `KF-040` (PR `#264`), nên số trống kế tiếp là `KF-041`.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` **EXIT=0** với cả hai ca dưới đây, CI xanh, `main` xanh. Không phép đo nào trong kho nhìn vào chỗ này.
+
+**Chữ ký:** `HOLD_FIELD` của `ops/scripts/backlog-status.ts` là một mẫu RegExp **một dòng** (`^\s*-\s*hold:\s*(\S.*?)\s*$`), và `ops/lanes/README.md` khai hình dạng đúng là *"**Một dòng** `- hold: <lý do>`"*. Nhưng lý do là văn xuôi tiếng Việt dài, nên người viết **xuống dòng** — và bên đọc lặng lẽ giữ đúng dòng đầu, bỏ phần còn lại. Không có gì phân biệt "lý do ngắn thật" với "lý do bị cắt".
+
+**Vì sao nó đắt hơn một chỗ đọc thiếu:** từ mục `platform/P-053` (`ops/scripts/owner-waiting.ts`, PR `#260`), chính chuỗi này là **chữ in trong khối "Việc đang chờ anh" của bản tin ngày**. Nên phần bị bỏ không nằm im trong file — nó là phần chủ dự án cần để hành động, và nó biến mất khỏi đúng cái hộp quyết định duy nhất mà `D-C06` dựng lên. Vòng soát ngữ cảnh sạch chạy `owner-waiting.ts` của `#260` trên bản sửa và thấy `release/R-002` hiện ra **với câu cụt**.
+
+**Lần gặp: 2**, hai lượt khác nhau, cùng một chữ ký:
+
+| # | Mục | Mẫu cũ cắt ở đâu | Mất bao nhiêu | Phần mất là gì |
+|---|---|---|---|---|
+| 1 | `topic/T-014` (đã trên `main`) | ``…`EMBEDDINGS_API_KEY` (secret chỉ sống trong`` | **142** ký tự | điều kiện gỡ treo, và câu *"mục **không** tự chuyển `done`"* — cắt để lại một dấu ngoặc chưa đóng |
+| 2 | `release/R-002` (lượt `2026-09-25` ~10:5xZ) | `…tạo kênh YouTube, tạo OAuth client scope` | **243** ký tự | tên scope, *"đặt refresh token vào Secrets"*, chế độ **In production**, điều kiện mở lại |
+
+Phép đo: dựng lại giá trị của mẫu một dòng rồi so với `parseBacklog` trên cả **47** trường `- hold:` thật của kho → đúng **2** mục lệch.
+
+**Nguyên nhân gốc:** luật *"giữ một dòng"* là **lời dặn cho người viết**, không có máy nào giữ. Nó đã bị vi phạm hai lần bởi hai lượt khác nhau, và cả hai lần đều không do cẩu thả — xuống dòng là phản xạ đúng khi câu dài hơn chiều rộng file.
+
+**Chỗ đã sửa (tầng luật, không vá sản phẩm — `CLAUDE.md` mục 13):** sửa **bên đọc**, không sửa hai mục backlog. `joinHoldLines` của `ops/scripts/backlog-status.ts` nối lý do với các dòng nối tiếp của nó, và **dừng** ở mọi thứ mở một khối Markdown mới (`-` `*` `+` gạch đầu dòng · `>` trích dẫn · `|` hàng bảng · dòng trống · dòng không thụt lề). Hệ quả: `topic/T-014` đọc đủ **không cần sửa một chữ nào** trong làn `topic`.
+
+Vì sao chọn *đọc đủ* chứ không *báo đỏ khi xuống dòng*: báo đỏ chỉ **phát hiện** lớp lỗi và để lại một cái bẫy người viết phải nhớ; đọc đủ **xoá hẳn lớp lỗi**. Cùng lối lập luận mà docblock của `HOLD_MARKERS` đã ghi cho lưới lời văn: *"danh sách chuỗi con KHÔNG hội tụ … Đó **không** phải chỗ để vá tiếp"*.
+
+**Máy chặn từ nay:** ba bài ở `ops/test/backlog-status.test.ts`, bài thứ ba chạy trên **backlog thật** nên nó bắt cả ca tương lai:
+
+1. `joinHoldLines` — nối đúng một khoảng trắng, và **dừng** đúng ở tám hình dạng biên (mỗi hình dạng một `assert` riêng, gộp lại thì một mẫu hỏng vẫn xanh nhờ mẫu khác).
+2. `parseBacklog` trên hai hình dạng thật (2 dòng nối và 1 dòng), kèm phép đòi dấu ngoặc `(secret …)` phải được đóng trong chính lý do.
+3. **Trên `ops/lanes/*/backlog.md` thật:** với mọi trường `- hold:`, `holdField` phải bằng bản **nối đủ**, không bằng bản một dòng.
+
+Phá thử, mỗi phép đúng số bài đỏ rồi khôi phục: bỏ `joinHoldLines` khỏi `parseBacklog` → **2 đỏ** (gồm bài trên backlog thật) · bỏ cổng loại gạch con/trích dẫn/bảng → **1 đỏ** · nối không khoảng trắng → **2 đỏ** · khôi phục → **77/77**.
+
+**Hình dạng khuyến nghị vẫn là một dòng** (`ops/lanes/README.md`), vì dòng bản tin phải đọc được trong khoảng 60 giây trên màn hình điện thoại (`CLAUDE.md` mục 9). `joinHoldLines` là lưới an toàn cho lúc nó bị vi phạm, không phải lời mời viết dài.
+
+---
+
+## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
+
+> Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh trên cả hai PR, `main` xanh. Chỗ hỏng chỉ lộ ra ở **lần gộp `main`**, và lộ ra dưới dạng một xung đột trông như xung đột nội dung bình thường.
+
+**Chữ ký:** hai lượt worker nhận **cùng một chỉ dẫn** trong cùng một khoảng vài phút → mỗi lượt chạy phép dò mã trống của `KF-005` (`### P-` trên `main` **và** trên đầu các PR đang mở) → cả hai đều thấy cùng một mã cao nhất → **cả hai cấp cùng một mã** cho hai mục khác nhau.
+
+**Quan sát được, `P-051`, 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `~03:1xZ` | `crux-worker-2` nhận chỉ dẫn **D5**, mở PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257), cấp mã `P-051` |
+| `03:41:42Z` | `crux-worker-1` mở PR [`#258`](https://github.com/HungQuach301/crux-studio/pull/258) cho **cùng** chỉ dẫn D5, dò ra cao nhất `P-050` (`#256`) → cũng cấp `P-051` |
+| `03:46:04Z` | `#257` **merge** — `P-051` vào `main`, 4 phút sau khi `#258` mở |
+| `03:41`–`06:4x` | `#258` xung đột với `main` ở `backlog.md` **và** `gpt-review.ts`; `integrator-resolve.ts` ra `aborted-ineligible` **5 lượt liên tiếp** |
+
+**Vì sao phép dò của `KF-005` không đỡ được:** nó đúng với tồn kho **tại thời điểm chạy**. Một PR đã mở nhưng chưa được dò (`#257` không nằm trong danh sách 10 PR mà `#258` dò — nó mở gần như cùng lúc), hoặc merge **sau** lúc dò, không bao giờ xuất hiện trong kết quả. Khoảng hở bằng đúng thời gian sống của một lượt worker, và ba worker chạy chồng nhau thì khoảng hở đó được dùng thường xuyên.
+
+**Vì sao hai worker nhận cùng một việc:** đây là lớp thứ hai, và nó đã có mục riêng — `P-041` (`#225`, bộ dò va chạm đọc từ tiêu đề PR). Mục này ghi lớp **mã mục**, không thay `P-041`.
+
+**Chỗ đã sửa lần này (thủ công, ở lượt gộp):** mục của `#258` đổi mã sang `P-054`, `ops/logs/platform/P-051.jsonl` tách lại theo `D-C04` (một file cho mỗi mục — auto-merge đã trộn dòng của hai mục vào một file mà **không gì đỏ**, vì `merge=union` không biết hai mục khác nhau).
+
+**Máy chặn nào còn thiếu:** chưa có. Hai hướng, mỗi hướng một mục riêng (một mục = một PR):
+
+1. **Cấp mã bằng một nguồn nối tiếp**, không bằng phép dò — mã mục do một lệnh cấp và ghi lại, để hai lượt không bao giờ đọc ra cùng một số.
+2. **Cổng máy bắt mã trùng ở CI** — `### P-xxx` trùng giữa đầu nhánh và `main`, và dòng log có `ref` không khớp tên file, đều đỏ được ngay trong `pnpm check`. Hướng này rẻ hơn và bắt được **cả** ca `P-028` cũ (`#224`) lẫn ca này.
+
+Tới khi có một trong hai, luật vẫn là lời dặn: dò mã **ngay trước khi commit mục**, không phải ở đầu lượt.
+
+---
+
+## KF-040 · Tiền API đã tiêu, rồi lượt chạy ném — và **không dòng log nào** ghi lại số tiền đó
+
+> Số **KF-040**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất toàn cục là `KF-039` (PR `#242`), nên `KF-040` không đụng ai.
+
+- **Lần gặp: 2.** Đủ ngưỡng `CLAUDE.md` mục 13 *"lỗi cùng loại lần thứ hai → sửa spec/contract/prompt, không vá sản phẩm"*.
+- **Nhóm Z.** Không gì đỏ: script ném, job đỏ vì một lý do khác (tên file hỏng), và người đọc thấy một job đỏ chứ không thấy *"vừa tiêu N đô mà sổ chi không có dòng nào"*. Ngân sách học của CHARTER mục 8 đọc `ops/logs/**`, nên tiền đã tiêu **biến mất khỏi phép cộng**.
+- **Chữ ký:** một script gọi API trả tiền trong vòng lặp → một bước **ngoài** `try` (đọc file đầu vào, dựng prompt) ném ở lượt thứ N → ngoại lệ thoát khỏi hàm → `appendLog` không bao giờ chạy → **N-1 lần gọi đã bị tính tiền, 0 dòng log**. Bất biến **I8** đòi *mọi* lần chạy có một dòng mang `costUsd`, và nhánh ném là nhánh **đắt nhất**, tức nhánh ít được phép im lặng nhất.
+
+| Lần | Chỗ | Phát hiện bởi |
+|---|---|---|
+| 1 | `ops/scripts/novelty-embeddings-trial.ts` (mục `topic/T-014`, PR `#253`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~03:0xZ` |
+| 2 | `ops/scripts/model-assumption-check.ts` (mục `topic/T-006b`, PR `#264`) | vòng soát ngữ cảnh sạch, `2026-09-25 ~10:0xZ` |
+
+Lần 2 xảy ra **~7 giờ sau** lần 1, trong một file **mới viết**, bởi một lượt agent **không đọc** bản sửa của lần 1. Đó là phần đáng ghi: bài học nằm trong một docblock của một file khác, và docblock không đi theo người viết file sau.
+
+- **Tái hiện, lần 2, chạy thật:**
+  ```
+  ném ở readHandCases('M-003') sau 2 lần gọi API
+  → NÉM RA NGOÀI runTier4
+  → số lần đã GỌI OPENAI (đã tính tiền): 2
+  → số dòng log ghi được (I8):            0
+  ```
+- **Nguyên nhân gốc:** `try` được đặt quanh *"lời gọi mạng"* vì đó là chỗ **trông như** có thể hỏng. Nhưng phạm vi đúng của `try` không phải "chỗ dễ hỏng" mà là **"từ lúc đồng hồ tiền bắt đầu chạy"** — mọi thứ sau lần gọi tính tiền đầu tiên, kể cả một phép đọc file trông vô hại.
+- **Máy chặn từ nay:**
+  - Lần 1: `ops/scripts/novelty-embeddings-trial.ts` ghi log trong `finally`, `costUsd` cộng dồn **ngoài** `try`.
+  - Lần 2: `ops/scripts/model-assumption-check.ts` — `runTier4` bao **cả vòng lặp** trong `try/finally`, `totalCostUsd` khai ngoài `try`, và hai lời gọi `readModel`/`readHandCases` chuyển **vào trong** `try` của từng model. Hai bài kiểm khoá hai lớp: `TÁI HIỆN C2` (file ca kiểm hỏng) và `C2 lớp 2` (ngoại lệ ngoài phạm vi một model). Phá thử: bỏ `finally` chỉ ghi ở đường trót lọt → **1 bài đỏ đúng chỗ**; đưa `readHandCases` ra ngoài `try` → **1 bài đỏ đúng chỗ**.
+- **Luật rút ra, cho mọi script gọi API trả tiền sau này:** đặt `try` từ **trước lời gọi tính tiền đầu tiên**, cộng dồn `costUsd` vào một biến khai **ngoài** `try`, và ghi dòng log trong `finally`. Ba câu đó là ba câu, không phải một gợi ý.
+- **Còn hở, khai chứ không giấu:** chưa có cổng **máy** nào bắt một script *mới* quên luật này — hai lần sửa đều do vòng soát ngữ cảnh sạch bắt, không do CI. Một bộ dò dạng *"file nào gọi `api.openai.com` mà không có `finally` chứa `appendLog`"* là một mục backlog riêng; chưa mở vì nó cần đo xem có bao nhiêu ca giả. Tới lúc đó, KF này là lưới đỡ.
+
+---
+
+## KF-035 · Một `[QĐ]` có điều kiện mà điều kiện **đã đủ** vẫn nằm mở 3 ngày, vì agent tin sai là còn bị chặn
+
+> Số **KF-035**: dò `## KF-` trên `main` **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-034` (PR `#258`), nên `KF-035` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Cái thiếu là thứ không chỉ báo nào đo: một câu hỏi đã hết cần hỏi vẫn nằm trong danh sách *"Cần anh quyết"* của bản tin.
+
+**Chữ ký:** một issue `[QĐ]` khai một điều kiện (một secret, một PR gate) → agent tin điều kiện **chưa đủ** → không đẩy nhánh việc đi tiếp và không nêu lại → issue nằm mở trong khi điều kiện **đã đủ từ lâu**. Mọi chỉ báo xanh vì bản thân "một issue mở" không làm gì đỏ.
+
+**Quan sát được, `#127`, đo bằng API 2026-09-25:**
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-22T09:16Z` | `#127` mở — `[QĐ]` (nhãn `decision` + `irreversible`), tiêu đề *"…cấp kiểm 4 **chặn** ở một secret **chưa có**"*. Phương án A: *"Cấp `OPENAI_API_KEY` rồi **merge PR #66**."* |
+| `2026-09-24T04:31:51Z` | **PR `#66` merge** (`platform/P-003`, cơ chế soát chéo GPT). Điều kiện dạng-PR của phương án A **đã đủ**. |
+| `2026-09-25 ~00:47Z` | Lượt `crux-worker-1` chép chỉ dẫn sang `#251` ghi thẳng: `#127` *"nằm 3 ngày vì agent tin là chưa có `OPENAI_API_KEY` trong khi key đã có và `#66` đã chạy"*. |
+| lúc viết mục này | `#127` **vẫn mở**. |
+
+**Lần gặp thứ 2 — chủ dự án bảo kiểm, đã kiểm, và nó đúng là một lần lặp.** Chỉ dẫn trên `#251`
+(`2026-09-25T06:04:33Z`): *"Báo cáo D6 vẫn ghi '#127 vẫn cần anh quyết'. Kiểm: lượt đó bắt đầu trước hay
+sau câu trả lời? Nếu sau thì đây là lần lặp của `KF-035`, ghi thêm vào KF."* Đo bằng API, ba mốc:
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-24T23:49:25Z` | Chủ dự án **trả lời `#127`** ngay trên issue: *"#127 A — điều kiện đã đủ… Chạy cấp kiểm 4 … ở lượt tới…"*. Comment không mở đầu 🤖 trên issue nhãn `decision` → là **chỉ dẫn** (`CLAUDE.md` mục 5). |
+| `2026-09-25 ~04:2x–05:0xZ` | Lượt `crux-worker-2` làm **D6**, và báo cáo của nó viết `#127` *"**vẫn cần anh quyết** dù `#66` đã merge"*. |
+| chênh lệch | Lượt D6 bắt đầu **~4,5 giờ SAU** câu trả lời. |
+
+**Nên: đúng, là lần lặp** — cùng chữ ký, đổi nguồn dữ liệu. Lần 1 agent đọc một *trạng thái tồn kho*
+(`OPENAI_API_KEY` có chưa) bằng trí nhớ; lần 2 agent đọc một *câu trả lời* bằng trí nhớ. Cả hai lần, thứ
+đã đổi nằm trong một chỗ **đọc được bằng một lời gọi API** mà không lượt nào gọi.
+
+**Nguyên nhân gốc lớp 3, mới ở lần này:** `CLAUDE.md` mục 14 dặn đọc câu trả lời ở **cả hai** chỗ — issue
+`[QĐ]` và issue bản tin. Lượt D6 đọc `#127` đủ để trích **thân** issue (nó dẫn đúng phương án A) nhưng
+**không đọc comment** của issue đó. Đọc thân mà không đọc comment là một hình dạng cụ thể, lặp được, và
+nó không đỏ ở đâu cả: thân issue luôn nói "đang chờ", vì thân issue được viết lúc còn chờ.
+
+**Máy chặn từ nay:** vẫn chỉ một nửa. Bộ dò *"Quyết định điều kiện đã đủ nhưng còn mở"* mà chính D6 dựng
+(`conditionMetButOpen` ở `ops/scripts/digest-metrics.ts`) bắt được hình dạng **lần 1** (PR gate đã merge).
+Nó **không** bắt được hình dạng lần 2, vì tín hiệu của lần 2 là *"issue đã có một comment không mở đầu 🤖
+sau lần agent đọc gần nhất"* — một phép đo khác hẳn. Chưa thêm luật ở đây vì đúng **A10** của `#251`
+(chỉ thêm luật khi đã có một lỗi thật): nay đã có, nên nó đáng một mục backlog riêng, không phải một dòng
+vá trong mục `topic/T-006b`. Lưới đỡ tạm cho tới lúc đó: **đọc `get_comments` của mọi `[QĐ]` mình định
+nhắc tới**, đừng đọc mỗi thân issue.
+
+**Lần gặp thứ 2 KHÔNG tự lành ở lượt này, và đó là chủ đích.** Lượt `crux-worker-1` `2026-09-25 ~09:5xZ`
+nhận `#127 A` và dựng xong cơ chế cấp kiểm 4 (`topic/T-006b`), nhưng **chưa chạy** nó: `OPENAI_API_KEY`
+chỉ sống trong Actions (kiểm bằng chạy thật, `env` của phiên không có), và một workflow mới trong
+`ops/workflows/` chỉ có hiệu lực **sau khi** PR merge vào `main` và `sync-workflows.yml` chép xong
+(`CLAUDE.md` mục 4). Nên `#127` **giữ mở** tới sóng 2. Đóng nó ở sóng 1 để "xong việc" là dựng lại đúng
+chữ ký của chính `KF-035` theo chiều ngược: khai một việc chưa làm là đã làm.
+
+**Nguyên nhân gốc — hai lớp:**
+
+1. **Agent đọc một trạng thái tồn kho bằng trí nhớ, không bằng chạy thật.** Câu *"`OPENAI_API_KEY` chưa có trên repo"* trong thân `#127` là đúng **lúc viết** (2026-09-22) và **sai** sau đó, nhưng không lượt nào đo lại. Đây là biến thể của chính luật CHARTER 11.1 *"kiểm bằng chạy thật, không bằng đọc tài liệu"* — một dòng văn trong thân issue cũng là "tài liệu".
+2. **Bản tin không có bộ dò cho hình dạng này.** Nó chỉ tách `[QĐ]` đang mở theo nhãn `reversible`/`irreversible` (mục "Cần anh quyết"), không hỏi *"điều kiện của nó đã đủ chưa"*. Nên một `[QĐ]` đã đủ điều kiện trông giống hệt một `[QĐ]` còn chờ người thật.
+
+**Chỗ đã sửa (mục `platform/P-052`, chỉ dẫn D6 của `#251`):** `renderDigestMetrics` thêm mục *"Quyết định điều kiện đã đủ nhưng còn mở"* — một `[QĐ]` khai chặn (`decisionDeclaresBlocked`, dấu hiệu lấy nguyên văn từ `#127`) mà có PR gate đã merge (`linkedPrNumbers` giao với tập PR đã merge) được **nêu lên** kèm số ngày đã mở. Bài kiểm `ops/test/digest-metrics.test.ts` khoá bằng fixture hình dạng `#127`.
+
+**Vì sao nêu lên chứ không tự đóng:** `#127` là `[QĐ]` `irreversible` (chi tiền + chọn nhà cung cấp) — nó **vẫn cần chủ dự án quyết** dù `#66` đã merge; điều kiện dạng-PR đủ chỉ nghĩa "hết cớ để nằm im", không nghĩa "đã quyết". Việc **đóng** một `[QĐ]` khi có bằng chứng mạnh thuộc `decision-close.ts` (`platform/P-050`); mục này ngược dấu — kéo một `[QĐ]` đã đủ điều kiện ra khỏi im lặng để chủ dự án soát. Hai mục cùng họ, không đè nhau.
+
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "đừng dùng điều kiện trong `[QĐ]`". Đọc thành: *một điều kiện đã khai thì phải có máy đo lại nó, nếu không nó thành một lời khẳng định đóng băng ở thời điểm viết.*
+
+---
+
 ## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
 
 > Số **KF-026**: dò `## KF-` trên `main` **và trên đầu cả 8 PR đang mở** trước khi viết (`KF-005`). Cao nhất trên `main` là `KF-024`, và `KF-025` do PR `#225` giữ — nên `KF-026` không đụng ai.
@@ -955,6 +1119,16 @@ Tầng thứ ba là bài học riêng: bốn chỗ hỏng NGỮ NGHĨA — CLI b
 
 ---
 
+## KF-032 · Cửa `open` không được `ci.yml` gắn nhãn `automerge`, nên PR sạch không bao giờ vào hàng đợi merge — CI vẫn 8/8 xanh
+
+> Số **KF-032**: dò `## KF-` trên `main` **và mọi** nhánh PR đang mở (KF-005), cao nhất đang dùng là `KF-031` (#249), nên `KF-032` không đụng ai.
+
+- **Lần gặp:** 1 (#223 — mở `2026-09-24T04:38:39Z`, CI 8/8 xanh từ `04:46Z`, cửa `open`, đứng yên ~20 giờ mà không chỉ báo nào đỏ). Chỉ dẫn của chủ dự án ở #251 mục **D4a**.
+- **Chữ ký:** một PR có CI đủ xanh, `mergeable_state` không `blocked`, cửa `protected-area.ts` là `open`, nhưng **không mang nhãn** `automerge` — và `automerge.yml` lọc hàng đợi theo `automerge`/`automerge-delayed`, nên nó vô hình với máy merge. Càng "sạch" (không chạm vùng bảo vệ) thì càng chắc chắn kẹt.
+- **Nguyên nhân gốc:** khối `case "$GATE"` của job `protected-area` trong `ops/workflows/ci.yml` có ba nhánh, nhưng chỉ hai nhánh `owner-merge)` và `automerge-delayed)` `--add-label` nhãn của mình; nhánh `*)` — tức cửa `open`, giá trị thứ ba và duy nhất còn lại của `Gate` — chỉ **gỡ** hai nhãn kia mà không bao giờ `--add-label automerge`. Hai luật đúng riêng lẻ (gắn nhãn theo cửa · lọc hàng đợi theo nhãn) cắn nhau ở đúng cửa không ai gắn. Nhóm **Z**: hỏng mà mọi chỉ báo đều xanh.
+- **Đã sửa ở đâu:** `ops/workflows/ci.yml` — thêm `gh pr edit "$PR" --add-label automerge` vào nhánh `*)`, cân xứng với hai nhánh kia. Không đụng `automerge.yml` (bộ lọc theo nhãn vốn đúng); chỗ hỏng là bên **sinh** nhãn, không phải bên đọc.
+- **Máy chặn từ nay:** `ops/scripts/check-workflows.ts` — `mergeGateLabelProblems` đọc khối `case "$GATE"` và đòi **cả ba** cửa `--add-label` đúng nhãn của mình (`owner-merge`→`owner-merge`, `automerge-delayed`→`automerge-delayed`, `open`/`*)`→`automerge`), chạy trong `pnpm lint:workflows`. Luật chỉ áp cho workflow mang khối gắn nhãn theo cửa merge (nhận diện bằng `case "$GATE"` cộng cả hai nhánh `owner-merge)`/`automerge-delayed)`) nên không kêu oan. `ops/test/check-workflows.test.ts` — bài **TÁI HIỆN LỖI** dựng đúng khối `*)` thiếu nhãn của #223 (bất biến I2), cộng bài khoá từng nhánh, bài thiếu nhánh, bài không-kêu-oan, và bài đọc `ci.yml` **thật** đòi cả ba cửa đủ nhãn.
+- **Còn lại, tách phạm vi (không nống mục này):** #223 **không tự thoát** nhờ PR này — workflow chỉ có hiệu lực sau khi merge và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4), và nhãn phải do một lượt `ci.yml` mới trên #223 gắn (một sự kiện `synchronize`/`labeled` bất kỳ). Chủ dự án merge tay hoặc một lượt sau gắn `automerge` sau khi soát vẫn là đường ngắn hơn. Hai mục anh em D4b (`protected-area.ts` chưa coi `ci.yml` là hạ tầng merge) và D4c (bước tải gitleaks không phân biệt "quét rồi sạch" với "chưa quét được") là hai PR riêng.
 ## KF-033 · PR sửa `ops/workflows/**` gây **báo động giả** trong cửa sổ chờ `sync-workflows` — @nhắc chủ dự án dù nhà máy chạy đúng
 
 > Số **KF-033**: dò `## KF-` trên `main` (cao nhất `KF-030`) **và trên đầu các PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-033` không đụng ai.
@@ -967,3 +1141,89 @@ Tầng thứ ba là bài học riêng: bốn chỗ hỏng NGỮ NGHĨA — CLI b
 - **Một lỗi RIÊNG bị trộn vào cùng cảnh báo, đừng gộp:** con số "60 giờ" của cảnh báo đó **không** đo cửa sổ sync — nó đếm từ một cảnh báo cũ (`a44d265`) **chưa bao giờ được đóng**. Đó là chữ ký của `KF-028` và đang được `#231`/`P-044` chữa (đóng cảnh báo khi `main` xanh lại). Hai lỗi cộng lại thành một cảnh báo trông tệ hơn từng lỗi — tách ra thì mỗi lỗi có một đường sửa riêng.
 - **Chưa sửa — chờ quyết định `#254`:** cách chặn phải **không nới** dấu hiệu 3 của `watchdog` (bắt `sync-workflows` chạy **hỏng** thật), nên nó là một lựa chọn thiết kế, không phải bản vá hiển nhiên. `🤖 [QĐ] #254` mở ba phương án; khuyến nghị A (thêm bộ phân loại "đang chờ sync" hạ cấp @nhắc, giữ nguyên dấu hiệu 3). Mục `platform/P-049` giữ chỗ, `status: parked`.
 - **Máy chặn từ nay:** chưa có — cửa này để mở tới khi `#254` chốt phương án. KF này là lưới đỡ tạm: lượt worker/integrator gặp một cảnh báo `main` đỏ **ngay sau** một merge `ops/workflows/**` mà `pnpm check` trên `main` lại xanh thì đối chiếu mốc `sync-workflows` gần nhất trước khi coi là sự cố thật — **đừng revert một `main` vốn đang xanh**.
+
+---
+
+## KF-039 · Cổng cú pháp của `I-018` **cho qua** cây union có khai báo trùng — `resolved` lần thứ hai cho một cây Node không nạp được
+
+> Số **KF-039**: `KF-036` là mã mà mục này nhận lúc viết, nhưng `main` đã cấp cùng số cho một chỗ hỏng khác (`KF-036 · Phép dò mã mục trống…`, mục `platform/P-054`, PR `#258`, vào `main` lúc `2026-09-25T06:53:33Z`) — tức **đúng chỗ hỏng mà `KF-036` của `main` mô tả**, xảy ra với chính mục này. Lượt `crux-worker-1` ~07:5xZ 2026-09-25 gộp `main` vào nhánh này ở bước 0 và phát hiện va chạm, nên đổi số ở đây. `KF-039` là mã trống kế tiếp, dò `^## KF-` trên `main` **và** trên đầu nhánh cả 11 PR đang mở (cao nhất `KF-038`, PR `#261`) — `KF-005`.
+
+- **Lần gặp:** 2 của **cùng một lớp hỏng** với `KF-016` (`integrator-resolve.ts` trả `resolved` cho một cây không đọc được), nhưng **chữ ký khác** nên cổng của `I-018` không bắt. Lần này: PR `#242` (`claude/dreamy-ride-ynixo1`, mục `audio/AU-007`), lượt `crux-worker-1` ~04:41Z ngày 2026-09-25, sau khi `#39`/`V-001` vào `main` lúc `04:36:59Z` (`b1063a9`).
+- **Chữ ký:** `node ops/scripts/integrator-resolve.ts origin/main` in `{"outcome":"resolved","files":["kernel/src/packs.ts"]}` và thoát `0`, nhưng cổng **đầu tiên** của `pnpm check` (`pnpm contracts`) đỏ ngay ở tầng **nạp module**, không phải ở `typecheck`:
+
+  ```
+  file:///home/user/crux-studio/kernel/src/packs.ts:13
+  import { assertValid,                 } from './validate.ts';
+           ^^^^^^^^^^^
+  SyntaxError: Identifier 'assertValid' has already been declared
+  ```
+
+- **Nguyên nhân gốc:** hai phía cùng **thêm** một dòng `import … assertValid …` vào cùng khối import — `main` viết `import { assertValid, type JsonSchema } from './validate.ts';` (V-001), nhánh viết `import { assertValid } from './validate.ts';` (AU-007). Union thuần cộng thêm giữ **cả hai** dòng. Không bên nào xoá dòng nào, nên phép đếm dòng xoá của `integrator-resolve.ts` lại không thấy gì — **y hệt `KF-016`**.
+- **Vì sao cổng `I-018` không bắt — và đây mới là phần mới:** `mergedSyntaxProblem` (`ops/scripts/merge-syntax.ts`) kiểm file script bằng `ts.transpileModule(..., { reportDiagnostics: true })`, phép này **chỉ báo lỗi PARSE**. Hai dòng `import` trùng ký hiệu **parse hoàn toàn hợp lệ** — lỗi là lỗi *khai báo trùng*, phát sinh ở tầng **liên kết module** của ESM, sau khi parse xong. Nên cổng trả `null` (cho qua) trên đúng file mà Node từ chối nạp. Đo được, hai chiều, bởi vòng soát ngữ cảnh sạch của phụ lục P1 bước 6:
+
+  ```
+  mergedSyntaxProblem(<file có 2 dòng import trùng>)  → null            # cổng CHO QUA
+  node -e "await import('…/kernel/src/packs.ts')"     → SyntaxError…    # Node TỪ CHỐI
+  ```
+
+- **Phân loại SAI, không chỉ là một lần bỏ sót:** CHARTER phụ lục P3 bước 0b nói ca "cây sau khi union không còn đọc được" là **`aborted-ineligible`**, *không* phải "PR đỏ" — và hai ca đi **hai đường khác nhau** ở lượt sau (phụ lục P1 bước 2: `aborted-ineligible` thì worker giải xung đột bằng phán đoán; `red-after-merge` thì worker đọc chỗ đỏ rồi sửa code). Tool trả `resolved`, nên `pickPrToHandle` xếp `#242` vào ca `red-after-merge`. Kết quả cuối vẫn đúng ở lượt này, nhưng đường đi là đường sai.
+- **Vì sao nó đắt:** nhóm **Z** ở đúng công cụ mà cả hàng đợi merge dựa vào. Phần *"Thiên lệch, khai trước"* của `KF-016` liệt kê các lỗ còn lại của cổng — nó kể đường gộp `clean` và phép kiểm YAML hẹp, **không** kể ca khai báo trùng. Nên tới trước dòng này, sổ đang nói **sai phạm vi lỗ** của chính cổng đó. Lượt integrator kế tiếp gặp lại hình dạng này sẽ lại nhận `resolved` và push một cây đỏ lên nhánh PR.
+- **Đã sửa ở đâu:** *chỉ mới phần vá sản phẩm.* Lượt `crux-worker-1` 04:41Z reset về `66ab9b8` (không push cây đỏ — P3 bước 0b), rồi gộp lại bằng `git merge` thường và **giải tay** đúng một khối import: gộp hai danh sách thành một, giữ đủ `readingTableSchema` (AU-007) lẫn `fileURLToPath` + `type JsonSchema` (V-001), `assertValid` đúng **một** lần. Đo không nuốt bên nào: `git diff origin/main -- kernel/src/packs.ts` **0 dòng xoá**; `git diff 66ab9b8 -- …` xoá **đúng 1 dòng**, là dòng import trùng; 19/19 export còn nguyên. Theo `CLAUDE.md` mục 13 thì đó **vẫn là vá sản phẩm**, không phải sửa cơ chế.
+- **Máy chặn từ nay:** **chưa có** — và đây là chỗ để mở có chủ đích, khai ra thay vì im. Phần siết `ops/scripts/merge-syntax.ts` chạm **tầng luật** đang bắt lỗi, nên `CLAUDE.md` mục 13 đòi **tách PR riêng**: *"Bản sửa vừa sửa chỗ hỏng vừa siết thêm luật thì tách hai PR"*. PR `#242` chỉ mang dòng tài liệu này. Mục backlog cho phần cơ chế cần: mở rộng `mergedSyntaxProblem` bắt khai báo trùng ở phạm vi đỉnh của module (nạp thử, hoặc soát tên trùng của `import`/`const`/`let`/`function`/`class`), kèm **test tái hiện lỗi** đúng hình dạng "hai bên cùng thêm một dòng import cùng ký hiệu" (bất biến **I2**), và đo **hai chiều** như `I-018` đã làm: đỏ trên bản trước khi sửa, xanh sau bản sửa. Giữ nguyên thiên lệch của `merge-syntax.ts` (báo sai đắt hơn bỏ sót): chỉ báo khi cây **chắc chắn** không nạp được.
+- **Lưới đỡ tới khi có máy chặn:** bước 0 phải chạy `pnpm check` **đủ** trước khi push (P3 bước 0b đã đòi), và một cây gộp `resolved` mà `pnpm check` đỏ ở lỗi *nạp module* hay *cú pháp* thì đọc là **`aborted-ineligible`**, không phải một PR đỏ bình thường — cùng dòng lưới đỡ mà `KF-016` đã đặt, nay nói rõ là nó phủ cả lỗi khai báo trùng.
+## KF-034 · Soát chéo GPT chạy đều, tốn tiền đều, và chưa bao giờ ra một phát hiện nào
+
+> Số **KF-034**: dò `## KF-` trên `main` (cao nhất `KF-033`) **và trên đầu cả 10 PR đang mở** (`#252` giữ `KF-032`, `#231` giữ `KF-028`, `#225` giữ `KF-025`) trước khi viết (`KF-005`) — nên `KF-034` không đụng ai.
+
+- **Lần gặp:** 1 (chỉ dẫn **D5** của chủ dự án trên `#251`).
+- **Nhóm Z.** Job `gpt-review` chạy, đăng comment, ghi dòng log có `costUsd` — mọi chỉ báo xanh. Cái thiếu là thứ không chỉ báo nào đo: comment **không chứa phát hiện nào**. Một bản tóm tắt PR đọc lướt qua trông y hệt một lượt soát chéo đã xong, nên nó đi qua mọi vòng mắt người mà không ai hỏi.
+- **Chữ ký:** comment `gpt-review` gồm các dòng đánh số mô tả PR đã đổi những gì (*"Đã thêm…"*, *"Việc định nghĩa … giúp đảm bảo…"*, *"Các test case … có vẻ đầy đủ"*), **0 dòng mang mức CHẶN/NÊN SỬA**, 0 chỗ hỏng nêu đích danh.
+  - Đo được lúc nhận mục `P-051`, **đếm lại bằng API GitHub trong vòng soát ngữ cảnh sạch**: **6/6** comment `gpt-review` trên `#249` (`5821972516`, `5822119278`, `5822426604`, `5824173496`, `5824271431`, `5826125889`) — 0 dòng mang mức. Cùng hình dạng trên `#242` (`5816275628`, `5818297000`), `#223` (`5807791978`, `5807846441`), `#224` (`5808392375`), `#39` (`5815319768`, `5815347132`, `5815417824`, `5818092517`).
+  - ⚠️ **Một con số của bản đầu KF này SAI, ghi lại chứ không lặng lẽ sửa** — nó khai *"5/5 comment trên `#249`"* và trích ID `5816275628` như thể ID đó nằm trên `#249`. Thật ra `#249` có **6** comment và `5816275628` nằm trên **`#242`**. Lượt làm chép con số đó từ mô tả PR `#256` thay vì tự đếm — đúng chữ ký `I-021` (ghi một con số không phải mình đo). Phần *định tính* (mọi comment đều là tóm tắt, 0 phát hiện có mức) thì đo lại vẫn đúng ở cả hai PR.
+- **Nguyên nhân gốc:** prompt hệ thống cũ chỉ xin *"nêu tối đa 5 phát hiện đáng chú ý nhất, mỗi phát hiện một dòng"*. *"Đáng chú ý"* không phân biệt **một chỗ hỏng** với **một thay đổi**, nên một câu mô tả thay đổi thoả yêu cầu. Mô hình đi theo đường rẻ nhất, và đường rẻ nhất khi đọc một diff là kể lại nó.
+- **Vì sao sửa prompt thôi là chưa đủ:** một prompt là lời dặn cho một mô hình xác suất, không phải lớp chặn. Chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649) — *"tất cả thành bài kiểm máy khoá được, không phải lời dặn"* — loại thẳng cách đó.
+- **Máy chặn từ nay** (`P-051`, `ops/scripts/gpt-review.ts`):
+  - `parseReviewFindings` đọc lại đầu ra thật và trả `conforms` cộng `problems` nêu **từng** dòng sai — hàm thuần, có bài kiểm.
+  - `formatComment` **không bao giờ** đăng một đầu ra sai dạng như thể nó là một lượt soát chéo: nó đăng kèm nhãn sai dạng và lý do, đầu ra thô nằm trong `<details>` đóng khung là dữ liệu (**I7**).
+  - Dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`, nên chuỗi "chưa bao giờ ra phát hiện" đếm được bằng `readRunLogs` thay vì bằng mắt.
+- **Hướng lệch đã chọn, và vì sao:** không đối xứng. Nuốt một đầu ra sai dạng thì comment biến mất và người đọc PR tưởng job không chạy; đăng trơn thì nhóm Z quay lại nguyên vẹn. Nên **đăng kèm nhãn**. Cùng lẽ đó, phép đọc cố ý **chặt** — một câu dẫn tự do cũng là sai dạng, vì đó đúng là nơi văn tóm tắt quay lại.
+- **Còn hở, khai chứ không giấu:** phép đọc bắt được *"không đúng dạng"*, **không** bắt được *"đúng dạng mà nội dung rỗng nghĩa"* — một dòng `NÊN SỬA · nên xem lại phần test` hợp dạng nhưng không nêu chỗ hỏng nào. Chưa có ca thật nào, nên chưa thêm luật (đúng **A10** của `#251`: chỉ thêm luật khi có một lỗi đã thật sự xảy ra). Thấy lần đầu thì mở mục backlog, đừng đoán trước.
+
+---
+
+## KF-041 · Nhánh chờ của lượt log-only không ai gộp lại, nên 4 lượt worker **không có dòng log nào trên `main`**
+
+> Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 13 PR đang mở** trước khi viết (`KF-005`, `KF-036`). `KF-037` do `#260` giữ, `KF-038` do `#261`, `KF-039` do `#242`, `KF-040` do `#264` — nên `KF-041` là mã trống kế tiếp.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh, `watchdog.yml` im. Cái thiếu là thứ không chỉ báo nào đo — một dòng log **đã được ghi và đã được đẩy đi**, chỉ là đẩy vào chỗ không ai đọc.
+
+**Chữ ký:** một lượt worker đi tới `openPr: false` → ghi dòng log bước 0 → đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>` → **không lượt nào sau đó gộp nhánh ấy vào PR của mình** → dòng log không bao giờ tới nhánh chính.
+
+**Đã gặp: 4 lần.** Đo tại mốc `2026-09-25T11:39:23Z` (chính mốc `at` của dòng log lượt này, nên số kiểm lại được) bằng `git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*'` rồi đối chiếu từng mã với `git cat-file -e origin/main:ops/logs/integration/<mã>.jsonl`:
+
+| Nhánh chờ | Dòng log đã vào nhánh chính? | Kẹt |
+|---|---|---|
+| `step0-pending/step0-2026-09-24T004410Z-crux-worker-1` | ❌ | ~34,9 giờ |
+| `step0-pending/step0-2026-09-24T214301Z-crux-worker-1` | ❌ | ~13,9 giờ |
+| `step0-pending/step0-2026-09-25T002357Z-crux-worker-2` | ❌ | ~11,3 giờ |
+| `step0-pending/step0-2026-09-25T003923Z-crux-worker-1` | ❌ | ~11,0 giờ |
+
+**Nguyên nhân gốc — luật có hai vế, chỉ một vế có người làm.** `ops/lanes/platform/backlog.md` mục `P-038` viết đủ cả hai vế trong **một** ô ⬜:
+
+> Dòng log của lượt `openPr: false` không bị mất (bất biến **I8**): commit và đẩy lên nhánh chờ `claude/integration/step0-pending/<mã log>`, không mở PR. Lượt nào mở PR thì `cherry-pick` các nhánh chờ vào PR của nó rồi **xoá** nhánh đã gộp.
+
+Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó chạy — bốn lần. Vế hai (**gộp lại**) nằm ở một lượt **khác**, một lượt không có lý do gì để mở ô ⬜ của một mục backlog đang treo. Và không có gì nhắc: phụ lục P1 bước 0 của `CHARTER.md` không nói tới nhánh chờ, `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng, `pnpm check` không đọc remote. Luật sống duy nhất ở một ô gạch đầu dòng chưa tick.
+
+**Vì sao không chỉ báo nào đỏ:**
+
+- Bất biến **I8** ("mọi lần chạy ghi một dòng log") được kiểm ở tầng *hình dạng dòng* (`misfiledLogLines`, trong `pnpm check`), không ở tầng *lượt chạy nào còn thiếu dòng*. Không có danh sách lượt chạy để đối chiếu, nên "thiếu bốn lượt" không có gì để so.
+- Nhịp tim `watchdog.yml` lấy `max` hai nguồn (`P-043`), và bước 0e đẩy bản sao lên `claude/telemetry` **trước** khi PR của lượt merge. Nên nhịp tim vẫn đập đúng trong khi nguồn nhánh chính thiếu bốn nhịp — hướng lệch an toàn cho watchdog, nhưng nó cũng **che** đúng chỗ hỏng này.
+- `readRunLogs("ops/logs")` chỉ thấy cái có mặt. Thiếu một file trông y hệt lượt chạy đó chưa từng xảy ra.
+
+**Hệ quả đo được:** `step0Streaks(readRunLogs("ops/logs"))` lúc phát hiện trả `totalRuns: 114` — thiếu 4. Mọi bên đọc log đếm thấp hơn sự thật: `ops/metrics.md` (số lượt, `costUsd` cộng dồn), bản tin ngày, và chính phép đếm chuỗi kẹt mà phụ lục P1 bước 2 dựa vào.
+
+**Chỗ đã sửa lần này:** lượt `crux-worker-1` `~11:39Z` `cherry-pick` cả bốn dòng vào PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) — đúng vế hai của luật, làm bằng tay.
+
+**Máy chặn từ nay:** chưa có. Mục `platform/P-056` giữ phần này (một mục = một PR, `CLAUDE.md` mục 2). Hình dạng cần có, theo đúng chuẩn *"thành bài kiểm máy khoá được, không phải lời dặn"*: một hàm thuần nhận danh sách nhánh chờ cộng danh sách mã log đã có trên nhánh chính và trả về những nhánh **chưa** gộp, cộng một nơi **chạy định kỳ** đọc remote thật (`watchdog.yml` đã fetch `claude/telemetry` mỗi lượt, nên nó là chỗ rẻ nhất) và mở cảnh báo khi một nhánh chờ quá ngưỡng. `pnpm check` **không** phải chỗ đúng: nó không đọc được remote trong CI mà không thêm một lần fetch cho mọi PR.
+
+Tới khi có nó, luật vẫn là lời dặn — và lời dặn đó đã hỏng bốn lần liên tiếp, nên đừng dựa vào nó.
