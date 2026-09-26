@@ -1438,3 +1438,47 @@ Mục này có **hai vế**, và chúng **không** cùng một chỗ hỏng — 
 - mã mục: dò `### P-` trên `main` **và trên MỌI nhánh remote** lúc `2026-09-26T02:2xZ` (`KF-005`, `KF-036`) — cao nhất `P-057` (nhánh của `#274`), nên `P-058` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
 - ghi chú trường `risk`: CHARTER 2.1 khai tập `risk: low|high`, nhưng backlog thật đang có `low` 73 · `medium` 34 · `high` 33 và **không bộ kiểm nào** cho trường này. Mục này là cái `medium` thứ 35. Lệch CHARTER ↔ thực tế có **trước** mục này; theo `CLAUDE.md` mục 0 thì CHARTER đúng và một trong hai phải sửa — cửa của CHARTER mục 2 là `automerge-delayed`, nên một PR riêng làm được. Không sửa ở đây (một mục = một PR).
 
+
+---
+
+### P-059 · fix · Đầu nhánh `claude/telemetry` thiếu 33 bản ghi nhịp tim, và không phép đo nào nói ra con số đó
+
+Tìm ra ở **bước 0e** lượt `crux-worker-2` `2026-09-26T07:25Z`, đo được chứ không suy. Chi tiết đầy đủ, kèm bảng chữ ký và ba lý do từng bên đọc im lặng: `ops/known-failures.md` `KF-043`.
+
+Mục này là **vế thứ hai** của chỗ hỏng mà [`#281`](https://github.com/HungQuach301/crux-studio/pull/281) đã sửa **vế thứ nhất**, và hai vế không cùng một chỗ:
+
+- **Vế ghi (ĐÃ sửa, `#281`).** Khối lệnh `--commands` của `ops/scripts/telemetry-beat.ts` dựng cây `heartbeat/` thêm vào thay vì dựng lại từ một entry, cộng 9 bài kiểm khoá hành vi đó.
+- **Vế đo lại (CHƯA có, mục này).** Không bên đọc nào hỏi *"đầu nhánh còn giữ đủ chưa"*. `heartbeat-source.ts` lấy `max` của `at` nên một file cũng đủ làm nó xanh; **không script nào gọi `step0Streaks`**, và mọi bên gọi `readRunLogs` đều truyền `ops/logs` chứ không phải `heartbeat/`; `pnpm step0:pending` đo *"dòng log đã tới nhánh chính chưa"*, một câu hỏi khác. Nên vế ghi hỏng lần nữa vì bất cứ lý do nào thì không gì đỏ, y như 37 lần trước.
+
+**Phép đo mở mục:**
+
+```
+file heartbeat/ ở ĐẦU nhánh                → 12   (đo lại 40 phút sau: 14)
+file heartbeat/ riêng biệt qua MỌI commit   → 45   (đo lại: 47)
+thiếu ở đầu nhánh                           → 33   ← ổn định ở cả hai mốc
+   trong đó: 25 đã có trên `main`, 8 chỉ còn trên đầu nhánh 6 PR ĐANG MỞ
+```
+
+**Bất biến phát biểu được thành một câu:** đầu nhánh `claude/telemetry` phải là **tập cha** của mọi file `heartbeat/` mà nhánh đã từng giữ. Nhánh này append-only (mỗi lượt một file, tên sinh từ `step0LogPath` của kernel), nên một lần vi phạm nghĩa là một lần đẩy đã xoá — **không có ca lành nào** cho nó.
+
+⚠️ **Đọc tiêu chí 4 trước khi ước lượng công sức:** phép đo này **không** miễn phí như `P-056`, vì nó cần **lịch sử** nhánh chứ không chỉ đầu nhánh. Đó là khác biệt chịu tải, và nó đã từng bị mục này khai sai một lần.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
+- status: ready
+- nguồn: bước 0e lượt `crux-worker-2` `2026-09-26T07:25:25Z`; `ops/known-failures.md` `KF-043`; món nợ mà `#281` tự khai và hoãn; `P-043` (vế ghi của nhịp tim) và `P-056` (tiền lệ một dấu hiệu `watchdog.yml` đọc remote)
+- tiêu chí xong:
+  - ⬜ **Hàm thuần, không đụng mạng, không đọc đĩa** — nhận hai danh sách tên file (`heartbeat/` ở đầu nhánh, và `heartbeat/` qua mọi commit) và trả về những tên **thiếu ở đầu nhánh** kèm mốc của từng tên. Mốc tách ra khỏi tên bằng **`parseStep0LogId`** của kernel (`kernel/src/log.ts`, phép **đảo** của `step0LogId` — `step0LogId` chỉ *ghép* tên, đừng gọi nó để đọc ngược), **không** tự cắt chuỗi. Cùng luật `P-056` đã dùng.
+  - ⬜ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng hình dạng đo được — 12 tên ở đầu nhánh, 45 tên trong lịch sử — và đòi hàm trả đủ **33**, đúng hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`. Ca âm: hai danh sách bằng nhau → **rỗng** (ca này phải chạy được sau khi tiêu chí 3 xong, nếu không mục tự sinh báo động vĩnh viễn). Ba ca biên, mỗi ca đòi một câu trong `problems` chứ **không** im lặng bỏ qua:
+    1. một tên không đúng hình dạng `step0LogId`;
+    2. `ever == tip` **trong khi** phép đo lịch sử chỉ thấy **một** commit → **NÉM**, tuyệt đối không trả *"0 thiếu"*. Đây là ca đắt nhất và nó **KHÔNG** phải giả thuyết: xem tiêu chí 4. Một lưới chỉ bắt *"danh sách lịch sử rỗng"* **không** che được nó, vì danh sách khi đó **không rỗng** — nó bằng đúng đầu nhánh;
+    3. một tên có ở đầu nhánh mà **không** có trong lịch sử. Lý do đúng là **đầu vào không nhất quán do bên gọi dựng sai** — *không* phải *"lịch sử bị viết lại"*: khi hai danh sách cùng dựng từ một `rev-list` thì `tip ⊆ ever` đúng theo cấu tạo (đầu nhánh là commit cuối của `rev-list`), kể cả sau một `--force`. Giữ ca này làm bài phòng thủ cho một hàm thuần, nhưng khai đúng lý do.
+  - ⬜ **Khôi phục 33 bản ghi vào đầu nhánh, và làm được lặp lại bằng MỘT LỆNH.** Dữ liệu **chưa mất** (còn trong lịch sử nhánh, và 25/33 còn trên `main`), nhưng 8 bản chỉ sống trên đầu nhánh 6 PR đang mở — một PR đóng-không-merge mang chúng ra khỏi mọi nhánh còn sống, và điều đó **đã xảy ra** với `#224` trong cùng ngày. Việc là một lần đẩy **thuần cộng thêm**: dựng cây `heartbeat/` bằng hợp của mọi tên, không xoá entry nào, không `--force`. Kiểm sau đó bằng hàm ở tiêu chí 1 → **rỗng**. Nhánh này **không bao giờ có PR** nên lần đẩy đó không chạy CI (`P-043`).
+  - ⬜ **Một nơi chạy định kỳ đọc remote thật — và khai ĐÚNG chi phí của nó.** `watchdog.yml` là chỗ hợp lý, nhưng **không** vì lý do `P-056` dùng: dấu hiệu số 7 của `P-056` gọi `git ls-remote --heads` (dòng 373), **không cần lịch sử**, nên nó thật sự không thêm gì. Phép đo của mục này **cần lịch sử**, mà `watchdog.yml` dòng **234** đang fetch nhánh telemetry bằng **`--depth=1`** rồi dòng 250 `git archive` chỉ giải cây đầu nhánh. Đo thật trên một kho mô phỏng đúng lệnh đó: `git rev-list` trả **1** commit, `ever` = `tip` = 14, ⇒ phép đo trả **"0 thiếu"** trong khi sự thật là **33**. Đó đúng ca **BÁO YÊN** mà `KF-041` cấm — *"không im lặng, nó KHẲNG ĐỊNH LÀ LÀNH, và cái đó tệ hơn im lặng"*. Nên tiêu chí này đòi **bỏ `--depth=1`** (hoặc một lần `--deepen`) cho nhánh telemetry, và khai thẳng rằng **đó là một thay đổi chi phí**: nhánh đang mọc ~1 commit mỗi 20 phút (66 commit sau hai ngày), nên lấy toàn bộ lịch sử nó mỗi giờ **không** miễn phí. Cân nhắc và ghi lại lựa chọn: fetch sâu dần, hay `--depth=N` đủ lớn, hay chuyển phép đo sang một nơi chạy thưa hơn. **Không được** cài tiêu chí 4 mà bỏ ca 2 của tiêu chí 2.
+  - ⬜ **Ngưỡng là 0, và khai ra vì sao nó khác mọi ngưỡng khác trong kho** — các dấu hiệu kia có hằng số giờ vì chúng đo *độ trễ*, một đại lượng có ca lành. Cái này đo *mất dữ liệu trên một nhánh append-only*, không có ca lành, nên `> 0` là đúng và một hằng số giờ ở đây sẽ là một cửa sổ cho phép xoá. Bài kiểm khoá chính câu đó, để lượt sau không "nới cho đỡ ồn".
+  - ⬜ **Đường tự gỡ cảnh báo phải là MỘT LỆNH, không phải một câu văn** — đúng lỗi mà `P-056` đã mắc một lần và phải sửa trong vòng soát: một cảnh báo gọi **chủ dự án** cho một việc chỉ **máy** làm được là ngược thước đo CHARTER 1.3. Ở đây đường gỡ là một lệnh có tên (`pnpm telemetry:restore` hay tương đương) làm đúng việc của tiêu chí 3, cộng một câu trỏ tới nó trong phụ lục P1 bước 0e và `CLAUDE.md` mục 1. Khôi phục là hành động **một lần**, nên nếu dấu hiệu bật lại mà không có lệnh thì đường gỡ duy nhất lại là một lần dựng cây bằng tay — đúng thứ mục này sinh ra để bỏ.
+  - ⬜ **Sửa lời khai rộng hơn số đo trong `ops/scripts/telemetry-beat.ts`** — docblock hiện viết *"bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần"*. Đo được là **không script nào gọi `step0Streaks`**, và `step0Streaks` là hàm **thuần** (`kernel/src/log.ts:413`, nhận một mảng dòng, không đọc đường dẫn nào); bên duy nhất đọc `heartbeat/` là `heartbeat-source.ts` và nó lấy `max` của `at`. Tiền lệ sửa tại chỗ nằm trong **chính docblock đó** (vòng soát `#229` đã bác một lời khai sai và sửa ngay ở chỗ nó nằm). Không để lời khai sai truyền tiếp sang lượt sau.
+  - ⬜ **`pnpm check` KHÔNG phải chỗ đặt** — khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên **mọi** PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy, tức trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần. Cùng lý lẽ `P-056` đã ghi — và lý lẽ đó **mạnh hơn** ở đây, vì phép đo này còn cần cả lịch sử nhánh (tiêu chí 4).
+- mã mục: dò `### P-` trên `main` **và trên MỌI nhánh remote** lúc `2026-09-26T07:2xZ` (`KF-005`, `KF-036`) — cao nhất `P-058`, nên `P-059` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
+- ghi chú chỗ đặt: mục này đặt ở **cuối** file, không chèn cạnh `P-058`, vì cả **6** PR đang mở lúc `07:2xZ` chạm chính file này và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown. Lượt mở mục đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa chứ không tin lập luận.
+- ghi chú chữ ký nhận việc: lượt mở mục này **không** lấy tiêu đề PR dạng `[platform] P-059`, vì nó chỉ *mở* mục chứ không làm. `claimCheck` đọc chữ ký từ **tiêu đề PR** (`P-041` luật 1), nên một tiêu đề như thế sẽ trả `open-pr` cho một mục `status: ready` không ai đang làm, và worker kế tiếp bị bảo "đi mục khác". Tiền lệ: `#275` mở `KF-042` **và** `### P-058` dưới tiêu đề `[integration] bước 0 …`, không phải `[platform] P-058`.
