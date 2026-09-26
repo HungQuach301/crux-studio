@@ -1434,7 +1434,7 @@ Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó c
 - **Chữ ký:** một commit trên `claude/telemetry` có `-1` file hoặc hơn trong `git show --stat`, tức cây `heartbeat/` ở đầu nhánh mang **ít** entry hơn tổng số file mà nhánh đã từng giữ.
 - **Nguyên nhân gốc:** khối lệnh `--commands` của `ops/scripts/telemetry-beat.ts` dựng cây `heartbeat/` **lại từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây đó với `-p $PARENT`. Một cây hợp lệ trỏ tới đúng một file vẫn là một cây hợp lệ, nên git không có gì để báo. "Hai worker không bao giờ chạm cùng một file" (`D-C04`) đúng — nhưng nó bảo đảm **không xung đột**, không bảo đảm **không mất dữ liệu**, và bản đầu của khối lệnh trộn hai điều đó.
 - **Đã sửa ở đâu:** `ops/scripts/telemetry-beat.ts` (`#281`) — khối lệnh nay dựng cây **THÊM** ở **cả hai** tầng: `git ls-tree` liệt kê entry đang có, `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Cộng ba chỗ hỏng cùng họ mà vòng soát của `#281` tìm ra: cây **gốc** cũng dựng thêm (một `README` ở gốc nhánh từng bị xoá im lặng được), `ls-tree` hỏng nay **NÉM** thay vì bị `2>/dev/null | awk` nuốt thành "danh sách rỗng" — tức đúng chỗ hỏng vừa sửa — và vòng thử lại khi lần đẩy bị từ chối nay **có thật**, trần 4 lần, không `--force` nào.
-- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ✅ Lớp chặn đó che vế **ghi**; vế **đo lại đầu nhánh** nay cũng có máy — `ops/scripts/telemetry-gaps.ts` cộng `watchdog.yml` dấu hiệu số 8, **17** bài kiểm, mục `platform/P-059` (xem hai khối ✅ dưới). 33 bản ghi thiếu đã được khôi phục ở `1b32c8e`.
+- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ✅ Lớp chặn đó che vế **ghi**; vế **đo lại đầu nhánh** nay cũng có máy — `ops/scripts/telemetry-gaps.ts` cộng `watchdog.yml` dấu hiệu số 8, **28** bài kiểm, mục `platform/P-059` (xem hai khối ✅ dưới). 33 bản ghi thiếu đã được khôi phục ở `1b32c8e`.
 
 ### Bảng: chữ ký sống bao lâu, đo trên chính nhánh đó
 
@@ -1518,10 +1518,31 @@ git rev-parse --is-shallow-repository      → true
 
 Đã sửa bằng **hai** tầng, có chủ đích:
 
-1. `watchdog.yml` bỏ `--depth=1` cho nhánh telemetry. Đây là một **thay đổi chi phí**, khai thẳng: nhánh mọc ~1 commit mỗi 20 phút (70 commit sau hai ngày) và lượt này chạy mỗi giờ. Bảng cân nhắc bốn lựa chọn ở đầu `ops/scripts/telemetry-gaps.ts`; `--depth=N` đủ lớn bị bác vì *"đủ lớn"* hết hạn **im lặng**.
-2. `telemetryTipGaps` **NÉM** khi `historyCommits == 1` mà đầu nhánh có nhiều hơn một file. Tầng này là tầng chịu tải: một lượt sau đặt lại trần độ sâu *cho rẻ* thì nó ra một câu **không đo được**, không ra *"0 thiếu"*. Tức chi phí giảm được mà không mua lại chỗ hỏng.
+1. `watchdog.yml` bỏ `--depth=1` cho nhánh telemetry. Đây là một **thay đổi chi phí**, khai thẳng: nhánh mọc ~1 commit mỗi 20 phút (74 commit sau hai ngày) và lượt này chạy mỗi giờ. Bảng cân nhắc bốn lựa chọn ở đầu `ops/scripts/telemetry-gaps.ts`; `--depth=N` đủ lớn bị bác vì *"đủ lớn"* hết hạn **im lặng**.
+2. Trường `historyTruncated` **bắt buộc**: lịch sử của **chính ref đó** bị cắt thì ra một câu *"không đo được"*, không ra *"0 thiếu"*.
 
-**Máy chặn từ nay:** `ops/test/telemetry-gaps.test.ts`, **17 bài** — gồm bài tái hiện lỗi dựng lại đúng hình dạng đo được (12 tên ở đầu nhánh, 45 trong lịch sử, **33** thiếu, hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`) bằng **tên thật** đọc từ commit `03e1314`, và một bài soi chính dòng `git fetch` của `watchdog.yml` để không lượt nào đặt lại `--depth` mà không gì đỏ.
+### ⚠️ Vòng soát bước 6 bác một phần lời khai của bản đầu — hai chỗ, ghi cả hai
+
+**(a) Lưới cũ chỉ phủ `--depth=1`, và bản đầu khai rộng hơn thế.** Bản đầu dựa vào `historyCommits === 1` rồi khai ở năm chỗ (docblock, chú thích YAML, khối này, backlog, dòng log) rằng *"đặt lại trần độ sâu thì ra `problems`"*. Vòng soát tái lập: `--history-commits` bằng **2, 5, 30** đều cho **EXIT=0, "giữ đủ"** trong khi sự thật là thiếu 33. Đó là một lời khai rộng hơn số đo, đúng thứ `KF-021` cấm. Bản sửa: `historyTruncated` là **trường bắt buộc**, đo bằng **giao** của `git rev-list <ref>` với danh sách biên nông — nên nó đúng với **mọi** N. Lưới `historyCommits === 1` giữ lại làm lưới **thứ hai**, độc lập (nó bắt cả một bên gọi quên tính trường kia).
+
+**(b) `git rev-parse --is-shallow-repository` là phép đo SAI ở đây, và dùng nó sẽ tạo một báo động giả vĩnh viễn.** Vòng soát khai một **CHẶN** rộng hơn số đo: rằng trong một kho nông (`actions/checkout@v7` mặc định `fetch-depth: 1`), lần fetch **không** `--depth` *cũng* bị cắt, nên phép đo sẽ ra `rev-list` = 1 ở mọi lượt. Lượt làm **đo lại trên remote thật** và điều đó **không** xảy ra:
+
+```
+git fetch --no-tags --depth=1 origin +refs/heads/main:…      # = actions/checkout
+git rev-parse --is-shallow-repository                → true
+git fetch --no-tags origin +refs/heads/claude/telemetry:…    # KHÔNG --depth
+git rev-list --count refs/crux/telemetry             → 74    ← ĐẦY ĐỦ
+git rev-list --max-parents=0 refs/crux/telemetry     → a6f071c (gốc thật của nhánh)
+git merge-base <telemetry> <main>                    → (không có tổ tiên chung)
+```
+
+Nhánh telemetry có **gốc riêng**, nên biên nông của `main` không cắt được nó. Cờ `--is-shallow-repository` nói về **cả kho** và trả `true` ở **mọi** lượt watchdog — dùng nó làm phép đo sẽ báo *"không đo được"* mỗi giờ và @nhắc chủ dự án **mỗi 4 giờ, vĩnh viễn**, cho một nhánh đang lành. Đó là ngược thước đo CHARTER 1.3, và `pnpm telemetry:restore` **không** gỡ được nó. Nên bản sửa bỏ hẳn cờ kho và dùng phép giao hẹp theo ref.
+
+Vì sao một phép mô phỏng dễ kết luận sai chỗ này, ghi ra để lượt sau không mất giờ: fetch **cùng một nhánh** hai lần vào hai ref khác nhau trong **một** kho thì lần fetch nông **cắt lại** chính các object đã có, nên ref *"đầy đủ"* tụt xuống theo. Muốn tái lập đúng phải dùng **hai nhánh gốc riêng** (hoặc hai kho riêng) — bài kiểm `refHistoryTruncated · phép đo HẸP theo ref` dựng đúng như vậy và ghi lại lý do.
+
+**Máy chặn từ nay:** `ops/test/telemetry-gaps.test.ts`, **28 bài** — gồm bài tái hiện lỗi dựng lại đúng hình dạng đo được (12 tên ở đầu nhánh, 45 trong lịch sử, **33** thiếu, hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`) bằng **tên thật** đọc từ commit `03e1314`, một bài soi chính dòng `git fetch` của `watchdog.yml` để không lượt nào đặt lại `--depth` mà không gì đỏ, và **hai bài chạy git thật** trên kho tạm (remote bare, không mạng) cho `refHistoryTruncated` và `scanTelemetryBranch`. Bốn bài khoá **tầng CLI** — hợp đồng mã thoát 0/1/2 mà CHARTER phụ lục P1 bước 0e và `CLAUDE.md` mục 1 khai, trước vòng soát không máy nào canh.
+
+Phá thử **18 phép**, 17 phép đỏ đúng chỗ rồi khôi phục 28/28. Phép còn lại là một đột biến **tương đương** (`ls-tree` nuốt lỗi *sau khi* `cat-file -e` đã chứng minh tree tồn tại, nên nó không đổi hành vi) — khai ra chứ không nhận là đã phủ.
 
 ### Ghi chú về chỗ đặt khối này
 

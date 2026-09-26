@@ -1517,13 +1517,22 @@ thiếu ở đầu nhánh                           → 33   ← ổn định �
 | Tiêu chí | Ở đâu | Số thật |
 |---|---|---|
 | 1 · hàm thuần | `ops/scripts/telemetry-gaps.ts` — `telemetryTipGaps` | mốc tách bằng `parseStep0LogId`, không `slice` |
-| 2 · bài tái hiện | `ops/test/telemetry-gaps.test.ts` | **17/17 pass**; bài tái hiện dựng 12 tên đầu nhánh + 45 lịch sử → **33** thiếu, hai mốc biên khớp |
+| 2 · bài tái hiện | `ops/test/telemetry-gaps.test.ts` | **28/28 pass**; bài tái hiện dựng 12 tên đầu nhánh + 45 lịch sử → **33** thiếu, hai mốc biên khớp |
 | 3 · khôi phục | `pnpm telemetry:restore`, đã chạy | `1b32c8e` — **33 `A`, 0 `D`**; đầu nhánh **20 → 53**; đo lại thoát **0** |
-| 4 · nơi chạy định kỳ | `watchdog.yml` dấu hiệu số **8**, `--depth=1` đã bỏ | ca báo yên đo được: `--depth=1` → `rev-list` **1**, `ever = tip = 18`, trả *"0 thiếu"* khi sự thật là **33** |
+| 4 · nơi chạy định kỳ | `watchdog.yml` dấu hiệu số **8**, `--depth=1` đã bỏ, cộng `historyTruncated` đo **hẹp theo ref** | ca báo yên đo được: `--depth=1` → `rev-list` **1**, `ever = tip = 18`, trả *"0 thiếu"* khi sự thật là **33** |
 | 5 · ngưỡng 0 | bài `'ngưỡng là 0 — không hằng số GIỜ nào trong file'` | mã không có `_HOURS` và không có `TOLERANCE` |
-| 6 · đường gỡ một lệnh | `pnpm telemetry:restore`, cộng một câu ở CHARTER P1 bước 0e và `CLAUDE.md` mục 1 | bài kiểm đòi render **không** có chữ *"anh"* |
+| 6 · đường gỡ một lệnh | `pnpm -s telemetry:restore > r.sh && bash r.sh`, đã chạy thật; cộng một câu ở CHARTER P1 bước 0e và `CLAUDE.md` mục 1 | bài kiểm đòi render **không** có chữ *"anh"* |
 | 7 · sửa lời khai | docblock `ops/scripts/telemetry-beat.ts` | câu *"`step0Streaks` đọc từ nhánh này"* thay bằng số đo: **không script nào gọi `step0Streaks`** |
 | 8 · không vào `pnpm check` | khai ở đầu `telemetry-gaps.ts` | cổng đó chạy trên **mọi** PR và không có remote trong CI |
 
-**Chi phí của tiêu chí 4, ghi lại lựa chọn như mục này đòi.** Bốn phương án cân nhắc (bảng đầy đủ ở đầu `ops/scripts/telemetry-gaps.ts`): `--depth=1` **bị bác** vì báo yên; `--depth=N` đủ lớn **bị bác** vì *"đủ lớn"* hết hạn im lặng khi nhánh mọc ~1 commit mỗi 20 phút; **lịch sử đầy đủ** được chọn (70 commit lúc chọn, mỗi commit một blob nhỏ cộng hai tree, mỗi giờ một lần); chuyển sang một nơi chạy thưa hơn **để lại** cho lúc lịch sử vượt ~5000 commit. Lối thoát đã cài sẵn: một lượt sau đặt lại trần độ sâu thì ca 2 của `telemetryTipGaps` biến việc đó thành một câu trong `problems`, **không** thành *"0 thiếu"* — nên chi phí giảm được mà không mua lại chỗ hỏng.
+**Vòng soát bước 6 — 1 CHẶN + 7 NÊN SỬA, xử lý cả tám.** Chi tiết và hai chỗ lời khai bị bác: `ops/known-failures.md` `KF-043`, khối *"Vòng soát bước 6 bác một phần lời khai của bản đầu"*. Hai điểm chịu tải:
+
+- **Phần ĐÚNG của CHẶN:** lưới `historyCommits === 1` chỉ phủ `--depth=1`. Vòng soát tái lập N = 2, 5, 30 đều cho *"giữ đủ"*, nên lời khai *"đặt lại trần độ sâu thì ra `problems`"* rộng hơn số đo. Bản sửa: trường **`historyTruncated` bắt buộc**, đo bằng **giao** của `git rev-list <ref>` với danh sách biên nông — đúng với **mọi** N.
+- **Phần KHÔNG tái lập được:** vòng soát khai rằng trong kho nông, lần fetch không `--depth` *cũng* bị cắt. Đo lại trên remote **thật**: không. Nhánh telemetry có gốc riêng (`git merge-base` với `main` không trả gì) nên biên nông của `main` không cắt được nó — fetch lấy đủ **74** commit trong khi `--is-shallow-repository` vẫn `true`. Nên cờ kho là phép đo **sai** ở đây: dùng nó sẽ @nhắc chủ dự án mỗi 4 giờ, vĩnh viễn, cho một nhánh lành.
+
+Bảy NÊN SỬA đã làm: ca *"chưa có ref"* phân biệt *"nhánh chưa sinh"* (im) với *"fetch trượt"* (gọi `add`) bằng `git ls-remote --exit-code` · `--restore` in lệnh ra **stdout**, báo cáo ra **stderr**, thoát **0**, và đường gỡ nay là `pnpm -s telemetry:restore > r.sh && bash r.sh` (`-s` bắt buộc vì `pnpm` in nhãn của chính nó vào stdout — đo được) · `cat-file -e` tách *"không có `heartbeat/`"* khỏi một lỗi thật · tiêu đề render không còn khẳng định *"giữ đủ"* khi `ever` là cận dưới · CHARTER 2.4 bỏ con số **37** dùng sai chỗ · `heartbeat-source.test.ts` sửa số dấu hiệu · **28** bài kiểm (từ 17), gồm hai bài chạy git thật và bốn bài khoá tầng CLI.
+
+**Phá thử 18 phép, 17 đỏ đúng chỗ rồi khôi phục 28/28.** Phép còn lại là một đột biến **tương đương** — khai ra chứ không nhận là đã phủ.
+
+**Chi phí của tiêu chí 4, ghi lại lựa chọn như mục này đòi.** Bốn phương án cân nhắc (bảng đầy đủ ở đầu `ops/scripts/telemetry-gaps.ts`): `--depth=1` **bị bác** vì báo yên; `--depth=N` đủ lớn **bị bác** vì *"đủ lớn"* hết hạn im lặng khi nhánh mọc ~1 commit mỗi 20 phút; **lịch sử đầy đủ** được chọn (70 commit lúc chọn, mỗi commit một blob nhỏ cộng hai tree, mỗi giờ một lần); chuyển sang một nơi chạy thưa hơn **để lại** cho lúc lịch sử vượt ~5000 commit. Lối thoát đã cài sẵn, và nó đúng với **mọi** N sau vòng soát: một lượt sau đặt lại trần độ sâu thì `historyTruncated` biến việc đó thành một câu trong `problems`, **không** thành *"0 thiếu"* — nên chi phí giảm được mà không mua lại chỗ hỏng.
 
