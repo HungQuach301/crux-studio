@@ -1,0 +1,13 @@
+{
+  "reviewedAt": "2026-09-26T15:59:27.130Z",
+  "provider": "openai/gpt-5",
+  "unflaggedAssumptions": [
+    "Lãi suất năm được quy đổi sang kỳ hạn tháng bằng cách chia cho 12; tính lãi theo tháng, không có ngày lẻ/odd days.",
+    "Số điểm (pointsPct) được tính trên số tiền vay (loan amount), không phải trên giá mua hay cơ sở khác.",
+    "Hai phương án so sánh giữ nguyên cùng số tiền vay và kỳ hạn; chỉ khác lãi suất và mức điểm.",
+    "Không có chênh lệch chi phí chốt khác ngoài points/lender credit; các phí còn lại bằng nhau và triệt tiêu.",
+    "Bỏ qua tác động thuế thu nhập (khấu trừ lãi/điểm); so sánh trên cơ sở trước thuế.",
+    "monthlySavingsUsd khác 0; nếu bằng 0 thì breakEvenMonths không xác định (mô hình không nêu cách xử lý)."
+  ],
+  "unitIssues": []
+}

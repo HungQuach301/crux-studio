@@ -1,0 +1,10 @@
+{
+  "reviewedAt": "2026-09-26T16:02:27.333Z",
+  "provider": "openai/gpt-5",
+  "unflaggedAssumptions": [
+    "Tham số primaryInsuranceAmountUsd được dùng như “mức cơ sở chưa giảm trừ” của loại quyền lợi đang xét (ví dụ với vợ/chồng là 50% PIA của người lao động), không nhất thiết là PIA của chính người lao động; giả định này không được nêu rõ.",
+    "Không áp dụng thêm quy tắc làm tròn mức chi trả tới đô-la nguyên sau khi trừ giảm trừ; mô hình ngầm định chỉ làm tròn phần giảm trừ lên tới 10 xu.",
+    "monthsBeforeFullRetirementAge được coi là số nguyên tháng (không xét phần tháng)."
+  ],
+  "unitIssues": []
+}
