@@ -1362,52 +1362,79 @@ Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó c
 
 ---
 
-## KF-043 · Mỗi lần đẩy nhịp tim **xoá** nhịp tim của các lượt trước, và 33 bản ghi vẫn chưa được khôi phục sau khi mã đã sửa
+## KF-043 · Mỗi lần đẩy nhịp tim **xoá** nhịp tim của các lượt trước, và 33 bản ghi vẫn thiếu ở đầu nhánh
 
 > Số **KF-043**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** ngay trước khi commit (`KF-005`, `KF-036` — không dò "các PR đang mở", nguồn đó đã đo được là cũ/thiếu). Cao nhất tìm được là `KF-042`, nên `KF-043` không đụng ai.
 >
-> **Vì sao mục này ra đời muộn hơn bản sửa.** Bản sửa mã đi trong [`#281`](https://github.com/HungQuach301/crux-studio/pull/281) (lượt `crux-worker-2` `06:29Z` `2026-09-26`), và chính lượt đó tự khai là còn nợ: *"chỗ hỏng này VẪN chưa có dòng nào trong `ops/known-failures.md` và chưa có mục backlog, nên sau khi PR này merge thì không chỉ báo MÁY nào trỏ vào chỗ thiếu — chỉ đoạn văn xuôi này"*. Lý do hoãn đo được (7/8 PR đang mở khi đó chạm `ops/lanes/platform/backlog.md`, và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown), nhưng một món nợ hoãn mà không ai ghi là đúng hình dạng *"nguồn để đếm không tồn tại"* của `KF-021`/`P-033`. Lượt `07:25Z` trả nợ đó, và **đặt cả hai khối mới ở CUỐI file** thay vì chèn ở đầu — xem ghi chú cuối mục.
+> **Vì sao mục này ra đời muộn hơn bản sửa mã.** Bản sửa đi trong [`#281`](https://github.com/HungQuach301/crux-studio/pull/281) (lượt `crux-worker-2` `06:29Z` `2026-09-26`), và chính lượt đó tự khai là còn nợ: *"chỗ hỏng này VẪN chưa có dòng nào trong `ops/known-failures.md` và chưa có mục backlog, nên sau khi PR này merge thì không chỉ báo MÁY nào trỏ vào chỗ thiếu — chỉ đoạn văn xuôi này"*. Lý do hoãn đo được (7/8 PR đang mở khi đó chạm `ops/lanes/platform/backlog.md`, và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown), nhưng một món nợ hoãn mà không ai ghi là đúng hình dạng *"nguồn để đếm không tồn tại"* của `KF-021`/`P-033`. Lượt `07:25Z` trả nợ đó.
 
 **Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: không lần đẩy nào bị từ chối, `pnpm check` **EXIT=0**, CI xanh, nhánh chính xanh, và `watchdog.yml` dấu hiệu số 5 **vẫn đúng** suốt thời gian đó.
 
-- **Lần gặp: 33** — không phải ba mà là ba mươi ba, và đó chính là lý do nó qua được ngưỡng hai lần của CHARTER 6.6 mà không ai đếm: **không** bộ đếm nào tồn tại. Xem bảng dưới.
+- **Lần gặp: 37** — đếm theo đúng chữ ký dưới đây, tức **số commit** mang dấu xoá, không phải số bản ghi mất. Hai đại lượng này khác nhau và đã từng bị trộn: tiêu đề `#281` ghi `(33/58 commit)` trong khi `note` của chính nó ghi 37, và **37 là số đúng cho chữ ký** (`git diff-tree --name-status` đếm `^D` trên từng commit, hai cách đếm độc lập cùng ra 37). Con số **33** ở khối ⚠️ dưới là *số bản ghi còn thiếu ở đầu nhánh* — đại lượng khác, đừng dùng nó cho ngưỡng CHARTER 6.6.
 - **Chữ ký:** một commit trên `claude/telemetry` có `-1` file hoặc hơn trong `git show --stat`, tức cây `heartbeat/` ở đầu nhánh mang **ít** entry hơn tổng số file mà nhánh đã từng giữ.
 - **Nguyên nhân gốc:** khối lệnh `--commands` của `ops/scripts/telemetry-beat.ts` dựng cây `heartbeat/` **lại từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây đó với `-p $PARENT`. Một cây hợp lệ trỏ tới đúng một file vẫn là một cây hợp lệ, nên git không có gì để báo. "Hai worker không bao giờ chạm cùng một file" (`D-C04`) đúng — nhưng nó bảo đảm **không xung đột**, không bảo đảm **không mất dữ liệu**, và bản đầu của khối lệnh trộn hai điều đó.
 - **Đã sửa ở đâu:** `ops/scripts/telemetry-beat.ts` (`#281`) — khối lệnh nay dựng cây **THÊM** ở **cả hai** tầng: `git ls-tree` liệt kê entry đang có, `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Cộng ba chỗ hỏng cùng họ mà vòng soát của `#281` tìm ra: cây **gốc** cũng dựng thêm (một `README` ở gốc nhánh từng bị xoá im lặng được), `ls-tree` hỏng nay **NÉM** thay vì bị `2>/dev/null | awk` nuốt thành "danh sách rỗng" — tức đúng chỗ hỏng vừa sửa — và vòng thử lại khi lần đẩy bị từ chối nay **có thật**, trần 4 lần, không `--force` nào.
-- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chỗ hỏng sống được 33 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ⚠️ Lớp chặn này che vế **ghi**; vế **đo lại đầu nhánh** còn thiếu — xem khối ⚠️ dưới và mục `platform/P-059`.
+- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ⚠️ Lớp chặn này che vế **ghi**; vế **đo lại đầu nhánh** còn thiếu — xem khối ⚠️ dưới và mục `platform/P-059`.
 
-### Bảng: chỗ hỏng sống bao lâu, đo trên chính nhánh đó
+### Bảng: chữ ký sống bao lâu, đo trên chính nhánh đó
 
 | Phép đo | Số | Nguồn |
 |---|---|---|
-| Commit có `-1` file hoặc hơn | **37 / 58** (không kể commit của lượt sửa) | `git log --diff-filter=D` cộng phép đếm tay từng commit, hai cách cùng ra 37 |
-| Nhánh đứng ở **đúng một** file | **27,7 giờ liền** — `a6f071c` (`2026-09-24T08:54:58Z`, commit gốc) → `1bb6594` (`2026-09-25T12:38:27Z`, lần đầu có hơn một file) | `git log --format=%cI` trên nhánh |
-| Rồi bị đạp về một file lần nữa | **15,0 giờ** — `715aab9` → `c74534b` | cùng nguồn |
+| Commit có `-1` file hoặc hơn | **37 / 58** (không kể 6 commit của lượt sửa và lượt ghi mục này) | `git diff-tree --no-commit-id --name-status -r` đếm `^D` từng commit; `git log --diff-filter=D` ra cùng số |
+| Nhánh đứng ở **đúng một** file | **27,7 giờ liền** — `a6f071c` (`2026-09-24T08:54:58Z`, commit gốc) → `1bb6594` (`2026-09-25T12:38:27Z`, lần đầu có hơn một file) | `git log --format=%cI` trên nhánh (27h43m29s) |
+| Rồi bị đạp về một file lần nữa | **15,0 giờ** — `715aab9` (`12:46:19Z`) → `c74534b` (`03:47:33Z`) | cùng nguồn (15h01m14s) |
 | Commit phải đi chữa **bằng tay** | **2**, và tên chúng nói ra chỗ hỏng: `1bb6594` *"khôi phục nhịp tim 11:39:23Z bị lần đẩy trước ghi đè"*, `c74534b` *"khôi phục dòng của crux-worker-1 03:38Z bị lần đẩy trước ghi đè"* | `git log --format=%s` |
-| Commit xoá **hai** file một lúc | **1** (`715aab9`) | `git show --stat` |
+| Commit xoá **hai** file một lúc | **1** (`715aab9`) | `git diff-tree --name-status` |
 
-### ⚠️ Vế CHƯA sửa, đo ở lượt `07:25Z` — bản sửa chặn lần xoá SAU, không khôi phục cái đã mất
+### ⚠️ Khúc nhân quả mà một bộ đọc dễ nối sai — các lần đẩy NGỪNG xoá TRƯỚC bản sửa 3 giờ 22 phút
 
-Bản sửa của `#281` là đúng và đã được kiểm bằng chạy thật: lần đẩy của lượt `07:25Z` đưa đầu nhánh từ **11** lên **12** file, **không xoá gì** — lần đầu tiên đo được điều đó sau bản sửa. Nhưng nó không lùi lại dọn đống cũ:
+Đây là chỗ dễ kể thành một câu chuyện gọn mà sai, nên ghi ra bằng mốc:
 
 ```
-git rev-parse claude/telemetry                                → 03e1314, 64 commit
-git ls-tree -r --name-only <tip> -- heartbeat/     | wc -l     → 12
-git rev-list <tip> | while read c; do
-  git ls-tree -r --name-only "$c" -- heartbeat/; done | sort -u | wc -l
-                                                              → 45
-comm -13 <tip đã sắp> <ever đã sắp>                | wc -l     → 33   ← còn thiếu ở ĐẦU NHÁNH
-khoảng 33 file đó phủ: 2026-09-24T083916Z … 2026-09-26T033126Z
+9acbc16  2026-09-26T03:47:01Z  D=1  tip=1   ← commit CUỐI CÙNG còn xoá
+c74534b  2026-09-26T03:47:33Z  D=0  tip=2   ← commit chữa TAY, và từ đây tip leo đơn điệu
+6a6d4de  2026-09-26T04:25:29Z  D=0  tip=3
+…        14 commit liền D=0, tip 2 → 12
+d1461b8  2026-09-26T07:09:45Z          ← bản sửa mã (#281) MỚI lên `main` ở mốc này
 ```
 
-**33 bản ghi nhịp tim chỉ còn sống trong lịch sử nhánh, không ở đầu nhánh** — và không chỉ báo nào nói ra con số đó, vì không bên đọc nào đo nó:
+Nên câu *"bản sửa làm các lần đẩy thôi xoá"* **không** được dữ liệu này chống đỡ: chuỗi sạch bắt đầu từ `03:47:33Z`, tức **3 giờ 22 phút trước** khi bản sửa vào `main`, và trong khoảng đó `main` vẫn mang khối lệnh cũ. Hai cách đọc còn mở, cả hai đều đáng biết:
 
-- `heartbeat-source.ts` lấy **`max`** của trường `at`, nên nó đúng với **một** file cũng như với 45. Đó là lý do `watchdog.yml` dấu hiệu 5 xanh suốt 33 lần.
-- `step0Streaks` đọc đường dẫn `ops/logs/**`, còn nhánh này dùng `heartbeat/**`, nên nhánh này **chưa bao giờ** góp dòng nào cho phép đếm chuỗi kẹt (đo được ở `#231`: `git ls-tree -r` trên nhánh đó trả **đúng 1 file** lúc ấy; và ở lượt `07:25Z` phép đo chuỗi trên 236 ref remote vẫn không lấy dòng nào từ `heartbeat/`). Lời khai cũ ở docblock `telemetry-beat.ts` rằng *"bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần"* **rộng hơn số đo** — ghi đúng mức ở đây thay vì để nó truyền tiếp.
-- `pnpm step0:pending` đo *"dòng log đã tới nhánh chính chưa"*, không đo *"đầu nhánh telemetry còn giữ đủ chưa"*. Hai câu hỏi khác nhau.
+1. các lượt từ `04:25Z` **không chạy khối `--commands` đúng như nó nằm trên `main`** (các commit chữa tay cho thấy worker đã tự thấy chỗ hỏng và tự dựng cây thêm vào) — nếu vậy thì 9 bài kiểm mới đang khoá một đường mà lần đẩy thật không đi qua;
+2. hoặc nguyên nhân gốc rộng hơn khối lệnh đó.
 
-Nên bất biến còn thiếu một lớp chặn, và nó phát biểu được thành một câu: **đầu nhánh `claude/telemetry` phải là tập cha của mọi file `heartbeat/` mà nhánh đã từng giữ** (nhánh append-only). Một lần vi phạm nghĩa là một lần đẩy đã xoá. Mục backlog `platform/P-059` mang vế đó, cộng việc khôi phục 33 file — dữ liệu **chưa mất**, nó còn trong lịch sử nhánh, nhưng nó **chỉ** còn ở đó.
+Điều bản sửa **thật sự** bảo đảm, và đo được: khối lệnh trên `main` từ `07:09:45Z` không còn dựng lại cây từ một entry, và 9 bài kiểm khoá hành vi đó. Lượt `07:25Z` là lần đẩy đầu tiên **sau** bản sửa, và nó đưa đầu nhánh **11 → 12** không xoá gì — một điểm dữ liệu nhất quán, **không** phải bằng chứng nhân quả. Phân biệt hai điều đó chính là thứ `KF-021` đòi.
 
-### Ghi chú về chỗ đặt hai khối mới của lượt `07:25Z`
+### ⚠️ Vế CHƯA sửa — 33 bản ghi vẫn thiếu ở đầu nhánh, và không phép đo nào nói ra
 
-Cả **6** PR đang mở lúc `07:2xZ` chạm `ops/lanes/platform/backlog.md`, **5/6** chạm file này, và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown (*"union sẽ trộn lẫn hai mục thành một mục hỏng mà vẫn merge được — đúng nhóm lỗi Z"*). Chèn ở **đầu** file — chỗ `KF-042` và các mục gần đây nằm — là đẩy tới 5 PR vào xung đột phải giải **bằng tay** ngay sau khi hàng đợi vừa sạch ba lượt liên tiếp. Nên cả hai khối đặt ở **cuối** file, và lượt đó **đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa** chứ không tin lập luận: kết quả ở mô tả PR. Thứ tự các mục trong file này vốn không mang nghĩa (`KF-041` đã nằm cuối trước lượt này), nên đặt ở cuối không phá quy ước nào.
+```
+tip = claude/telemetry
+file heartbeat/ ở ĐẦU nhánh                → 12   (đo lại lúc 08:0xZ: 14, hai lượt sau đã đẩy)
+file heartbeat/ riêng biệt qua MỌI commit   → 45   (đo lại: 47)
+thiếu ở đầu nhánh                           → 33   ← ỔN ĐỊNH ở cả hai mốc
+khoảng phủ: 2026-09-24T083916Z … 2026-09-26T033126Z
+```
+
+Con số **33 không đổi** khi nhánh mọc thêm, vì mỗi lượt mới thêm đúng một file vào cả hai phép đếm — đó là dấu hiệu nó đo một đống nợ đứng yên, không phải một đại lượng đang trôi.
+
+**Không chỉ báo nào nói ra con số đó**, vì không bên đọc nào đo nó:
+
+- `heartbeat-source.ts` lấy **`max`** của `at` (dòng 141–146), nên nó đúng với **một** file cũng như với 45. Đó là lý do `watchdog.yml` dấu hiệu 5 xanh suốt 37 lần.
+- **Không script nào trong kho gọi `step0Streaks`**, và mọi bên gọi `readRunLogs` trong `ops/scripts/*` (`digest-metrics`, `update-metrics`, `lane-heartbeat`, `recheck-assumptions`) đều truyền thư mục **`ops/logs`**; bên duy nhất đọc `heartbeat/` là `heartbeat-source.ts` và nó không gọi `step0Streaks`. Nên nhánh này **chưa bao giờ** góp dòng nào cho phép đếm chuỗi kẹt. **Điều này BÁC một lời khai rộng hơn số đo** đang nằm trong docblock `ops/scripts/telemetry-beat.ts` (*"bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần"*) — `step0Streaks` là hàm **thuần**, nó không đọc đường dẫn nào. Sửa docblock đó là **tiêu chí 8** của `P-059`, không phải một câu để đây rồi quên: vòng soát `#229` đã có tiền lệ sửa tại chỗ một lời khai sai trong đúng file đó.
+- `pnpm step0:pending` đo *"dòng log đã tới nhánh chính chưa"*, một câu hỏi khác.
+
+**"Dữ liệu chưa mất" đúng, nhưng chia làm hai phần rất khác nhau về độ khẩn:**
+
+```
+trong 33 bản ghi thiếu, đã có trên `main` (ops/logs/integration/)   → 25
+chỉ còn trên đầu nhánh của các PR ĐANG MỞ                            →  8
+    #231 (2) · #249 · #223 · #260 · #261 (2) · #274 — mỗi tên đúng một nhánh
+```
+
+Tám bản ghi đó phụ thuộc vào việc sáu PR kia **merge được**. Một PR đóng-không-merge mang theo dòng log của nó ra khỏi mọi nhánh còn sống — và điều đó **đã xảy ra** trong ngày (xem mục dưới), nên tám bản ghi này không phải chuyện lý thuyết.
+
+Bất biến còn thiếu phát biểu được thành một câu: **đầu nhánh `claude/telemetry` phải là tập cha của mọi file `heartbeat/` mà nhánh đã từng giữ** (nhánh append-only). Một lần vi phạm nghĩa là một lần đẩy đã xoá. Mục `platform/P-059` mang vế đó cộng việc khôi phục.
+
+### Ghi chú về chỗ đặt khối này
+
+Cả **6** PR đang mở lúc `07:2xZ` chạm `ops/lanes/platform/backlog.md`, **5/6** chạm file này (chỉ `#274` không), và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown (*"union sẽ trộn lẫn hai mục thành một mục hỏng mà vẫn merge được — đúng nhóm lỗi Z"*). Chèn ở **đầu** file — chỗ `KF-042` nằm — là đẩy tới 5 PR vào xung đột phải giải **bằng tay** ngay sau khi hàng đợi vừa sạch ba lượt liên tiếp. Nên khối đặt ở **cuối** file, và lượt đó **đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa** chứ không tin lập luận. Thứ tự các mục trong file này vốn không mang nghĩa (`KF-041` đã nằm cuối trước lượt này), nên đặt ở cuối không phá quy ước nào.
