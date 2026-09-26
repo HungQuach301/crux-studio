@@ -6,30 +6,35 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
-## KF-042 · `claimCheck` trả `free` cho một mục đang có **hai** PR mở làm nó, vì cả hai PR đã đổi mã trong tiêu đề
+## KF-042 · `claimCheck` trả `free` cho một mục đang có **hai** PR mở làm nó, vì mã trong tiêu đề PR lệch mã trong cây `main`
 
-> Số **KF-042**: dò `## KF-` trên `main` **và trên đầu MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-041`, nên `KF-042` không đụng ai.
+> Số **KF-042**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-041`, nên `KF-042` không đụng ai.
 
 **Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` **EXIT=0**, CI xanh, `main` xanh, và `pnpm claims` **thoát 0** trong khi trả đúng câu trả lời sai.
 
-**Chữ ký:** `claimCheck(prs, lane, id)` đọc chữ ký nhận việc từ **tiêu đề PR** (`[<lane>] <id> — …`) — đúng luật 1 của `P-041`, và luật đó vẫn đúng. Nhưng khi một lượt **đổi mã mục** (vì mã cũ đã bị một mục `done` giữ, đúng việc `KF-036` dặn làm), tiêu đề PR mang **mã mới**, còn `readyNow` của `pnpm backlog:status` vẫn mang **mã cũ**. Hai chuỗi không còn khớp, nên phép hỏi *"mục này đã có ai nhận chưa"* trả `free` cho một mục đang có người giữ — **fail-open ở đúng chỗ `P-041` sinh ra để chặn**.
+- **Lần gặp: 2** — và cả hai đều là va chạm **đã xảy ra**, không phải nguy cơ. Xem bảng dưới.
+- **Nguyên nhân gốc:** mã mục trong **tiêu đề PR** lệch mã mục trong **cây `main`**, vì một lần **đổi mã đang bay** (mã mới chỉ sống trên nhánh PR). `claimCheck` đọc chữ ký từ tiêu đề PR — luật 1 của `P-041`, và luật đó **vẫn đúng**; `readyNow` đọc mã từ cây `main`. Hai chuỗi không còn khớp, nên phép hỏi *"mục này đã có ai nhận chưa"* fail-open.
+- **Đã sửa ở đâu:** **chưa sửa** — mục này chỉ ghi lại phép đo. Chi tiết ở *"Chỗ đã sửa"* dưới.
+- **Máy chặn từ nay:** **chưa có.** `platform/P-058` che **nguyên nhân kích** (mã trùng) chứ **không** che cơ chế trên — xem *"Máy chặn từ nay"* dưới, đã đo bằng phép phá thử.
 
-**Đã gặp: 1 lần**, đo được ở bước 3 lượt `crux-worker-2` `2026-09-26T02:22:36Z`:
+**Chữ ký:** `claimCheck(prs, lane, id)` trả `verdict: "free"` cho một mã mục mà **không PR mở nào mang trong tiêu đề**, trong khi công việc của mục đó **đang có PR mở** dưới một mã khác.
+
+### Phép đo, ở bước 3 lượt `crux-worker-2` `2026-09-26T02:22:36Z`
 
 ```
 node ops/scripts/backlog-status.ts → readyNow chứa "platform/P-028"
-pnpm claims <232 PR, mở LẪN đã đóng> (lane=platform, id=P-028)
-  → {"claim":"platform/P-028","verdict":"free","prs":[]}
+pnpm claims <ảnh chụp ĐỦ 232 PR, mở LẪN đã đóng, bảy trường> (lane=platform, id=P-028)
+  → {"claim":"platform/P-028","verdict":"free","prs":[]}          ← EXIT=0
 ```
 
-Trong khi đúng lúc đó **hai** PR đang mở làm chính mục ấy, và chúng chạm **cùng ba file**:
+Trong khi đúng lúc đó **hai** PR đang mở làm chính mục ấy, chạm **cùng ba file nội dung**:
 
-| PR | Tiêu đề (mã trong tiêu đề) | Tạo lúc | File nội dung |
-|---|---|---|---|
-| [`#224`](https://github.com/HungQuach301/crux-studio/pull/224) | `[platform] P-040 — bộ dò cross-lane đếm cả ops/logs//, tách luật khỏi YAML` | 2026-09-24T05:41:17Z | `ops/scripts/cross-lane.ts` · `ops/test/cross-lane.test.ts` · `ops/workflows/ci.yml` |
-| [`#274`](https://github.com/HungQuach301/crux-studio/pull/274) | `[platform] P-057 — bộ dò cross-lane đếm cả ops/logs//, tách luật khỏi YAML` | 2026-09-26T01:43:52Z | **y hệt ba file trên** |
+| PR | Mã trong **tiêu đề** | Tạo lúc | Còn mở lúc đo | File nội dung |
+|---|---|---|---|---|
+| [`#224`](https://github.com/HungQuach301/crux-studio/pull/224) | `P-040` | 2026-09-24T05:41:17Z | **có** | `ops/scripts/cross-lane.ts` · `ops/test/cross-lane.test.ts` · `ops/workflows/ci.yml` |
+| [`#274`](https://github.com/HungQuach301/crux-studio/pull/274) | `P-057` | 2026-09-26T01:43:52Z | **có** | **y hệt ba file trên** |
 
-`#274` tự khai trong thân PR rằng nó **là** mục `P-028` đổi mã (*"Mục vốn mang mã `P-028` … nên lấy `P-057`"*), và diff của nó đổi đúng một dòng tiêu đề mục:
+Cả **hai** diff đổi đúng một dòng tiêu đề mục trong `ops/lanes/platform/backlog.md` — `### P-028` (dòng 459) sang mã riêng của mình (`#224` → `### P-040`, `#274` → `### P-057`), và `#274` tự khai trong thân PR rằng nó **là** mục `P-028` đổi mã:
 
 ```
 $ git diff origin/main...refs/remotes/pr/274 -- ops/lanes/platform/backlog.md | grep -E '^[+-]### P-'
@@ -37,21 +42,70 @@ $ git diff origin/main...refs/remotes/pr/274 -- ops/lanes/platform/backlog.md | 
 +### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
 ```
 
-Nên một lượt worker thứ ba đọc `readyNow`, chạy `claimCheck` đúng như `CLAUDE.md` mục 2 dặn, và nhận được `free`, sẽ mở **PR thứ ba** cho cùng một việc. Đó là `KF-025` lần thứ ba, đi qua đúng cái cổng dựng lên để chặn `KF-025`.
+### Va chạm này ĐÃ xảy ra — và bộ dò va chạm **mù** với nó
 
-**Vì sao `free` chứ không phải `recently-merged`:** mã `P-028` **có** một PR đã merge mang nó — [`#160`](https://github.com/HungQuach301/crux-studio/pull/160), `2026-09-24T01:41:42Z` — nhưng đó là **mục `P-028` KHÁC** (bản sửa hai khoá `env:` của `smoke-workflows.yml`, `status: done`). Nó merge quá `RECENT_MERGE_MINUTES` (30) nên không kích `recently-merged` được, và dù có kích thì phán quyết ấy cũng nói sai chuyện: nó mời đọc lại backlog vì *"mục có thể vừa xong"*, chứ không nói *"mục này đang có hai PR mở"*.
+Đây là chỗ đắt nhất của mục này, và nó **không** phải chuyện tương lai: `#224` **vẫn mở** khi `#274` ra đời cho cùng một mục backlog — đúng chữ ký `KF-025` (*"hai PR cùng một mục, thời gian sống chồng nhau"*), **lần thứ ba**. `duplicateClaims` của cùng file `ops/scripts/claim-collision.ts` không thấy:
 
-**Nguyên nhân gốc — và nó nằm ở tầng dưới `claimCheck`:** `ops/lanes/platform/backlog.md` có **hai** mục `### P-028` (dòng 459 và 876). `backlog-status.ts` **đã** phát hiện (`duplicateIds: ["platform/P-028 ↔ platform/P-028"]`) nhưng **không cổng nào đỏ** vì nó, nên mã trùng sống trên `main` và `readyNow` phát ra một mã mà hai bộ đọc hiểu theo hai nghĩa. `claimCheck` không thể đúng ở đây: nó được hỏi về một mã không xác định được mục.
+```
+$ pnpm claims <ảnh chụp 232 PR> --json   → duplicates: 5 cặp
+  editorial/E-001   #80  #81   2.67 phút  (first merged)
+  integration/I-020 #221 #222  1.48 phút  (first merged)
+  platform/P-022    #43  #44   6.38 phút  (first merged)
+  platform/P-027    #120 #121  6.20 phút  (first merged)
+  platform/P-051    #257 #258  3.20 phút  (first merged)
+→ KHÔNG có cặp #224 ↔ #274
+```
 
-Cùng cây còn **hai** `## KF-016` và **hai** `## KF-041`, cũng không gì đỏ. Ba PR liên tiếp — [`#261`](https://github.com/HungQuach301/crux-studio/pull/261), [`#269`](https://github.com/HungQuach301/crux-studio/pull/269), [`#231`](https://github.com/HungQuach301/crux-studio/pull/231) — đều khai chỗ này và đều hẹn *"tách mục riêng"*; không lượt nào tạo mục đó, nên lời hẹn hết hạn mà không ai thấy. Mục **`platform/P-058`** nay là mục đó.
+Cả **5** cặp nó thấy đều `firstMerged` — tức nó chỉ kể lại lịch sử, và bỏ đúng cặp **đang sống**. Đó là chỗ hỏng **thứ hai, độc lập**, trong cùng file, và nặng hơn phần `claimCheck` ở trên vì `duplicateClaims` là bộ đo mà bản tin và integrator đọc.
 
-**Chỗ đã sửa: CHƯA — mục này chỉ ghi lại phép đo.** Khai thẳng thay vì để ô trống trông như đã xong:
+Vì thế một lượt worker thứ ba làm **đúng** như `CLAUDE.md` mục 2 dặn — đọc `readyNow`, chạy `claimCheck`, nhận `free` — sẽ mở PR **thứ tư** cho cùng một việc, và không phép đếm nào nêu ra.
 
-- `#274` đang mở **đã** xoá cặp `### P-028` (nó đổi dòng 459 sang `P-057`), nên một nửa chỗ hỏng tự hết **khi và chỉ khi `#274` merge**. Hai cặp `## KF-016` và `## KF-041` thì không PR nào đang mở chạm tới.
-- Vì thế **cổng máy chặn không được xây trước `#274`**: một cổng "mã trùng thì đỏ" bật lên lúc này sẽ làm đỏ chính `main` (ba cặp trùng đang nằm sẵn), và PR nào xây nó cũng phải vừa xây cổng vừa đổi tên các mục trùng — tức đụng thẳng vào diff của `#274`. Thứ tự đúng nằm trong `deps` của `P-058`.
+### Vì sao `free` chứ không phải `recently-merged`
+
+Mã `P-028` **có** một PR đã merge mang nó — [`#160`](https://github.com/HungQuach301/crux-studio/pull/160), `2026-09-24T01:41:42Z`, và đó là **PR duy nhất trong 232 PR** có `P-028` trong tiêu đề. Nhưng nó là **mục `P-028` KHÁC** (bản sửa hai khoá `env:` của `smoke-workflows.yml`, `status: done`). Nó merge cách mốc đo ~24,7 giờ, quá `RECENT_MERGE_MINUTES` (30), nên không kích `recently-merged`; và dù có kích thì phán quyết ấy cũng nói sai chuyện — nó mời đọc lại backlog vì *"mục có thể vừa xong"*, chứ không nói *"mục này đang có hai PR mở"*.
+
+### Mã trùng là nguyên nhân KÍCH, không phải cơ chế — đo bằng phá thử
+
+Phân biệt này quan trọng, vì nhầm nó sẽ dựng một cổng không che được ca đã đo. Trên worktree `origin/main`, đổi tiêu đề `### P-028` **thứ hai** (dòng 876, mục `done`) sang một mã trống rồi đo lại:
+
+```
+$ node ops/scripts/backlog-status.ts
+duplicateIds: []                                                   ← cặp trùng đã hết
+readyNow:  ["platform/P-014", "platform/P-028", "platform/P-056"]  ← VẪN phát ra P-028
+```
+
+`readyNow` **không đổi** ⇒ `claimCheck` **vẫn** trả `free`. Nên:
+
+- **mã trùng** là lý do `#274` (và `#224`) **phải** đổi mã — nguyên nhân kích, và nó thật: `backlog-status.ts` báo `duplicateIds: ["platform/P-028 ↔ platform/P-028"]` mà **không cổng nào đỏ** vì nó. Cùng cây còn **hai** `## KF-016` (dòng 988, 1095) và **hai** `## KF-041` (98, 1253);
+- **cơ chế** là `title ↔ tree` lệch mã, và nó sống **độc lập** với mã trùng: bất cứ lần đổi mã nào trên nhánh — vì `KF-036`, vì `D-C04`, vì bất cứ lý do gì — đều tái hiện y nguyên kể cả khi `duplicateIds` rỗng.
+
+Mục **`platform/P-058`** nhận **cả hai** vế, khai rõ vế nào che cái gì. Ba PR liên tiếp — [`#261`](https://github.com/HungQuach301/crux-studio/pull/261), [`#269`](https://github.com/HungQuach301/crux-studio/pull/269), [`#231`](https://github.com/HungQuach301/crux-studio/pull/231) — đều khai vế mã trùng và đều hẹn *"tách mục riêng"*; không lượt nào tạo mục đó, nên lời hẹn hết hạn mà không ai thấy.
+
+### Lý do thứ hai của lần đổi mã, khai để không mất
+
+Thân `#274` nêu **hai** lý do, không phải một: mã trùng, **và** `ops/logs/platform/P-028.jsonl` của mục kia **đã tồn tại** → đụng `D-C04` (một file cho mỗi mục). Kiểm được: file đó có thật, 2177 byte, `ref: platform/P-028`, `at 2026-09-22T19:35Z`, thuộc mục `done`. Vế này **ngoài phạm vi** `P-058` (cổng ở đó dò tiêu đề Markdown, không dò chuyện một mục `ready` có file log đã bị mục khác chiếm) — khai ra chứ không để nó im.
+
+### Chỗ đã sửa: CHƯA — và thứ tự bắt buộc
+
+Khai thẳng thay vì để ô trống trông như đã xong:
+
+- `#274` đang mở **đã** xoá cặp `### P-028`, nên vế **mã trùng** tự hết **khi và chỉ khi `#274` merge**. Hai cặp `## KF-016` và `## KF-041` thì không PR nào đang mở chạm tới.
+- Vì thế **cổng mã trùng không được xây trước `#274`**: bật lúc này sẽ làm đỏ **chính `main`** (ba cặp đang nằm sẵn), và PR xây cổng buộc phải vừa xây cổng vừa đổi tên các mục trùng — đụng thẳng diff của `#274`, đúng loại va chạm `KF-029` mô tả. Thứ tự nằm trong `deps` của `P-058`.
 - Lượt đo được chỗ này (`crux-worker-2` `02:19Z` `2026-09-26`) **không** nhận mục: cả ba mục trong `readyNow` đều đã có PR mở, kể cả `P-028` (dù `claimCheck` nói `free`). Nó ghi mục này rồi thoát, đúng `CLAUDE.md` mục 16.
 
-**Máy chặn từ nay:** chưa có — đó là toàn bộ tiêu chí xong của `platform/P-058`. Cho tới khi mục đó xong, phần bù bằng người là dòng dặn ở `CLAUDE.md` mục 2 và phụ lục P1 bước 3: **một phán quyết `free` kèm `unreadable` khác rỗng, hoặc kèm một mã nằm trong `duplicateIds`, là một `free` chưa chắc** — đọc `duplicateIds` của `pnpm backlog:status` trước khi tin nó. Lượt này `unreadable` có **104** PR và `duplicateIds` có đúng mã đang hỏi, nên cả hai dấu hiệu đều đã bật.
+### Máy chặn từ nay: chưa có, và `P-058` chỉ che một nửa
+
+Nói rõ để lượt sau không đọc *"`P-058` xong"* thành *"`KF-042` đã có máy chặn"*:
+
+| Vế | Ai che |
+|---|---|
+| mã trùng sống trên `main` mà không cổng nào đỏ | ⬜ `P-058`, tiêu chí 1–4 |
+| `title ↔ tree` lệch mã (**cơ chế**) | ⬜ `P-058`, tiêu chí 5 |
+| `duplicateClaims` mù với va chạm **đang sống** | ⬜ `P-058`, tiêu chí 6 |
+
+Cho tới khi `P-058` xong, phần bù bằng người là dòng dặn ở `CLAUDE.md` mục 2 và phụ lục P1 bước 3: **một phán quyết `free` cho một mã nằm trong `duplicateIds`, hoặc một mã mà backlog có nhưng không tiêu đề PR mở nào mang, là một `free` chưa chắc.** Dòng dặn này **không** phải lưới tạm — cơ chế `title ↔ tree` không biến mất khi `duplicateIds` rỗng, nên nó ở lại tới khi tiêu chí 5 của `P-058` xong.
+
+⚠️ **Một dấu hiệu lượt đo đã dùng SAI, đính chính ngay tại chỗ:** lượt đó khai *"`unreadable` = 104 PR"* là một dấu hiệu *"`free` chưa chắc"*. Con số đúng (đo lại: 104), nhưng suy luận yếu — **cả 104 PR đó đều ĐÃ ĐÓNG** (`unreadable ∩ đang mở = []`), nên tập ấy không thể giấu một lần nhận việc đang sống. Ở lượt này nó là **nhiễu lịch sử, không phải bằng chứng**. Dấu hiệu thật là hai dấu hiệu trong dòng dặn trên.
 
 ---
 
@@ -59,9 +113,9 @@ Cùng cây còn **hai** `## KF-016` và **hai** `## KF-041`, cũng không gì đ
 
 > Số **KF-025**: dò `## KF-` trên `main` **và trên đầu cả 7 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-024`, nên `KF-025` không đụng ai.
 
-**Chữ ký lỗi:** hai PR mang cùng một mã mục trong tiêu đề, sống chồng nhau; PR ra đời trước merge, PR ra đời sau kẹt xung đột vĩnh viễn với `main` vì mục của nó đã nằm trên `main` rồi.
+**Chữ ký lỗi:** hai PR cho **cùng một mục backlog**, sống chồng nhau; PR ra đời trước merge, PR ra đời sau kẹt xung đột vĩnh viễn với `main` vì mục của nó đã nằm trên `main` rồi.
 
-**Đã gặp:** **2 lần**, cả hai đo được, cả hai trong ngày 2026-09-24.
+**Đã gặp:** **3 lần.** Hai lần đầu đo được trong ngày 2026-09-24 (bảng dưới). **Lần thứ ba: `2026-09-26`, mục `platform/P-028`** — `#224` (mã tiêu đề `P-040`) **vẫn mở** khi `#274` (mã tiêu đề `P-057`) ra đời cho cùng mục đó, cùng ba file nội dung. Lần này hai tiêu đề mang **hai mã khác nhau**, nên `duplicateClaims` — chính bộ dò viết ra ở mục này — **không thấy** (nó trả 5 cặp, không có cặp `#224 ↔ #274`, và cả 5 đều `firstMerged`). Đó là một chỗ hỏng **độc lập** với hai lần đầu, và nó nằm trong cùng file `ops/scripts/claim-collision.ts`. Chi tiết, phép phá thử và ai giữ phần chưa che: **`KF-042`** và mục `platform/P-058`.
 
 | Lần | Mục | PR | Tạo lúc | Cách nhau | Kết cục |
 |---|---|---|---|---|---|
