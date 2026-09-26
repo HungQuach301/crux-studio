@@ -27,6 +27,8 @@ import {
   decisionDeclaresBlocked,
   decisionRows,
   laneFromTitle,
+  laneLogBalance,
+  LANE_LOG_GAP_THRESHOLD,
   linkedPrNumbers,
   mergedByLane,
   needOwnerCount,
@@ -328,6 +330,7 @@ function baseMetrics(over: Partial<Parameters<typeof renderDigestMetrics>[0]> = 
       bottleneck: 'không tắc' as const,
       routineRuns24h: 0,
     },
+    laneLogBalance: [],
     ...over,
   };
 }
@@ -882,6 +885,127 @@ test('P-036 · đếm cả dòng bước 0 hình dạng P-023 (`integration/step
     { at: '2026-09-23T12:00:00.000Z', lane: 'platform', kind: 'lane', ref: 'platform/P-019', status: 'ok', durationMs: 0, costUsd: 0 }, // dòng mục thường → không tính
   ];
   assert.equal(computeProgress(new Map(), [], logs, 0, 0, now).routineRuns24h, 3);
+});
+
+// --- laneLogBalance (Z14, mục `platform/P-014` sóng 3) ---
+
+const Z14_SINCE = '2026-09-20T18:00:00.000Z';
+
+function mergedLanePr(number: number, lane: LaneName, id: string, mergedAt: string): GhPr {
+  return { number, title: `[${lane}] ${id} — x`, headRefName: `claude/${lane}/${id}`, mergedAt };
+}
+
+function itemLog(lane: LaneName, id: string, at: string): RunLogLine {
+  return { at, lane, kind: 'lane', ref: `${lane}/${id}`, status: 'ok', durationMs: 0, costUsd: 0 };
+}
+
+test('laneLogBalance ÂM: làn có PR merged mà KHÔNG có dòng log trong cửa sổ thì flagged (Z14 đỏ đúng lúc)', () => {
+  const merged = [
+    mergedLanePr(1, 'visual', 'V-001', '2026-09-21T08:00:00Z'),
+    mergedLanePr(2, 'visual', 'V-002', '2026-09-21T09:00:00Z'),
+    mergedLanePr(3, 'visual', 'V-003', '2026-09-21T10:00:00Z'),
+  ];
+  const rows = laneLogBalance(merged, [], Z14_SINCE);
+  const visual = rows.find((r) => r.lane === 'visual')!;
+  assert.equal(visual.mergedPrs, 3);
+  assert.equal(visual.logLines, 0);
+  assert.equal(visual.gap, 3);
+  assert.equal(visual.flagged, true);
+});
+
+test('laneLogBalance: làn khớp số dòng log với số PR merged thì KHÔNG flagged', () => {
+  const merged = [
+    mergedLanePr(1, 'visual', 'V-001', '2026-09-21T08:00:00Z'),
+    mergedLanePr(2, 'visual', 'V-002', '2026-09-21T09:00:00Z'),
+  ];
+  const logs = [itemLog('visual', 'V-001', '2026-09-21T07:30:00Z'), itemLog('visual', 'V-002', '2026-09-21T08:30:00Z')];
+  const visual = laneLogBalance(merged, logs, Z14_SINCE).find((r) => r.lane === 'visual')!;
+  assert.equal(visual.gap, 0);
+  assert.equal(visual.flagged, false);
+});
+
+test('laneLogBalance: ngưỡng — lệch = ngưỡng thì KHÔNG flagged, lệch > ngưỡng thì flagged', () => {
+  // lệch đúng bằng ngưỡng (1): 2 merged, 1 log → gap 1 → không báo (ca lệch-một hợp lệ vì `at` sớm hơn mép).
+  const edge = laneLogBalance(
+    [mergedLanePr(1, 'audio', 'AU-001', '2026-09-21T08:00:00Z'), mergedLanePr(2, 'audio', 'AU-002', '2026-09-21T09:00:00Z')],
+    [itemLog('audio', 'AU-001', '2026-09-21T07:00:00Z')],
+    Z14_SINCE,
+  ).find((r) => r.lane === 'audio')!;
+  assert.equal(edge.gap, LANE_LOG_GAP_THRESHOLD);
+  assert.equal(edge.flagged, false);
+  // lệch > ngưỡng (2): 3 merged, 1 log → gap 2 → báo.
+  const over = laneLogBalance(
+    [
+      mergedLanePr(1, 'audio', 'AU-001', '2026-09-21T08:00:00Z'),
+      mergedLanePr(2, 'audio', 'AU-002', '2026-09-21T09:00:00Z'),
+      mergedLanePr(3, 'audio', 'AU-003', '2026-09-21T10:00:00Z'),
+    ],
+    [itemLog('audio', 'AU-001', '2026-09-21T07:00:00Z')],
+    Z14_SINCE,
+  ).find((r) => r.lane === 'audio')!;
+  assert.equal(over.gap, 2);
+  assert.equal(over.flagged, true);
+});
+
+test('laneLogBalance ÂM: dòng bước 0 KHÔNG được tính là log của việc — không được che ca thiếu log', () => {
+  // integration merge 2 mục nhưng chỉ có dòng bước 0 (nhịp tim). Nếu bước 0
+  // bị tính, integration sẽ trông "đủ log" và ca thiếu bị che — đúng nhóm Z.
+  const merged = [
+    mergedLanePr(1, 'integration', 'I-001', '2026-09-21T08:00:00Z'),
+    mergedLanePr(2, 'integration', 'I-002', '2026-09-21T09:00:00Z'),
+  ];
+  const logs: RunLogLine[] = [
+    step0Line('2026-09-21T08:05:00.000Z'), // ref cũ platform/P-016 → bước 0
+    { at: '2026-09-21T09:05:00.000Z', lane: 'integration', kind: 'lane', ref: step0LogRef('2026-09-21T09:05:00.000Z', 'crux-worker-2'), status: 'ok', durationMs: 0, costUsd: 0 }, // ref mới → bước 0
+  ];
+  const integration = laneLogBalance(merged, logs, Z14_SINCE).find((r) => r.lane === 'integration')!;
+  assert.equal(integration.logLines, 0); // hai dòng trên đều là bước 0, không tính
+  assert.equal(integration.flagged, true);
+});
+
+test('laneLogBalance: log NHIỀU hơn merge không flagged; PR ngoài cửa sổ và PR không mã mục không tính', () => {
+  const merged = [
+    mergedLanePr(1, 'topic', 'T-001', '2026-09-21T08:00:00Z'),
+    mergedLanePr(2, 'topic', 'T-002', '2026-09-10T08:00:00Z'), // ngoài cửa sổ → không tính
+    { number: 3, title: 'Gộp origin/main', headRefName: 'x', mergedAt: '2026-09-21T08:00:00Z' }, // không mã mục
+  ];
+  const logs = [
+    itemLog('topic', 'T-001', '2026-09-21T07:00:00Z'),
+    itemLog('topic', 'T-001', '2026-09-21T07:30:00Z'), // mục chạy nhiều lượt
+    itemLog('topic', 'T-003', '2026-09-11T07:00:00Z'), // ngoài cửa sổ → không tính
+  ];
+  const topic = laneLogBalance(merged, logs, Z14_SINCE).find((r) => r.lane === 'topic')!;
+  assert.equal(topic.mergedPrs, 1);
+  assert.equal(topic.logLines, 2);
+  assert.equal(topic.flagged, false);
+});
+
+test('laneLogBalance: biên cửa sổ — `at`/`mergedAt` ĐÚNG bằng `since` được tính (>= chứ không >)', () => {
+  const merged = [mergedLanePr(1, 'kernel', 'K-001', Z14_SINCE)];
+  const logsAtEdge = laneLogBalance(merged, [itemLog('kernel', 'K-001', Z14_SINCE)], Z14_SINCE).find((r) => r.lane === 'kernel')!;
+  assert.equal(logsAtEdge.mergedPrs, 1);
+  assert.equal(logsAtEdge.logLines, 1);
+});
+
+test('laneLogBalance: làn không hoạt động (0 merge, 0 log) bị bỏ khỏi bảng; đầu vào rỗng ra mảng rỗng', () => {
+  assert.deepEqual(laneLogBalance([], [], Z14_SINCE), []);
+  const rows = laneLogBalance([mergedLanePr(1, 'visual', 'V-001', '2026-09-21T08:00:00Z')], [], Z14_SINCE);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.lane, 'visual');
+});
+
+test('renderDigestMetrics: mục Z14 in cả khi 0 làn lệch (không im lặng), và liệt kê làn lệch khi có', () => {
+  const clean = renderDigestMetrics(baseMetrics());
+  assert.match(clean, /^Cân đối log\/merge theo làn \(Z14\): 0 làn lệch$/m);
+  assert.match(clean, /^ {2}Mọi làn hoạt động khớp số dòng log với số PR merged trong ngưỡng\.$/m);
+
+  const flagged = renderDigestMetrics(
+    baseMetrics({
+      laneLogBalance: [{ lane: 'visual', mergedPrs: 3, logLines: 0, gap: 3, flagged: true }],
+    }),
+  );
+  assert.match(flagged, /^Cân đối log\/merge theo làn \(Z14\): 1 làn lệch$/m);
+  assert.match(flagged, /^- visual: 3 PR merged \/ 0 dòng log \(thiếu 3 dòng — bất biến I8 có thể đã thủng\)$/m);
 });
 
 test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí xong của P-019', () => {

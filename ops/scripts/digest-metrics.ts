@@ -570,6 +570,99 @@ export function computeProgress(
   return { doneLast24h, done3d, throughputPerDay: round2(done3d / 3), byBatch, bottleneck, routineRuns24h };
 }
 
+// --- Z14: cân đối số PR merged với số dòng log theo làn (mục `platform/P-014` sóng 3) ---
+
+/**
+ * Ngưỡng lệch cho phép giữa số PR đã merge của một làn và số dòng log **của
+ * việc** (không kể dòng bước 0) của làn đó trong cùng cửa sổ. `1`: dòng log
+ * của một mục mang `at` lúc việc chạy, có thể sớm hơn mép cửa sổ một chút,
+ * nên một PR merge trong cửa sổ mà dòng log của nó rơi ngay ngoài mép là ca
+ * lệch một hợp lệ — chỉ báo từ lệch **hai** trở lên.
+ */
+export const LANE_LOG_GAP_THRESHOLD = 1;
+
+export interface LaneLogBalanceRow {
+  lane: LaneName;
+  /** PR đã merge mang mã mục của làn này (`laneFromTitle`), `mergedAt` trong cửa sổ. */
+  mergedPrs: number;
+  /** Dòng log của làn này trong cửa sổ, **trừ** dòng bước 0 (nhịp tim, không gắn với một mục). */
+  logLines: number;
+  /** `mergedPrs - logLines`. Dương = ghi log THIẾU so với việc đã vào `main` (bất biến I8 có thể đã thủng). */
+  gap: number;
+  /** `gap > threshold`. */
+  flagged: boolean;
+}
+
+/**
+ * Z14 (`ops/known-failures.md` nhóm Z): một lần chạy chết **sau khi** việc
+ * vào `main` nhưng **trước** khi ghi dòng `costUsd` (bất biến I8) không làm
+ * gì đỏ — chi phí thật cao hơn chi phí thấy được, và ngân sách học trôi.
+ * Phép bắt đúng công thức nhóm Z: **một thứ ở ngoài đếm và so**, không phải
+ * một thứ tự khai.
+ *
+ * So **số PR đã merge theo làn** với **số dòng log của làn** trong cùng cửa
+ * sổ (`at` / `mergedAt` ≥ `since`). Báo **một chiều** — chỉ khi số dòng log
+ * ÍT hơn số PR merged quá ngưỡng: chiều ngược lại (log nhiều hơn merge) là
+ * bình thường, vì một mục chạy nhiều lượt trước khi merge và việc chưa merge
+ * vẫn ghi log. Dòng **bước 0** bị loại khỏi phép đếm: nó là nhịp tim ghi ở
+ * mọi lượt (phụ lục P1/P3 bước 0) và dồn hết vào làn `integration`, nên tính
+ * vào sẽ vừa thổi phồng `integration` vừa che đúng ca thiếu log của chính
+ * làn đó.
+ *
+ * ⚠️ Giới hạn đã khai, không giấu — cả hai chiều:
+ * - **Che (thiếu, false-negative):** phép đếm là **số dòng**, gồm cả dòng
+ *   `kind: 'stage'` của lượt chạy tập, nên nhiều lượt hoặc nhiều stage của
+ *   một mục có thể che một mục khác thiếu hẳn dòng log trong cùng làn + cửa
+ *   sổ.
+ * - **Báo thừa (false-positive):** dòng log mang `at` lúc **việc chạy**, còn
+ *   `mergedAt` là lúc **merge** — và cơ chế merge của dự án tách hai mốc ra
+ *   xa (`automerge-delayed` chờ ≥12 giờ, `owner-merge` có thể nhiều ngày).
+ *   Một làn merge ≥2 PR trong cửa sổ mà dòng log của chúng đã rơi ra ngoài
+ *   cửa sổ sẽ bị báo nhầm dù mọi lượt đã ghi log đúng; ngưỡng chỉ hấp thụ
+ *   một ca như vậy mỗi làn.
+ *
+ * Cả hai chấp nhận được vì đây là **báo động** (CHARTER mục 4), không phải
+ * cổng chặn: nó bắt ca cả một làn im (merge có mà dòng log không), và báo
+ * thừa là chiều an toàn của nhóm Z. Chỗ đọc bản tin xem đây là gợi ý cần
+ * xác minh, không phải kết luận.
+ */
+export function laneLogBalance(
+  mergedPrs: readonly GhPr[],
+  logLines: readonly RunLogLine[],
+  since: string,
+  threshold: number = LANE_LOG_GAP_THRESHOLD,
+): LaneLogBalanceRow[] {
+  const sinceMs = Date.parse(since);
+  const inWindow = (iso: string): boolean => {
+    const t = Date.parse(iso);
+    return Number.isFinite(t) && t >= sinceMs;
+  };
+
+  const merged = new Map<LaneName, number>();
+  for (const pr of mergedPrs) {
+    if (typeof pr.mergedAt !== 'string' || !inWindow(pr.mergedAt)) continue;
+    const lane = laneFromTitle(pr.title);
+    if (lane === null) continue; // PR gộp/revert/sync không mang mã mục — không phải một mục done.
+    merged.set(lane, (merged.get(lane) ?? 0) + 1);
+  }
+
+  const logs = new Map<LaneName, number>();
+  for (const line of logLines) {
+    if (isStep0Line(line) || !inWindow(line.at)) continue;
+    logs.set(line.lane, (logs.get(line.lane) ?? 0) + 1);
+  }
+
+  const rows: LaneLogBalanceRow[] = [];
+  for (const lane of LANES) {
+    const m = merged.get(lane) ?? 0;
+    const l = logs.get(lane) ?? 0;
+    if (m === 0 && l === 0) continue; // làn không hoạt động trong cửa sổ — không có gì để so.
+    const gap = m - l;
+    rows.push({ lane, mergedPrs: m, logLines: l, gap, flagged: gap > threshold });
+  }
+  return rows;
+}
+
 // --- Kết xuất ---
 
 export interface DigestMetrics {
@@ -598,6 +691,13 @@ export interface DigestMetrics {
   cost: CostSummary;
   /** Mục "Tiến độ" (mục `platform/P-019`). */
   progress: ProgressMetrics;
+  /**
+   * Z14 (mục `platform/P-014` sóng 3): cân đối số PR merged với số dòng log
+   * theo làn. Mọi làn hoạt động trong cửa sổ, cả làn khớp lẫn làn lệch —
+   * `renderDigestMetrics` lọc lấy `flagged`, nhưng giữ cả để bên đọc máy
+   * thấy được số thật của từng làn.
+   */
+  laneLogBalance: LaneLogBalanceRow[];
 }
 
 function prLabel(row: OpenPrRow): string {
@@ -698,6 +798,22 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
     '',
     `Chi phí: 24 giờ ${cost24h} USD · tích luỹ ${total} USD · ${percent}% ngân sách học (${budget} USD, CHARTER mục 8)`,
   );
+
+  // Z14 (mục `platform/P-014` sóng 3). Đặt ngay dưới "Chi phí" vì nó là phép
+  // kiểm chéo của chính con số đó: một dòng `costUsd` thiếu làm chi phí thấy
+  // được thấp hơn chi phí thật. In cả khi 0 làn lệch — im lặng ở đây đúng là
+  // thứ nhóm Z cấm (bài học Z7/Z15).
+  const flaggedBalance = metrics.laneLogBalance.filter((row) => row.flagged);
+  out.push('', `Cân đối log/merge theo làn (Z14): ${flaggedBalance.length} làn lệch`);
+  if (flaggedBalance.length === 0) {
+    out.push('  Mọi làn hoạt động khớp số dòng log với số PR merged trong ngưỡng.');
+  } else {
+    for (const row of flaggedBalance) {
+      out.push(
+        `- ${row.lane}: ${row.mergedPrs} PR merged / ${row.logLines} dòng log (thiếu ${row.gap} dòng — bất biến I8 có thể đã thủng)`,
+      );
+    }
+  }
 
   // Mục "Tiến độ" (mục `platform/P-019`, chỉ dẫn 3 của chủ dự án ở issue #17).
   const p = metrics.progress;
@@ -851,6 +967,7 @@ export function collectMetrics(
     decisions,
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
     progress,
+    laneLogBalance: laneLogBalance(snapshot.mergedPrs, logLines, since),
   };
 }
 
