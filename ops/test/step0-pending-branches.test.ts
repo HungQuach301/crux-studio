@@ -13,7 +13,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { parseStep0LogId, step0LogId } from '../../kernel/src/log.ts';
 import { DEFAULT_DELAY_HOURS } from '../invariants.merge-gate.ts';
@@ -361,4 +364,115 @@ test('renderStep0PendingReport: đánh dấu nhánh quá ngưỡng và in cả p
   assert.match(text, new RegExp(`4 \\(quá ngưỡng ${STEP0_PENDING_STALE_HOURS} giờ: 1\\)`));
   assert.match(text, /⚠ claude\/integration\/step0-pending\/step0-2026-09-24T004410Z-crux-worker-1 — kẹt 34\.9 giờ/);
   assert.match(text, /claude\/visual\/V-001/);
+});
+
+// ── Mục `P-062`: đối chiếu với NHÁNH CHÍNH, không với cây làm việc ─────────
+
+/**
+ * Dựng một kho git tạm đúng hình dạng lượt `crux-worker-2`
+ * `2026-09-26T22:3xZ`: `origin/main` CHƯA có dòng log của nhánh chờ, còn nhánh
+ * lượt chạy đang checkout thì ĐÃ `cherry-pick` nó vào. Remote `origin` trỏ về
+ * chính kho đó nên `git ls-remote` chạy thật, không cần mạng.
+ */
+function withCherryPickedRepo(body: (dir: string, logId: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), 'crux-step0-pending-'));
+  try {
+    const git = (...args: string[]): string =>
+      execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    const logId = step0LogId('2026-09-26T22:40:06Z', 'crux-worker-1');
+    const logDir = join(dir, 'ops/logs/integration');
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    mkdirSync(logDir, { recursive: true });
+    writeFileSync(join(logDir, 'step0-2026-09-25T042106Z-crux-worker-2.jsonl'), '{}\n');
+    git('add', '.');
+    git('commit', '-q', '-m', 'nền');
+    git('checkout', '-q', '-b', step0PendingBranch(logId));
+    writeFileSync(join(logDir, `${logId}.jsonl`), '{}\n');
+    git('add', '.');
+    git('commit', '-q', '-m', 'dòng log lượt log-only');
+    git('checkout', '-q', 'main');
+    git('remote', 'add', 'origin', dir);
+    git('fetch', '-q', 'origin');
+    // Nhánh lượt chạy: cherry-pick dòng log vào — đúng bước 0f.
+    git('checkout', '-q', '-b', 'claude/some-run');
+    git('cherry-pick', step0PendingBranch(logId));
+    body(dir, logId);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const SCRIPT = join(process.cwd(), 'ops/scripts/step0-pending-branches.ts');
+
+test('TÁI HIỆN P-062: `pnpm step0:pending` trên nhánh đã cherry-pick VẪN kể nhánh chờ là pending', () => {
+  withCherryPickedRepo((dir, logId) => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--json', '--now', '2026-09-26T23:40:00Z'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    // Trên `main` trước mục này: `pending: []` và câu "không nhánh nào…" —
+    // tức một "all clear" giả ở đúng bước dựng ra để không im lặng.
+    assert.deepEqual(report.pending.map((row: { logId: string }) => row.logId), [logId]);
+    assert.equal(report.pending[0].inTree, true, 'đánh dấu đã cherry-pick, không rút khỏi pending');
+    assert.match(report.mergedSource, /origin\/main/);
+    assert.match(report.render, /đối chiếu với: ref `origin\/main`/);
+  });
+});
+
+test('ca âm P-062: sau khi dòng log tới `origin/main` thì hết pending', () => {
+  withCherryPickedRepo((dir) => {
+    execFileSync('git', ['-C', dir, 'push', '-q', 'origin', 'HEAD:main']);
+    execFileSync('git', ['-C', dir, 'fetch', '-q', 'origin']);
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--json'], { cwd: dir, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).pending, []);
+  });
+});
+
+test('P-062: `--logs-dir` (đo cây) vẫn chạy được, nhưng báo cáo NÓI RA nó đo cây làm việc', () => {
+  withCherryPickedRepo((dir) => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--logs-dir', 'ops/logs/integration'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /CÂY LÀM VIỆC/);
+  });
+});
+
+test('P-062: nhánh chính không xác định được thì NÉM, không rơi về cây làm việc', () => {
+  withCherryPickedRepo((dir) => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--main-ref', 'origin/khong-co'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Không xác định được nhánh chính/);
+  });
+});
+
+test('P-062: cờ thiếu giá trị là lỗi cách dùng, không lặng lẽ rơi về mặc định', () => {
+  for (const args of [['--from-remote', '--main-ref'], ['--from-remote', '--now'], ['--from-remote', '--logs-dir']]) {
+    const result = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 2, args.join(' '));
+  }
+  const both = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--main-ref', 'x', '--logs-dir', 'y'], {
+    encoding: 'utf8',
+  });
+  assert.equal(both.status, 2, '`--main-ref` và `--logs-dir` loại trừ nhau');
+});
+
+test('P-062: `--branches` (dạng watchdog.yml) giữ cây làm việc làm mặc định và khai nguồn', () => {
+  withCherryPickedRepo((dir) => {
+    const list = join(dir, 'branches.txt');
+    writeFileSync(list, '');
+    const result = spawnSync(process.execPath, [SCRIPT, '--branches', list, '--json'], { cwd: dir, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(JSON.parse(result.stdout).mergedSource, /CÂY LÀM VIỆC/);
+  });
 });

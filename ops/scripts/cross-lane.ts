@@ -45,6 +45,7 @@
  */
 
 import { LANES, type LaneName } from '../../kernel/src/envelope.ts';
+import { rejectUnexpectedArgs } from './stdin-only-args.ts';
 
 const LANE_SET: ReadonlySet<string> = new Set<string>(LANES);
 
@@ -112,6 +113,10 @@ export function countLanesTouched(changedFiles: readonly string[]): number {
 const isMain = process.argv[1]?.endsWith('cross-lane.ts') === true;
 
 if (isMain) {
+  // P-062: một cờ gõ nhầm (`--changed <file>`, mượn từ `protected-area.ts`)
+  // không được rơi mất rồi in "0 làn" — ném trước khi đọc stdin.
+  rejectUnexpectedArgs('cross-lane.ts', process.argv.slice(2), 'node ops/scripts/cross-lane.ts < changed.txt');
+
   const input = await new Promise<string>((resolve, reject) => {
     let buffer = '';
     process.stdin.setEncoding('utf8');

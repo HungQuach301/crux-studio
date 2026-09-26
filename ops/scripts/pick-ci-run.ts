@@ -62,6 +62,8 @@
  * cùng `main-ci` trên chính `main`.
  */
 
+import { rejectUnexpectedArgs } from './stdin-only-args.ts';
+
 /** Các trường của một lần chạy workflow mà luật chọn cần tới. */
 export interface CiRun {
   readonly id?: number;
@@ -117,6 +119,10 @@ export function pickCiRun(runs: readonly CiRun[], headSha?: string): CiRun | nul
 const isMain = process.argv[1]?.endsWith('pick-ci-run.ts') === true;
 
 if (isMain) {
+  // P-062: đối số duy nhất là `headSha`. Một cờ (`--head …`) trước đây rơi
+  // vào `headSha` và lọc ra `{}` — tức "CI chưa xanh" cho một lần gọi sai.
+  rejectUnexpectedArgs('pick-ci-run.ts', process.argv.slice(2), 'gh api … | node ops/scripts/pick-ci-run.ts [headSha]', 1);
+
   // Đọc từ stdin để bên gọi nối thẳng `gh api … | node ops/scripts/pick-ci-run.ts`
   // mà không cần file tạm. Đầu vào là `.workflow_runs` của API, đầu ra là
   // MỘT object (hoặc `{}`) — đúng hình dạng mà `--argjson ci` của
