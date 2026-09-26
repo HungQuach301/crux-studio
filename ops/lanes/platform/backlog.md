@@ -4,6 +4,24 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-062 · Hai phép đo của bước 0 trả "sạch" cho một lần gọi sai, và không gì đỏ
+
+Hai chỗ khác nhau, **cùng một chữ ký**: một phép đo của bước 0 nhận đầu vào không phải thứ nó định đo, rồi trả **ca lành** thay vì ném. Cả hai đều là nhóm **Z** — `pnpm check` xanh, CI xanh, `main` xanh.
+
+1. **`pnpm step0:pending` đo "đã vào nhánh chính" bằng CÂY LÀM VIỆC, không bằng `origin/main`.** `ops/scripts/step0-pending-branches.ts` lấy `mergedLogIds` từ `mergedStep0LogIds(logsDir)` với `logsDir` mặc định là `ops/logs/integration` **của cây đang checkout**. Đo được ở lượt `crux-worker-2` `2026-09-26T22:3xZ`, sau khi bước 0f đã `cherry-pick` 7 dòng log vào nhánh lượt chạy: lệnh in `không nhánh nào còn dòng log chưa vào nhánh chính`, EXIT=0 — trong khi so với `origin/main` **vẫn còn đúng 7** (`comm` giữa `git ls-remote … step0-pending/*` và `git ls-tree --name-only origin/main ops/logs/integration/`). `watchdog.yml` không bị vì nó chạy trên `main`; chỗ cắn là **một lượt worker chạy lại bước 0f trên nhánh của chính nó** — nó nhận một "all clear" giả ở đúng bước mà `P-056`/`KF-041` dựng ra để **không** im lặng.
+2. **`ops/scripts/cross-lane.ts` chỉ đọc `stdin`, nhưng một cờ `--changed <file>` sai không làm nó ném.** Gọi `node ops/scripts/cross-lane.ts --changed /tmp/changed.txt` trả **"0 làn"** thay vì báo lỗi cờ — cùng hình dạng với `node ops/invariants.protected-area.ts --changed …`, thứ **có** cờ đó, nên gõ nhầm là chuyện sẽ xảy ra. Hệ quả: một lượt kết luận "PR này không `cross-lane`" và bỏ nhãn, mà không gì đỏ.
+
+- deps: —
+- risk: low — cả hai chỗ sửa là *làm cho phép đo ném thay vì trả ca lành*. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
+- status: ready
+- nguồn: vòng soát ngữ cảnh sạch (bước 6) của PR bước 0 lượt `crux-worker-2` `2026-09-26T22:18Z`, phát hiện `N6` và phép phá thử thứ 15; `ops/scripts/step0-pending-branches.ts`; `ops/scripts/cross-lane.ts`; `ops/known-failures.md` `KF-041`; mục `platform/P-056`
+- tiêu chí xong:
+  - `step0PendingBranches` đo **đối chiếu với `origin/main`**, không với cây làm việc — hoặc, nếu giữ mặc định cây, thì **nói ra** trong báo cáo rằng nó đang đo cây nào và ném khi không xác định được nhánh chính. Im lặng là thứ duy nhất không được phép.
+  - **Bài tái hiện lỗi** (bất biến **I2**): dựng một cây có dòng log mà `origin/main` **chưa** có, rồi đòi phép đo vẫn kể nhánh đó là `pending`. Bài này phải **đỏ** trên `main` hôm nay — đó là phép đo, không phải lời khai.
+  - `cross-lane.ts` (và mọi script `ops/scripts/**` chỉ đọc `stdin`) **ném** với mã thoát khác 0 khi nhận một cờ nó không hiểu, thay vì đọc `stdin` rỗng rồi trả "0". Cộng một bài `spawnSync` chạy CLI thật.
+  - Khai rõ **cái không sửa ở đây**: mục này không thêm cờ `--changed` cho `cross-lane.ts`; nó chỉ cấm cái im lặng. Thêm cờ là một quyết định khác, và thêm nó bằng cách đoán là đúng thứ luật `A10` cấm.
+- **mã mục nhận lúc 2026-09-26 ~22:3xZ** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `origin/main` **và trên đầu nhánh cả 4 PR đang mở** (#293 #284 #260 #223) — cao nhất là `P-061`, nên `P-062` không đụng ai.
+
 ### P-061 · `pnpm -s check` đỏ trên cây mà `pnpm check` xanh — chặn cái bẫy "`main` đỏ" giả (KF-045)
 
 `pnpm -s run <script>` xuất **`npm_config_reporter=silent`** vào môi trường script. Mọi `pnpm` **lồng** bên trong kế thừa nó và in **0 byte**. `verifyLockfileInstall` (`ops/scripts/integrator-lockfile.ts`) cài thật rồi gói *nguyên văn đầu ra* của `pnpm` vào `reason` — với biến đó, `reason` giữ đúng mã thoát mà mất hết chữ, nên bài `TÁI HIỆN I-006` (khớp `/ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY/`) đỏ. Đo được lúc `2026-09-26T12:2xZ`: `pnpm -s test` đỏ **6/6 vòng** trên **cả** nhánh lượt chạy **và** worktree `origin/main` `b9f8b25`, trong khi `pnpm test`, `node --test` toàn bộ (song song, mặc định), `pnpm exec node --test` và `pnpm check` thật đều **1565/1565 xanh**, và `main-ci` trên đúng SHA đó là `success`.
@@ -1118,6 +1136,7 @@ Khi hàng đợi xung đột trống **và** mọi mục `ready` đã có PR m�
     → **Vế hai (`cherry-pick` rồi xoá) chuyển sang mục `P-056`.** Vế một chạy trong đúng lượt viết ra nó nên nó chạy; vế hai nằm ở một lượt **khác** và đã hỏng bốn lần liên tiếp (`ops/known-failures.md` `KF-048`). `P-056` biến nó thành thứ máy nói ra — `ops/scripts/step0-pending-branches.ts` cộng dấu hiệu số 7 của `ops/workflows/watchdog.yml` — nên đừng đọc ô này như thể nó còn giữ phần ấy. Ô vẫn ⬜ vì vế một chưa có bài kiểm riêng.
   - ⬜ Chỗ gọi phải lấy `lastHeartbeatOnMainAt` bằng **đúng bộ lọc** mà `watchdog.yml` dùng (`ref` khớp `(^|/)(step0|P3-run)-` hoặc `== "platform/P-016"`), và bộ lọc đó phải là **một** chỗ dùng chung — tốt nhất export từ `kernel/src/log.ts`, nơi đã giữ `STEP0_LOG_PREFIX`. Hai bộ lọc khác nhau thì cổng và watchdog nói hai chuyện mà không gì đỏ.
   - ⬜ Một phép đo sau khi áp: số PR log mỗi 24 giờ trước và sau, để biết mục này có thật sự cắt được chi phí hay chỉ dịch nó đi.
+  - ⬜ **`step0PrGate` đọc MỘT nguồn nhịp tim, `watchdog.yml` dấu hiệu số 5 đọc `max` của HAI** (mục `P-043`, `🤖 [QĐ] #213`). Trường `lastHeartbeatOnMainAt` và tài liệu của nó vẫn viết theo thời trước `P-043` (*"đúng thứ `watchdog.yml` đọc"*), mà từ `P-043` watchdog lấy `max` của `ops/logs` trên `main` **và** nhánh `claude/telemetry`. Đo được ở lượt `crux-worker-2` `2026-09-26T22:18Z`: nguồn `main` `19:33:44Z` (**164 phút**) so với `heartbeat-source.ts` lấy `max` ra `21:39:18Z` (**38,6 phút** — `step0PrGate` in tròn thành *"39 phút"*, nên đừng ghi `38`) — cổng trả `heartbeat-due` trong khi watchdog còn cách ngưỡng 3 giờ hơn hai tiếng. Hướng lệch **an toàn** (mở PR thừa, không bỏ sót nhịp tim) nhưng nó ăn đúng khoản tiết kiệm mà mục này sinh ra để lấy, và không gì đỏ. Chỗ sửa: cổng gọi `heartbeat-source.ts` trên cả hai nguồn, hoặc đổi tên trường cho đúng đại lượng — **đừng** để tài liệu nói một đằng và watchdog đo một nẻo.
 - **vòng soát ngữ cảnh sạch của PR #212 — 0 phát hiện chặn**, và hai phát hiện đã sửa ngay trong PR đó:
   - Kẹp `Math.max(0, …)` cho mốc `at` ở tương lai **không** chữa được chỗ hỏng nó tự nhận là đã chặn: `0 >= 150` cũng `false`, nên cổng vẫn nói "nhịp tim còn mới" và vẫn không mở PR, mà `watchdog.yml` cũng không nổ (`AGE_MIN` âm, `-gt 180` false). Không lớp nào bắt được — nhóm **Z** thuần. Nay tương lai quá `HEARTBEAT_FUTURE_TOLERANCE_MINUTES` (5 phút) trả `null` → nhánh `heartbeat-unreadable` → **mở PR**.
   - Bài khoá ngưỡng 180 là một phép so **hằng-với-hằng**, vẫn xanh nếu ai đổi `watchdog.yml` thành `-gt 240`. Nay bài đọc chính `ops/workflows/watchdog.yml` và bắt lấy ngưỡng thật; đã phá thật **cả hai chiều** (đổi hằng số TS, và đổi ngưỡng YAML), cả hai đỏ.
@@ -1377,6 +1396,87 @@ Ba cách đọc sai mà nửa đọc phải chặn bằng test, không phải b�
 - **mã mục nhận lúc 2026-09-24 ~12:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu cả 13 PR đang mở, cao nhất là `P-045` (`#233`), nên `P-046` không đụng ai.
 ---
 
+### P-047 · fix · Một lượt `ci.yml` bị `concurrency` huỷ để lại check run `cancelled` mang tên check **bắt buộc**, và PR kẹt `blocked` vĩnh viễn
+Chỉ dẫn của chủ dự án trên issue bản tin [#241](https://github.com/HungQuach301/crux-studio/issues/241), comment `2026-09-24T14:59:40Z` (comment không mở đầu 🤖 trên issue nhãn `digest` → là lệnh, `CLAUDE.md` mục 5):
+
+> `#233`: đã merge. Xác minh nguyên nhân gốc lỗi 405 của `#226`: `#226` và `#224` chỉ có 1/1 check trong khi ruleset `protect-main` đòi 5 check bắt buộc — kiểm xem CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không; sửa gốc, ghi KF.
+
+`ops/known-failures.md` `KF-029` đã khai giả thuyết này và tự dặn *"Tách thành mục backlog riêng"*; ~10 giờ sau không mục nào giữ nó. Mục này giữ.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/ci.yml` (vùng `automerge-delayed`). Không đổi tên, không gộp, không xoá job nào trong năm job mà ruleset `protect-main` đòi, nên **không** rơi vào nhóm `irreversible` số 8 của CHARTER 2.3.
+- status: review
+- hold: bản sửa `ci.yml` chỉ có hiệu lực sau khi PR vào `main` và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4) — chưa chạy thật lần nào
+- nguồn: chỉ dẫn chủ dự án trên `#241`; `ops/known-failures.md` `KF-029` và **`KF-031`**; `D-C08`; `ops/scripts/required-checks.ts`
+- tiêu chí xong:
+  - ✅ **Nguyên nhân gốc xác minh bằng đo, và cả hai vế của chỉ dẫn được trả lời — kể cả vế đo được là SAI.**
+    Vế *"CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không"*: **không**. `ci.yml` không có `paths:`
+    hay `paths-ignore:` nào (`grep -n "paths" ops/workflows/*.yml` → chỉ `labels.yml` và `smoke-workflows.yml`,
+    cả hai không sinh check bắt buộc); và `#226` cũng không phải PR chỉ chạm `ops/logs/` — nó chạm
+    `ops/known-failures.md`, `ops/lanes/`, `ops/scripts/`, `ops/test/`. Vế *"405 vì check bắt buộc không được
+    ruleset đọc thấy"*: **đúng**, nhưng nguyên nhân khác — xem `KF-031`. Bằng chứng là một phép thử tự nhiên
+    trên **cả 8 PR đang mở**: đúng **một** PR mang check run `cancelled` tên check bắt buộc (`#224`), và đó
+    cũng là đúng **một** PR ở `mergeable_state: "blocked"`; bảy PR còn lại chỉ có check run của một lượt và
+    không PR nào `blocked`.
+  - ✅ **Sửa gốc:** **bỏ hẳn khối `concurrency`** khỏi `ops/workflows/ci.yml`.
+    Bản sửa đầu của lượt này là `cancel-in-progress: false` + `group` mang `head.sha`, và **vòng soát ngữ
+    cảnh sạch bác nó**: `concurrency` còn đường huỷ thứ hai — một lượt đang **xếp hàng** trong nhóm bị huỷ
+    khi lượt sau tới, mà `cancel-in-progress` chỉ chi phối lượt đang **chạy**. `ci.yml` đăng ký năm loại sự
+    kiện nên ba sự kiện trên cùng một commit là chuyện thường. Vế này khai đúng mức là **suy luận từ ngữ
+    nghĩa nền tảng**, không phải một lần chạy thật (bất biến I6) — nhưng bỏ cả khối thì không còn đường huỷ
+    nào để phải đoán.
+  - ✅ **Máy chặn, tách khỏi YAML:** `ops/scripts/ci-concurrency.ts` → `concurrencyProblems`, nối vào
+    `pnpm lint:workflows`. Luật cấm cả **khối**, không chỉ cấm `cancel-in-progress: true` — vòng soát đo
+    được bản đầu **đọc sai bốn dạng viết hợp lệ** (flow mapping một dòng · `${{ true }}` · `True` viết hoa ·
+    giá trị ở dòng sau), cả bốn bật huỷ thật mà cổng vẫn `EXIT=0`. Một luật cấm cả khối không có mặt đó để
+    đọc sai. Đọc cả khối `concurrency` mức **job**. Thu hẹp bằng `requiredChecksOnPr` (chạy trên
+    `pull_request` **và** sinh check bắt buộc), nên `gpt-review.yml` và `main-ci.yml` không bị chặn oan —
+    cả hai đều có bài kiểm ca âm chạy trên file **thật**.
+  - ✅ **Bộ dò PR đang kẹt:** `blockedRequiredChecks` trong cùng file, cộng CLI
+    `node ops/scripts/ci-concurrency.ts <file.json>` (nhận cả mảng trần lẫn nguyên object `{"check_runs": […]}`
+    mà API trả về). Cờ `silent` tách ca "có cả lượt `success` cùng tên" — PR trông xanh mà vẫn kẹt. Bài kiểm
+    chạy trên **dữ liệu đo thật của `#224`**. Vòng soát bỏ `skipped` khỏi `NON_VERDICT_CONCLUSIONS`: GitHub
+    coi required check `skipped` là **đã qua**, và hai job có `if: github.event_name == 'pull_request'` ra
+    `skipped` ở mọi lượt `workflow_dispatch` → dương tính giả.
+  - ✅ Ghi `ops/known-failures.md` **`KF-031`**, gồm cả vế giả thuyết đo được là sai.
+  - ✅ **28 bài, ba tầng** (`ops/test/ci-concurrency.test.ts`): hàm thuần · `ops/workflows/**` thật trên đĩa ·
+    hợp đồng "`check-workflows.ts` phải THẬT SỰ gọi luật này". Tầng ba có vì hai tầng đầu **không đủ**: gỡ
+    lời gọi khỏi CLI làm **0** bài đỏ, đúng nhóm Z mà mục này sinh ra để giết.
+  - ✅ **Phá thử 17 phép, mỗi phép đỏ đúng chỗ rồi khôi phục**, cây sạch sau mỗi vòng. Sáu phép đầu đo ở
+    **cả** bài kiểm lẫn cổng thật (`pnpm lint:workflows` `EXIT=1`): thêm lại khối cũ → 2 đỏ · khối +
+    `cancel: false` → 1 · `${{ true }}` → 1 · `True` → 1 · flow mapping → 1 · giá trị ở dòng sau → 1. Mười
+    một phép còn lại trên module: gỡ lời gọi khỏi `check-workflows.ts` → 1 · `concurrencyProblems` luôn rỗng
+    → 9 · bỏ lọc trigger `pull_request` → 2 · thêm lại `skipped` → 1 · bỏ `cancelled` → 2 · bộ dò đếm mọi
+    tên → 1 · `silent` luôn `false` → 1 · bỏ qua khối mức job → 2 · `cancelsFromValue` về so sánh chặt của
+    bản đầu → 1 · `parseCheckRuns` nuốt dữ liệu lạ → 1 · bỏ nhận dạng flow mapping → 1. Khôi phục → **28/28
+    xanh**.
+- **vòng soát ngữ cảnh sạch (bước 6) — 1 CHẶN, 3 NÊN SỬA, sửa cả bốn.** Reviewer dựng worktree riêng ở
+  `origin/main`, tự chạy lệnh chứ không tin mô tả, và tự nghĩ thêm phép phá thử:
+  - **C1 (CHẶN) · dòng log của chính lượt này mang mốc `at` Ở TƯƠNG LAI.** `ops/logs/platform/P-047.jsonl`
+    ghi `at: 21:05:00.000Z` trong khi commit tạo lúc `20:56:15Z` — vượt `FUTURE_TOLERANCE_HOURS` (1 phút).
+    Hậu quả đo được: bài `Z7` của `ops/test/lane-heartbeat.test.ts` **đỏ** trong cửa sổ ~9 phút rồi tự lành,
+    nên lời khai "`pnpm check` xanh" **không tái lập được** trên chính cây đã commit; và trong khoảng đó làn
+    `platform` không bao giờ `stale` được, tức dấu hiệu 5 của CHARTER 2.4 bị tắt. Đây là **lần thứ tư** cùng
+    thói quen ghi mốc tròn bằng tay — `I-021` đã ghi ba mốc trước đó và viết sẵn *"cách chữa luôn là ghi
+    `at` bằng đồng hồ thật, không phải nới dung sai"*. Đã ghi lại bằng đồng hồ thật, và mọi con số kiểm tra
+    trong mục này là số **đo lại sau vòng soát**.
+  - **N1 · bốn lối đi vòng qua luật**, đo bằng một workflow `zz-evil.yml` dựng riêng: cả bốn làm
+    `pnpm lint:workflows` ra `EXIT=0` trong khi huỷ vẫn bật. Đã bịt bằng cách đổi luật từ "cấm một giá trị"
+    sang "cấm cả khối", cộng 5 bài mới.
+  - **N2 · `cancel-in-progress: false` không bỏ hẳn đường huỷ** — xem tiêu chí "Sửa gốc" ở trên.
+  - **N3 · CLI vỡ bằng stack trace thô** với đúng dạng dữ liệu mà chính nó chỉ người dùng đi lấy
+    (`{"check_runs": […]}`), và với file không tồn tại. Đã bọc: `parseCheckRuns` nhận cả hai hình dạng, lỗi
+    in một câu tiếng Việt và thoát 2.
+  - **Ghi nhận không chặn của reviewer, dán lại để không rơi mất:** mọi lời khai số trong `KF-031` và mục
+    này đều tái lập được (`ci.yml` không có `paths:` · `gpt-review.yml` không sinh check bắt buộc · nền
+    `main` 1222 · `lint:workflows` 16 file 45 khối · replay 6/6); 8 phép phá thử của bản đầu đúng cả 8;
+    I1/I2/I3/I8 đạt; `.github/` 0 dòng; trailer sạch tên model.
+- **luật mềm CHARTER mục 4, ghi nhận:** diff vượt ngưỡng ~400 dòng. Phần *code sửa lỗi* chỉ vài chục dòng;
+  phần lớn là bài kiểm và tài liệu. Không tách: tách cặp "test tái hiện + bản sửa" làm hỏng bất biến **I2**.
+  Bộ dò `cross-lane` hiện trên `main` đếm `^(workshops|ops/lanes)/[a-z]+` nên ra **1** làn (`platform`) và CI
+  sẽ không gắn nhãn; bộ dò mới của `P-040` (`#224`, đang mở) đếm cả `ops/logs/<làn>/` nên sẽ ra **2** làn —
+  khai ra đây thay vì để lượt sau tưởng nhãn bị sót.
+- **mã mục nhận lúc 2026-09-24 ~20:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 8 PR đang mở (242, 238, 231, 229, 225, 224, 223, 39), cao nhất là `P-046` (`#238`), nên `P-047` không đụng ai. Mã `KF-031` nhận cùng cách, cao nhất là `KF-030` (`#231`, `#225`).
 ### P-049 · fix · Báo động giả trong cửa sổ chờ `sync-workflows` sau PR sửa `ops/workflows/**`
 
 Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). Một PR sửa `ops/workflows/**` vào `main` mở một cửa sổ vài chục giây mà bản workflow đang chạy (`.github/`) lệch bản nguồn (`ops/workflows/`) cho tới khi `sync-workflows` chép sang. Trong cửa sổ đó tầng cảnh báo `@nhắc` chủ dự án dù `main` đang xanh — báo động giả (ngược nhóm Z). Đo được `2026-09-24T22:26Z` (`#229`/`a642919` → `843bbd4` sau 33 giây). Chi tiết: `ops/known-failures.md` `KF-033`.
@@ -1599,20 +1699,44 @@ thiếu ở đầu nhánh                           → 33   ← ổn định �
 
 - deps: —
 - risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
-- status: ready
+- status: review
 - nguồn: bước 0e lượt `crux-worker-2` `2026-09-26T07:25:25Z`; `ops/known-failures.md` `KF-043`; món nợ mà `#281` tự khai và hoãn; `P-043` (vế ghi của nhịp tim) và `P-056` (tiền lệ một dấu hiệu `watchdog.yml` đọc remote)
 - tiêu chí xong:
-  - ⬜ **Hàm thuần, không đụng mạng, không đọc đĩa** — nhận hai danh sách tên file (`heartbeat/` ở đầu nhánh, và `heartbeat/` qua mọi commit) và trả về những tên **thiếu ở đầu nhánh** kèm mốc của từng tên. Mốc tách ra khỏi tên bằng **`parseStep0LogId`** của kernel (`kernel/src/log.ts`, phép **đảo** của `step0LogId` — `step0LogId` chỉ *ghép* tên, đừng gọi nó để đọc ngược), **không** tự cắt chuỗi. Cùng luật `P-056` đã dùng.
-  - ⬜ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng hình dạng đo được — 12 tên ở đầu nhánh, 45 tên trong lịch sử — và đòi hàm trả đủ **33**, đúng hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`. Ca âm: hai danh sách bằng nhau → **rỗng** (ca này phải chạy được sau khi tiêu chí 3 xong, nếu không mục tự sinh báo động vĩnh viễn). Ba ca biên, mỗi ca đòi một câu trong `problems` chứ **không** im lặng bỏ qua:
+  - ✅ **Hàm thuần, không đụng mạng, không đọc đĩa** — nhận hai danh sách tên file (`heartbeat/` ở đầu nhánh, và `heartbeat/` qua mọi commit) và trả về những tên **thiếu ở đầu nhánh** kèm mốc của từng tên. Mốc tách ra khỏi tên bằng **`parseStep0LogId`** của kernel (`kernel/src/log.ts`, phép **đảo** của `step0LogId` — `step0LogId` chỉ *ghép* tên, đừng gọi nó để đọc ngược), **không** tự cắt chuỗi. Cùng luật `P-056` đã dùng.
+  - ✅ **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**): dựng lại đúng hình dạng đo được — 12 tên ở đầu nhánh, 45 tên trong lịch sử — và đòi hàm trả đủ **33**, đúng hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`. Ca âm: hai danh sách bằng nhau → **rỗng** (ca này phải chạy được sau khi tiêu chí 3 xong, nếu không mục tự sinh báo động vĩnh viễn). Ba ca biên, mỗi ca đòi một câu trong `problems` chứ **không** im lặng bỏ qua:
     1. một tên không đúng hình dạng `step0LogId`;
     2. `ever == tip` **trong khi** phép đo lịch sử chỉ thấy **một** commit → **NÉM**, tuyệt đối không trả *"0 thiếu"*. Đây là ca đắt nhất và nó **KHÔNG** phải giả thuyết: xem tiêu chí 4. Một lưới chỉ bắt *"danh sách lịch sử rỗng"* **không** che được nó, vì danh sách khi đó **không rỗng** — nó bằng đúng đầu nhánh;
     3. một tên có ở đầu nhánh mà **không** có trong lịch sử. Lý do đúng là **đầu vào không nhất quán do bên gọi dựng sai** — *không* phải *"lịch sử bị viết lại"*: khi hai danh sách cùng dựng từ một `rev-list` thì `tip ⊆ ever` đúng theo cấu tạo (đầu nhánh là commit cuối của `rev-list`), kể cả sau một `--force`. Giữ ca này làm bài phòng thủ cho một hàm thuần, nhưng khai đúng lý do.
-  - ⬜ **Khôi phục 33 bản ghi vào đầu nhánh, và làm được lặp lại bằng MỘT LỆNH.** Dữ liệu **chưa mất** (còn trong lịch sử nhánh, và 25/33 còn trên `main`), nhưng 8 bản chỉ sống trên đầu nhánh 6 PR đang mở — một PR đóng-không-merge mang chúng ra khỏi mọi nhánh còn sống, và điều đó **đã xảy ra** với `#224` trong cùng ngày. Việc là một lần đẩy **thuần cộng thêm**: dựng cây `heartbeat/` bằng hợp của mọi tên, không xoá entry nào, không `--force`. Kiểm sau đó bằng hàm ở tiêu chí 1 → **rỗng**. Nhánh này **không bao giờ có PR** nên lần đẩy đó không chạy CI (`P-043`).
-  - ⬜ **Một nơi chạy định kỳ đọc remote thật — và khai ĐÚNG chi phí của nó.** `watchdog.yml` là chỗ hợp lý, nhưng **không** vì lý do `P-056` dùng: dấu hiệu số 7 của `P-056` gọi `git ls-remote --heads` (dòng 373), **không cần lịch sử**, nên nó thật sự không thêm gì. Phép đo của mục này **cần lịch sử**, mà `watchdog.yml` dòng **234** đang fetch nhánh telemetry bằng **`--depth=1`** rồi dòng 250 `git archive` chỉ giải cây đầu nhánh. Đo thật trên một kho mô phỏng đúng lệnh đó: `git rev-list` trả **1** commit, `ever` = `tip` = 14, ⇒ phép đo trả **"0 thiếu"** trong khi sự thật là **33**. Đó đúng ca **BÁO YÊN** mà `KF-048` cấm — *"không im lặng, nó KHẲNG ĐỊNH LÀ LÀNH, và cái đó tệ hơn im lặng"*. Nên tiêu chí này đòi **bỏ `--depth=1`** (hoặc một lần `--deepen`) cho nhánh telemetry, và khai thẳng rằng **đó là một thay đổi chi phí**: nhánh đang mọc ~1 commit mỗi 20 phút (66 commit sau hai ngày), nên lấy toàn bộ lịch sử nó mỗi giờ **không** miễn phí. Cân nhắc và ghi lại lựa chọn: fetch sâu dần, hay `--depth=N` đủ lớn, hay chuyển phép đo sang một nơi chạy thưa hơn. **Không được** cài tiêu chí 4 mà bỏ ca 2 của tiêu chí 2.
-  - ⬜ **Ngưỡng là 0, và khai ra vì sao nó khác mọi ngưỡng khác trong kho** — các dấu hiệu kia có hằng số giờ vì chúng đo *độ trễ*, một đại lượng có ca lành. Cái này đo *mất dữ liệu trên một nhánh append-only*, không có ca lành, nên `> 0` là đúng và một hằng số giờ ở đây sẽ là một cửa sổ cho phép xoá. Bài kiểm khoá chính câu đó, để lượt sau không "nới cho đỡ ồn".
-  - ⬜ **Đường tự gỡ cảnh báo phải là MỘT LỆNH, không phải một câu văn** — đúng lỗi mà `P-056` đã mắc một lần và phải sửa trong vòng soát: một cảnh báo gọi **chủ dự án** cho một việc chỉ **máy** làm được là ngược thước đo CHARTER 1.3. Ở đây đường gỡ là một lệnh có tên (`pnpm telemetry:restore` hay tương đương) làm đúng việc của tiêu chí 3, cộng một câu trỏ tới nó trong phụ lục P1 bước 0e và `CLAUDE.md` mục 1. Khôi phục là hành động **một lần**, nên nếu dấu hiệu bật lại mà không có lệnh thì đường gỡ duy nhất lại là một lần dựng cây bằng tay — đúng thứ mục này sinh ra để bỏ.
-  - ⬜ **Sửa lời khai rộng hơn số đo trong `ops/scripts/telemetry-beat.ts`** — docblock hiện viết *"bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần"*. Đo được là **không script nào gọi `step0Streaks`**, và `step0Streaks` là hàm **thuần** (`kernel/src/log.ts:413`, nhận một mảng dòng, không đọc đường dẫn nào); bên duy nhất đọc `heartbeat/` là `heartbeat-source.ts` và nó lấy `max` của `at`. Tiền lệ sửa tại chỗ nằm trong **chính docblock đó** (vòng soát `#229` đã bác một lời khai sai và sửa ngay ở chỗ nó nằm). Không để lời khai sai truyền tiếp sang lượt sau.
-  - ⬜ **`pnpm check` KHÔNG phải chỗ đặt** — khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên **mọi** PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy, tức trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần. Cùng lý lẽ `P-056` đã ghi — và lý lẽ đó **mạnh hơn** ở đây, vì phép đo này còn cần cả lịch sử nhánh (tiêu chí 4).
-- mã mục: dò `### P-` trên `main` **và trên MỌI nhánh remote** lúc `2026-09-26T07:2xZ` (`KF-005`, `KF-036`) — cao nhất `P-058`, nên `P-059` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
+  - ✅ **Khôi phục 33 bản ghi vào đầu nhánh, và làm được lặp lại bằng MỘT LỆNH.** Dữ liệu **chưa mất** (còn trong lịch sử nhánh, và 25/33 còn trên `main`), nhưng 8 bản chỉ sống trên đầu nhánh 6 PR đang mở — một PR đóng-không-merge mang chúng ra khỏi mọi nhánh còn sống, và điều đó **đã xảy ra** với `#224` trong cùng ngày. Việc là một lần đẩy **thuần cộng thêm**: dựng cây `heartbeat/` bằng hợp của mọi tên, không xoá entry nào, không `--force`. Kiểm sau đó bằng hàm ở tiêu chí 1 → **rỗng**. Nhánh này **không bao giờ có PR** nên lần đẩy đó không chạy CI (`P-043`).
+  - ✅ **Một nơi chạy định kỳ đọc remote thật — và khai ĐÚNG chi phí của nó.** `watchdog.yml` là chỗ hợp lý, nhưng **không** vì lý do `P-056` dùng: dấu hiệu số 7 của `P-056` gọi `git ls-remote --heads` (dòng 373), **không cần lịch sử**, nên nó thật sự không thêm gì. Phép đo của mục này **cần lịch sử**, mà `watchdog.yml` dòng **234** đang fetch nhánh telemetry bằng **`--depth=1`** rồi dòng 250 `git archive` chỉ giải cây đầu nhánh. Đo thật trên một kho mô phỏng đúng lệnh đó: `git rev-list` trả **1** commit, `ever` = `tip` = 14, ⇒ phép đo trả **"0 thiếu"** trong khi sự thật là **33**. Đó đúng ca **BÁO YÊN** mà `KF-048` cấm — *"không im lặng, nó KHẲNG ĐỊNH LÀ LÀNH, và cái đó tệ hơn im lặng"*. Nên tiêu chí này đòi **bỏ `--depth=1`** (hoặc một lần `--deepen`) cho nhánh telemetry, và khai thẳng rằng **đó là một thay đổi chi phí**: nhánh đang mọc ~1 commit mỗi 20 phút (66 commit sau hai ngày), nên lấy toàn bộ lịch sử nó mỗi giờ **không** miễn phí. Cân nhắc và ghi lại lựa chọn: fetch sâu dần, hay `--depth=N` đủ lớn, hay chuyển phép đo sang một nơi chạy thưa hơn. **Không được** cài tiêu chí 4 mà bỏ ca 2 của tiêu chí 2.
+  - ✅ **Ngưỡng là 0, và khai ra vì sao nó khác mọi ngưỡng khác trong kho** — các dấu hiệu kia có hằng số giờ vì chúng đo *độ trễ*, một đại lượng có ca lành. Cái này đo *mất dữ liệu trên một nhánh append-only*, không có ca lành, nên `> 0` là đúng và một hằng số giờ ở đây sẽ là một cửa sổ cho phép xoá. Bài kiểm khoá chính câu đó, để lượt sau không "nới cho đỡ ồn".
+  - ✅ **Đường tự gỡ cảnh báo phải là MỘT LỆNH, không phải một câu văn** — đúng lỗi mà `P-056` đã mắc một lần và phải sửa trong vòng soát: một cảnh báo gọi **chủ dự án** cho một việc chỉ **máy** làm được là ngược thước đo CHARTER 1.3. Ở đây đường gỡ là một lệnh có tên (`pnpm telemetry:restore` hay tương đương) làm đúng việc của tiêu chí 3, cộng một câu trỏ tới nó trong phụ lục P1 bước 0e và `CLAUDE.md` mục 1. Khôi phục là hành động **một lần**, nên nếu dấu hiệu bật lại mà không có lệnh thì đường gỡ duy nhất lại là một lần dựng cây bằng tay — đúng thứ mục này sinh ra để bỏ.
+  - ✅ **Sửa lời khai rộng hơn số đo trong `ops/scripts/telemetry-beat.ts`** — docblock hiện viết *"bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần"*. Đo được là **không script nào gọi `step0Streaks`**, và `step0Streaks` là hàm **thuần** (`kernel/src/log.ts:413`, nhận một mảng dòng, không đọc đường dẫn nào); bên duy nhất đọc `heartbeat/` là `heartbeat-source.ts` và nó lấy `max` của `at`. Tiền lệ sửa tại chỗ nằm trong **chính docblock đó** (vòng soát `#229` đã bác một lời khai sai và sửa ngay ở chỗ nó nằm). Không để lời khai sai truyền tiếp sang lượt sau.
+  - ✅ **`pnpm check` KHÔNG phải chỗ đặt** — khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên **mọi** PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy, tức trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần. Cùng lý lẽ `P-056` đã ghi — và lý lẽ đó **mạnh hơn** ở đây, vì phép đo này còn cần cả lịch sử nhánh (tiêu chí 4).- mã mục: dò `### P-` trên `main` **và trên MỌI nhánh remote** lúc `2026-09-26T07:2xZ` (`KF-005`, `KF-036`) — cao nhất `P-058`, nên `P-059` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
 - ghi chú chỗ đặt: mục này đặt ở **cuối** file, không chèn cạnh `P-058`, vì cả **6** PR đang mở lúc `07:2xZ` chạm chính file này và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown. Lượt mở mục đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa chứ không tin lập luận.
 - ghi chú chữ ký nhận việc: lượt mở mục này **không** lấy tiêu đề PR dạng `[platform] P-059`, vì nó chỉ *mở* mục chứ không làm. `claimCheck` đọc chữ ký từ **tiêu đề PR** (`P-041` luật 1), nên một tiêu đề như thế sẽ trả `open-pr` cho một mục `status: ready` không ai đang làm, và worker kế tiếp bị bảo "đi mục khác". Tiền lệ: `#275` mở `KF-042` **và** `### P-058` dưới tiêu đề `[integration] bước 0 …`, không phải `[platform] P-058`.
+
+**Đã làm — lượt `crux-worker-2` `2026-09-26T09:24Z`, PR [`#284`](https://github.com/HungQuach301/crux-studio/pull/284). Cả tám tiêu chí, đo bằng chạy thật:**
+
+| Tiêu chí | Ở đâu | Số thật |
+|---|---|---|
+| 1 · hàm thuần | `ops/scripts/telemetry-gaps.ts` — `telemetryTipGaps` | mốc tách bằng `parseStep0LogId`, không `slice` |
+| 2 · bài tái hiện | `ops/test/telemetry-gaps.test.ts` | **28/28 pass**; bài tái hiện dựng 12 tên đầu nhánh + 45 lịch sử → **33** thiếu, hai mốc biên khớp |
+| 3 · khôi phục | `pnpm telemetry:restore`, đã chạy | `1b32c8e` — **33 `A`, 0 `D`**; đầu nhánh **20 → 53**; đo lại thoát **0** |
+| 4 · nơi chạy định kỳ | `watchdog.yml` dấu hiệu số **8**, `--depth=1` đã bỏ, cộng `historyTruncated` đo **hẹp theo ref** | ca báo yên đo được: `--depth=1` → `rev-list` **1**, `ever = tip = 18`, trả *"0 thiếu"* khi sự thật là **33** |
+| 5 · ngưỡng 0 | bài `'ngưỡng là 0 — không hằng số GIỜ nào trong file'` | mã không có `_HOURS` và không có `TOLERANCE` |
+| 6 · đường gỡ một lệnh | `pnpm -s telemetry:restore > r.sh && bash r.sh`, đã chạy thật; cộng một câu ở CHARTER P1 bước 0e và `CLAUDE.md` mục 1 | bài kiểm đòi render **không** có chữ *"anh"* |
+| 7 · sửa lời khai | docblock `ops/scripts/telemetry-beat.ts` | câu *"`step0Streaks` đọc từ nhánh này"* thay bằng số đo: **không script nào gọi `step0Streaks`** |
+| 8 · không vào `pnpm check` | khai ở đầu `telemetry-gaps.ts` | cổng đó chạy trên **mọi** PR và không có remote trong CI |
+
+**Vòng soát bước 6 — 1 CHẶN + 7 NÊN SỬA, xử lý cả tám.** Chi tiết và hai chỗ lời khai bị bác: `ops/known-failures.md` `KF-043`, khối *"Vòng soát bước 6 bác một phần lời khai của bản đầu"*. Hai điểm chịu tải:
+
+- **Phần ĐÚNG của CHẶN:** lưới `historyCommits === 1` chỉ phủ `--depth=1`. Vòng soát tái lập N = 2, 5, 30 đều cho *"giữ đủ"*, nên lời khai *"đặt lại trần độ sâu thì ra `problems`"* rộng hơn số đo. Bản sửa: trường **`historyTruncated` bắt buộc**, đo bằng **giao** của `git rev-list <ref>` với danh sách biên nông — đúng với **mọi** N.
+- **Phần KHÔNG tái lập được:** vòng soát khai rằng trong kho nông, lần fetch không `--depth` *cũng* bị cắt. Đo lại trên remote **thật**: không. Nhánh telemetry có gốc riêng (`git merge-base` với `main` không trả gì) nên biên nông của `main` không cắt được nó — fetch lấy đủ **74** commit trong khi `--is-shallow-repository` vẫn `true`. Nên cờ kho là phép đo **sai** ở đây: dùng nó sẽ @nhắc chủ dự án mỗi 4 giờ, vĩnh viễn, cho một nhánh lành.
+
+Bảy NÊN SỬA đã làm: ca *"chưa có ref"* phân biệt *"nhánh chưa sinh"* (im) với *"fetch trượt"* (gọi `add`) bằng `git ls-remote --exit-code` · `--restore` in lệnh ra **stdout**, báo cáo ra **stderr**, thoát **0**, và đường gỡ nay là `pnpm -s telemetry:restore > r.sh && bash r.sh` (`-s` bắt buộc vì `pnpm` in nhãn của chính nó vào stdout — đo được) · `cat-file -e` tách *"không có `heartbeat/`"* khỏi một lỗi thật · tiêu đề render không còn khẳng định *"giữ đủ"* khi `ever` là cận dưới · CHARTER 2.4 bỏ con số **37** dùng sai chỗ · `heartbeat-source.test.ts` sửa số dấu hiệu · **28** bài kiểm (từ 17), gồm hai bài chạy git thật và bốn bài khoá tầng CLI.
+
+**Phá thử 18 phép, 17 đỏ đúng chỗ rồi khôi phục 28/28.** Phép còn lại là một đột biến **tương đương** — khai ra chứ không nhận là đã phủ.
+
+**Chi phí của tiêu chí 4, ghi lại lựa chọn như mục này đòi.** Bốn phương án cân nhắc (bảng đầy đủ ở đầu `ops/scripts/telemetry-gaps.ts`): `--depth=1` **bị bác** vì báo yên; `--depth=N` đủ lớn **bị bác** vì *"đủ lớn"* hết hạn im lặng khi nhánh mọc ~1 commit mỗi 20 phút; **lịch sử đầy đủ** được chọn (70 commit lúc chọn, mỗi commit một blob nhỏ cộng hai tree, mỗi giờ một lần); chuyển sang một nơi chạy thưa hơn **để lại** cho lúc lịch sử vượt ~5000 commit. Lối thoát đã cài sẵn, và nó đúng với **mọi** N sau vòng soát: một lượt sau đặt lại trần độ sâu thì `historyTruncated` biến việc đó thành một câu trong `problems`, **không** thành *"0 thiếu"* — nên chi phí giảm được mà không mua lại chỗ hỏng.
+

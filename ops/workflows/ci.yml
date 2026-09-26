@@ -50,9 +50,28 @@ permissions:
   # `issues` nào. Vì vậy KHÔNG thêm `issues: write` vào đây. Xem KF-003.
   pull-requests: write
 
-concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+# KF-031 / mục `P-047` — WORKFLOW NÀY CỐ Ý KHÔNG CÓ KHỐI `concurrency`.
+#
+# Các job dưới đây sinh ra ĐÚNG năm tên check mà ruleset `protect-main` đòi
+# (`ops/scripts/required-checks.ts`). Một lượt bị huỷ để lại check run
+# `conclusion: cancelled` mang đúng những tên ấy trên `head.sha` đang sống;
+# ruleset đọc chúng thành "chưa báo cáo", PR đứng `mergeable_state: blocked`
+# VĨNH VIỄN — GitHub không sinh lượt mới cho một `sha` đã có lượt — và
+# `automerge.yml` trả `HTTP 405`. Đo được trên `#224` (kẹt 15 giờ với 8/8 job
+# xanh) và `#226` (8 lượt `automerge` đỏ liên tiếp).
+#
+# `cancel-in-progress: false` KHÔNG đủ, nên đừng thêm lại khối này kèm nó:
+# `concurrency` còn một đường huỷ thứ hai — một lượt đang XẾP HÀNG trong nhóm
+# bị huỷ khi lượt sau tới, và `cancel-in-progress` chỉ chi phối lượt đang
+# CHẠY. Workflow này đăng ký năm loại sự kiện ở `types:` trên kia, nên ba sự
+# kiện trên cùng một commit là chuyện thường (mở PR → gắn nhãn cửa merge →
+# gắn hoặc gỡ một nhãn nữa).
+#
+# Giá phải trả, khai thẳng: một lượt của commit đã bị commit sau vượt qua nay
+# chạy hết thay vì bị huỷ. Đó là ngân sách runner đổi lấy việc bỏ hẳn một lớp
+# lỗi đã tốn của chủ dự án một lần merge tay và hơn một giờ hàng đợi tắc.
+#
+# `ops/scripts/ci-concurrency.ts` giữ luật này, `pnpm lint:workflows` chặn.
 
 jobs:
   check:

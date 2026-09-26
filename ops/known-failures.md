@@ -352,6 +352,49 @@ Cho tới khi `P-058` xong, phần bù bằng người là dòng dặn ở `CLAU
 
 ---
 
+## KF-031 · Lượt `ci.yml` bị `concurrency` huỷ để lại check run `cancelled` **mang tên check bắt buộc**, và PR kẹt `blocked` vĩnh viễn trong khi mọi chỉ báo xanh
+
+> Số **KF-031**: dò `## KF-` trên `main` **và** trên `refs/pull/N/head` của cả 8 PR đang mở (`KF-005`). Cao nhất là `KF-030` (`#231`, `#225`), nên `KF-031` không đụng ai.
+
+- **Lần gặp:** 2 — `#226` (`2026-09-24` `09:31Z`→`10:26Z`, 8 lượt `automerge` đỏ liên tiếp, `HTTP 405`) và `#224` (kẹt `blocked` **≥ 15 giờ**, từ `05:42Z` tới lúc viết dòng này `20:4xZ`, với 8/8 job của lượt CI mới nhất **xanh**).
+- **Chữ ký:** `mergeable_state: "blocked"` trên một PR mà lượt CI mới nhất xanh đủ mọi job; `automerge.yml` trả `HTTP 405` với thông điệp *"5 of 5 required status checks are expected"* dù cả năm check ĐỀU có một lượt `success` trên đúng `head.sha`. `pnpm check` xanh, CI xanh, `main` xanh, không cảnh báo nào mở. Nhóm **Z**.
+- **Nguyên nhân gốc:** `ops/workflows/ci.yml` khai `concurrency.group` theo **số PR** cộng `cancel-in-progress: true`. Hai lượt của **cùng một `head.sha`** vì thế nằm chung nhóm, và lượt sau huỷ lượt trước — để lại trên `head.sha` đang sống một loạt check run `conclusion: cancelled` **mang đúng tên năm check mà ruleset `protect-main` đòi**. Ruleset đọc chúng thành "chưa báo cáo". GitHub không sinh lượt mới cho một `sha` đã có lượt, nên PR kẹt cho tới khi có commit mới.
+
+  Đường đi thường gặp nhất **không** phải hai lần push, mà là chính nhịp làm việc của worker (CHARTER phụ lục P1 bước 4 và bước 7):
+
+  | Mốc (`#224`) | Việc |
+  |---|---|
+  | `05:41:17Z` | worker mở PR → sự kiện `opened` → lượt CI `35961048518` |
+  | `05:42:34Z` | worker gắn nhãn cửa merge bằng **danh tính riêng** (không phải `GITHUB_TOKEN`, nên GitHub CÓ kích hoạt lại) → `ci.yml` đăng ký `labeled` trong `types` (mục `P-009`) → lượt CI `35961061644` trên **đúng cùng một commit** `871e1db` |
+  | `05:42:31Z` | `cancel-in-progress` huỷ lượt đầu → 5 check run `cancelled`, trong đó **4** mang tên check bắt buộc (`check`, `secret-scan`, `protected-area`, `trailer-warn`) |
+  | `05:43:50Z` | lượt sau xong, **7/7 job `success`** — và PR vẫn `blocked` |
+
+  Nên nó **không ngẫu nhiên**: mọi PR bị gắn nhãn trong lúc CI còn chạy đều rơi vào đây. `#242`, `#238`, `#231`, `#229`, `#225`, `#223`, `#39` thoát vì lượt đầu kịp xong trước khi nhãn được gắn — đo được: bảy PR ấy chỉ có check run của **một** lượt và cả bảy đều không `blocked`.
+
+- **Một vế của giả thuyết ban đầu đo được là SAI, ghi lại thay vì lặng lẽ bỏ:** chỉ dẫn của chủ dự án trên issue bản tin `#241` hỏi *"kiểm xem CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không"*. **Không.** `ci.yml` khai `on: pull_request:` với đúng `branches` và `types`, **không có `paths:` hay `paths-ignore:` nào** — đo bằng `grep -n "paths" ops/workflows/*.yml`: chỉ `labels.yml` và `smoke-workflows.yml` có lọc đường dẫn, và cả hai đều không sinh check bắt buộc. Mọi PR đều nhận đủ năm job. `#226` cũng không phải PR "chỉ chạm `ops/logs/`": nó chạm `ops/known-failures.md`, `ops/lanes/`, `ops/scripts/`, `ops/test/` và `ops/logs/`. Vế còn lại của chỉ dẫn — 405 là do check bắt buộc không được ruleset đọc thấy — thì **đúng**, chỉ khác nguyên nhân.
+- **Đã sửa ở đâu:** `ops/workflows/ci.yml` — **bỏ hẳn khối `concurrency`**.
+  - **Bản sửa đầu của mục này là `cancel-in-progress: false` cộng `group` mang `head.sha`, và vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) chỉ ra nó CHƯA ĐỦ.** `concurrency` còn **đường huỷ thứ hai**: khi một lượt vào một nhóm đang có lượt chạy, nó nằm **pending**, và *"any previously pending job or workflow in the concurrency group will be cancelled"*. `cancel-in-progress` chỉ chi phối lượt **đang chạy**, không chi phối lượt **đang xếp hàng**. `ci.yml` đăng ký năm loại sự kiện (`opened`, `synchronize`, `reopened`, `labeled`, `unlabeled`), nên ba sự kiện trên cùng một commit là chuyện thường — mở PR, gắn nhãn cửa merge, rồi gắn hoặc gỡ một nhãn nữa — và lượt thứ hai bị huỷ khi lượt thứ ba tới. Đúng chữ ký ở trên.
+  - ⚠️ Vế này là **suy luận từ ngữ nghĩa nền tảng** cộng hai sự thật đo được trong repo (`ci.yml` khai năm loại sự kiện; `group` khoá theo một khoá mà ba sự kiện cùng commit dùng chung), **không** phải một lần chạy thật — phiên agent không chạy được Actions. Khai đúng mức thay vì viết như một kết luận đã đo (bất biến **I6**). Nhưng hướng xử lý không đổi: bỏ cả khối thì không còn đường huỷ nào để phải đoán.
+  - **Giá phải trả, khai thẳng:** lượt CI của một commit đã bị commit sau vượt qua nay chạy hết thay vì bị huỷ. Ước lượng, không phải số đo: ~45 giây runner mỗi PR bị gắn nhãn trong lúc CI chạy — đổi lấy việc bỏ hẳn một lớp lỗi đã tốn của chủ dự án một lần merge tay và hơn một giờ hàng đợi tắc.
+- **Máy chặn từ nay:** `ops/scripts/ci-concurrency.ts` (`concurrencyProblems`), chạy trong `pnpm lint:workflows` — một workflow chạy trên `pull_request` **và** sinh ra ít nhất một tên trong `REQUIRED_CHECKS` thì **không được khai khối `concurrency` nào cả**.
+  - **Vì sao cấm cả KHỐI, không chỉ cấm `cancel-in-progress: true`.** Ngoài lý do "đường huỷ thứ hai" ở trên còn một lý do đo được: bản đầu của luật cấm một **giá trị**, nên nó phải đọc đúng giá trị đó — và vòng soát đo được nó đọc **sai bốn dạng viết hợp lệ**, cả bốn đều bật huỷ thật mà `pnpm lint:workflows` vẫn `EXIT=0`:
+
+    | Dạng viết | GitHub hiểu | Bản đầu bắt được |
+    |---|---|---|
+    | `concurrency: {group: x, cancel-in-progress: true}` (flow mapping) | bật | **không** |
+    | `cancel-in-progress: ${{ true }}` (biểu thức, đúng dạng GitHub tài liệu hoá) | bật | **không** |
+    | `cancel-in-progress: True` (viết hoa) | bật | **không** |
+    | `cancel-in-progress:` rồi giá trị ở dòng sau | bật | **không** |
+
+    Một luật cấm cả **khối** không có mặt đó để đọc sai: nó chỉ hỏi khoá `concurrency:` có xuất hiện không. Cả bốn dạng nay đỏ ở **cả** bài kiểm lẫn cổng thật.
+  - **Thu hẹp đúng chỗ, không rộng hơn lý do của mình:** `requiredChecksOnPr` đòi **cả hai** điều kiện. `gpt-review.yml` vẫn được `cancel-in-progress: true` (lượt bị huỷ để lại check run tên `gpt-review`, ruleset không đòi tên đó); `main-ci.yml` cũng có một job tên `check` nhưng chạy trên `push`/`schedule`, nên check run của nó gắn vào SHA trên `main` chứ không vào `head.sha` của PR nào. Cả hai đều có bài kiểm ca âm chạy trên file **thật**.
+  - `ops/test/ci-concurrency.test.ts` giữ ba tầng: hàm thuần · `ops/workflows/**` thật trên đĩa · và hợp đồng "`check-workflows.ts` phải THẬT SỰ gọi luật này" — thiếu tầng ba thì gỡ một dòng khỏi CLI làm **0** bài đỏ, đúng nhóm Z mà mục này sinh ra để giết.
+- **Luật chặn lần sau, KHÔNG gỡ được PR đã dính.** Check run `cancelled` nằm sẵn trên `head.sha` ấy và GitHub không sinh lượt mới cho nó; chỉ một **commit mới** mới gỡ được (một lần gộp `main` vào nhánh ở bước 0 của phụ lục P3 là đủ). Nên mục này còn một bộ dò: `blockedRequiredChecks` trong cùng file, đọc danh sách check run của một `head.sha` và trả về các check bắt buộc đang bị giữ, kèm cờ `silent` cho ca "có cả lượt `success` cùng tên" — tức PR trông xanh mà vẫn kẹt. Gọi bằng `node ops/scripts/ci-concurrency.ts <file.json>`, nhận cả mảng trần lẫn nguyên object `{"check_runs": […]}` mà API trả về.
+  - `skipped` **không** nằm trong `NON_VERDICT_CONCLUSIONS`, và đây là chỗ vòng soát sửa bản đầu: GitHub coi một required check `skipped` là **đã qua**, mà `fix-has-test` và `protected-area` mang `if: github.event_name == 'pull_request'` nên ra `skipped` ở mọi lượt `workflow_dispatch` — để `skipped` trong danh sách là chuốc dương tính giả cho một bộ dò mà cả giá trị lẫn lý do tồn tại đều nằm ở chỗ nó không kêu oan.
+- **Cách đọc bản ghi này cho đúng:** đừng đọc thành "`concurrency` nguy hiểm". Đọc thành: *một lượt bị huỷ vẫn để lại dấu vết mang tên của lượt thành công, nên huỷ một lượt sinh ra check **bắt buộc** là huỷ luôn lời khẳng định mà cổng vào `main` đang chờ.*
+
+---
+
 ## KF-025 · Hai worker nhận cùng một mục backlog trong 89 giây, và không chỉ báo nào đỏ
 
 > Số **KF-025**: dò `## KF-` trên `main` **và trên đầu cả 7 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-024`, nên `KF-025` không đụng ai.
@@ -1680,7 +1723,7 @@ Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó c
 - **Chữ ký:** một commit trên `claude/telemetry` có `-1` file hoặc hơn trong `git show --stat`, tức cây `heartbeat/` ở đầu nhánh mang **ít** entry hơn tổng số file mà nhánh đã từng giữ.
 - **Nguyên nhân gốc:** khối lệnh `--commands` của `ops/scripts/telemetry-beat.ts` dựng cây `heartbeat/` **lại từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây đó với `-p $PARENT`. Một cây hợp lệ trỏ tới đúng một file vẫn là một cây hợp lệ, nên git không có gì để báo. "Hai worker không bao giờ chạm cùng một file" (`D-C04`) đúng — nhưng nó bảo đảm **không xung đột**, không bảo đảm **không mất dữ liệu**, và bản đầu của khối lệnh trộn hai điều đó.
 - **Đã sửa ở đâu:** `ops/scripts/telemetry-beat.ts` (`#281`) — khối lệnh nay dựng cây **THÊM** ở **cả hai** tầng: `git ls-tree` liệt kê entry đang có, `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Cộng ba chỗ hỏng cùng họ mà vòng soát của `#281` tìm ra: cây **gốc** cũng dựng thêm (một `README` ở gốc nhánh từng bị xoá im lặng được), `ls-tree` hỏng nay **NÉM** thay vì bị `2>/dev/null | awk` nuốt thành "danh sách rỗng" — tức đúng chỗ hỏng vừa sửa — và vòng thử lại khi lần đẩy bị từ chối nay **có thật**, trần 4 lần, không `--force` nào.
-- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ⚠️ Lớp chặn này che vế **ghi**; vế **đo lại đầu nhánh** còn thiếu — xem khối ⚠️ dưới và mục `platform/P-059`.
+- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ✅ Lớp chặn đó che vế **ghi**; vế **đo lại đầu nhánh** nay cũng có máy — `ops/scripts/telemetry-gaps.ts` cộng `watchdog.yml` dấu hiệu số 8, **28** bài kiểm, mục `platform/P-059` (xem hai khối ✅ dưới). 33 bản ghi thiếu đã được khôi phục ở `1b32c8e`.
 
 ### Bảng: chữ ký sống bao lâu, đo trên chính nhánh đó
 
@@ -1711,7 +1754,7 @@ Nên câu *"bản sửa làm các lần đẩy thôi xoá"* **không** được 
 
 Điều bản sửa **thật sự** bảo đảm, và đo được: khối lệnh trên `main` từ `07:09:45Z` không còn dựng lại cây từ một entry, và 9 bài kiểm khoá hành vi đó. Lượt `07:25Z` là lần đẩy đầu tiên **sau** bản sửa, và nó đưa đầu nhánh **11 → 12** không xoá gì — một điểm dữ liệu nhất quán, **không** phải bằng chứng nhân quả. Phân biệt hai điều đó chính là thứ `KF-021` đòi.
 
-### ⚠️ Vế CHƯA sửa — 33 bản ghi vẫn thiếu ở đầu nhánh, và không phép đo nào nói ra
+### ✅ Vế đo lại — ĐÃ sửa ở `platform/P-059` (mốc dưới giữ nguyên hình dạng lúc phát hiện)
 
 ```
 tip = claude/telemetry
@@ -1740,6 +1783,55 @@ chỉ còn trên đầu nhánh của các PR ĐANG MỞ                         
 Tám bản ghi đó phụ thuộc vào việc sáu PR kia **merge được**. Một PR đóng-không-merge mang theo dòng log của nó ra khỏi mọi nhánh còn sống — và điều đó **đã xảy ra** trong ngày (xem mục dưới), nên tám bản ghi này không phải chuyện lý thuyết.
 
 Bất biến còn thiếu phát biểu được thành một câu: **đầu nhánh `claude/telemetry` phải là tập cha của mọi file `heartbeat/` mà nhánh đã từng giữ** (nhánh append-only). Một lần vi phạm nghĩa là một lần đẩy đã xoá. Mục `platform/P-059` mang vế đó cộng việc khôi phục.
+
+### ✅ Đã sửa và đã khôi phục — `platform/P-059`, lượt `crux-worker-2` `2026-09-26T09:24Z`
+
+Bất biến trên nay **có máy đo**, và đống nợ 33 bản ghi đã được **trả**:
+
+- **Máy đo:** `ops/scripts/telemetry-gaps.ts` — hàm thuần `telemetryTipGaps(tip, ever, historyCommits)`, mốc tách khỏi tên bằng `parseStep0LogId` của kernel. `watchdog.yml` **dấu hiệu số 8** chạy nó mỗi giờ. **Ngưỡng là 0** (không hằng số giờ nào trong file, và một bài kiểm khoá chính điều đó): mọi ngưỡng khác trong kho đo *độ trễ* — có ca lành — còn cái này đo *mất dữ liệu trên một nhánh append-only*, không có ca lành, nên một hằng số giờ ở đây là **một cửa sổ cho phép xoá**.
+- **Đã khôi phục, đo bằng chạy thật:** `git diff-tree --name-status 1b32c8e` → **33 `A`, 0 `D`** (thuần cộng thêm, không `--force`). Đầu nhánh **20 → 53** file, `git rev-list --count` **74**, và `pnpm telemetry:gaps` sau đó thoát **0** với câu *"đầu nhánh giữ đủ mọi bản ghi nhánh đã từng có"*. Tám bản ghi từng chỉ sống trên đầu nhánh 6 PR đang mở nay có mặt ở đầu nhánh telemetry, nên một PR đóng-không-merge không mang chúng đi được nữa.
+- **Đường gỡ là MỘT lệnh, máy tự chạy được:** `pnpm telemetry:restore`. Cảnh báo gọi **chủ dự án** cho một việc chỉ máy làm được là ngược thước đo CHARTER 1.3 — đúng lỗi `P-056` đã mắc một lần và phải sửa trong vòng soát.
+
+### ⚠️ Một chỗ BÁO YÊN đo được, và nó nằm trong chính `watchdog.yml`
+
+Phép đo này cần **lịch sử** nhánh, không chỉ đầu nhánh. `watchdog.yml` trước mục này fetch nhánh telemetry bằng **`--depth=1`**. Đo thật trên một kho trắng chạy đúng lệnh đó (`2026-09-26T09:3xZ`):
+
+```
+git fetch --no-tags --depth=1 origin +refs/heads/claude/telemetry:refs/crux/telemetry
+git rev-list --count refs/crux/telemetry   → 1      (lịch sử thật lúc đó: 70)
+ever = tip = 18  ⇒  phép đo trả "0 thiếu"           (sự thật: 33)
+git rev-parse --is-shallow-repository      → true
+```
+
+Đó **không** phải im lặng — nó **KHẲNG ĐỊNH LÀ LÀNH**, và cái đó tệ hơn im lặng (cùng câu `KF-041` đã ghi). Một lưới chỉ bắt *"danh sách lịch sử rỗng"* **không** che được ca này, vì danh sách khi đó **không rỗng** — nó bằng đúng đầu nhánh.
+
+Đã sửa bằng **hai** tầng, có chủ đích:
+
+1. `watchdog.yml` bỏ `--depth=1` cho nhánh telemetry. Đây là một **thay đổi chi phí**, khai thẳng: nhánh mọc ~1 commit mỗi 20 phút (74 commit sau hai ngày) và lượt này chạy mỗi giờ. Bảng cân nhắc bốn lựa chọn ở đầu `ops/scripts/telemetry-gaps.ts`; `--depth=N` đủ lớn bị bác vì *"đủ lớn"* hết hạn **im lặng**.
+2. Trường `historyTruncated` **bắt buộc**: lịch sử của **chính ref đó** bị cắt thì ra một câu *"không đo được"*, không ra *"0 thiếu"*.
+
+### ⚠️ Vòng soát bước 6 bác một phần lời khai của bản đầu — hai chỗ, ghi cả hai
+
+**(a) Lưới cũ chỉ phủ `--depth=1`, và bản đầu khai rộng hơn thế.** Bản đầu dựa vào `historyCommits === 1` rồi khai ở năm chỗ (docblock, chú thích YAML, khối này, backlog, dòng log) rằng *"đặt lại trần độ sâu thì ra `problems`"*. Vòng soát tái lập: `--history-commits` bằng **2, 5, 30** đều cho **EXIT=0, "giữ đủ"** trong khi sự thật là thiếu 33. Đó là một lời khai rộng hơn số đo, đúng thứ `KF-021` cấm. Bản sửa: `historyTruncated` là **trường bắt buộc**, đo bằng **giao** của `git rev-list <ref>` với danh sách biên nông — nên nó đúng với **mọi** N. Lưới `historyCommits === 1` giữ lại làm lưới **thứ hai**, độc lập (nó bắt cả một bên gọi quên tính trường kia).
+
+**(b) `git rev-parse --is-shallow-repository` là phép đo SAI ở đây, và dùng nó sẽ tạo một báo động giả vĩnh viễn.** Vòng soát khai một **CHẶN** rộng hơn số đo: rằng trong một kho nông (`actions/checkout@v7` mặc định `fetch-depth: 1`), lần fetch **không** `--depth` *cũng* bị cắt, nên phép đo sẽ ra `rev-list` = 1 ở mọi lượt. Lượt làm **đo lại trên remote thật** và điều đó **không** xảy ra:
+
+```
+git fetch --no-tags --depth=1 origin +refs/heads/main:…      # = actions/checkout
+git rev-parse --is-shallow-repository                → true
+git fetch --no-tags origin +refs/heads/claude/telemetry:…    # KHÔNG --depth
+git rev-list --count refs/crux/telemetry             → 74    ← ĐẦY ĐỦ
+git rev-list --max-parents=0 refs/crux/telemetry     → a6f071c (gốc thật của nhánh)
+git merge-base <telemetry> <main>                    → (không có tổ tiên chung)
+```
+
+Nhánh telemetry có **gốc riêng**, nên biên nông của `main` không cắt được nó. Cờ `--is-shallow-repository` nói về **cả kho** và trả `true` ở **mọi** lượt watchdog — dùng nó làm phép đo sẽ báo *"không đo được"* mỗi giờ và @nhắc chủ dự án **mỗi 4 giờ, vĩnh viễn**, cho một nhánh đang lành. Đó là ngược thước đo CHARTER 1.3, và `pnpm telemetry:restore` **không** gỡ được nó. Nên bản sửa bỏ hẳn cờ kho và dùng phép giao hẹp theo ref.
+
+Vì sao một phép mô phỏng dễ kết luận sai chỗ này, ghi ra để lượt sau không mất giờ: fetch **cùng một nhánh** hai lần vào hai ref khác nhau trong **một** kho thì lần fetch nông **cắt lại** chính các object đã có, nên ref *"đầy đủ"* tụt xuống theo. Muốn tái lập đúng phải dùng **hai nhánh gốc riêng** (hoặc hai kho riêng) — bài kiểm `refHistoryTruncated · phép đo HẸP theo ref` dựng đúng như vậy và ghi lại lý do.
+
+**Máy chặn từ nay:** `ops/test/telemetry-gaps.test.ts`, **28 bài** — gồm bài tái hiện lỗi dựng lại đúng hình dạng đo được (12 tên ở đầu nhánh, 45 trong lịch sử, **33** thiếu, hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`) bằng **tên thật** đọc từ commit `03e1314`, một bài soi chính dòng `git fetch` của `watchdog.yml` để không lượt nào đặt lại `--depth` mà không gì đỏ, và **hai bài chạy git thật** trên kho tạm (remote bare, không mạng) cho `refHistoryTruncated` và `scanTelemetryBranch`. Bốn bài khoá **tầng CLI** — hợp đồng mã thoát 0/1/2 mà CHARTER phụ lục P1 bước 0e và `CLAUDE.md` mục 1 khai, trước vòng soát không máy nào canh.
+
+Phá thử **18 phép**, 17 phép đỏ đúng chỗ rồi khôi phục 28/28. Phép còn lại là một đột biến **tương đương** (`ls-tree` nuốt lỗi *sau khi* `cat-file -e` đã chứng minh tree tồn tại, nên nó không đổi hành vi) — khai ra chứ không nhận là đã phủ.
 
 ### Ghi chú về chỗ đặt khối này
 
