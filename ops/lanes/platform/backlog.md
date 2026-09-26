@@ -4,6 +4,36 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-061 · `pnpm -s check` đỏ trên cây mà `pnpm check` xanh — chặn cái bẫy "`main` đỏ" giả (KF-045)
+
+`pnpm -s run <script>` xuất **`npm_config_reporter=silent`** vào môi trường script. Mọi `pnpm` **lồng** bên trong kế thừa nó và in **0 byte**. `verifyLockfileInstall` (`ops/scripts/integrator-lockfile.ts`) cài thật rồi gói *nguyên văn đầu ra* của `pnpm` vào `reason` — với biến đó, `reason` giữ đúng mã thoát mà mất hết chữ, nên bài `TÁI HIỆN I-006` (khớp `/ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY/`) đỏ. Đo được lúc `2026-09-26T12:2xZ`: `pnpm -s test` đỏ **6/6 vòng** trên **cả** nhánh lượt chạy **và** worktree `origin/main` `b9f8b25`, trong khi `pnpm test`, `node --test` toàn bộ (song song, mặc định), `pnpm exec node --test` và `pnpm check` thật đều **1565/1565 xanh**, và `main-ci` trên đúng SHA đó là `success`.
+
+Hai chỗ đau, và chỗ thứ hai đắt hơn:
+
+1. **Cổng nói sai với người gọi nó.** `CLAUDE.md` mục 1 gọi `pnpm check` là **cổng chính**; thêm một chữ `-s` cho gọn làm nó đỏ. CHARTER mục 13 nối thẳng cái đỏ đó vào *"`main` đỏ thì revert ngay"* cộng lối `hotfix` của `D-C07` — tức một lượt đọc sai mở PR revert và bỏ khoảng chờ 12 giờ cho một `main` đang xanh.
+2. **Lời hứa trong docblock bốc hơi mà không bài nào đỏ hộ.** `verifyLockfileInstall` tự khai: *"Nguyên văn đầu ra của `pnpm` đi kèm trong `reason` để người đọc phân biệt được hai ca"* — *lockfile lệch manifest* và *không ra được mạng*. Integrator gọi đúng hàm này ở bước 0b của phụ lục P3 để quyết `aborted-ineligible`; dưới biến đó, ghi chú lượt chạy còn đúng `(mã 1):` rồi hết câu, và lượt sau không có gì để phân biệt hai ca. Ở **chỗ đó** không bài kiểm nào đỏ — chỉ bài `I-006` đỏ, và nó đỏ ở một cây khác.
+
+- deps: —
+- risk: low — chỗ sửa là một phép **vô hiệu hoá biến môi trường kế thừa** ở đúng một hàm, cộng bài kiểm. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
+- status: ready
+- nguồn: `ops/known-failures.md` `KF-045`; `ops/scripts/integrator-lockfile.ts` (`verifyLockfileInstall`); `ops/test/integrator-clean-merge-lockfile.test.ts:151`; phép đo bước 0 lượt `crux-worker-2` `2026-09-26T12:2xZ`
+- tiêu chí xong:
+  - `verifyLockfileInstall` (và mọi chỗ khác trong `ops/scripts/**` spawn `pnpm`) chạy `pnpm` với **`npm_config_reporter` bị xoá khỏi `env`** — hoặc đặt tường minh về mức in đủ chữ. Chọn cách nào thì **ghi lý do tại chỗ**: một hàm cài thật mà đầu ra của nó là bằng chứng duy nhất cho một quyết định thì không được để người gọi tắt được đầu ra đó.
+  - **Bài tái hiện lỗi** (bất biến **I2**): một bài chạy `verifyLockfileInstall` trên đúng fixture lệch manifest **với `npm_config_reporter=silent` trong `process.env`** và đòi `reason` vẫn chứa `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Bài này phải **đỏ** trên `main` hôm nay — đó là phép đo, không phải lời khai. Hình dạng đã đo sẵn, vòng soát bước 6 của PR mở mục này dựng ra và nó **đổi đúng một biến** (một file, một tiến trình, không `-s`, không song song):
+
+    ```
+    npm_config_reporter=silent node --test ops/test/integrator-clean-merge-lockfile.test.ts
+        → EXIT=1 · 6 test / 5 pass / 1 fail
+                               node --test ops/test/integrator-clean-merge-lockfile.test.ts
+        → EXIT=0 · 6/6 pass
+    ```
+
+    Bài mới phải neo vào **`0B` ↔ khác `0B`**, không vào số byte: đầu ra của `pnpm` chứa `Done in <ms>` và số workspace project nên số byte đổi theo lần chạy (137B trên kho này, 105B trên một bản chép ba file) — xem `KF-045`.
+  - Ca âm: cùng bài với biến đó **không** đặt, để bản sửa không rút thành "bỏ qua env của người gọi" một cách vô điều kiện.
+  - Một bài **rộng hơn một hàm**: quét `ops/scripts/**` tìm mọi `spawnSync`/`execFile` gọi `pnpm` mà **không** vô hiệu hoá `npm_config_reporter`, và đỏ khi có chỗ mới. **Phạm vi đã đo:** hôm nay cổng đó trả về đúng **một** chỗ — `ops/scripts/integrator-lockfile.ts` dòng 139 và 184 (quét `kernel ops workshops spike`, trừ test). Nên nó là cổng **phòng xa**, không phải cổng dọn nợ; ai làm mục này đừng mong nó tìm ra thêm việc.
+  - Khai rõ **cái không sửa ở đây**: `pnpm -s check` vẫn là một cách gọi hợp lệ và sẽ vẫn xanh sau bản sửa; mục này **không** cấm `-s` và **không** sửa `CLAUDE.md` để cấm — chặn ở tầng luật thì một chữ `-s` gõ tay vẫn lọt, còn chặn ở tầng hàm thì không.
+- ⚠️ **Thứ tự trong file này KHÔNG phải thứ tự ưu tiên.** Mục này nằm ở đầu file nên `pnpm backlog:status` trả nó ở `readyNow[0]`, **trước** `platform/P-014` đang tự khai *"ưu tiên cao"* — cùng chỗ mà `P-060` đã đặt tiền lệ khi chèn lên đầu. `CLAUDE.md` mục 2 nói nhận *"mục `readyNow` đầu tiên"* sau khi duyệt làn theo `ops/lanes/priority.md`, nên một lượt đọc thẳng `readyNow[0]` sẽ lấy mục này trước `P-014`. Lượt nào nhận việc thì đọc `ưu tiên cao` trong tên mục, đừng đọc thứ tự file. (Chỗ chữa tận gốc là một trường ưu tiên máy đọc trong backlog, không phải xếp lại file — nó là một mục khác.)
+
 ### P-060 · Máy đo PR nằm NGOÀI hàng đợi merge — không mang nhãn cửa merge nào (KF-044)
 
 `ops/workflows/automerge.yml` lọc hàng đợi bằng **nhãn**, và nhãn chỉ được gắn trong một lượt `pull_request` của `ci.yml`. Không cron nào gắn lại. Nên một PR đã xanh **trước** khi luật gắn nhãn đổi (`P-048`, `KF-032`) đứng lại không nhãn nào và **không bao giờ** vào hàng đợi — không phải chậm. Đo được lúc `2026-09-26T08:2xZ`: **#223**, không nháp, CI 8/8 xanh, gộp sạch, `labels: []`, đầu nhánh đứng yên **27,0 giờ**, trong đó **13,7 giờ** là sau khi bản sửa `P-048` đã nằm trên `main`. Và nó khoá luôn mục `platform/P-014` ở `readyNow` (chữ ký nhận việc đọc từ tiêu đề PR), nên một PR kẹt giữ một mục `ưu tiên cao` đứng im ba lượt worker liên tiếp.
