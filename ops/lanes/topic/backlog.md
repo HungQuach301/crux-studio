@@ -79,16 +79,91 @@ Cổng Mốc 3 đòi tám mô hình đã qua kiểm. Đây là chỗ chúng ra �
 - deps: T-005
 - risk: high
 - status: review
-- hold: chưa done — cấp kiểm 4 (mô hình khác họ tính lại) chờ platform/P-003 (secret OPENAI_API_KEY, PR #66); tám issue tóm tắt chờ tiêu chí 2
+- hold: chưa done — cấp kiểm 4 (mô hình khác họ tính lại) nay có chủ: mục `T-006b` (sóng 1 xong, sóng 2 chạy thật chưa); tám issue tóm tắt chờ tiêu chí 2
 - nguồn: spec WP-008; CHARTER mặc định M7 (D-C02 điều chỉnh D-18)
 - tiêu chí xong:
   - ✅ Mỗi mô hình có ca kiểm cấp 1 lấy từ **nguồn độc lập bên ngoài** (ví dụ công cụ tính công khai của một tổ chức uy tín), có ghi nguồn. **Không bao giờ để máy tự sinh ca kiểm.** — 8 mô hình, **22 ca**, mỗi ca `computedBy` trích thẳng câu văn công bố con số đó: SEC (bản tin phí), CFPB (Ask CFPB #136), 12 CFR 1030 Phụ lục A, 20 CFR 404.410, IRS Pub 590-B, TreasuryDirect, IRS Pub 915, IRS Pub 590-A. Subagent reviewer đã tự tra **cả tám** nguồn và xác nhận không trích dẫn nào bịa hay bóp méo. Một test canh `computedBy` không trỏ về chính máy.
-  - ⬜ **Chưa làm, chặn ngoài phạm vi mục này:** công thức được một mô hình **khác họ, không phải Claude** tính lại độc lập. Cơ chế là mục `platform/P-003`, mục đó cần secret `OPENAI_API_KEY` — chưa có trên repo, và PR #66 của nó đang chờ chủ dự án merge (issue #67). Cấp kiểm 4 (`llm-assumption-check`) của cả tám mô hình vì vậy ghi `pass: false` kèm lý do, và `verification.status` của cả tám là `pending`.
+  - ⬜ **Chưa làm, nhưng KHÔNG còn vô chủ — nay là mục `T-006b`.** Công thức được một mô hình **khác họ, không phải Claude** tính lại độc lập. Hai câu cũ của ô này *đã lỗi thời và là chữ ký `KF-035`*: PR `#66` (`platform/P-003`) **đã merge** `2026-09-24T04:31:51Z` và `OPENAI_API_KEY` **đã có**, nhưng ô này vẫn đọc như thể cả hai còn thiếu — giữ nguyên văn ở đây thì lượt sau lại tin sai một lần nữa. Chủ dự án trả lời `🤖 [QĐ]` `#127` **phương án A** (`2026-09-24T23:49:25Z`). Cấp kiểm 4 (`llm-assumption-check`) của cả tám mô hình vẫn ghi `pass: false` và `verification.status` vẫn `pending` — đúng, vì **cấp 4 chưa chạy lần nào**; nó chuyển khi sóng 2 của `T-006b` chạy thật.
   - ✅ Mô hình không tìm được ca kiểm độc lập thì mở `🤖 [QĐ]` — **không mô hình nào rơi vào ca này**: cả tám đều có ví dụ tính sẵn đã công bố. Điều kiện kích hoạt không xảy ra nên không có issue nào phải mở.
   - ⬜ **Chưa làm, cố ý, chờ tiêu chí 2:** mỗi mô hình một issue `irreversible` tóm tắt. Issue đó là đường duy nhất đưa `verification.status` lên `verified` (D-C02 điểm c), và phần "kết quả đối chiếu" của nó chính là thứ đang thiếu. Mở tám issue lúc cấp 4 còn `pass: false` là xin duyệt cho thứ chưa đủ bằng chứng, và tốn tám dòng bản tin (mặc định M8, rủi ro B11).
 - **Chưa chuyển `done`:** hai tiêu chí trên còn ⬜. Mục này ở `review` cho tới khi `P-003` chạy được; lúc đó phần còn lại là một lượt cơ học (chạy soát chéo, ghi bằng chứng cấp 4, mở issue tóm tắt).
 - **Hai mâu thuẫn trong chính nguồn, đã ghi chứ không nuốt** (xem `ops/known-failures.md` KF-012): TreasuryDirect in 4,03% trong khi khối ví dụ của chính nó tính ra 4,26%; IRS Pub 590-A có câu hướng dẫn dòng 4 không cùng thoả một cách đọc với ví dụ điền sẵn của chính nó ($6.830 so với $6.825). Cả hai nằm trong `assumptions` của file mô hình tương ứng để Fact & Risk Pass đọc được.
 - công cụ: `workshops/topic/data/models/M-001.json`…`M-008.json` (mô tả theo contract) · `cases/M-00N.cases.json` (ca kiểm cấp 1 kèm trích dẫn) · `workshops/topic/src/models.ts` (tám công thức + registry) · `workshops/topic/test/models.test.ts` (74 test: khớp nguồn, kiểm đột biến, biên, xác định, trần dung sai).
+
+### T-006b · Cấp kiểm 4 cho tám mô hình — cơ chế, rồi mới tới lượt chạy
+`🤖 [QĐ]` [#127](https://github.com/HungQuach301/crux-studio/issues/127) **phương án A**, chủ dự án trả lời `2026-09-24T23:49:25Z` và nhắc lại trên issue chỉ dẫn `#251` lúc `2026-09-25T06:04:33Z` (*"Thực hiện #127 A ngay trong lượt worker-1 kế tiếp"*).
+
+- deps: T-006
+- risk: high
+- status: review
+- hold: chưa done — sóng 2 (chạy thật) chờ workflow có hiệu lực trên `main`; xem "làm theo sóng" dưới đây
+- nguồn: `D-C02` điểm b; spec WP-012 mục 2 và 3b; CHARTER mặc định M7; chỉ dẫn của chủ dự án trên `#127` và `#251`
+- **nguyên văn ba ràng buộc của chủ dự án**, vì chúng là luật của mục này chứ không phải lời khuyên:
+  *"Chạy cấp kiểm 4 cho tám mô hình T-006 ở lượt tới bằng **model OpenAI mạnh nhất trong key, không dùng
+  `gpt-4o-mini`**. Đầu ra mỗi mô hình: **khớp/không khớp kèm số**, và **ghi `costUsd`**."*
+- **mục này làm theo sóng, và vì sao KHÔNG thể gộp một sóng** (`CLAUDE.md` mục 4): `OPENAI_API_KEY` chỉ
+  sống trong Actions — phiên cloud không có nó, đo được ở chính lượt này (`env` không có biến đó). Mà một
+  workflow mới trong `ops/workflows/` **chỉ có hiệu lực sau khi PR merge vào `main`** và `sync-workflows.yml`
+  chép xong. Nên "chạy ở lượt tới" tách làm hai:
+  - **sóng 1 (lượt này)** — cơ chế: `ops/scripts/model-assumption-check.ts`, `ops/workflows/model-assumption-check.yml`,
+    33 bài kiểm, cộng một dòng danh sách trắng cho `isToolCommit` (không có nó thì giả định **G14** báo
+    `sai` vì một commit **không PR nào chữa được**), cộng `KF-040`.
+  - **sóng 2 (lượt sau khi sóng 1 vào `main` và sync chạy xong)** — chạy thật: `workflow_dispatch` kèm
+    `dry_run=false`, lấy bằng chứng từ nhánh `claude/tier4-evidence`, ghi vào `verification.tiers` của
+    tám file mô hình, rồi **đóng `#127`**. Đóng `#127` ở sóng 1 là khai một việc chưa làm là đã làm.
+- tiêu chí xong:
+  - ✅ Chọn model **mạnh nhất mà key thật sự cấp**, không đoán một tên: bảng `TIER4_MODEL_PREFERENCE` (giá
+    $/1M đọc từ trang giá chính thức `developers.openai.com/api/docs/pricing`, **2026-09-25**; đối chứng:
+    trang in `gpt-4o-mini` $0.15/$0.60, trùng khít hằng số `gpt-4o-mini` mà `gpt-review.ts` đã ghi từ
+    `2026-09-21`) giao với `GET /v1/models`. Key không cấp ứng viên nào thì **DỪNG**, không lùi.
+  - ✅ `gpt-4o-mini` bị cấm **đích danh** bằng cổng cứng `TIER4_BANNED_MODELS`, không phải bằng chỗ vắng
+    mặt trong bảng — một lượt sau nhét nó vào bảng vẫn bị chặn. ⚠️ **Bản đầu của ô này khai sai**: bài
+    được gọi là "tái hiện" dựng lại phép lọc bằng tay trong chính test, nên xoá hẳn cổng đi thì **24/24
+    vẫn xanh** (vòng soát ngữ cảnh sạch, phát hiện `C4`). Đã sửa: `pickStrongestModel` nhận bảng ưu tiên
+    qua **tham số**, và bài kiểm đẩy `gpt-4o-mini` lên ĐẦU một bảng bẩn rồi gọi hàm thật. Phá thử lại:
+    xoá dòng lọc → **1 bài đỏ đúng chỗ**.
+  - ✅ Đầu ra **sai dạng KHÔNG BAO GIỜ thành `pass`**: `parseTier4Report` không có nhánh "gần đúng thì cho
+    qua", và đầu ra sai dạng thì mô hình đó **không sinh bằng chứng** — `evaluateLlmAssumptionCheck(undefined)`
+    trả `pass: false` kèm *"Chưa có báo cáo"*. Hướng lệch là *chưa kiểm*, không phải *kiểm rồi và sạch*.
+  - ✅ Cấp 4 **không kiểm số học** (WP-012 mục 2): prompt gửi đi phần KHAI BÁO của mô hình và các ca kiểm
+    tay, **cố ý không gửi mã nguồn công thức**. Có bài khoá điều đó.
+  - ✅ Nội dung file mô hình vào prompt dưới dạng **dữ liệu, không phải chỉ dẫn** (bất biến I7); secret chỉ
+    nằm ở header ký request, không vào body và không vào `argv`.
+  - ✅ `costUsd` tính từ `usage` do chính OpenAI trả về, ghi một dòng `ops/logs/topic/T-006b.jsonl` ở **mọi**
+    lần chạy script — kể cả lần bị bỏ qua vì thiếu secret, **và kể cả lần ném sau khi đã tiêu tiền** (bất
+    biến I8). ⚠️ Bản đầu thủng đúng ca đắt nhất: `readModel`/`readHandCases` nằm ngoài `try`, nên một file
+    `M-00N.cases.json` hỏng cho ra **2 lần gọi API đã tính tiền, 0 dòng log** (vòng soát, `C2`). Đây là
+    **lần thứ hai** của chữ ký đó trong repo — xem **`KF-040`**, và bản sửa nằm ở tầng luật (`try` mở từ
+    trước lời gọi tính tiền đầu tiên, `finally` ghi log) chứ không phải một chỗ vá.
+  - ✅ Dòng log `costUsd` của **lượt chạy thật** cũng đi lên nhánh `claude/tier4-evidence` cùng bằng chứng.
+    Bản đầu chỉ chép thư mục `tier4/`, nên `git clean -fdx` ở lối `--orphan` xoá luôn dòng log và số tiền
+    không bao giờ về tới repo (vòng soát, `C3`).
+  - ✅ Lượt chạy thật **thứ hai trở đi** không còn đỏ sau khi đã tiêu tiền: workflow dọn cây làm việc trước
+    khi đổi nhánh (vòng soát, `C1` — `git checkout -B` từ chối ghi đè file chưa track). Tái hiện bằng git
+    thật trên hai lượt liên tiếp: lượt 2 **đi qua**, nhánh bằng chứng có **2 commit** (nối thêm, không
+    `--force`), cả hai dòng `costUsd` còn nguyên.
+  - ⬜ **Sóng 2, chưa làm:** chạy thật tám mô hình, ghi `verification.tiers[llm-assumption-check]` cho cả
+    tám kèm `evidenceRef` và `checkedAt`, rồi đóng `#127`. Không lượt nào được ghi `pass: true` mà không có
+    file bằng chứng tương ứng dưới `workshops/topic/data/models/tier4/`.
+  - ⬜ **Sóng 2, chưa làm:** quan sát `#127` thật sự đóng được, và `T-006` chuyển khỏi `review`.
+- **Ba chỗ còn hở, khai chứ không giấu** (vòng soát ngữ cảnh sạch nêu, chưa sửa trong mục này):
+  - **Giá $/1M nay có bài ghim sáu con số** (đổi giá mà không đổi bài kiểm là CI đỏ), nhưng repo đang có
+    **hai** bảng giá trong `ops/scripts/` không chung nguồn — bảng của mục này và bảng của
+    `novelty-embeddings-trial.ts` (`G20`). Luật mềm CHARTER mục 4 (hằng số trùng lặp). Chỗ chữa đúng là
+    đưa giá xuống **dữ liệu** kèm `source`/ngày đọc và một mã giả định riêng, đúng lối `G20` — một mục
+    backlog riêng, không nống mục này.
+  - **`askTier4` không đặt `max_completion_tokens` và không hỏi lại lần hai.** Hai dòng đầu bảng ưu tiên
+    là model suy luận (`gpt-5`, `o3`): một đầu ra bị cắt vì reasoning token sẽ đọc thành *"sai dạng"* →
+    `failed` → phải chạy lại cả lượt, tiền đã tiêu. Hướng lệch **an toàn** (không bao giờ thành `pass`),
+    nhưng **đắt**. Chưa siết vì chưa có ca thật — đúng luật **A10** của `#251`; thấy lần đầu thì mở mục.
+  - **Không cổng máy nào bắt một script gọi API trả tiền *mới* quên luật `KF-040`.** Cả hai lần đều do
+    vòng soát ngữ cảnh sạch bắt, không do CI.
+- **`verification.status` vẫn KHÔNG do máy đặt** (`D-C02` điểm c): cấp 4 đạt chỉ gỡ một cổng; `verified`
+  vẫn chờ tám issue `irreversible` tóm tắt và chữ của chủ dự án. Mục này không chạm vào điều đó.
+- công cụ: `ops/scripts/model-assumption-check.ts` · `ops/workflows/model-assumption-check.yml` ·
+  `ops/test/model-assumption-check.test.ts` (33 bài) · bằng chứng ghi dưới
+  `workshops/topic/data/models/tier4/` (thư mục con, nên `ops/scripts/check-models.ts` không quét nhầm nó
+  qua `model.schema.json` — cùng lối `cases/`)
 
 ### T-007 · Sensitivity Pass
 Cho một mô hình và một tập tham số, quét **toàn bộ** khoảng giá trị hợp lệ và tìm mọi điểm đảo chiều. Đây là chữ ký khác biệt của kênh, và là cách bù cho việc chủ dự án không sống ở thị trường Mỹ: không đoán tham số vùng miền, quét hết khoảng của nó.
@@ -229,7 +304,7 @@ Mục này ở làn `topic` vì Channel Pack là vùng của `T-002`, không vì
 
 - deps: —
 - risk: medium — một con số ước tính sai **theo một chiều cố định** (cao hơn thật 43%) là loại sai không tự lộ ra: mọi bảng đều nhất quán với nhau, chỉ lệch so với thế giới. Bất biến **I6**: mọi con số hiển thị có nguồn hoặc có mô hình.
-- status: review
+- status: done
 - nguồn: chỉ dẫn chủ dự án trên `#193`; bất biến **I6**; `packs/channels/us-personal-finance/channel.json` khoá `scoringWeights.rpm` và `revenuePriorityByPhase`
 - **cửa merge:** chạm `packs/channels/**`, `kernel/src/**`, `ops/scripts/**`, `ops/test/**` — không chạm `kernel/contracts/**`, `CHARTER.md` mục 1/3, hay vùng `owner-merge` nào. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
 - tiêu chí xong:
