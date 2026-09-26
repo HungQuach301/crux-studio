@@ -47,6 +47,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { pnpmEnv } from './pnpm-env.ts';
 
 export const LOCKFILE_BASENAME = 'pnpm-lock.yaml';
 
@@ -146,6 +147,10 @@ export function verifyLockfileInstall(cwd: string, options: RegenerateOptions = 
     // của `I-004` in ít nên chưa lộ; cổng này **cài thật**, và một repo có
     // phụ thuộc thật in vượt 1 MiB rất sớm.
     maxBuffer: 64 * 1024 * 1024,
+    // Đầu ra dưới đây là bằng chứng DUY NHẤT trong `reason`, nên người gọi
+    // không được tắt nó: `pnpm -s …` xuất `npm_config_reporter=silent` và
+    // `pnpm` lồng ở đây sẽ im theo (`KF-045`, mục `P-061`).
+    env: pnpmEnv(),
   });
   if (verify.error) {
     return {
@@ -207,10 +212,15 @@ export function regenerateLockfile(
   // `CI` được đặt (mọi lần chạy trong Actions), `pnpm` mặc định
   // `frozen-lockfile=true` và sẽ TỪ CHỐI cập nhật lockfile. Thiếu cờ này thì
   // bước tạo lại chỉ đỏ ở CI, còn ở máy thì xanh.
+  //
+  // `pnpmEnv()` ở đây còn đắt hơn ở `verifyLockfileInstall`: phép dò
+  // `SEED_DISCARDED` ngay dưới đọc chính đầu ra này, nên một `pnpm` im theo
+  // `npm_config_reporter=silent` của người gọi làm nó XANH GIẢ — bản mồi bị
+  // vứt mà không gì đỏ (`KF-045`, mục `P-061`).
   const generate = spawnSync(
     pnpm,
     ['install', '--lockfile-only', '--no-frozen-lockfile', '--ignore-scripts'],
-    { cwd: root, encoding: 'utf8' },
+    { cwd: root, encoding: 'utf8', env: pnpmEnv() },
   );
   if (generate.status !== 0) {
     return {
@@ -241,7 +251,8 @@ export function regenerateLockfile(
   const verify = spawnSync(
     pnpm,
     ['install', '--lockfile-only', '--frozen-lockfile', '--ignore-scripts'],
-    { cwd: root, encoding: 'utf8' },
+    // `pnpmEnv`: đầu ra đi vào `reason` (`KF-045`, mục `P-061`).
+    { cwd: root, encoding: 'utf8', env: pnpmEnv() },
   );
   if (verify.status !== 0) {
     return {

@@ -15,7 +15,7 @@ Hai chỗ đau, và chỗ thứ hai đắt hơn:
 
 - deps: —
 - risk: low — chỗ sửa là một phép **vô hiệu hoá biến môi trường kế thừa** ở đúng một hàm, cộng bài kiểm. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
-- status: ready
+- status: review
 - nguồn: `ops/known-failures.md` `KF-045`; `ops/scripts/integrator-lockfile.ts` (`verifyLockfileInstall`); `ops/test/integrator-clean-merge-lockfile.test.ts:151`; phép đo bước 0 lượt `crux-worker-2` `2026-09-26T12:2xZ`
 - tiêu chí xong:
   - `verifyLockfileInstall` (và mọi chỗ khác trong `ops/scripts/**` spawn `pnpm`) chạy `pnpm` với **`npm_config_reporter` bị xoá khỏi `env`** — hoặc đặt tường minh về mức in đủ chữ. Chọn cách nào thì **ghi lý do tại chỗ**: một hàm cài thật mà đầu ra của nó là bằng chứng duy nhất cho một quyết định thì không được để người gọi tắt được đầu ra đó.
@@ -33,6 +33,7 @@ Hai chỗ đau, và chỗ thứ hai đắt hơn:
   - Một bài **rộng hơn một hàm**: quét `ops/scripts/**` tìm mọi `spawnSync`/`execFile` gọi `pnpm` mà **không** vô hiệu hoá `npm_config_reporter`, và đỏ khi có chỗ mới. **Phạm vi đã đo:** hôm nay cổng đó trả về đúng **một** chỗ — `ops/scripts/integrator-lockfile.ts` dòng 139 và 184 (quét `kernel ops workshops spike`, trừ test). Nên nó là cổng **phòng xa**, không phải cổng dọn nợ; ai làm mục này đừng mong nó tìm ra thêm việc.
   - Khai rõ **cái không sửa ở đây**: `pnpm -s check` vẫn là một cách gọi hợp lệ và sẽ vẫn xanh sau bản sửa; mục này **không** cấm `-s` và **không** sửa `CLAUDE.md` để cấm — chặn ở tầng luật thì một chữ `-s` gõ tay vẫn lọt, còn chặn ở tầng hàm thì không.
 - ⚠️ **Thứ tự trong file này KHÔNG phải thứ tự ưu tiên.** Mục này nằm ở đầu file nên `pnpm backlog:status` trả nó ở `readyNow[0]`, **trước** `platform/P-014` đang tự khai *"ưu tiên cao"* — cùng chỗ mà `P-060` đã đặt tiền lệ khi chèn lên đầu. `CLAUDE.md` mục 2 nói nhận *"mục `readyNow` đầu tiên"* sau khi duyệt làn theo `ops/lanes/priority.md`, nên một lượt đọc thẳng `readyNow[0]` sẽ lấy mục này trước `P-014`. Lượt nào nhận việc thì đọc `ưu tiên cao` trong tên mục, đừng đọc thứ tự file. (Chỗ chữa tận gốc là một trường ưu tiên máy đọc trong backlog, không phải xếp lại file — nó là một mục khác.)
+- kết quả (lượt `crux-worker-1` `2026-09-26T13:3xZ`): `pnpmEnv()` ở `ops/scripts/pnpm-env.ts` xoá `npm_config_reporter` (mọi dạng hoa thường) — **xoá**, không đặt một mức khác, vì mức mặc định là mức duy nhất đã đo là có `ERR_PNPM_*`; lý do ghi tại chỗ. Bộ quét đo được **ba** lời gọi, không phải hai: phép `grep` một dòng lúc mở mục không thấy bước kiểm lại viết trên nhiều dòng của `regenerateLockfile`. Và chỗ thứ hai (`--lockfile-only --no-frozen-lockfile`) đắt hơn mục khai: phép dò `SEED_DISCARDED` đọc chính đầu ra đó, nên dưới `pnpm -s` *"pnpm đã vứt bản mồi"* xanh giả — có bài tái hiện riêng.
 
 ### P-060 · Máy đo PR nằm NGOÀI hàng đợi merge — không mang nhãn cửa merge nào (KF-044)
 

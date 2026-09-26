@@ -347,3 +347,43 @@ test('`I-006`: gộp sạch KHÔNG chạm lockfile thì không gọi pnpm lần 
     rmSync(binDir, { recursive: true, force: true });
   }
 });
+
+/**
+ * Mục `platform/P-061` (`KF-045`): `pnpm -s run …` xuất
+ * `npm_config_reporter=silent` vào môi trường, và `pnpm` lồng trong
+ * `verifyLockfileInstall` kế thừa nó thì in **0 byte** — `reason` còn đúng
+ * `(mã 1): ` rồi hết câu, mất bằng chứng phân biệt *lockfile lệch* với
+ * *không ra được mạng*. Hai bài dưới đây là CÙNG MỘT bài, chỉ đổi đúng một
+ * biến: bài đặt biến là bài tái hiện lỗi (đỏ trước bản sửa), bài không đặt
+ * là ca âm canh để bản sửa không rút thành "bỏ qua env của người gọi".
+ *
+ * Neo vào **rỗng ↔ khác rỗng** của phần sau dấu hai chấm, không vào số
+ * byte: đầu ra của `pnpm` mang `Done in <ms>` nên số byte đổi theo lần chạy.
+ */
+for (const reporter of ['silent', undefined] as const) {
+  const label = reporter === undefined ? 'KHÔNG đặt `npm_config_reporter` (ca âm)' : `\`npm_config_reporter=${reporter}\` từ người gọi`;
+  test(`${reporter === undefined ? '' : 'TÁI HIỆN '}\`P-061\`: ${label} — \`reason\` vẫn mang nguyên văn lỗi của pnpm`, () => {
+    const saved = { lower: process.env.npm_config_reporter, upper: process.env.NPM_CONFIG_REPORTER };
+    delete process.env.NPM_CONFIG_REPORTER;
+    if (reporter === undefined) delete process.env.npm_config_reporter;
+    else process.env.npm_config_reporter = reporter;
+    const dir = initDivergence();
+    try {
+      const merge = spawnSync('git', ['merge', '--no-commit', '--no-ff', 'main'], { cwd: dir, encoding: 'utf8' });
+      assert.equal(merge.status, 0, `fixture sai: git báo xung đột:\n${merge.stdout}${merge.stderr}`);
+
+      const real = verifyLockfileInstall(dir);
+      assert.equal(real.ok, false, 'không tái hiện được: pnpm install --frozen-lockfile vẫn xanh');
+      assert.equal(real.ineligible, true);
+      const text = String(real.reason).replace(/^[^:]*\(mã \d+\):/, '').trim();
+      assert.notEqual(text, '', `reason mất hết đầu ra của pnpm: ${JSON.stringify(real.reason)}`);
+      assert.match(text, /ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      for (const [key, value] of [['npm_config_reporter', saved.lower], ['NPM_CONFIG_REPORTER', saved.upper]] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+}
