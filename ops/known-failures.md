@@ -290,9 +290,11 @@ Phá thử, mỗi phép đúng số bài đỏ rồi khôi phục: bỏ `joinHol
 
 ---
 
-## KF-036 · Phép dò mã mục trống chỉ thấy tồn kho **tại thời điểm dò**, nên hai PR mở cách nhau vài phút vẫn nhận cùng một mã
+## KF-038 · Phép dò mã mục trống đọc một **danh sách PR đã cũ/thiếu**, nên hai mục khác nhau nhận cùng một mã
 
-> Số **KF-036**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 11 PR đang mở** trước khi viết (`KF-005`). `KF-034` do PR `#258` giữ, `KF-035` do `main` giữ.
+> Số **KF-038**: dò `## KF-` trên `main` **và trên đầu MỌI nhánh remote** (`git branch -r`), không chỉ các PR mà một phép liệt kê trước đó trả về — chính chỗ mục này ghi lại. Cao nhất đang dùng là `KF-037` (`#260`); `KF-036` do `#242` giữ (`claude/dreamy-ride-ynixo1`, push `05:03:22Z`) và `KF-035` do `main` giữ. ⚠️ Bản đầu của mục này **tự vấp đúng cái bẫy nó mô tả**: nó nhận số `KF-036` sau khi dò 11 PR "đang mở", mà `#242` đã giữ `KF-036` từ trước đó hơn một tiếng. Khi `#242` merge, `merge=union` sẽ sinh **hai** khối `## KF-036` mà không gì đỏ — đúng hình dạng hai khối `## KF-016` đang nằm sẵn trong file này.
+
+- **Lần gặp:** **3** — `### P-028` (`#224`, mã trùng một mục đã merge, chữa bằng đổi sang `P-040`) · `### P-051` (`#257` vs `#258`, mục này) · `## KF-036` (chính mục này cấp nhầm khi được viết ra, `#242` đã giữ). Ba lần, ba loại mã, **một** chữ ký: phép dò đọc một danh sách không đầy đủ. Ngưỡng ba lần của `CLAUDE.md` mục 13 **đã chạm** → chỗ phải sửa là một cổng máy, không phải lời dặn (xem cuối mục).
 
 **Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh trên cả hai PR, `main` xanh. Chỗ hỏng chỉ lộ ra ở **lần gộp `main`**, và lộ ra dưới dạng một xung đột trông như xung đột nội dung bình thường.
 
@@ -302,16 +304,21 @@ Phá thử, mỗi phép đúng số bài đỏ rồi khôi phục: bỏ `joinHol
 
 | Mốc | Việc |
 |---|---|
-| `~03:1xZ` | `crux-worker-2` nhận chỉ dẫn **D5**, mở PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257), cấp mã `P-051` |
+| `03:38:30Z` | `crux-worker-2` mở PR [`#257`](https://github.com/HungQuach301/crux-studio/pull/257) cho chỉ dẫn **D5**, cấp mã `P-051` (`created_at` đo bằng API, không phải mốc chép từ mô tả PR) |
+| `03:40:32.748Z` | Lượt bước 0 của `#258` chạy — **2 phút 2 giây SAU** khi `#257` mở — và liệt kê **10** PR đang mở, **không có `#257`** |
 | `03:41:42Z` | `crux-worker-1` mở PR [`#258`](https://github.com/HungQuach301/crux-studio/pull/258) cho **cùng** chỉ dẫn D5, dò ra cao nhất `P-050` (`#256`) → cũng cấp `P-051` |
 | `03:46:04Z` | `#257` **merge** — `P-051` vào `main`, 4 phút sau khi `#258` mở |
 | `03:41`–`06:4x` | `#258` xung đột với `main` ở `backlog.md` **và** `gpt-review.ts`; `integrator-resolve.ts` ra `aborted-ineligible` **5 lượt liên tiếp** |
 
-**Vì sao phép dò của `KF-005` không đỡ được:** nó đúng với tồn kho **tại thời điểm chạy**. Một PR đã mở nhưng chưa được dò (`#257` không nằm trong danh sách 10 PR mà `#258` dò — nó mở gần như cùng lúc), hoặc merge **sau** lúc dò, không bao giờ xuất hiện trong kết quả. Khoảng hở bằng đúng thời gian sống của một lượt worker, và ba worker chạy chồng nhau thì khoảng hở đó được dùng thường xuyên.
+**Vì sao phép dò của `KF-005` không đỡ được — và chẩn đoán đầu tiên ở đây đã NHẸ HƠN sự thật.** Bản đầu viết *"nó mở gần như cùng lúc"* và *"merge sau lúc dò"*, tức đổ cho một cuộc đua vài giây. Đo lại bằng API thì không phải: `#257` mở lúc `03:38:30Z`, lượt bước 0 của `#258` chạy lúc `03:40:32.748Z` — **sau** hơn hai phút — mà danh sách vẫn chỉ có 10 PR và không có `#257`. Vậy chỗ hỏng là **danh sách PR của phép dò vốn đã cũ/thiếu**, không phải khoảng hở thời gian.
+
+Hệ quả thực tế, và đây là lý do chẩn đoán sai thì lời dặn cũng sai: lời dặn *"dò mã ngay trước khi commit mục, thay vì ở đầu lượt"* **không đỡ được ca thật này** — `#258` cấp mã sau `03:41` mà vẫn trùng, vì nguồn nó dò đã thiếu `#257` rồi. Cùng lẽ đó, dò *"các PR đang mở"* cũng không đủ: mã có thể nằm trên một nhánh remote chưa có PR, hoặc trên một PR vừa merge. Phép dò đúng là trên **mọi nhánh remote** (`git branch -r`) cộng `main`, và ngay cả thế vẫn là cận dưới.
 
 **Vì sao hai worker nhận cùng một việc:** đây là lớp thứ hai, và nó đã có mục riêng — `P-041` (`#225`, bộ dò va chạm đọc từ tiêu đề PR). Mục này ghi lớp **mã mục**, không thay `P-041`.
 
-**Chỗ đã sửa lần này (thủ công, ở lượt gộp):** mục của `#258` đổi mã sang `P-054`, `ops/logs/platform/P-051.jsonl` tách lại theo `D-C04` (một file cho mỗi mục — auto-merge đã trộn dòng của hai mục vào một file mà **không gì đỏ**, vì `merge=union` không biết hai mục khác nhau).
+**Chỗ đã sửa (thủ công, ở lượt gộp `P-054`):** mục của `#258` đổi mã sang `P-054`, `ops/logs/platform/P-051.jsonl` tách lại theo `D-C04` (một file cho mỗi mục — auto-merge đã trộn dòng của hai mục vào một file mà **không gì đỏ**, vì `merge=union` không biết hai mục khác nhau).
+
+**Và mục này đã vấp lại chính nó một lần nữa** (mục `P-055`): bản đầu nhận số `KF-036` bằng phép dò *"11 PR đang mở"*, trong khi `#242` đã giữ `KF-036` từ `05:03:22Z`. Lần thứ hai cùng một chữ ký trong cùng một ngày, nên theo CHARTER mục 13 chỗ phải sửa là **tầng luật**, không phải một con số: xem hướng 2 dưới đây.
 
 **Máy chặn nào còn thiếu:** chưa có. Hai hướng, mỗi hướng một mục riêng (một mục = một PR):
 
@@ -442,6 +449,18 @@ Máy **không** làm sai luật của nó: cửa `open` chỉ đòi "CI xanh tr�
 **Chỗ thủng là ở luật, không ở máy.** CHARTER 6.4 đòi mỗi PR có subagent ngữ cảnh sạch soát **trước khi gắn** nhãn tự merge — luật viết cho thời điểm *gắn nhãn*, không cho thời điểm *merge*. Với `automerge-delayed`, CHARTER 3.3 có sẵn cơ chế bù: *"Một lần push mới đặt lại đồng hồ, nên khoảng chờ luôn áp lên đúng nội dung sắp vào `main`"*. Cửa `open` **không có gì tương đương**, nên một PR `automerge` chỉ cần được soát **một lần, ở bất kỳ phiên bản nào**, rồi mọi lần push sau đó đi thẳng vào `main` không qua soát.
 
 Đây là **lần thứ hai trong một ngày** cùng một họ sự cố quanh mục `I-020` (lần một: `KF-025`, hai worker cùng nhận một mục). `CLAUDE.md` mục 13 đòi sửa **luật** ở lần thứ hai, không vá sản phẩm.
+
+**LẦN THỨ BA — `#258`, 2026-09-25** (mục `P-055`). Cùng hình dạng, và lần này **không** phải nhãn sống sót qua một lần push đổi nội dung: nhãn `automerge` đã nằm sẵn trên PR từ lượt mở nó, rồi một lượt worker **khác** nhận PR ở bước 2 phụ lục P1 và push một commit gộp mang phán đoán thật (giữ prompt của một bên, **viết lại một bài kiểm**). Cửa `open` không có khoảng chờ nên `automerge.yml` merge lúc `06:53:34Z`, **54 giây** sau khi CI xanh (`06:52:40Z`), trong lúc vòng soát bước 6 còn chạy.
+
+| # | Lượt | Khoảng CI xanh → merge | Nội dung chưa soát |
+|---|---|---|---|
+| 1 | `#94`, 2026-09-22 | 83 giây (tạo → merge) | issue `🤖 [QĐ]` `#96` |
+| 2 | `#222`, 2026-09-24 | 76 giây sau push | 14 file giải xung đột |
+| 3 | `#258`, 2026-09-25 | 54 giây | một lần giải xung đột có phán đoán, gồm **viết lại một bài kiểm** |
+
+Vì sao lần ba đáng ghi riêng dù nguyên nhân gần giống lần hai: hai lần đầu là **agent tự gắn nhãn rồi soát sau**, nên lời dặn *"soát xong mới gắn nhãn"* (phương án **A** của `#96`) đủ chữa. Lần ba thì agent **không gắn nhãn nào** — nhãn đã ở đó từ lượt trước, và bước 2 của phụ lục P1 bảo worker push thẳng vào PR của người khác. **Một lời dặn về thứ tự gắn nhãn không phủ được ca này**; chỗ chữa là `I-021` (nhãn hết hiệu lực khi `head.sha` đổi), hoặc worker gỡ nhãn trước khi push rồi gắn lại sau bước 6.
+
+- **Lần gặp:** **3** — `#94` (2026-09-22, issue `#96`) · `#222` (2026-09-24, mục này) · `#258` (2026-09-25, mục `P-055`). Ngưỡng ba lần của `CLAUDE.md` mục 13 **đã chạm**: chỗ phải sửa là luật/máy, không phải vá từng PR. Bản sửa đã có chủ ở `integration/I-021` và đang ⬜ vì nó chạm vùng `owner-merge`.
 
 - **Máy chặn từ nay:** *chưa có* — và đây là chỗ khai thẳng thay vì để trống im lặng. Bản sửa đề xuất nằm ở mục backlog `integration/I-021`: `automerge.yml` so `head.sha` lúc merge với `head.sha` tại thời điểm nhãn được gắn (đọc từ timeline của label event), lệch thì **gỡ nhãn** và đòi soát lại thay vì merge. Việc đó chạm `ops/workflows/automerge.yml` — vùng **`owner-merge`** (CHARTER mục 3), nên nó phải đi bằng một PR riêng mà chủ dự án merge; ghi ở đây để nó không rơi mất trong lúc chờ.
 - **Cách đọc bản ghi này cho đúng:** đừng đọc thành "automerge nguy hiểm". Đọc thành: *một nhãn tự merge là lời khẳng định về MỘT phiên bản cụ thể, nên nó phải hết hiệu lực khi phiên bản đó đổi.*
@@ -1395,11 +1414,11 @@ Không có dòng **Máy chặn từ nay** thì mục đó chưa xong.
 - **Lần gặp:** 1 (chỉ dẫn **D5** của chủ dự án trên `#251`).
 - **Nhóm Z.** Job `gpt-review` chạy, đăng comment, ghi dòng log có `costUsd` — mọi chỉ báo xanh. Cái thiếu là thứ không chỉ báo nào đo: comment **không chứa phát hiện nào**. Một bản tóm tắt PR đọc lướt qua trông y hệt một lượt soát chéo đã xong, nên nó đi qua mọi vòng mắt người mà không ai hỏi.
 - **Chữ ký:** comment `gpt-review` gồm các dòng đánh số mô tả PR đã đổi những gì (*"Đã thêm…"*, *"Việc định nghĩa … giúp đảm bảo…"*, *"Các test case … có vẻ đầy đủ"*), **0 dòng mang mức CHẶN/NÊN SỬA**, 0 chỗ hỏng nêu đích danh.
-  - Đo được lúc nhận mục `P-051`, **đếm lại bằng API GitHub trong vòng soát ngữ cảnh sạch**: **6/6** comment `gpt-review` trên `#249` (`5821972516`, `5822119278`, `5822426604`, `5824173496`, `5824271431`, `5826125889`) — 0 dòng mang mức. Cùng hình dạng trên `#242` (`5816275628`, `5818297000`), `#223` (`5807791978`, `5807846441`), `#224` (`5808392375`), `#39` (`5815319768`, `5815347132`, `5815417824`, `5818092517`).
+  - Đo được lúc nhận mục `P-054` (nhận dưới mã `P-051`, đổi mã khi gộp `main` — `KF-038`), **đếm lại bằng API GitHub trong vòng soát ngữ cảnh sạch**: **6/6** comment `gpt-review` trên `#249` (`5821972516`, `5822119278`, `5822426604`, `5824173496`, `5824271431`, `5826125889`) — 0 dòng mang mức. Cùng hình dạng trên `#242` (`5816275628`, `5818297000`), `#223` (`5807791978`, `5807846441`), `#224` (`5808392375`), `#39` (`5815319768`, `5815347132`, `5815417824`, `5818092517`).
   - ⚠️ **Một con số của bản đầu KF này SAI, ghi lại chứ không lặng lẽ sửa** — nó khai *"5/5 comment trên `#249`"* và trích ID `5816275628` như thể ID đó nằm trên `#249`. Thật ra `#249` có **6** comment và `5816275628` nằm trên **`#242`**. Lượt làm chép con số đó từ mô tả PR `#256` thay vì tự đếm — đúng chữ ký `I-021` (ghi một con số không phải mình đo). Phần *định tính* (mọi comment đều là tóm tắt, 0 phát hiện có mức) thì đo lại vẫn đúng ở cả hai PR.
 - **Nguyên nhân gốc:** prompt hệ thống cũ chỉ xin *"nêu tối đa 5 phát hiện đáng chú ý nhất, mỗi phát hiện một dòng"*. *"Đáng chú ý"* không phân biệt **một chỗ hỏng** với **một thay đổi**, nên một câu mô tả thay đổi thoả yêu cầu. Mô hình đi theo đường rẻ nhất, và đường rẻ nhất khi đọc một diff là kể lại nó.
 - **Vì sao sửa prompt thôi là chưa đủ:** một prompt là lời dặn cho một mô hình xác suất, không phải lớp chặn. Chuẩn của chủ dự án ở [`#169`](https://github.com/HungQuach301/crux-studio/issues/169#issuecomment-5787322649) — *"tất cả thành bài kiểm máy khoá được, không phải lời dặn"* — loại thẳng cách đó.
-- **Máy chặn từ nay** (`P-051`, `ops/scripts/gpt-review.ts`):
+- **Máy chặn từ nay** (`P-054`, `ops/scripts/gpt-review.ts`):
   - `parseReviewFindings` đọc lại đầu ra thật và trả `conforms` cộng `problems` nêu **từng** dòng sai — hàm thuần, có bài kiểm.
   - `formatComment` **không bao giờ** đăng một đầu ra sai dạng như thể nó là một lượt soát chéo: nó đăng kèm nhãn sai dạng và lý do, đầu ra thô nằm trong `<details>` đóng khung là dữ liệu (**I7**).
   - Dòng log `ops/logs/platform/P-003.jsonl` mang `N CHẶN, M NÊN SỬA` hoặc `SAI DẠNG D5 (k vi phạm)`, nên chuỗi "chưa bao giờ ra phát hiện" đếm được bằng `readRunLogs` thay vì bằng mắt.
