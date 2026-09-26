@@ -1407,7 +1407,7 @@ Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR 
 
 - deps: —
 - risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
-- status: review
+- status: done
 - nguồn: bước 0 lượt `crux-worker-1` `2026-09-25T11:39Z`; PR [`#267`](https://github.com/HungQuach301/crux-studio/pull/267) (chỗ bốn dòng log được cứu bằng tay); `ops/known-failures.md` `KF-041`; ô chưa tick thứ hai của mục `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*)
 - tiêu chí xong:
   - ✅ **Hàm thuần, không đụng mạng** — nhận danh sách tên nhánh chờ cộng danh sách mã log đã có ở nhánh chính, trả về những nhánh **chưa** gộp kèm tuổi từng nhánh. Dùng lại `isStep0PendingBranch` và `STEP0_PENDING_BRANCH_PREFIX` đã có ở `ops/scripts/step0-pr-gate.ts`, và `step0LogId` của kernel để tách mã ra khỏi tên nhánh — một chỗ sinh ra tên thì một chỗ đọc ngược lại, không tự cắt chuỗi.
