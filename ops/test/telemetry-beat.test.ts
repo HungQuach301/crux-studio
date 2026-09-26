@@ -166,6 +166,12 @@ test('`bytes` là BYTE UTF-8, không phải đơn vị mã UTF-16', () => {
   // nguyên âm có dấu tiếng Việt là 1 đơn vị UTF-16 nhưng 2–3 byte.
   const raw = '🤖 nhịp tim bước 0';
   assert.equal(beatBytes(raw), Buffer.byteLength(`${raw}\n`, 'utf8'));
+  // Hai số này là cặp minh hoạ mà docblock của `beatBytes` trích. Khoá chúng
+  // ở đây để lời khai trong chú thích có máy canh: cặp trước đó (`6763`/`8214`)
+  // trích từ một dòng log — thứ TỰ THAM CHIẾU, vì sửa `note` là đổi chính số
+  // byte — nên nó hết đúng và không tái lập được ở đâu trong kho.
+  assert.equal(beatContent(raw).length, 19);
+  assert.equal(beatBytes(raw), 26);
   assert.ok(
     beatBytes(raw) > beatContent(raw).length,
     'với nội dung tiếng Việt có 🤖, số byte phải LỚN HƠN số đơn vị UTF-16 — ' +

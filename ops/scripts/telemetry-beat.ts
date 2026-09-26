@@ -192,11 +192,18 @@ export function beatContent(raw: string): string {
  * Tồn tại vì bản đầu in `beatContent(raw).length` — `String.length`, tức số
  * đơn vị mã **UTF-16**, không phải byte. Dòng log bước 0 là tiếng Việt có
  * dấu cộng ký tự 🤖, nên hai con số không bao giờ bằng nhau và chênh lệch
- * lệch theo hướng **báo nhỏ hơn thật**: đo trên dòng log bước 0 của chính
- * lượt thêm hàm này (`step0-2026-09-26T062951Z-crux-worker-2.jsonl`),
- * `beatContent(raw).length` ra **4851** còn số byte thật là **5767** — và
- * `wc -c` của file cho đúng 5767, nên cặp số này tái lập được từ trong
- * chính PR mang nó. Một trường tên `bytes` mang một
+ * lệch theo hướng **báo nhỏ hơn thật**. Cặp số minh hoạ **cố ý không** lấy
+ * từ một file log: một dòng log là **tự tham chiếu** — sửa `note` là đổi
+ * chính số byte của nó, nên mọi cặp số trích từ đó hết đúng ở lần sửa
+ * `note` kế tiếp (đã xảy ra thật trong lượt thêm hàm này, và trước đó là
+ * cặp `6763`/`8214` không còn tái lập được ở đâu trong kho). Cặp ổn định,
+ * tái lập được bằng một dòng `node` ở bất cứ lúc nào:
+ *
+ *     beatContent('🤖 nhịp tim bước 0').length   // 19  (đơn vị mã UTF-16)
+ *     beatBytes('🤖 nhịp tim bước 0')            // 26  (byte UTF-8)
+ *
+ * 🤖 là một cặp surrogate (2 đơn vị UTF-16, 4 byte), và mỗi nguyên âm có dấu
+ * là 1 đơn vị UTF-16 nhưng 2–3 byte. Một trường tên `bytes` mang một
  * đại lượng khác là đúng họ **I6** (mọi con số hiển thị phải có nguồn), và
  * đây là con số duy nhất mà bước 0e in ra cho người đọc bản ghi lượt chạy.
  */
