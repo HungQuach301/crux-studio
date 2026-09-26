@@ -80,6 +80,14 @@ node ops/scripts/heartbeat-source.ts --source main=ops/logs --source telemetry=<
 # Bước 0e: kiểm một file log bước 0 trước khi đẩy bản sao lên nhánh `claude/telemetry` (KHÔNG mở PR):
 node ops/scripts/telemetry-beat.ts ops/logs/integration/step0-<mốc>-<routine>.jsonl
 
+# Bước 0e, vế đo lại (mục P-059, `KF-043`): đầu nhánh `claude/telemetry` có còn giữ ĐỦ mọi bản ghi
+# nhịp tim nhánh đã từng giữ? Chạy, đừng tin dấu hiệu nhịp tim — nó lấy `max` của `at` nên MỘT file
+# cũng đủ làm nó xanh, và 33 bản ghi đã mất trong khi nó xanh:
+pnpm telemetry:gaps      # thoát 1 khi CÓ bản ghi thiếu · thoát 2 khi KHÔNG ĐO ĐƯỢC (hai ca khác nhau)
+pnpm telemetry:restore   # in ra các lệnh khôi phục về HỢP của mọi bản ghi. Chạy chúng
+# → Ngưỡng là 0: nhánh append-only nên không có ca lành. Đây là đường DUY NHẤT gỡ dấu hiệu số 8
+#   của `watchdog.yml`, và phép đo cần LỊCH SỬ nhánh nên nó không chạy trên một kho fetch nông.
+
 # Bước 0f (mục P-056, `KF-041`): nhánh chờ nào của lượt log-only trước còn giữ một dòng log CHƯA tới
 # `main`? Chạy, đừng đọc `git branch -r` bằng mắt — và đừng coi "không in gì" là lành, lệnh này ném lỗi
 # khi không đo được chứ không trả danh sách rỗng:

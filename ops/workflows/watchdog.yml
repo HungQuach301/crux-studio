@@ -23,9 +23,9 @@ on:
         default: false
       # P-010 · chế độ chạy thử. Khác `test_alert` ở đúng một điểm và điểm
       # đó là tất cả: `test_alert` MỞ issue thật (nó kiểm đường thông báo);
-      # `dry_run` soát đủ bảy dấu hiệu rồi IN RA issue nó định mở, không mở.
+      # `dry_run` soát đủ tám dấu hiệu rồi IN RA issue nó định mở, không mở.
       dry_run:
-        description: 'Chạy thử: soát đủ bảy dấu hiệu, in ra issue ĐỊNH mở, không mở issue nào'
+        description: 'Chạy thử: soát đủ tám dấu hiệu, in ra issue ĐỊNH mở, không mở issue nào'
         type: boolean
         default: false
 
@@ -55,14 +55,14 @@ jobs:
       # người canh chết đúng lúc nó phải lên tiếng.
       #
       # `continue-on-error` vì chính lý do đó áp cho cả bước này: nó đứng
-      # TRƯỚC cả bảy phép soát, nên nó hỏng (tool cache trượt, nodejs.org
-      # không với tới được) là cả người canh câm — mất luôn sáu dấu hiệu
+      # TRƯỚC cả tám phép soát, nên nó hỏng (tool cache trượt, nodejs.org
+      # không với tới được) là cả người canh câm — mất luôn bảy dấu hiệu
       # không dính gì tới Node. Runner đã có sẵn Node; thiếu bản đủ mới thì
       # `alert-escalation.ts` không chạy được, và bước quyết định dưới đã có
       # sẵn hướng an toàn cho ca đó: rơi về `mention`.
       - uses: actions/setup-node@v7
         # Z9 · nuốt lỗi ở đây là an toàn và CÓ CHỦ Ý: bước này đứng TRƯỚC cả
-        # bảy phép soát, nên để nó đỏ là để cả người canh câm — mất luôn sáu
+        # tám phép soát, nên để nó đỏ là để cả người canh câm — mất luôn bảy
         # dấu hiệu không dính gì tới Node. Runner đã có sẵn Node; thiếu bản
         # đủ mới thì `alert-escalation.ts` không chạy được, và bước quyết
         # định dưới đã có hướng an toàn cho đúng ca đó: rơi về `mention`.
@@ -77,7 +77,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Soát bảy dấu hiệu im lặng
+      - name: Soát tám dấu hiệu im lặng
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -88,7 +88,7 @@ jobs:
           # `main-ci.yml` để hai cảnh báo không đếm nhầm nhịp của nhau.
           #
           # Chỉ là tiền tố, vì mốc đầy đủ còn mang vân tay của TẬP DẤU HIỆU
-          # (xem chỗ dựng `MARKER` dưới). Workflow này gộp bảy dấu hiệu vào
+          # (xem chỗ dựng `MARKER` dưới). Workflow này gộp tám dấu hiệu vào
           # MỘT issue, mà CHARTER 2.4 đếm chúng là những loại cảnh báo khẩn
           # KHÁC nhau — "nhà máy im lặng" và "chi phí vượt 80% ngân sách" là
           # hai loại riêng. Một mốc dùng chung cho cả issue thì một dấu hiệu
@@ -149,9 +149,9 @@ jobs:
           #     hạn (rủi ro B13). Khi đó mọi workflow agent viết vào
           #     ops/workflows/ sẽ IM LẶNG không có hiệu lực — không có gì
           #     đỏ, chỉ là không có gì xảy ra. Đây là lý do nó được canh riêng.
-          # Z9: đây là MỘT trong bảy dấu hiệu của watchdog, không phải việc
+          # Z9: đây là MỘT trong tám dấu hiệu của watchdog, không phải việc
           # chính. `gh run list` lỗi vặt (API, quyền, hay workflow chưa từng
-          # chạy) không được phép làm đỏ cả job và nuốt luôn sáu dấu hiệu
+          # chạy) không được phép làm đỏ cả job và nuốt luôn bảy dấu hiệu
           # còn lại — nhánh `if [ -n "$SYNC" ]` dưới coi rỗng là "không có gì
           # để báo", không phải "đã kiểm và ổn".
           SYNC=$(gh run list --repo "$REPO" --workflow sync-workflows.yml \
@@ -228,17 +228,37 @@ jobs:
           rm -rf "$TELEMETRY_CHECKOUT"
           # Z9 · `|| true` có chủ ý: nhánh telemetry có thể CHƯA tồn tại (mọi
           # lượt trước lượt routine đầu tiên ghi vào nó), và một fetch trượt
-          # không được phép giết sáu dấu hiệu còn lại. Nguồn thiếu KHÔNG bị
+          # không được phép giết bảy dấu hiệu còn lại. Nguồn thiếu KHÔNG bị
           # nuốt: thư mục vắng mặt đi vào trường `missing` của
           # `heartbeat-source.ts` và được in ra trong báo cáo dưới.
-          git fetch --no-tags --depth=1 origin "+refs/heads/$TELEMETRY_BRANCH:refs/crux/telemetry" || true
+          # P-059 · KHÔNG `--depth=1` nữa, và đây là một THAY ĐỔI CHI PHÍ có
+          # chủ đích. Dấu hiệu số 8 dưới đây cần LỊCH SỬ nhánh, không chỉ đầu
+          # nhánh: `ever` chỉ dựng được bằng cách đọc cây `heartbeat/` của MỌI
+          # commit. Đo thật trên một kho trắng chạy đúng lệnh cũ:
+          #
+          #   git fetch --no-tags --depth=1 …
+          #   git rev-list --count refs/crux/telemetry  → 1    (thật: 70)
+          #   ever = tip = 18  ⇒  phép đo trả "0 thiếu"  (thật: 33)
+          #
+          # Đó là ca BÁO YÊN mà `KF-041` cấm — tệ hơn im lặng. Bảng cân nhắc
+          # bốn lựa chọn (gồm `--depth=N` đủ lớn, và chuyển sang một nơi chạy
+          # thưa hơn) nằm ở đầu `ops/scripts/telemetry-gaps.ts`.
+          #
+          # Chi phí khai thẳng: nhánh mọc ~1 commit mỗi 20 phút (70 commit sau
+          # hai ngày), mỗi commit một blob nhỏ cộng hai tree, và lượt này chạy
+          # mỗi giờ. Lối thoát đã cài sẵn: một lượt sau đặt lại trần độ sâu thì
+          # `historyCommits` cộng ca 2 của `telemetryTipGaps` biến việc đó thành
+          # một câu trong `problems`, KHÔNG thành "0 thiếu" — nên chi phí giảm
+          # được mà không mua lại chỗ hỏng. `ops/test/telemetry-gaps.test.ts`
+          # canh chính dòng này.
+          git fetch --no-tags origin "+refs/heads/$TELEMETRY_BRANCH:refs/crux/telemetry" || true
           if git rev-parse --verify --quiet refs/crux/telemetry >/dev/null; then
             mkdir -p "$TELEMETRY_CHECKOUT"
             # Z9 · nuốt lỗi CÓ CHỦ Ý, và đây là chỗ vòng soát ngữ cảnh sạch của
             # PR #229 đo được là CHẶN ở bản đầu: không có lưới thì một lỗi của
             # `git archive` hay `tar` (archive lỗi, hết chỗ đĩa, SIGPIPE) giết cả
             # bước dưới `set -euo pipefail` — đo được EXIT=2, **không dấu hiệu
-            # nào trong bảy dấu hiệu chạy**. Và `smoke-workflows.yml` đã khai sẵn
+            # nào trong tám dấu hiệu chạy**. Và `smoke-workflows.yml` đã khai sẵn
             # rằng không gì canh một lần chạy đỏ của `watchdog.yml`, nên đó là
             # người canh chết mà không ai canh người canh (rủi ro B7).
             #
@@ -253,7 +273,7 @@ jobs:
           # Z9 · `|| true`: `node` thiếu bản đủ mới (bước `setup-node` ở trên
           # cũng `continue-on-error`) phải thành "không đọc được nhịp tim" —
           # tức nhánh `-z "$LAST_BEAT"` GỌI `add` — chứ không thành một job đỏ
-          # nuốt sáu dấu hiệu kia.
+          # nuốt bảy dấu hiệu kia.
           BEAT=$(node ops/scripts/heartbeat-source.ts --json \
             --source "main=ops/logs" \
             --source "telemetry=$TELEMETRY_CHECKOUT/heartbeat" || true)
@@ -278,7 +298,7 @@ jobs:
             LAST_BEAT=""
           else
             # Z9 · `|| true` ở hai dòng dưới: JSON lạ làm `jq` thoát khác 0, và
-            # dưới `set -euo pipefail` thì cả job đỏ — nuốt sáu dấu hiệu kia.
+            # dưới `set -euo pipefail` thì cả job đỏ — nuốt bảy dấu hiệu kia.
             # Rơi về chuỗi rỗng là hướng an toàn: nhánh `-z "$LAST_BEAT"` dưới
             # GỌI `add`, nên "không đọc được" vẫn tới tay chủ dự án.
             BEAT_REPORT=$(echo "$BEAT" | jq -r '.render // empty' 2>/dev/null || true)
@@ -319,8 +339,8 @@ jobs:
           #
           #     Dùng `if !` chứ KHÔNG dùng `|| LANE_REPORT=…`: script thoát
           #     khác 0 khi không quét được `ops/logs`, và bắt lỗi đó là có
-          #     chủ đích (đây là MỘT trong bảy dấu hiệu, không được phép giết
-          #     sáu dấu hiệu kia). Nhưng `|| VAR=…` là một hình dạng nuốt lỗi
+          #     chủ đích (đây là MỘT trong tám dấu hiệu, không được phép giết
+          #     bảy dấu hiệu kia). Nhưng `|| VAR=…` là một hình dạng nuốt lỗi
           #     mà luật Z9 (`undocumentedSwallows`) KHÔNG nhìn thấy — nó chỉ
           #     bắt `|| true` và `continue-on-error`. Đưa một hình dạng vô
           #     hình vào cây là tự mở một chỗ nhóm Z mới, nên viết tường minh.
@@ -385,7 +405,7 @@ jobs:
           else
             # Z9 · `|| true` có chủ ý, cùng lý do và cùng hình dạng như dấu
             # hiệu số 5: một JSON lạ làm `jq` thoát khác 0, và dưới
-            # `set -euo pipefail` thì cả job đỏ — tức nuốt sáu dấu hiệu kia.
+            # `set -euo pipefail` thì cả job đỏ — tức nuốt bảy dấu hiệu kia.
             # Rơi về chuỗi rỗng là hướng an toàn: nhánh `-z` ngay dưới biến
             # nó thành một câu "không đo được", không thành một câu báo yên.
             PENDING_REPORT=$(echo "$PENDING_JSON" | jq -r '.render // empty' 2>/dev/null || true)
@@ -413,6 +433,110 @@ jobs:
 
           if [ "$PENDING_STALE" -gt 0 ]; then
             add "Có $PENDING_STALE nhánh chờ \`$STEP0_PENDING_PREFIX/*\` mang dòng log bước 0 CHƯA vào nhánh chính quá ngưỡng (\`KF-041\`, mục \`platform/P-056\`; ngưỡng ở \`STEP0_PENDING_STALE_HOURS\`). Bất biến **I8** đang thủng đúng ngần ấy lượt chạy: mọi bên đọc log — \`ops/metrics.md\`, bản tin ngày, phép đếm chuỗi kẹt của phụ lục P1 bước 2 — đếm THẤP hơn sự thật. Cách gỡ: lượt worker kế tiếp \`cherry-pick\` các nhánh ấy vào PR của nó rồi xoá nhánh đã gộp (\`P-038\`). Chi tiết từng nhánh ở ngay dưới."
+          fi
+
+          #  8. Mục `platform/P-059`, `KF-043` VẾ ĐO LẠI · đầu nhánh
+          #     `$TELEMETRY_BRANCH` KHÔNG còn giữ đủ mọi bản ghi nhịp tim mà
+          #     nhánh đã từng giữ.
+          #
+          #     Nhánh này append-only — mỗi lượt một file, tên sinh từ
+          #     `step0LogPath` của kernel — nên một bản ghi biến mất khỏi đầu
+          #     nhánh nghĩa là một lần đẩy đã XOÁ. Không có ca lành, nên
+          #     NGƯỠNG LÀ 0; lý lẽ đầy đủ ở đầu `ops/scripts/telemetry-gaps.ts`.
+          #     Đo được lúc mở mục: đầu nhánh 12 file, lịch sử 45, thiếu 33 —
+          #     và `pnpm check` xanh, CI xanh, nhánh chính xanh, dấu hiệu số 5
+          #     VẪN ĐÚNG suốt thời gian đó, vì nó lấy `max` của `at` nên một
+          #     file cũng đủ làm nó xanh. Nhóm **Z** thuần.
+          #
+          #     Lượt này đã fetch nhánh telemetry với LỊCH SỬ ĐẦY ĐỦ ở trên
+          #     (xem khối P-059 ở đó), nên dấu hiệu này không thêm một lần
+          #     fetch nào. `pnpm check` KHÔNG phải chỗ đặt: nó chạy trên mọi
+          #     PR và không có remote trong CI.
+          #
+          #     NGƯỠNG KHÔNG CHÉP VÀO ĐÂY, cùng luật dấu hiệu số 7: YAML chỉ
+          #     so SỐ BẢN GHI THIẾU với 0. Không hằng số giờ nào — có một là
+          #     mở một cửa sổ cho phép xoá.
+          GAPS_MISSING=0
+          GAPS_PROBLEMS=0
+          GAPS_TMP="${RUNNER_TEMP:-/tmp}/crux-telemetry-gaps"
+          rm -rf "$GAPS_TMP"
+          mkdir -p "$GAPS_TMP"
+
+          # Ba đầu vào của phép đo, mỗi cái một file — cùng hình dạng
+          # `$PENDING_LIST` của dấu hiệu số 7, và cùng lý do: mã thoát của TỪNG
+          # lệnh `git` kiểm được tường minh, không trôi vào một pipeline dài mà
+          # `|| true` nuốt. Mọi nhánh "không đo được" dưới đây rơi về một câu
+          # PHÂN BIỆT ĐƯỢC với ca lành, không rơi về một danh sách rỗng.
+          #
+          # `refs/crux/telemetry` có thể KHÔNG tồn tại (nhánh chưa sinh, hay lần
+          # fetch ở trên trượt — nó có `|| true` đúng chủ đích). Ca đó là "chưa
+          # biết", và dấu hiệu số 5 đã nói ra nó qua trường `missing` của
+          # `heartbeat-source.ts`, nên ở đây im đúng MỘT ca này và chỉ ca này.
+          if ! git rev-parse --verify --quiet refs/crux/telemetry >/dev/null; then
+            GAPS_REPORT="Nhịp tim \`$TELEMETRY_BRANCH\`: chưa có ref để đo bản ghi thiếu (dấu hiệu số 8, mục \`platform/P-059\`). Dấu hiệu số 5 ở trên đã nói nguồn nào vắng mặt."
+          elif ! git rev-list refs/crux/telemetry > "$GAPS_TMP/commits.txt"; then
+            GAPS_REPORT="⚠ Không đo được bản ghi nhịp tim thiếu (\`KF-043\`, mục \`platform/P-059\`) — \`git rev-list\` thoát khác 0. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"; xem log của lượt chạy này."
+            GAPS_PROBLEMS=1
+          elif ! git ls-tree --name-only refs/crux/telemetry:heartbeat > "$GAPS_TMP/tip.txt"; then
+            GAPS_REPORT="⚠ Không đo được bản ghi nhịp tim thiếu (\`KF-043\`) — \`git ls-tree\` trên đầu nhánh thoát khác 0. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"; xem log của lượt chạy này."
+            GAPS_PROBLEMS=1
+          else
+            # `ls-tree` trên một commit CHƯA có `heartbeat/` thoát khác 0, và ca
+            # đó là ca thường (commit gốc của nhánh) — nên `|| true` ở ĐÚNG đây
+            # là đúng, không phải một lần nuốt. Phép đếm lịch sử lấy từ
+            # `commits.txt` chứ KHÔNG từ số lần `ls-tree` thành công, nên một lần
+            # trượt không làm lịch sử trông đầy đủ hơn nó thật.
+            while read -r C; do
+              # Z9 · `|| true` ĐÚNG ở đây: xem khối ngay trên — commit chưa có
+              # `heartbeat/` là ca thường, và lịch sử đếm từ `commits.txt`.
+              git ls-tree --name-only "$C:heartbeat" 2>/dev/null || true
+            done < "$GAPS_TMP/commits.txt" | sort -u > "$GAPS_TMP/ever.txt"
+
+            GAPS_COMMITS=$(wc -l < "$GAPS_TMP/commits.txt" | tr -d ' ')
+
+            # `set +e` TƯỜNG MINH, không `|| VAR=…`: script thoát **1** khi CÓ
+            # bản ghi thiếu — một phán quyết bình thường, không phải lỗi — và
+            # thoát **2** khi KHÔNG ĐO ĐƯỢC. Hai ca đó phải đi hai đường, nên
+            # mã thoát phải đọc được thay vì bị `set -e` biến thành job đỏ.
+            set +e
+            GAPS_JSON=$(node ops/scripts/telemetry-gaps.ts --json \
+              --tip "$GAPS_TMP/tip.txt" \
+              --ever "$GAPS_TMP/ever.txt" \
+              --history-commits "$GAPS_COMMITS")
+            GAPS_STATUS=$?
+            set -e
+
+            if [ "$GAPS_STATUS" -ge 2 ] || [ -z "$GAPS_JSON" ]; then
+              GAPS_REPORT="⚠ Không đo được bản ghi nhịp tim thiếu (\`KF-043\`, mục \`platform/P-059\`) — script thoát $GAPS_STATUS. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"; xem log của lượt chạy này."
+              GAPS_PROBLEMS=1
+            else
+              # Z9 · `|| true` có chủ ý, cùng hình dạng dấu hiệu số 5 và số 7:
+              # một JSON lạ làm `jq` thoát khác 0, và dưới `set -euo pipefail`
+              # thì cả job đỏ — tức nuốt bảy dấu hiệu kia. Rỗng đi vào nhánh
+              # `-z` ngay dưới và thành một câu "không đo được", KHÔNG thành một
+              # câu báo yên.
+              GAPS_REPORT=$(echo "$GAPS_JSON" | jq -r '.render // empty' 2>/dev/null || true)
+              # Z9 · cùng lý do khối ngay trên: rỗng đi vào nhánh `-z` dưới.
+              GAPS_MISSING=$(echo "$GAPS_JSON" | jq -r '.gaps | length' 2>/dev/null || true)
+              # Z9 · cùng lý do — rỗng đi vào nhánh `-z`, không vào phép so `-gt`.
+              GAPS_PROBLEMS=$(echo "$GAPS_JSON" | jq -r '.problems | length' 2>/dev/null || true)
+              if [ -z "$GAPS_REPORT" ] || [ -z "$GAPS_MISSING" ] || [ -z "$GAPS_PROBLEMS" ]; then
+                GAPS_REPORT="⚠ Không đọc được báo cáo bản ghi nhịp tim thiếu (\`KF-043\`) — JSON không có \`render\`/\`gaps\`/\`problems\`. ĐÂY KHÔNG PHẢI \"đầu nhánh giữ đủ\"."
+                GAPS_MISSING=0
+                GAPS_PROBLEMS=1
+              fi
+            fi
+          fi
+          echo "$GAPS_REPORT"
+
+          # `problems` phải tới được chỗ có người đọc, không chỉ nằm trong log
+          # lượt chạy — cùng lý do dấu hiệu số 7 làm vậy.
+          if [ "$GAPS_PROBLEMS" -gt 0 ] && [ "$GAPS_MISSING" -eq 0 ]; then
+            add "Dấu hiệu số 8 (bản ghi nhịp tim thiếu ở đầu nhánh \`$TELEMETRY_BRANCH\`, \`KF-043\`) có $GAPS_PROBLEMS chỗ KHÔNG ĐO ĐƯỢC. Đây không phải \"đầu nhánh giữ đủ\" — một lần đẩy có thể đang xoá bản ghi mà phép đo không thấy. Chi tiết từng chỗ ở ngay dưới."
+          fi
+
+          if [ "$GAPS_MISSING" -gt 0 ]; then
+            add "Đầu nhánh \`$TELEMETRY_BRANCH\` THIẾU $GAPS_MISSING bản ghi nhịp tim mà nhánh đã từng giữ (\`KF-043\`, mục \`platform/P-059\`). Nhánh này append-only nên NGƯỠNG LÀ 0 — không có ca lành, mỗi bản ghi thiếu là một lần đẩy đã xoá. Dấu hiệu số 5 vẫn xanh vì nó lấy \`max\` của \`at\`, nên một file cũng đủ. Cách gỡ, MỘT lệnh, máy tự làm được: \`pnpm telemetry:restore\`. Chi tiết từng bản ghi ở ngay dưới."
           fi
 
           if [ "$TEST" = "true" ]; then
@@ -447,6 +571,7 @@ jobs:
             "$BEAT_REPORT" \
             "$LANE_REPORT" \
             "$PENDING_REPORT" \
+            "$GAPS_REPORT" \
             "" \
             "Xem \`ops/lanes/priority.md\` để biết làn nào đang chờ." \
             "Routine \`crux-integrator\` đóng issue này khi các dấu hiệu hết.")
@@ -463,7 +588,7 @@ jobs:
             "" \
             "Đây là một trong bốn cảnh báo khẩn của CHARTER 2.4. Nhắc lại mỗi 4 giờ chừng nào tập dấu hiệu này còn nguyên; một dấu hiệu MỚI xuất hiện thì gọi ngay, không chờ hết 4 giờ (mục \`platform/P-034\`).")
 
-          # Chạy thử dừng ở ĐÂY, không sớm hơn: bảy phép soát trên đã gọi
+          # Chạy thử dừng ở ĐÂY, không sớm hơn: tám phép soát trên đã gọi
           # `gh issue list`, `gh pr list`, `gh run list` thật và đọc
           # `ops/logs/**` thật, nên lỗi quyền hay lệnh `gh` sai vẫn lộ ra.
           # Chỉ đúng thao tác ghi ra ngoài là bị chặn.

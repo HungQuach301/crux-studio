@@ -1374,7 +1374,7 @@ Vế một (**đẩy đi**) nằm trong đúng lượt viết ra nó, nên nó c
 - **Chữ ký:** một commit trên `claude/telemetry` có `-1` file hoặc hơn trong `git show --stat`, tức cây `heartbeat/` ở đầu nhánh mang **ít** entry hơn tổng số file mà nhánh đã từng giữ.
 - **Nguyên nhân gốc:** khối lệnh `--commands` của `ops/scripts/telemetry-beat.ts` dựng cây `heartbeat/` **lại từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây đó với `-p $PARENT`. Một cây hợp lệ trỏ tới đúng một file vẫn là một cây hợp lệ, nên git không có gì để báo. "Hai worker không bao giờ chạm cùng một file" (`D-C04`) đúng — nhưng nó bảo đảm **không xung đột**, không bảo đảm **không mất dữ liệu**, và bản đầu của khối lệnh trộn hai điều đó.
 - **Đã sửa ở đâu:** `ops/scripts/telemetry-beat.ts` (`#281`) — khối lệnh nay dựng cây **THÊM** ở **cả hai** tầng: `git ls-tree` liệt kê entry đang có, `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Cộng ba chỗ hỏng cùng họ mà vòng soát của `#281` tìm ra: cây **gốc** cũng dựng thêm (một `README` ở gốc nhánh từng bị xoá im lặng được), `ls-tree` hỏng nay **NÉM** thay vì bị `2>/dev/null | awk` nuốt thành "danh sách rỗng" — tức đúng chỗ hỏng vừa sửa — và vòng thử lại khi lần đẩy bị từ chối nay **có thật**, trần 4 lần, không `--force` nào.
-- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ⚠️ Lớp chặn này che vế **ghi**; vế **đo lại đầu nhánh** còn thiếu — xem khối ⚠️ dưới và mục `platform/P-059`.
+- **Máy chặn từ nay:** `ops/test/telemetry-beat.test.ts` (`#281`), **9 bài**, chạy thật các lần đẩy nối nhau trên một kho tạm có remote bare — không mạng, không rác. File này **trước đó không có bài kiểm nào**, và đó là lý do chữ ký sống được 37 lần. Phá thử sáu phép, mỗi phép đỏ đúng một bài rồi khôi phục 9/9. ✅ Lớp chặn đó che vế **ghi**; vế **đo lại đầu nhánh** nay cũng có máy — `ops/scripts/telemetry-gaps.ts` cộng `watchdog.yml` dấu hiệu số 8, **17** bài kiểm, mục `platform/P-059` (xem hai khối ✅ dưới). 33 bản ghi thiếu đã được khôi phục ở `1b32c8e`.
 
 ### Bảng: chữ ký sống bao lâu, đo trên chính nhánh đó
 
@@ -1405,7 +1405,7 @@ Nên câu *"bản sửa làm các lần đẩy thôi xoá"* **không** được 
 
 Điều bản sửa **thật sự** bảo đảm, và đo được: khối lệnh trên `main` từ `07:09:45Z` không còn dựng lại cây từ một entry, và 9 bài kiểm khoá hành vi đó. Lượt `07:25Z` là lần đẩy đầu tiên **sau** bản sửa, và nó đưa đầu nhánh **11 → 12** không xoá gì — một điểm dữ liệu nhất quán, **không** phải bằng chứng nhân quả. Phân biệt hai điều đó chính là thứ `KF-021` đòi.
 
-### ⚠️ Vế CHƯA sửa — 33 bản ghi vẫn thiếu ở đầu nhánh, và không phép đo nào nói ra
+### ✅ Vế đo lại — ĐÃ sửa ở `platform/P-059` (mốc dưới giữ nguyên hình dạng lúc phát hiện)
 
 ```
 tip = claude/telemetry
@@ -1434,6 +1434,34 @@ chỉ còn trên đầu nhánh của các PR ĐANG MỞ                         
 Tám bản ghi đó phụ thuộc vào việc sáu PR kia **merge được**. Một PR đóng-không-merge mang theo dòng log của nó ra khỏi mọi nhánh còn sống — và điều đó **đã xảy ra** trong ngày (xem mục dưới), nên tám bản ghi này không phải chuyện lý thuyết.
 
 Bất biến còn thiếu phát biểu được thành một câu: **đầu nhánh `claude/telemetry` phải là tập cha của mọi file `heartbeat/` mà nhánh đã từng giữ** (nhánh append-only). Một lần vi phạm nghĩa là một lần đẩy đã xoá. Mục `platform/P-059` mang vế đó cộng việc khôi phục.
+
+### ✅ Đã sửa và đã khôi phục — `platform/P-059`, lượt `crux-worker-2` `2026-09-26T09:24Z`
+
+Bất biến trên nay **có máy đo**, và đống nợ 33 bản ghi đã được **trả**:
+
+- **Máy đo:** `ops/scripts/telemetry-gaps.ts` — hàm thuần `telemetryTipGaps(tip, ever, historyCommits)`, mốc tách khỏi tên bằng `parseStep0LogId` của kernel. `watchdog.yml` **dấu hiệu số 8** chạy nó mỗi giờ. **Ngưỡng là 0** (không hằng số giờ nào trong file, và một bài kiểm khoá chính điều đó): mọi ngưỡng khác trong kho đo *độ trễ* — có ca lành — còn cái này đo *mất dữ liệu trên một nhánh append-only*, không có ca lành, nên một hằng số giờ ở đây là **một cửa sổ cho phép xoá**.
+- **Đã khôi phục, đo bằng chạy thật:** `git diff-tree --name-status 1b32c8e` → **33 `A`, 0 `D`** (thuần cộng thêm, không `--force`). Đầu nhánh **20 → 53** file, `git rev-list --count` **74**, và `pnpm telemetry:gaps` sau đó thoát **0** với câu *"đầu nhánh giữ đủ mọi bản ghi nhánh đã từng có"*. Tám bản ghi từng chỉ sống trên đầu nhánh 6 PR đang mở nay có mặt ở đầu nhánh telemetry, nên một PR đóng-không-merge không mang chúng đi được nữa.
+- **Đường gỡ là MỘT lệnh, máy tự chạy được:** `pnpm telemetry:restore`. Cảnh báo gọi **chủ dự án** cho một việc chỉ máy làm được là ngược thước đo CHARTER 1.3 — đúng lỗi `P-056` đã mắc một lần và phải sửa trong vòng soát.
+
+### ⚠️ Một chỗ BÁO YÊN đo được, và nó nằm trong chính `watchdog.yml`
+
+Phép đo này cần **lịch sử** nhánh, không chỉ đầu nhánh. `watchdog.yml` trước mục này fetch nhánh telemetry bằng **`--depth=1`**. Đo thật trên một kho trắng chạy đúng lệnh đó (`2026-09-26T09:3xZ`):
+
+```
+git fetch --no-tags --depth=1 origin +refs/heads/claude/telemetry:refs/crux/telemetry
+git rev-list --count refs/crux/telemetry   → 1      (lịch sử thật lúc đó: 70)
+ever = tip = 18  ⇒  phép đo trả "0 thiếu"           (sự thật: 33)
+git rev-parse --is-shallow-repository      → true
+```
+
+Đó **không** phải im lặng — nó **KHẲNG ĐỊNH LÀ LÀNH**, và cái đó tệ hơn im lặng (cùng câu `KF-041` đã ghi). Một lưới chỉ bắt *"danh sách lịch sử rỗng"* **không** che được ca này, vì danh sách khi đó **không rỗng** — nó bằng đúng đầu nhánh.
+
+Đã sửa bằng **hai** tầng, có chủ đích:
+
+1. `watchdog.yml` bỏ `--depth=1` cho nhánh telemetry. Đây là một **thay đổi chi phí**, khai thẳng: nhánh mọc ~1 commit mỗi 20 phút (70 commit sau hai ngày) và lượt này chạy mỗi giờ. Bảng cân nhắc bốn lựa chọn ở đầu `ops/scripts/telemetry-gaps.ts`; `--depth=N` đủ lớn bị bác vì *"đủ lớn"* hết hạn **im lặng**.
+2. `telemetryTipGaps` **NÉM** khi `historyCommits == 1` mà đầu nhánh có nhiều hơn một file. Tầng này là tầng chịu tải: một lượt sau đặt lại trần độ sâu *cho rẻ* thì nó ra một câu **không đo được**, không ra *"0 thiếu"*. Tức chi phí giảm được mà không mua lại chỗ hỏng.
+
+**Máy chặn từ nay:** `ops/test/telemetry-gaps.test.ts`, **17 bài** — gồm bài tái hiện lỗi dựng lại đúng hình dạng đo được (12 tên ở đầu nhánh, 45 trong lịch sử, **33** thiếu, hai mốc biên `2026-09-24T083916Z` và `2026-09-26T033126Z`) bằng **tên thật** đọc từ commit `03e1314`, và một bài soi chính dòng `git fetch` của `watchdog.yml` để không lượt nào đặt lại `--depth` mà không gì đỏ.
 
 ### Ghi chú về chỗ đặt khối này
 
