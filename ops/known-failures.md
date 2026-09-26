@@ -229,6 +229,24 @@ Cho tới khi `P-058` xong, phần bù bằng người là dòng dặn ở `CLAU
 
 ---
 
+## KF-037 · Việc cần chủ dự án mà **không phải một quyết định** rơi khỏi bản tin, nằm im 2–3 ngày, mọi chỉ báo xanh
+
+> Số **KF-037**: dò `## KF-` trên `main` (cao nhất `KF-035`) **và trên đầu cả 10 PR đang mở** trước khi viết (`KF-005`) — cao nhất đang dùng là `KF-036` (PR `#242`), nên `KF-037` không đụng ai.
+
+- **Lần gặp:** 1 (chỉ dẫn **C4** của chủ dự án trên `#251`, nguồn `#131` lúc `2026-09-24T16:15:26Z` — anh nêu bốn ca cùng lúc).
+- **Nhóm Z** đúng định nghĩa: `pnpm check` xanh, CI xanh, `main` xanh, bản tin xanh — mà **nút thắt người bị đếm thiếu**, nên dòng *"nút thắt hiện tại là máy hay người"* (mục `platform/P-019`) và thước đo *"thời gian của anh"* (CHARTER 1.3) đều nói sai về phía dễ chịu.
+- **Chữ ký:** một việc chỉ chủ dự án làm được — xem một clip, chấm gu hình, đọc một con số trong trang cấu hình tài khoản, tạo một khoá API, merge một PR `owner-merge` — nằm trong trường `- hold:` của một mục backlog hoặc trong một `[QĐ]` nhãn `reversible`, và **không xuất hiện ở bất cứ dòng nào của bản tin**. Nó không được đếm trong *"Cần anh quyết: N việc"*, và mục *"Quyết định reversible đang mở"* chỉ in tên chứ không phân biệt *"máy đã tự làm, chờ đóng"* với *"máy không làm được, đang chờ anh"*.
+- **Bốn ca chủ dự án dẫn:** `#101` (mở Google Cloud Console đọc hạn mức tìm kiếm) · `#92` cộng `visual/V-002`/`assembly/A-001` (xem clip, chấm `WP-003` mục 5) · `#5` (`verify/VF-G1` — trang cấu hình tài khoản) · khoá YouTube Data API cho `topic/T-011`/`T-008`. `#5` mở từ `2026-09-20`, `#36` từ `2026-09-21`, `#101` từ `2026-09-22`.
+- **Nguyên nhân gốc, hai lớp:**
+  1. **Bản tin chỉ có một cửa cho việc của chủ dự án, và cửa đó khai theo NHÃN.** `needOwnerCount` cố ý chỉ đếm `irreversible` cộng `chưa phân loại` (đúng `D-C06`: `reversible` thì agent làm ngay theo khuyến nghị). Nhưng nhãn `reversible` nói *"revert được"*, **không** nói *"máy làm được"* — `#36` tự khai đúng chỗ lệch đó: *"Ở đây tôi không làm được — cả ba phương án đều nằm ngoài repo và cần anh. Nhãn vẫn đúng, nhưng thực chất đây là một chỗ chặn cần anh."* Một `reversible` mà máy không làm được vì thế không có cửa nào để đi qua.
+  2. **Trường `- hold:` không có bên đọc nào tách được "chờ người" khỏi "chờ máy".** Đo được trên `main` `2aa0b73` (nền của PR): **45** trường `- hold:` thật, trong đó **34** là chờ máy (*"chưa kiểm bằng chạy thật"*, *"routine chưa chạy lại"*) và **11** là chờ chính chủ dự án. `backlog-status.ts` chỉ cần trả lời *"mục có bị giữ không"* nên nó cố ý không phân loại — đúng phạm vi của nó, nhưng không ai làm phần còn lại.
+- **Đã sửa:** mục `platform/P-053` — `ops/scripts/owner-waiting.ts` (hàm thuần, **33 bài kiểm** hai chiều) cộng khối **"Việc đang chờ anh"** đứng **ngay sau** *"Cần anh quyết"* trong `renderDigestMetrics`, và CHARTER 2.5 + phụ lục P2 khai nó là phần **bắt buộc** của bản tin.
+- **Máy chặn từ nay:** `ops/test/owner-waiting.test.ts` khoá từng luật con bằng **fixture nguyên văn** của ca thật, mỗi luật một bài **dương** và một bài **âm** — chiều hỏng đắt nhất là **nêu oan** (một `[QĐ]` mở bằng *"Không cần anh làm gì"* bị kéo vào mục này thì lần sau chủ dự án thôi đọc nó). Cộng một bài chạy trên **dữ liệu thật của repo** giữ tính chất *"lời giữ khai `không treo` ⇒ không nêu"*, và một bài khoá **vị trí** của khối trong `renderDigestMetrics` (`ops/test/digest-metrics.test.ts`) — vị trí là thứ chủ dự án đọc trong 60 giây đầu, nên nó không được để trong một lời dặn.
+- **Bài kiểm tác động (`A3` của `#251`) bắt được một dương tính giả trước khi merge, và nó nằm trong chính mục này:** lời giữ của `P-053` *nhắc* `[QĐ] reversible` khi kể hai vế C2/C3 đã tách, trong khi thứ nó chờ là một lượt `crux-digest` — tức chờ **máy**. Dấu hiệu `[QĐ]` trần vì thế bị siết thành `chờ … [QĐ]` trong cùng một câu, và ca thật đó thành một bài kiểm âm. Đúng lý do `A3` tồn tại: chạy lớp chặn mới trên toàn bộ tồn kho **trước** khi merge, không sau.
+- **Còn hở, khai trước:** phép đọc dựa vào **lời văn** của trường `- hold:` và thân `[QĐ]`, nên một lời giữ viết theo cách chưa gặp (không nhắc `chủ dự án`, không `chờ … [QĐ]`, không `cần người`) vẫn rơi. Danh sách dấu hiệu **cố ý hẹp** theo luật `A10` của `#251` — chỉ thêm khi có một ca thật lọt — nên hướng lệch là **nêu thiếu**, và đó là chỗ phải canh. Cách chữa tận gốc là một **trường máy đọc** trong mục backlog (`- waits: owner`) thay cho phép đọc lời văn; chưa làm vì nó đổi hình dạng mọi mục backlog và đáng một mục riêng.
+
+---
+
 ## KF-025 · Hai worker nhận cùng một mục backlog trong 89 giây, và không chỉ báo nào đỏ
 
 > Số **KF-025**: dò `## KF-` trên `main` **và trên đầu cả 7 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-024`, nên `KF-025` không đụng ai.

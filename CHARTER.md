@@ -188,11 +188,12 @@ Cơ chế: mốc `<!-- crux-escalate-* -->` thôi mang nghĩa "đã nhắc thì 
 
 Routine `crux-digest` chạy mỗi sáng và mở issue `🤖 [Bản tin] YYYY-MM-DD`, dài tối đa khoảng 25 dòng. Dòng đầu tiên luôn là "Cần anh quyết: N việc", kèm link tới từng issue.
 
-Từ D-C06, đây là **nơi duy nhất** chủ dự án phải mở. Bản tin chứa đủ năm thứ để một lần đọc là đủ:
+Từ D-C06, đây là **nơi duy nhất** chủ dự án phải mở. Bản tin chứa đủ sáu thứ để một lần đọc là đủ:
 
 | Phần | Nội dung | Cách trả lời |
 |---|---|---|
 | Cần anh quyết | Mỗi `irreversible` một dòng: tóm tắt · khuyến nghị · link | MỘT comment, dạng `#19 A, #14 B` |
+| Việc đang chờ anh | Việc **không phải quyết định** mà vẫn cần chủ dự án: mục backlog có `- hold:` chờ chính anh, và `[QĐ] reversible` máy không tự làm được. Mỗi mục một dòng: việc cụ thể · đã chờ bao lâu · đang chặn gì · link | Làm việc đó, hoặc trả lời ngay trên link |
 | Đã tự làm | Mỗi `reversible` đã làm theo khuyến nghị một dòng | `hoàn tác #N` trong vòng 24 giờ |
 | Đang chờ merge | PR `automerge-delayed` cùng số giờ còn lại | `dừng` ngay trên PR đó |
 | Tiến độ | Mục done 24 giờ · còn lại theo từng đợt · thông lượng và ngày dự kiến xong · nút thắt máy hay người · lượt chạy routine 24 giờ (`G3`) | — |
@@ -812,18 +813,34 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    `ops/logs/platform/P-016.jsonl`; đừng neo vào một tên file. Có hai chuỗi rồi thì gộp lại bằng
    `stuckStreak` của `ops/scripts/pr-triage.ts` (hàm thuần trên hai con số, nó KHÔNG tự đọc log);
    PR có nhãn automerge-delayed kèm SỐ GIỜ CÒN LẠI trước khi tự merge; các mục parked;
-   issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; chi phí 24 giờ và tích luỹ
+   issue [QĐ] đang mở, tách thành reversible-đã-tự-làm và irreversible-đang-chờ; **việc đang chờ chủ dự án**
+   (mục `platform/P-053`, chỉ dẫn C1) — mục backlog có `- hold:` chờ chính anh cộng `[QĐ] reversible` máy
+   không tự làm được, lấy bằng `ownerWaitingRows` của `ops/scripts/owner-waiting.ts`, ĐỪNG đọc `- hold:`
+   bằng mắt: phần lớn lời giữ là chờ **máy** (đo trên đầu nhánh của `P-053`: **35 trên 46** trường thật) và trộn hai loại làm mục này vô dụng;
+   chi phí 24 giờ và tích luỹ
    từ ops/logs so với ngân sách (CHARTER mục 8); cảnh báo; các thước đo ở CHARTER 1.3; và số liệu **Tiến độ**
    (mục `platform/P-019`): số mục done 24 giờ, số mục còn lại theo từng đợt, thông lượng 3 ngày, ngày dự kiến
    xong từng đợt, nút thắt máy hay người, và số lượt chạy routine 24 giờ. **Đừng tính tay** — gọi
    `ops/scripts/digest-metrics.ts` (`collectMetrics` → `renderDigestMetrics`), nó tính tất cả từ backlog, log
    và snapshot GitHub bằng mô hình có test (bất biến I6). Đợt của một mục suy từ làn theo bảng `LANE_BATCH`.
 
-3. Mở issue "🤖 [Bản tin] YYYY-MM-DD", nhãn digest, tiếng Việt, tối đa khoảng 25 dòng, theo đúng năm phần:
+3. Mở issue "🤖 [Bản tin] YYYY-MM-DD", nhãn digest, tiếng Việt, tối đa khoảng 25 dòng, theo đúng sáu phần:
 
    Cần anh quyết: N việc
      Mỗi irreversible MỘT dòng: tóm tắt · khuyến nghị · link. Không thuật ngữ chưa giải thích.
      Đọc và trả lời được trong khoảng 60 giây trên màn hình điện thoại (rủi ro B11).
+
+   Việc đang chờ anh: N việc
+     BẮT BUỘC, và đứng NGAY SAU mục trên (chỉ dẫn C1 của #251, mục `platform/P-053`). Đây là chỗ cho việc
+     cần chủ dự án mà KHÔNG phải một quyết định: mục backlog có `- hold:` chờ chính anh (xem clip, chấm gu
+     hình, đọc một số trong trang cấu hình, merge một PR owner-merge, tạo một khoá), và `[QĐ] reversible`
+     mà máy không tự làm được — nhãn đúng, nhưng cả ba phương án đều nằm ngoài repo (#36 tự khai đúng câu
+     đó). Trước P-053 hai loại này rơi khỏi bản tin: #101, #92, #5 và khoá YouTube Data API nằm im 2–3 ngày.
+     Mỗi mục một dòng: việc cụ thể · đã chờ bao lâu · đang chặn gì · link. Xếp theo mức chặn đường tới cổng
+     Mốc 3 — số mục bị chặn thuộc làn `topic` trước, rồi tổng số mục bị chặn, rồi chờ lâu hơn đi trước.
+     Lấy thẳng từ `renderDigestMetrics`, ĐỪNG tự đọc `- hold:` bằng mắt (xem bước 2).
+     In dòng đếm kể cả khi N = 0, cùng luật với dòng đầu bản tin: một khối biến mất khi rỗng là một khối
+     chủ dự án phải đọc kỹ mới biết nó có hay không.
 
    Đã tự làm
      Mỗi reversible đã làm theo khuyến nghị một dòng. Phủ quyết bằng "hoàn tác #N" trong 24 giờ.

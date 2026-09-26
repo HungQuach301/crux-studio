@@ -75,6 +75,8 @@ import {
   type GateFlowRow,
 } from './gate-flow.ts';
 import { DEFAULT_DELAY_HOURS } from '../invariants.merge-gate.ts';
+import { ownerWaitingRows, renderOwnerWaitingLines } from './owner-waiting.ts';
+import type { OwnerWaitRow } from './owner-waiting.ts';
 
 // --- Dạng dữ liệu GitHub (đúng dạng `gh … --json` trả về) ---
 
@@ -595,6 +597,16 @@ export interface DigestMetrics {
   delayed: GateFlowRow[] | null;
   parked: ParkedItem[];
   decisions: DecisionRow[];
+  /**
+   * Mục **"Việc đang chờ anh"** (mục `platform/P-053`, chỉ dẫn `C1` của
+   * `#251`) — mục backlog có `- hold:` chờ chính chủ dự án, cộng `[QĐ]
+   * reversible` mà máy không tự làm được. Cơ chế ở `ops/scripts/owner-waiting.ts`.
+   *
+   * Mảng **rỗng là một câu trả lời**, không phải "chưa đo": nguồn của nó là
+   * backlog và danh sách issue, hai thứ `collectMetrics` luôn đọc được. Nên
+   * ở đây không có ca `null` như `conflicts`/`delayed`.
+   */
+  ownerWaiting: OwnerWaitRow[];
   cost: CostSummary;
   /** Mục "Tiến độ" (mục `platform/P-019`). */
   progress: ProgressMetrics;
@@ -625,6 +637,13 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
     const suffix = row.kind === 'chưa phân loại' ? ' (chưa phân loại — thiếu nhãn reversible/irreversible)' : '';
     out.push(`- #${row.number} · ${row.title}${suffix}`);
   }
+
+  // Mục `platform/P-053` (chỉ dẫn `C1` của `#251`): khối "Việc đang chờ anh"
+  // đứng **ngay sau** "Cần anh quyết", đúng chữ của chỉ dẫn. Nó đi TRƯỚC
+  // "Quyết định reversible đang mở" có lý do: mục dưới liệt kê cả những
+  // `reversible` mà máy đã tự làm xong và chỉ chờ đóng, nên đọc nó trước sẽ
+  // trộn việc của chủ dự án với việc máy đã lo.
+  out.push('', ...renderOwnerWaitingLines(metrics.ownerWaiting));
 
   const reversible = decisions.filter((r) => r.kind === 'reversible');
   out.push('', `Quyết định reversible đang mở: ${reversible.length}`);
@@ -766,10 +785,15 @@ export function collectMetrics(
   // không suy được đợt, nhưng mục `parked` của nó vẫn được giữ.
   const itemsByLane = new Map<LaneName, readonly BacklogItem[]>();
   const knownLane = new Set<string>(LANES as readonly string[]);
+  // Mục `P-053` giữ lại nguyên nội dung từng file: đồ thị `deps` của
+  // `owner-waiting.ts` cần CẢ làn lạ, vì một mục ở thư mục không phải tên làn
+  // vẫn chặn được mục khác — cùng lý do `parked` ở trên không bỏ thư mục lạ.
+  const backlogFiles: { lane: string; content: string }[] = [];
   for (const lane of laneDirs) {
     const path = join(lanesDir, lane, 'backlog.md');
     if (!existsSync(path)) continue;
     const content = readFileSync(path, 'utf8');
+    backlogFiles.push({ lane, content });
     parked.push(...parkedItems(lane, content));
     if (knownLane.has(lane)) itemsByLane.set(lane as LaneName, parseBacklog(content));
   }
@@ -815,6 +839,24 @@ export function collectMetrics(
   const mergedPrNumbers = new Set(snapshot.mergedPrs.map((mpr) => mpr.number));
   const decisions = decisionRows(snapshot.decisionIssues, { mergedPrNumbers, now });
 
+  // Mục `platform/P-053`. Chỉ đưa vào `reversible`: `irreversible` đã nằm ở
+  // dòng đầu bản tin ("Cần anh quyết"), và in lại là bắt chủ dự án đọc cùng
+  // một việc hai lần trong một bản tin dài.
+  const ownerWaiting = ownerWaitingRows({
+    backlogs: backlogFiles,
+    decisions: snapshot.decisionIssues
+      .filter((issue) => classifyDecision(labelNames(issue.labels)) === 'reversible')
+      .map((issue) => ({
+        number: issue.number,
+        title: issue.title,
+        body: issue.body,
+        ageDays: decisionAgeDays(issue.createdAt, now),
+      })),
+    logs: logLines,
+    now,
+    issueRefsOf: linkedPrNumbers,
+  });
+
   // Nút thắt (mục `platform/P-019`). Người: PR `owner-merge` đang mở, cộng
   // quyết định đang chờ chủ dự án. Máy: PR đang xung đột (đã dò), cộng PR
   // CI đỏ. `conflicts === null` (chưa dò) đóng góp 0 — không đoán là có tắc.
@@ -849,6 +891,7 @@ export function collectMetrics(
     delayed,
     parked,
     decisions,
+    ownerWaiting,
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
     progress,
   };
