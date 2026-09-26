@@ -1103,6 +1103,42 @@ Con số này là số để kiểm giả định `G3` (trần lượt chạy ro
   - ✅ Ghi `ops/known-failures.md` KF-022.
 - **mã mục nhận lúc 2026-09-23 ~14:3x giờ UTC** (`KF-005`): dò `### P-` trên `main` và mọi nhánh PR đang mở, cao nhất là `P-035`, nên `P-036` không đụng ai.
 
+### P-041 · Hai worker nhận cùng một mục trong cùng một phút, và không gì đỏ — đã gặp hai lần
+Phụ lục P1 bước 3 đòi mục `ready`, `deps` đã xong, *"chưa có nhánh `claude/<lane>/<id>` và chưa có PR mở"*. Phép hỏi đó chạy **một lần**, lúc lượt chạy bắt đầu duyệt backlog — rồi lượt chạy làm việc cả giờ đồng hồ và push. Khoảng trống giữa hai mốc ấy không có cổng nào.
+
+Đo được ngày 2026-09-24, mục `integration/I-020`:
+
+| PR | Routine | Tạo lúc | Kết cục |
+|---|---|---|---|
+| [#221](https://github.com/HungQuach301/crux-studio/pull/221) | `crux-worker-2` | 03:40:00Z | merge 03:44:45Z |
+| [#222](https://github.com/HungQuach301/crux-studio/pull/222) | `crux-worker-1` | 03:41:29Z | còn mở, xung đột với `main` ở `ops/known-failures.md` |
+
+Cách nhau **89 giây**. Cả hai lượt làm đúng luật như nó được viết. Cái giá: trọn một lượt worker (giả định **G3** — trần số lần chạy routine mỗi ngày) cộng một PR mà bước 0 trả `aborted-ineligible` ở mọi lượt kể từ đó, vì mục của nó đã nằm trên `main` rồi. Mọi chỉ báo đều xanh — nhóm **Z**.
+
+Hai tín hiệu nhận việc đang có đều không bắt được ca này. Tên nhánh thì đã chết: phiên cloud được nền tảng gán nhánh ngẫu nhiên (`claude/dreamy-ride-oh9k8r`), nên `laneFromBranch` trả `null` cho **5 trên 7** PR đang mở lúc viết mục này. Trạng thái `claimed` thì có trong bảng của `ops/lanes/README.md` và dòng *"Nhận xong đổi thành `claimed` ngay trong PR nháp"* — nhưng CHARTER phụ lục P1 bước 4 không nhắc tới nó, chưa lượt nào ghi nó, và không phép kiểm nào đọc nó. Một trạng thái không ai ghi và không ai đọc là một luật không tồn tại.
+
+- deps: —
+- risk: medium
+- status: review
+- hold: còn lại, tách phạm vi — hai mục `⬜` chưa làm ở PR này: đưa `duplicateClaims` vào bản tin ngày (chờ `#223` thôi chạm `digest-metrics.ts`), và chốt một đường cho trạng thái `claimed` giữa `ops/lanes/README.md` và phụ lục P1 bước 4; cả hai là việc của lượt sau, không chặn phần lõi đã xong
+- nguồn: `ops/known-failures.md` KF-025; CHARTER phụ lục P1 bước 3 và bước 4; `ops/lanes/README.md`; PR [#221](https://github.com/HungQuach301/crux-studio/pull/221) và [#222](https://github.com/HungQuach301/crux-studio/pull/222)
+- tiêu chí xong:
+  - ✅ Chữ ký nhận việc đọc từ **tiêu đề PR** (`[<lane>] <id> — …`), không đọc từ tên nhánh — `claimKeyFromTitle` của `ops/scripts/claim-collision.ts`, cùng hình dạng mà `hasCompletionCommit` đã đọc.
+  - ✅ `claimCheck(prs, lane, id, now)` trả `open-pr` · `recently-merged` · `free`. Phụ lục P1 bước 3 và bước 4 gọi nó, và gọi **lại** ngay trước khi push commit đầu tiên — khoảng trống giữa hai mốc đó chính là 89 giây đã sinh ra `#222`.
+  - ✅ `duplicateClaims(prs)` bắt mọi cặp PR cùng mục có **thời gian sống chồng nhau**, tính cả PR đã merge: ca `#221`/`#222` là bằng chứng rằng một phép dò chỉ nhìn PR đang mở sẽ tắt tiếng đúng vào lúc chỗ hỏng thành vĩnh viễn.
+  - ✅ Sóng nối tiếp **không** bị báo: `platform/P-014` cố ý làm theo sóng (`#62`, `#196`, `#223`), và một bộ dò kêu sai vài lần là một bộ dò bị tắt. Phép phân biệt là thời gian sống, không phải mã mục.
+  - ✅ PR có tiêu đề không đọc được thành mã mục được **đếm và in ra**, không biến mất khỏi phép đo (bài học `Z15`).
+  - ✅ `pnpm claims <file.json>` in bảng người đọc; `--json` cho máy. Thoát 0 kể cả khi có va chạm — đây là phép **đo**, cổng chặn duy nhất là người nhận việc đọc `verdict` rồi đi mục khác.
+  - ✅ `ops/test/claim-collision.test.ts` — **29 bài**, mở đầu bằng bốn bài tái hiện lỗi dựng lại đúng mốc thật của `#221`/`#222` **và** `#224`/`#225` (bất biến I2).
+  - ✅ Chạy thật trên ảnh chụp PR thật: **đúng 2 va chạm**, cả hai là va chạm thật — `integration/I-020` (`#221`/`#222`, 1,48 phút) và `platform/P-040` (`#224`/`#225`, 9,75 phút) — và **0 báo giả** trên hai sóng của `P-014` (`#196` đóng 03:41:39Z, `#223` tạo 04:38:39Z).
+  - ✅ Tiền tố `🤖` của `CLAUDE.md` mục 5 được bỏ qua khi đọc tiêu đề: 29 commit trên `main` mang nó, trong đó `🤖 [platform] P-038 — …` (#212) là một PR nhận mục **thật**. Neo cứng vào `[` làm `claimCheck` trả `free` cho một mục đang có người giữ — fail-open ở đúng chỗ mục này chữa.
+  - ✅ **Đầu vào thiếu hay hỏng thì NÉM, không trả `free`**: tên làn ngoài `LANES`, mốc `now` không đọc được, `PrSnapshot` thiếu `closedAt`/`isDraft`/`updatedAt` — cả ba trước đây cho `free` im lặng và exit 0. CLI in `⚠ KHÔNG TRẢ LỜI ĐƯỢC` và thoát 2. "Không trả lời được" khác "không ai giữ mục này", và phải khác cả ở mã thoát.
+  - ✅ Ngoại lệ **PR nháp bỏ quá 24 giờ** (`CLAUDE.md` mục 2) không bị luật mới nuốt: verdict `abandoned-draft`, ngưỡng `ABANDONED_DRAFT_HOURS`. Thiếu nó thì `integration/I-020` bị `#222` khoá **vĩnh viễn**. Một PR sống cộng một PR nháp chết vẫn là "có người giữ".
+  - ✅ "Đã merge" suy từ `mergedAt`, không nhận cờ boolean: endpoint **liệt kê** PR của GitHub trả `merged:false` cho cả PR đã merge, nên một cờ boolean làm nhánh `recently-merged` thành mã chết.
+  - ✅ Thứ tự kết quả **ổn định**, có bài kiểm chạy hai chiều đầu vào với `createdAt` bằng nhau: hai lượt đọc cùng dữ liệu không được ghi hai câu khác nhau (`KF-021`).
+  - ⬜ **Còn lại, tách phạm vi:** đưa `duplicateClaims` vào bản tin ngày (`ops/scripts/digest-metrics.ts`) để va chạm nổi lên hộp quyết định duy nhất. Không làm ở PR này vì `digest-metrics.ts` đang bị `#223` sửa — hai PR cùng chạm một file là đúng thứ luật mềm CHARTER mục 4 bảo tránh.
+  - ⬜ **Còn lại:** trạng thái `claimed` của `ops/lanes/README.md` vẫn chưa ai ghi. Hoặc phụ lục P1 bước 4 ghi nó, hoặc bảng trong README bỏ nó đi — hai nguồn nói hai chuyện là chỗ sinh ra lỗi tiếp theo.
+- **mã mục nhận lúc 2026-09-24 ~05:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và trên nhánh của cả 7 PR đang mở**, cao nhất là `P-039`, nên `P-041` không đụng ai. Mã `KF-025` dò cùng cách, cao nhất là `KF-024`.
 ### P-042 · fix · tiền tố 🤖 bắt buộc của `CLAUDE.md` mục 5 làm mù mọi bộ đọc tiêu đề neo `^`
 
 Hai luật của repo đều đúng, và chúng cắn nhau ở đúng ký tự đầu tiên. `CLAUDE.md` mục 5 bắt buộc **mọi** thứ agent viết mở đầu bằng 🤖 — dấu vết duy nhất phân biệt người với máy khi agent dùng danh tính chủ dự án (CHARTER 3.1, mặc định M6). Phụ lục P1 bước 4 đòi tiêu đề PR dạng `[<lane>] <id> — …`, và mọi bộ đọc tiêu đề neo `^\[`. Squash-merge giữ nguyên tiêu đề, nên tiền tố đi thẳng vào commit subject trên `main`: **30 / 213** commit subject trên `e4a5931` mang tiền tố đó.
