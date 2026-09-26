@@ -66,7 +66,8 @@
  *   mất. Phép đo cho đúng chỗ đó là `ops/scripts/telemetry-gaps.ts`
  *   (`watchdog.yml` dấu hiệu số 8), và đường gỡ là `pnpm telemetry:restore`.
  *   Còn `KF-021`/`KF-048` nói về chuỗi kẹt là **cận dưới** vì một lý do
- *   **khác**: dòng log chưa tới nhánh chính, không phải nhánh telemetry. *
+ *   **khác**: dòng log chưa tới nhánh chính, không phải nhánh telemetry.
+ *
  *   Nên khối lệnh nay dựng cây **THÊM**: `git ls-tree` liệt kê entry đang có,
  *   `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Bài
  *   kiểm `ops/test/telemetry-beat.test.ts` chạy thật hai lần đẩy nối nhau

@@ -1803,7 +1803,7 @@ ever = tip = 18  ⇒  phép đo trả "0 thiếu"           (sự thật: 33)
 git rev-parse --is-shallow-repository      → true
 ```
 
-Đó **không** phải im lặng — nó **KHẲNG ĐỊNH LÀ LÀNH**, và cái đó tệ hơn im lặng (cùng câu `KF-041` đã ghi). Một lưới chỉ bắt *"danh sách lịch sử rỗng"* **không** che được ca này, vì danh sách khi đó **không rỗng** — nó bằng đúng đầu nhánh.
+Đó **không** phải im lặng — nó **KHẲNG ĐỊNH LÀ LÀNH**, và cái đó tệ hơn im lặng (cùng câu `KF-048` đã ghi). Một lưới chỉ bắt *"danh sách lịch sử rỗng"* **không** che được ca này, vì danh sách khi đó **không rỗng** — nó bằng đúng đầu nhánh.
 
 Đã sửa bằng **hai** tầng, có chủ đích:
 
