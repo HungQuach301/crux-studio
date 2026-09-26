@@ -60,6 +60,15 @@ node ops/invariants.protected-area.ts --changed /tmp/changed.txt --head . \
 node ops/invariants.hotfix-lane.ts /tmp/hotfix.json
 # → {"lane":"hotfix"} đi ngay · {"lane":"normal"} cửa thường 12 giờ · {"lane":"needs-decision"} mở [QĐ]
 
+# Mục này đã có ai nhận chưa (P-041, KF-025)? Chạy ở bước 3 VÀ lại ở bước 4, đừng đoán.
+# File JSON: {prs:[{number,title,createdAt,closedAt,mergedAt,isDraft,updatedAt}], lane?, id?, now?}
+# `prs` dựng thẳng từ một lần liệt kê PR (mở LẪN đã đóng), đủ bảy trường — thiếu một trường thì tool NÉM,
+# không trả `free`. `mergedAt` lấy từ `merged_at`: endpoint liệt kê trả `merged:false` cho cả PR đã merge.
+pnpm claims /tmp/prs.json
+# → {"verdict":"open-pr"} ĐI MỤC KHÁC · {"verdict":"recently-merged"} đọc lại backlog, mục có thể vừa xong
+# → {"verdict":"abandoned-draft"} PR nháp bỏ quá 24 giờ, nhận được · {"verdict":"free"} rảnh
+# Trường `unreadable` khác rỗng = ảnh chụp có PR vô hình với phép đếm; một `free` khi đó là `free` chưa chắc.
+
 # Phạm vi sự cố của một `main` đỏ, dạng máy đọc (nguồn duy nhất cho điều kiện 2):
 pnpm check > /tmp/check.txt 2>&1; node ops/scripts/main-red-scope.ts /tmp/check.txt "$(git rev-parse HEAD)"
 
@@ -83,6 +92,7 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 - Tên nhánh: `claude/<lane>/<id>` — ví dụ `claude/visual/V-003`. Làn là một trong: `kernel`, `platform`, `verify`, `integration`, `topic`, `editorial`, `visual`, `audio`, `assembly`, `release`.
 - Nhận việc: tạo nhánh và **PR nháp** ngay từ đầu, tiêu đề `[<lane>] <id> — <tóm tắt>`. Đó là cách báo cho các worker khác biết mục đã có người nhận.
 - Thấy PR đang mở cho một mục thì **không nhận lại** mục đó. Ngoại lệ: PR nháp không có commit mới quá 24 giờ thì coi như bỏ.
+- **Đừng đọc bằng mắt, chạy `claimCheck`** (`ops/scripts/claim-collision.ts`, lệnh `pnpm claims`). Nó đọc chữ ký nhận việc từ **tiêu đề PR**, không từ tên nhánh — phiên cloud được gán nhánh ngẫu nhiên nên tên nhánh không nói được gì. Và chạy **ba lần**: lúc chọn mục, lại ngay trước khi push commit đầu tiên, rồi lần nữa trước khi bỏ nháp. Các mốc đó cách nhau cả một lượt làm việc; đúng khoảng trống ấy đã cho hai worker nhận cùng mục `I-020` cách nhau 89 giây, rồi cùng ngày lặp lại với mã `P-040` (#224/#225, 9,75 phút — lần đó phép hỏi trước khi bỏ nháp là thứ bắt được). Xem `KF-025`, mục `P-041`. Phán quyết `abandoned-draft` chính là ngoại lệ 24 giờ ở gạch đầu dòng trên, nay máy đọc chứ không phải mắt; tool **ném** khi đầu vào thiếu, và "ném" không bao giờ đọc thành `free`.
 - Commit sớm và thường xuyên, push sau mỗi bước có ý nghĩa. Phiên có thể dừng bất cứ lúc nào; việc đã push thì lần chạy sau làm tiếp được.
 - `git push -u origin <branch>`. Lỗi mạng thì thử lại tối đa 4 lần, giãn 2s/4s/8s/16s.
 - Xong việc: chạy `pnpm check`, cập nhật backlog (`status: review`) và `ops/logs/<lane>/<id>.jsonl` **trong cùng PR đó**, rồi chuyển PR khỏi trạng thái nháp.

@@ -21,6 +21,46 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 - **Máy chặn từ nay:** `ops/test/owner-waiting.test.ts` khoá từng luật con bằng **fixture nguyên văn** của ca thật, mỗi luật một bài **dương** và một bài **âm** — chiều hỏng đắt nhất là **nêu oan** (một `[QĐ]` mở bằng *"Không cần anh làm gì"* bị kéo vào mục này thì lần sau chủ dự án thôi đọc nó). Cộng một bài chạy trên **dữ liệu thật của repo** giữ tính chất *"lời giữ khai `không treo` ⇒ không nêu"*, và một bài khoá **vị trí** của khối trong `renderDigestMetrics` (`ops/test/digest-metrics.test.ts`) — vị trí là thứ chủ dự án đọc trong 60 giây đầu, nên nó không được để trong một lời dặn.
 - **Bài kiểm tác động (`A3` của `#251`) bắt được một dương tính giả trước khi merge, và nó nằm trong chính mục này:** lời giữ của `P-053` *nhắc* `[QĐ] reversible` khi kể hai vế C2/C3 đã tách, trong khi thứ nó chờ là một lượt `crux-digest` — tức chờ **máy**. Dấu hiệu `[QĐ]` trần vì thế bị siết thành `chờ … [QĐ]` trong cùng một câu, và ca thật đó thành một bài kiểm âm. Đúng lý do `A3` tồn tại: chạy lớp chặn mới trên toàn bộ tồn kho **trước** khi merge, không sau.
 - **Còn hở, khai trước:** phép đọc dựa vào **lời văn** của trường `- hold:` và thân `[QĐ]`, nên một lời giữ viết theo cách chưa gặp (không nhắc `chủ dự án`, không `chờ … [QĐ]`, không `cần người`) vẫn rơi. Danh sách dấu hiệu **cố ý hẹp** theo luật `A10` của `#251` — chỉ thêm khi có một ca thật lọt — nên hướng lệch là **nêu thiếu**, và đó là chỗ phải canh. Cách chữa tận gốc là một **trường máy đọc** trong mục backlog (`- waits: owner`) thay cho phép đọc lời văn; chưa làm vì nó đổi hình dạng mọi mục backlog và đáng một mục riêng.
+## KF-025 · Hai worker nhận cùng một mục backlog trong 89 giây, và không chỉ báo nào đỏ
+
+> Số **KF-025**: dò `## KF-` trên `main` **và trên đầu cả 7 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-024`, nên `KF-025` không đụng ai.
+
+**Chữ ký lỗi:** hai PR mang cùng một mã mục trong tiêu đề, sống chồng nhau; PR ra đời trước merge, PR ra đời sau kẹt xung đột vĩnh viễn với `main` vì mục của nó đã nằm trên `main` rồi.
+
+**Đã gặp:** **2 lần**, cả hai đo được, cả hai trong ngày 2026-09-24.
+
+| Lần | Mục | PR | Tạo lúc | Cách nhau | Kết cục |
+|---|---|---|---|---|---|
+| 1 | `integration/I-020` | [#221](https://github.com/HungQuach301/crux-studio/pull/221) `crux-worker-2` | 03:40:00Z | — | merge 03:44:45Z |
+| 1 | `integration/I-020` | [#222](https://github.com/HungQuach301/crux-studio/pull/222) `crux-worker-1` | 03:41:29Z | **1,48 phút** | còn mở, `aborted-ineligible` ở mọi lượt bước 0 kể từ đó |
+| 2 | `platform/P-040` | [#224](https://github.com/HungQuach301/crux-studio/pull/224) | 05:41:17Z | — | còn mở |
+| 2 | `platform/P-040` | [#225](https://github.com/HungQuach301/crux-studio/pull/225) | 05:51:02Z | **9,75 phút** | đổi mã sang `P-041` trước khi bỏ nháp |
+
+Lần thứ hai là **chính lượt viết ra mục sửa lỗi này**: phép dò mã mục chạy lúc 05:40Z, `#224` ra đời 05:41:17Z — **77 giây sau**. Hai PR gộp **sạch** vào nhau, nên nếu cả hai vào `main` thì `main` mang hai mục `### P-040` cộng một file log trộn hai việc (`ops/logs/**/*.jsonl` khai `merge=union`), mà không gì đỏ.
+
+Lần thứ hai cũng là lần đầu tiên một chỗ hỏng nhóm Z của repo này **tự bắt được chính nó**: bộ dò dưới đây, chạy ở vòng soát ngữ cảnh sạch (phụ lục P1 bước 6), nêu ra va chạm trước khi PR bỏ nháp. Sổ nhóm Z tới trước hôm nay ghi tỉ lệ tự phát hiện **0/3**; đây là ca đầu khác 0. Nó cũng là bằng chứng chạy thật rằng phép hỏi **lại** ở bước 4 — chứ không chỉ ở bước 3 — là phần bắt buộc.
+
+**Nguyên nhân gốc.** Phụ lục P1 bước 3 hỏi *"chưa có nhánh `claude/<lane>/<id>` và chưa có PR mở"* **đúng một lần**, lúc lượt chạy bắt đầu duyệt backlog. Giữa mốc đó và lúc push commit đầu tiên là cả một giờ làm việc, và không cổng nào hỏi lại. Hai worker chạy chồng nhau (cấu hình 3 worker, `VF-G1`) thì cửa sổ ấy đủ rộng.
+
+Hai tín hiệu nhận việc đang có đều không bắt được:
+
+- **Tên nhánh đã chết.** Phiên cloud được nền tảng gán nhánh ngẫu nhiên (`claude/dreamy-ride-oh9k8r`), nên `laneFromBranch` trả `null` cho **5 trên 7** PR đang mở lúc ghi mục này. Một bộ dò neo vào tên nhánh im lặng đúng ở những PR nó cần bắt nhất.
+- **Trạng thái `claimed` chưa bao giờ tồn tại thật.** `ops/lanes/README.md` có nó trong bảng và dặn *"Nhận xong đổi thành `claimed` ngay trong PR nháp"*, nhưng CHARTER phụ lục P1 bước 4 không nhắc tới, chưa lượt nào ghi, và không phép kiểm nào đọc. Một trạng thái không ai ghi và không ai đọc là một luật không tồn tại.
+
+**Vì sao nó là nhóm Z.** Cả hai PR đều xanh: CI xanh, `pnpm check` xanh, nhãn đúng, `pickPrToHandle` không thấy gì bất thường. Chỗ hỏng chỉ lộ ra ở chỗ không ai nhìn — một lượt worker (giả định **G3**, trần số lần chạy mỗi ngày) đã tiêu, và hàng đợi merge nhận thêm một PR không bao giờ gỡ được. Đúng công thức: **một thứ ở ngoài đếm và so**, không phải một thứ ở trong tự khai.
+
+**Máy chặn từ nay** (mục `platform/P-041`):
+
+- `ops/scripts/claim-collision.ts` đọc chữ ký nhận việc từ **tiêu đề PR** (`[<lane>] <id> — …`), cùng hình dạng mà `hasCompletionCommit` đã đọc — không đọc tên nhánh.
+- `claimCheck(prs, lane, id, now)` trả `open-pr` · `recently-merged` · `free`. Phụ lục P1 bước 3 và bước 4 gọi nó, và gọi **lại ngay trước khi push commit đầu tiên**: khoảng trống giữa hai mốc đó chính là 89 giây trên.
+- `duplicateClaims(prs)` bắt mọi cặp PR cùng mục có **thời gian sống chồng nhau**, tính cả PR đã merge — ca `#221`/`#222` cho thấy phép dò chỉ nhìn PR đang mở sẽ tắt tiếng đúng vào lúc chỗ hỏng thành vĩnh viễn.
+- Phân biệt với **sóng nối tiếp** (`P-014`: `#62`, `#196`, `#223`) bằng thời gian sống, không bằng mã mục. Một bộ dò kêu sai vài lần là một bộ dò bị tắt.
+- **Tiền tố `🤖`** của `CLAUDE.md` mục 5 được bỏ qua khi đọc tiêu đề. 29 commit trên `main` mang nó, trong đó `🤖 [platform] P-038 — …` (#212) là một PR nhận mục **thật**: neo cứng vào `[` làm `claimCheck` trả `free` cho một mục đang có người giữ, tức fail-open ở đúng chỗ luật này chữa.
+- **Đầu vào thiếu hay hỏng thì ném, không trả `free`** — tên làn ngoài `LANES`, `now` không đọc được, `PrSnapshot` thiếu `closedAt`/`isDraft`/`updatedAt`. Cả ba trước đây cho `free` im lặng và exit 0; nay CLI in `⚠ KHÔNG TRẢ LỜI ĐƯỢC` và thoát 2. "Không trả lời được" khác "không ai giữ mục này", và phải khác cả ở mã thoát (`Z15`).
+- **Ngoại lệ PR nháp bỏ quá 24 giờ** (`CLAUDE.md` mục 2) không bị luật mới nuốt: verdict `abandoned-draft`. Thiếu nó thì `#222` khoá `integration/I-020` vĩnh viễn, và luật mới nói ngược luật cũ đứng ngay trên nó.
+- `ops/test/claim-collision.test.ts`, **29 bài**, mở đầu bằng bốn bài tái hiện đúng mốc thật của `#221`/`#222` và `#224`/`#225` (bất biến I2). Chạy thật trên ảnh chụp PR thật: đúng **2** va chạm, cả hai thật, **0** báo giả trên hai sóng của `platform/P-014`.
+
+**Còn thiếu, khai ra:** va chạm chưa nổi lên bản tin ngày (`digest-metrics.ts` đang bị `#223` sửa, để PR sau nối), và mâu thuẫn `claimed` giữa `ops/lanes/README.md` và phụ lục P1 bước 4 vẫn còn nguyên.
 ## KF-041 · Trường máy đọc `- hold:` bị đọc **cắt giữa câu** khi lý do xuống dòng, và chữ bị mất đi thẳng tới mắt chủ dự án
 
 > Số **KF-041**: dò `## KF-` trên `main` (cao nhất `KF-036`) **và trên đầu cả 12 PR đang mở** trước khi viết (`KF-005`). Cao nhất tìm được là `KF-040` (PR `#264`), nên số trống kế tiếp là `KF-041`.

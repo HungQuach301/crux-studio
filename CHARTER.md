@@ -740,10 +740,20 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    `readyNow` đã tính cả mục còn `status: review` mà PR của nó đã vào `main` thật, nên một `deps` "trông như chưa
    xong" không chặn oan; trường `blocked` nói rõ mục nào còn chờ ai. Duyệt các làn theo thứ tự ưu tiên trong
    ops/lanes/priority.md và nhận mục `readyNow` đầu tiên gặp được mà chưa có nhánh claude/<lane>/<id> và chưa có PR
-   mở (PR nháp không có commit mới quá 24 giờ coi như đã bỏ). Chỉ in "idle" khi `readyNow` rỗng, hoặc mọi mục trong
-   đó đều đã có nhánh hay PR — và khi in `idle`, dán luôn `readyNow` để lượt sau biết đó là hàng đợi thật chứ không
-   phải một phép đọc sai. Không có mục nào thì kết thúc, không commit gì.
+   mở (PR nháp không có commit mới quá 24 giờ coi như đã bỏ). Phép hỏi "đã có ai giữ mục này chưa" chạy bằng
+   `claimCheck` của `ops/scripts/claim-collision.ts`, đừng đọc bằng mắt: nó đọc chữ ký từ TIÊU ĐỀ PR
+   (`[<lane>] <id> — …`), vì nền tảng gán nhánh ngẫu nhiên nên tên nhánh không nói được gì (mục `P-041`).
+   Bốn phán quyết: `open-pr` → đi mục khác; `abandoned-draft` → PR nháp bỏ quá 24 giờ, nhận được (đó là ngoại lệ
+   ngay trên, nay máy đọc chứ không phải mắt); `recently-merged` → đọc lại backlog, mục có thể vừa xong; `free`
+   → nhận. Tool NÉM khi đầu vào thiếu, và "ném" không bao giờ được đọc thành `free`. Chỉ in "idle" khi `readyNow`
+   rỗng, hoặc mọi mục trong đó đều đã có nhánh hay PR — và khi in `idle`, dán luôn `readyNow` để lượt sau biết đó
+   là hàng đợi thật chứ không phải một phép đọc sai. Không có mục nào thì kết thúc, không commit gì.
 4. Nhận mục: tạo nhánh claude/<lane>/<id>, push, mở PR nháp tiêu đề "[<lane>] <id> …", mô tả PR bắt đầu bằng 🤖.
+   Chạy `claimCheck` LẠI ngay trước khi push commit đầu tiên, trên danh sách PR vừa liệt kê lại — và chạy lần
+   nữa ở bước 6, trước khi bỏ nháp. Bước 3 và bước 4 cách nhau cả một lượt làm việc, và đúng khoảng trống đó
+   đã cho hai worker nhận cùng mục `I-020` cách nhau 89 giây ngày 2026-09-24 (`KF-025`): PR trước merge, PR sau
+   kẹt xung đột vĩnh viễn, và không gì đỏ. Cùng ngày nó lặp lại lần hai với mã `P-040` (#224/#225, 9,75 phút),
+   và lần đó phép hỏi ở bước 6 là thứ bắt được.
 5. Làm theo tiêu chí xong của mục. Commit và push sau mỗi bước có ý nghĩa. Chạy `pnpm check` và tập vàng replay.
    PR sửa lỗi phải có test tái hiện lỗi.
 6. Gọi subagent reviewer (ngữ cảnh sạch) soát diff theo CHARTER mục 3 đến 6; sửa các điểm nó nêu.
