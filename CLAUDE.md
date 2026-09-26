@@ -103,6 +103,8 @@ Cập nhật snapshot tập vàng (`pnpm replay -- --update`) phải đi trong *
 - Commit sớm và thường xuyên, push sau mỗi bước có ý nghĩa. Phiên có thể dừng bất cứ lúc nào; việc đã push thì lần chạy sau làm tiếp được.
 - `git push -u origin <branch>`. Lỗi mạng thì thử lại tối đa 4 lần, giãn 2s/4s/8s/16s.
 - Xong việc: chạy `pnpm check`, cập nhật backlog (`status: review`) và `ops/logs/<lane>/<id>.jsonl` **trong cùng PR đó**, rồi chuyển PR khỏi trạng thái nháp.
+- **Nhãn tự merge gắn SAU vòng soát bước 6, không bao giờ trước** (`🤖 [QĐ]` `#96` phương án A — `reversible`, làm ngay; `KF-026`). Cửa `open` merge **ngay khi CI xanh**, đo được 83 / 76 / 54 giây ở ba lần đã xảy ra, mà một lượt soát ngữ cảnh sạch mất 6–7 phút — nên gắn nhãn trước là bảo đảm vòng soát không kịp chặn gì. Giữ PR ở trạng thái **nháp** cho tới khi bước 6 xong là cách rẻ nhất: PR nháp không vào hàng đợi merge.
+- **Push vào PR đã mang sẵn nhãn tự merge thì GỠ NHÃN trước khi push, gắn lại sau bước 6.** Đây là ca mà luật trên không phủ, và nó đã xảy ra thật (`KF-026` lần 3, `#258`): nhãn nằm sẵn trên PR từ lượt mở nó, rồi bước 2 của phụ lục P1 bảo worker khác push thẳng vào — không ai "gắn nhãn" cả, mà nội dung vẫn vào `main` sau 54 giây với 0 vòng soát. Bản sửa bằng máy (nhãn hết hiệu lực khi `head.sha` đổi) nằm ở `integration/I-021`, chạm vùng `owner-merge` nên còn ⬜; tới khi có nó, đây là lời dặn.
 - Gắn nhãn theo **cửa merge** (CHARTER mục 3, quyết định `D-C06`). **Không đoán** — chạy lệnh ở mục 1 và lấy trường `gate`:
 
   | `gate` | Nhãn | Chuyện gì xảy ra |

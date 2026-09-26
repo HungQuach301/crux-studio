@@ -69,7 +69,14 @@ export function buildReviewPrompt(changedFiles: readonly string[], diff: string)
     // `parseReviewFindings` dưới đây kiểm lại đầu ra thật và
     // `formatComment` không bao giờ đăng một bản tóm tắt như thể nó là soát chéo.
     'ĐẦU RA BẮT BUỘC là một DANH SÁCH PHÁT HIỆN, mỗi phát hiện đúng MỘT DÒNG, ' +
-    `bắt đầu bằng mức "${BLOCKING_LEVEL}" hoặc "${ADVISORY_LEVEL}", rồi dấu "${LEVEL_SEPARATOR}", rồi phát hiện. Ví dụ:\n` +
+    `bắt đầu bằng mức "${BLOCKING_LEVEL}" hoặc "${ADVISORY_LEVEL}", rồi dấu "${LEVEL_SEPARATOR}", rồi phát hiện.\n` +
+    // TIÊU CHÍ của từng mức, không chỉ cú pháp. Hai vế này đến từ bản cài đặt
+    // của `#257` và suýt bị lần gộp `P-054` bỏ mất: bản ở đây dạy hình dạng
+    // rất kỹ mà không nói cái gì LÀM một phát hiện thành `CHẶN`, nên mô hình
+    // tự chọn mức — và một bộ đọc chặt về cú pháp không bắt được mức sai.
+    `"${BLOCKING_LEVEL}" là lỗi phải sửa TRƯỚC KHI MERGE: vi phạm bất biến máy chặn, rò rỉ secret, ` +
+    `phá ranh giới kernel/xưởng, hoặc sai đúng/sai. "${ADVISORY_LEVEL}" là điểm nên sửa nhưng KHÔNG chặn merge.\n` +
+    'Ví dụ:\n' +
     `${BLOCKING_LEVEL} ${LEVEL_SEPARATOR} kernel/src/packs.ts nạp pack mà không validate, một pack hỏng đi thẳng vào xưởng.\n` +
     `${ADVISORY_LEVEL} ${LEVEL_SEPARATOR} ops/scripts/x.ts lặp lại hằng số đã có ở kernel, hai bản sẽ lệch nhau.\n` +
     `Không tìm thấy gì thì trả về ĐÚNG MỘT DÒNG: "${NO_FINDING_PHRASE}".\n` +

@@ -12,6 +12,7 @@ Tín hiệu của rủi ro **R12** (độ phức tạp tự phình to) và **B1*
 | 2026-09-21 | 46 | 10 | 5 | Đếm tự động bằng `ops/scripts/update-metrics.ts` (mục `I-002`). |
 | 2026-09-24 | 83 | 26 | 3 | Đếm tự động bằng `ops/scripts/update-metrics.ts` (mục `I-002`). |
 | 2026-09-25 | 94 | 40 | 2 | Đếm tự động bằng `ops/scripts/update-metrics.ts` (mục `I-002`). |
+| 2026-09-26 | 103 | 41 | 3 | Đếm tự động bằng `ops/scripts/update-metrics.ts` (mục `I-002`). |
 
 Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩa là một mục đã đẻ ra nhiều code hơn giá trị nó mang lại — đó là lúc gọi routine integrator dọn dẹp.
 
@@ -19,7 +20,7 @@ Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩ
 
 | Tuần | Lần merge | Lần revert | Tỷ lệ `main` xanh |
 |---|---|---|---|
-| 2026-09-20 → 2026-09-25 | 213 | 0 | 100% (không lần nào phải revert) |
+| 2026-09-20 → 2026-09-26 | 233 | 0 | 100% (không lần nào phải revert) |
 
 ## Thước đo quá trình xây (CHARTER 1.3)
 
@@ -43,3 +44,4 @@ Tỷ lệ này tăng dần đều là bình thường. Tăng đột ngột nghĩ
 | 2026-09-21 | 0 | 0 | 0% |
 | 2026-09-24 | 1.05 | 3.59 | 0% |
 | 2026-09-25 | 1.99 | 5.58 | 0% |
+| 2026-09-26 | 0 | 6.65 | 1% |
