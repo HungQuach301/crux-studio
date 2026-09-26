@@ -13,7 +13,7 @@ Hai chỗ khác nhau, **cùng một chữ ký**: một phép đo của bước 0
 
 - deps: —
 - risk: low — cả hai chỗ sửa là *làm cho phép đo ném thay vì trả ca lành*. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
-- status: ready
+- status: review
 - nguồn: vòng soát ngữ cảnh sạch (bước 6) của PR bước 0 lượt `crux-worker-2` `2026-09-26T22:18Z`, phát hiện `N6` và phép phá thử thứ 15; `ops/scripts/step0-pending-branches.ts`; `ops/scripts/cross-lane.ts`; `ops/known-failures.md` `KF-041`; mục `platform/P-056`
 - tiêu chí xong:
   - `step0PendingBranches` đo **đối chiếu với `origin/main`**, không với cây làm việc — hoặc, nếu giữ mặc định cây, thì **nói ra** trong báo cáo rằng nó đang đo cây nào và ném khi không xác định được nhánh chính. Im lặng là thứ duy nhất không được phép.
@@ -21,6 +21,14 @@ Hai chỗ khác nhau, **cùng một chữ ký**: một phép đo của bước 0
   - `cross-lane.ts` (và mọi script `ops/scripts/**` chỉ đọc `stdin`) **ném** với mã thoát khác 0 khi nhận một cờ nó không hiểu, thay vì đọc `stdin` rỗng rồi trả "0". Cộng một bài `spawnSync` chạy CLI thật.
   - Khai rõ **cái không sửa ở đây**: mục này không thêm cờ `--changed` cho `cross-lane.ts`; nó chỉ cấm cái im lặng. Thêm cờ là một quyết định khác, và thêm nó bằng cách đoán là đúng thứ luật `A10` cấm.
 - **mã mục nhận lúc 2026-09-26 ~22:3xZ** (`ops/logs/README.md`, `KF-005`): dò `### P-` trên `origin/main` **và trên đầu nhánh cả 4 PR đang mở** (#293 #284 #260 #223) — cao nhất là `P-061`, nên `P-062` không đụng ai.
+- kết quả (lượt `crux-worker-1` `2026-09-26T23:4xZ`, PR #301):
+  - `pnpm step0:pending` (`--from-remote`) nay đối chiếu với **`origin/main`** qua `git ls-tree --full-tree` (hàm `mergedStep0LogIdsFromRef`), không với cây làm việc. Ném khi ref không tồn tại **và** khi ref có thật mà không có file `.jsonl` nào dưới thư mục log (rỗng là thư mục/ref sai, không phải "chưa dòng nào tới"). Báo cáo khai nguồn đo (`mergedSource`, in dòng `đối chiếu với: …`) và đánh dấu `inTree` cho nhánh đã cherry-pick vào cây này — **không** rút nhánh đó khỏi `pending`. Cờ thiếu giá trị (`--now`, `--logs-dir`, `--main-ref`, `--branches`) thoát 2 thay vì rơi về mặc định; `--main-ref` và `--logs-dir` loại trừ nhau.
+  - `--branches` (dạng `watchdog.yml` dấu hiệu 7 gọi trên bản checkout của `main`) **giữ** cây làm việc làm mặc định — đổi nó phải sửa `ops/workflows/watchdog.yml` (cửa `automerge-delayed`), mục này không cần — nhưng nay báo cáo nói ra `CÂY LÀM VIỆC … chỉ đúng khi cây này là nhánh chính`.
+  - Lỗi tái hiện **ngay trên nhánh của lượt này**: sau bước 0f cherry-pick 1 dòng log, bản cũ in *"không nhánh nào còn dòng log chưa vào nhánh chính"*; bản mới in 1 nhánh `pending` kèm `inTree`.
+  - Helper `ops/scripts/stdin-only-args.ts` (`unexpectedArgs`/`rejectUnexpectedArgs`) áp vào `cross-lane.ts`, `check-golden-pr.ts` (không đối số) và `pick-ci-run.ts` (tối đa 1 đối số vị trí `headSha`). `pick-ci-run.ts --head abc` trước đây nhét `--head` vào `headSha` rồi in `{}` với mã 0 — tức "CI chưa xanh" cho một lần gọi sai. Mọi chỗ gọi thật trong `ops/workflows/*.yml` đã soát: không chỗ nào truyền cờ.
+  - **Không sửa ở đây, khai ra:** không thêm cờ `--changed` cho script nào (luật `A10`). `alert-escalation.ts`/`alert-resolution.ts` cũng đọc stdin nhưng nhận đối số vị trí tuỳ ý (marker, tiêu đề issue) nên không phải "chỉ đọc stdin" — để nguyên. `pick-ci-run.ts ""` (`$HEAD` rỗng) vẫn in `{}` như trước — hành vi có sẵn, không tệ hơn.
+  - Bài tái hiện (I2): 9 bài đỏ trên bản `origin/main` của bốn script, xanh ở đây; vòng soát bước 6 phá thử 8 chỗ, bài bắt cả 8.
+
 
 ### P-061 · `pnpm -s check` đỏ trên cây mà `pnpm check` xanh — chặn cái bẫy "`main` đỏ" giả (KF-045)
 

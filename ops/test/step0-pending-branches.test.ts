@@ -476,3 +476,35 @@ test('P-062: `--branches` (dạng watchdog.yml) giữ cây làm việc làm mặ
     assert.match(JSON.parse(result.stdout).mergedSource, /CÂY LÀM VIỆC/);
   });
 });
+
+test('P-062: ref có thật mà không có log bước 0 nào thì NÉM, không coi là "chưa dòng nào tới"', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crux-step0-empty-'));
+  try {
+    const git = (...args: string[]): string => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    git('commit', '-q', '--allow-empty', '-m', 'rỗng');
+    const list = join(dir, 'branches.txt');
+    writeFileSync(list, '');
+    const result = spawnSync(process.execPath, [SCRIPT, '--branches', list, '--main-ref', 'main'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /không có file `\.jsonl` nào/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('P-062: đo từ thư mục con vẫn đúng (`--full-tree`)', () => {
+  withCherryPickedRepo((dir, logId) => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--json'], {
+      cwd: join(dir, 'ops'),
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).pending.map((row: { logId: string }) => row.logId), [logId]);
+  });
+});

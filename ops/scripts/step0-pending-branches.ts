@@ -311,7 +311,9 @@ export function mergedStep0LogIdsFromRef(ref: string, dir = STEP0_LOG_DIR): stri
         'cây của một nhánh lượt chạy có thể đã mang sẵn dòng log vừa cherry-pick (mục P-062).',
     );
   }
-  const run = spawnSync('git', ['ls-tree', '--name-only', ref, '--', `${dir}/`], {
+  // `--full-tree`: không có nó, `ls-tree` hiểu đường dẫn theo thư mục đang
+  // đứng — gọi từ `ops/` là rỗng với mã 0 (vòng soát bước 6 của P-062).
+  const run = spawnSync('git', ['ls-tree', '--full-tree', '--name-only', ref, '--', `${dir}/`], {
     encoding: 'utf8',
   });
   if (run.status !== 0) {
@@ -320,11 +322,20 @@ export function mergedStep0LogIdsFromRef(ref: string, dir = STEP0_LOG_DIR): stri
         (run.stderr ?? '').trim(),
     );
   }
-  return (run.stdout ?? '')
+  const ids = (run.stdout ?? '')
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.endsWith('.jsonl'))
     .map((line) => line.slice(line.lastIndexOf('/') + 1, -'.jsonl'.length));
+  // Nhánh chính luôn có dòng log bước 0 từ `P-023`; rỗng nghĩa là thư mục sai
+  // hoặc ref sai, không phải "chưa dòng nào tới". Ném, đừng đo tiếp.
+  if (ids.length === 0) {
+    throw new Error(
+      `Ref \`${ref}\` không có file \`.jsonl\` nào dưới \`${dir}/\` — thư mục hoặc ref sai. ` +
+        'KHÔNG đo được mã log trên nhánh chính (mục P-062).',
+    );
+  }
+  return ids;
 }
 
 /** Mã sha ngắn của một ref, để báo cáo nói đúng nó đã đo ở đâu. */
