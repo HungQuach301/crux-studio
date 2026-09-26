@@ -6,6 +6,66 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-044 · PR mở, CI xanh, **không mang nhãn cửa merge nào** — `automerge.yml` lọc theo nhãn nên nó không chậm, nó KHÔNG BAO GIỜ vào hàng đợi
+
+> Số **KF-044**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-043` (`#282`), nên `KF-044` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` EXIT=0, CI **8/8 xanh**, `main` xanh, PR **gộp sạch** nên bước 0a không nhìn tới, `pickPrToHandle` không có lý do nào khớp, và `pnpm claims` thấy PR đó "đang giữ mục" nên worker khác cũng tránh nó.
+
+- **Lần gặp: 1** — nhưng nó là hệ quả **đã đo được** của một mục đã merge (`P-048`), không phải một nguy cơ suy ra. Xem phép đo dưới.
+- **Nguyên nhân gốc:** nhãn cửa merge chỉ được gắn trong một lượt `pull_request` của `ops/workflows/ci.yml` (`types: [opened, synchronize, reopened, labeled, unlabeled]`; `workflow_dispatch` chạy đúng `check` và `secret-scan`, **không** chạy khối gắn nhãn). **Không cron nào, không routine nào gắn lại nhãn cho một PR đang mở.** Nên một PR đã xanh **trước** khi luật gắn nhãn đổi đứng lại không nhãn nào, và không sự kiện nào tới để gắn.
+- **Đã sửa ở đâu:** **chưa sửa** — mục này ghi phép đo và mở `platform/P-060`. `P-048` đã sửa *luật gắn nhãn*; phần **tồn đọng** (PR xanh từ trước) thì `P-048` tự khai bằng lời ở ô ⬜ cuối (*"#223 không tự thoát nhờ PR này"*) mà không đặt hạn và không chỉ báo nào.
+- **Máy chặn từ nay:** `ops/scripts/merge-queue-orphans.ts` (`pnpm queue:orphans`) **đo** được nó — hàm thuần `queueOrphans`, 28 bài kiểm, thoát 1 khi có PR quá ngưỡng hoặc có `problems`. Chỗ **chạy định kỳ** vẫn ⬜ (`P-060`): tool có mà không lượt nào gọi thì vẫn là văn xuôi.
+
+**Chữ ký:** một PR đang mở, `isDraft: false`, mọi check `success`, mà `labels` **không chứa** nhãn nào trong `automerge` / `automerge-delayed` / `owner-merge`.
+
+### Phép đo, bước 0 lượt `crux-worker-2` `2026-09-26T08:2xZ`
+
+```
+gh pr list --state open  → 7 PR: #223 #231 #249 #260 #261 #274 #282
+nhãn:  #231 #249 #261 [fix, automerge-delayed] · #260 #274 [automerge-delayed] · #282 [automerge]
+       #223 → []                                  ← rỗng, PR duy nhất
+#223:  isDraft false · CI 8/8 success (lượt 36098801723, 2026-09-25T05:29:54→05:30:40Z)
+       git merge-tree --write-tree origin/main <đầu nhánh> → EXIT=0 (gộp SẠCH)
+       đầu nhánh e0970d0 đứng yên từ 2026-09-25T05:28:04Z  → 27,0 giờ
+ops/workflows/automerge.yml:109
+  select(.labels | map(.name) | (index("automerge") != null or index("automerge-delayed") != null))
+```
+
+Một PR không mang nhãn nào trong hai nhãn đó **không bao giờ** vào danh sách ứng viên, nên phép tính lại cửa merge của `automerge.yml` (`CLAUDE.md` mục 3) không bao giờ chạy cho nó.
+
+### Vì sao 27 giờ, khi bản sửa `P-048` đã nằm trên `main` từ 13,7 giờ trước
+
+| Mốc | Chuyện gì |
+|---|---|
+| `2026-09-25T05:28:04Z` | lượt `crux-worker-2` gộp `main` vào #223, push `e0970d0` — lần đổi đầu nhánh **cuối cùng** |
+| `2026-09-25T05:30:40Z` | CI 8/8 xanh trên `e0970d0`; luật gắn nhãn khi đó còn **thiếu** nhánh `open` (`KF-032`) |
+| `2026-09-25T18:46:27Z` | `P-048` (`#252`) vào `main`: nhánh `*)` của `case "$GATE"` nay `--add-label automerge` |
+| `2026-09-26T08:2xZ` | #223 **vẫn** `labels: []` — 13,7 giờ sau bản sửa, không một lượt `ci.yml` nào chạy trên nó |
+
+Bản sửa đúng và không thiếu gì; nó chỉ **không có đường tới các PR đã xanh từ trước** — cần một sự kiện `pull_request` mà không ai sinh ra. `workflow_dispatch` cũng không gỡ được: khối gắn nhãn khoá sau `if: github.event_name == 'pull_request'`.
+
+### Vì sao không phép đếm nào hiện có thấy nó
+
+| Bộ đếm | Vì sao mù |
+|---|---|
+| bước 0a (phụ lục P3) | chỉ liệt kê PR **đang xung đột**; #223 gộp sạch |
+| `pickPrToHandle` (P1 bước 2) | bốn lý do là `ci-red`, `unhandled-comment`, `red-after-merge`, `aborted-ineligible` — #223 không khớp lý do nào |
+| `gate-flow.ts` / `gateFlowVerdict` | `delayedCount` chỉ đếm PR **đã mang** nhãn `automerge-delayed`; PR không nhãn rơi ra ngoài cả mẫu số |
+| bản tin "Đang chờ merge" (phụ lục P2) | liệt kê PR `automerge-delayed` và PR kẹt ở hàng đợi; PR chưa từng vào hàng đợi không thuộc nhóm nào |
+| `watchdog.yml` bảy dấu hiệu | không dấu hiệu nào đọc nhãn PR |
+| `pnpm claims` | trả `open-pr` cho mục `platform/P-014` — đúng, nhưng nó nói "có người nhận", không nói "PR đó không đi đâu được" |
+
+### Chiều hỏng, và vì sao nó đắt hơn một PR đứng yên
+
+PR càng **sạch** (cửa `open`, không chạm vùng bảo vệ) thì càng chắc chắn kẹt theo cách này — cùng nhận xét `P-048` đã ghi. Và nó **giữ luôn mã mục**: `claimCheck` đọc chữ ký từ tiêu đề PR, nên chừng nào #223 còn mở, mục `platform/P-014` còn ở `readyNow` mà mọi worker đều "đi mục khác". Một PR kẹt vì thế khoá một mục `ưu tiên cao` chứ không chỉ khoá chính nó — đo được: `P-014` đứng ở `readyNow` suốt ba lượt worker liên tiếp (`05:34Z`, `06:29Z`, `07:25Z`) với đúng lý do đó.
+
+### Chỗ đã sửa
+
+Chưa có. Bản gỡ #223 **không** nằm trong mục này: gắn `automerge` cho một PR cửa `open` đã xanh là merge nó gần như tức thì, mà `CLAUDE.md` mục 13 đòi một vòng soát ngữ cảnh sạch trước khi gắn nhãn merge — nên nó là việc của một lượt nhận đúng PR #223, hoặc của chủ dự án. Mục này làm chỗ kẹt **thấy được**; `platform/P-060` giữ phần còn lại.
+
+---
+
 ## KF-042 · `claimCheck` trả `free` cho một mục đang có **hai** PR mở làm nó, vì mã trong tiêu đề PR lệch mã trong cây `main`
 
 > Số **KF-042**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-041`, nên `KF-042` không đụng ai.
