@@ -6,6 +6,50 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-045 · `pnpm -s check` **đỏ** trên đúng cây mà `pnpm check` **xanh** — `-s` xuất `npm_config_reporter=silent`, và `pnpm` lồng bên trong im theo
+
+> Số **KF-045**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-044`, nên `KF-045` không đụng ai.
+
+**Nhóm Z lộn chiều** — không phải "hỏng mà chỉ báo xanh", mà **"lành mà chỉ báo đỏ"**, và cái đỏ đó chỉ điều kiện của CHARTER mục 13: *"`main` đỏ thì revert ngay"*. Một lượt đọc sai chỗ này mở một PR revert cho một `main` đang xanh, cộng nhãn `hotfix` của `D-C07` — tức tiêu đúng thứ đắt nhất (thời gian của chủ dự án, lối đi nhanh bỏ khoảng chờ) cho một chỗ không hỏng.
+
+- **Lần gặp: 1.** Bước 0 lượt `crux-worker-2` `2026-09-26T12:2xZ`.
+- **Nguyên nhân gốc:** `pnpm -s run <script>` (và `pnpm -s <script>`) xuất **`npm_config_reporter=silent`** vào môi trường của script. Mọi `pnpm` **lồng** bên trong kế thừa biến đó và in **0 byte** ra cả `stdout` lẫn `stderr`. `verifyLockfileInstall` (`ops/scripts/integrator-lockfile.ts`) cài thật rồi gói *nguyên văn đầu ra* của `pnpm` vào trường `reason`; với biến đó thì `reason` còn đúng mã thoát mà **mất hết chữ**. Bài `TÁI HIỆN I-006` (`ops/test/integrator-clean-merge-lockfile.test.ts:151`) khớp `reason` với `/ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY/`, nên nó đỏ — **đỏ đúng**, nhưng đỏ vì cách gọi cổng, không vì cây.
+- **Chỗ đau hơn bài kiểm:** docblock của `verifyLockfileInstall` **hứa** bằng chữ: *"Nguyên văn đầu ra của `pnpm` đi kèm trong `reason` để người đọc phân biệt được hai ca"* — hai ca là *lockfile lệch manifest* và *không ra được mạng*. Lời hứa đó **bốc hơi** khi hàm chạy dưới một lượt gọi mang `npm_config_reporter=silent`, và integrator ở bước 0b của phụ lục P3 gọi đúng hàm này để quyết `aborted-ineligible`. Ở đó không bài kiểm nào đỏ hộ: ghi chú lượt chạy chỉ còn `(mã 1):` rồi hết câu.
+- **Đã sửa ở đâu:** **chưa sửa** — mục này ghi phép đo và mở `platform/P-061`.
+- **Máy chặn từ nay:** chưa có. Không cổng nào bắt một biến môi trường kế thừa, và `pnpm check` trong CI không mang `-s` nên CI không bao giờ gặp ca này — đúng hình dạng "chỉ lộ ra trên máy của worker".
+
+**Chữ ký:** `pnpm -s check` (hoặc `pnpm -s test`) thoát 1 với đúng **một** bài đỏ — `TÁI HIỆN I-006` — kèm `AssertionError` *"The input did not match the regular expression /ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY/. Input: 'pnpm install --frozen-lockfile đỏ trên cây vừa gộp (mã 1): '"* (chuỗi rỗng sau dấu hai chấm), trong khi `pnpm check` trên **cùng** cây thoát 0.
+
+### Phép đo — sáu vòng đỏ, bốn vòng xanh, cùng một cây
+
+```
+cây: nhánh lượt này (chỉ thêm 7 file .jsonl) VÀ worktree origin/main b9f8b25, kết quả GIỐNG NHAU
+
+pnpm -s test           ×6  → 1564/1565 pass, 1 fail  (bài 734)
+pnpm test              ×1  → 1565/1565 pass, 0 fail
+node --test <4 glob>   ×1  → 1565/1565 pass, 0 fail   (song song, mặc định, nproc=4)
+pnpm exec node --test  ×1  → 1565/1565 pass, 0 fail
+node --test <1 file>   ×3  → 6/6 pass                 (chạy lẻ không bao giờ đỏ)
+pnpm check (thật)          → EXIT=0 · 1565/1565 · pnpm replay EXIT=0 · tập vàng 6/6 xưởng
+CI GitHub: main-ci trên b9f8b25 → success (2026-09-26T09:46:04Z)
+```
+
+Biến duy nhất, đo trực tiếp bằng một gói rỗng trong `/tmp`:
+
+```
+pnpm -s run dump  → npm_config_reporter=silent        ← có
+pnpm    run dump  → (không có biến đó)
+
+npm_config_reporter=silent pnpm install --frozen-lockfile  → rc=0, stdout 0B, stderr 0B
+                           pnpm install --frozen-lockfile  → rc=0, stdout 105B
+```
+
+### Vì sao "song song" là chẩn đoán SAI, và nó đã suýt được ghi vào đây
+
+Bốn vòng đầu đều gọi `pnpm -s test`, và vòng đối chứng đầu tiên lại gọi `node --test` một file — nên hai biến (cách gọi cổng, và số bài chạy cùng lúc) đổi **cùng lúc**, và chẩn đoán dễ nhất là *"bài kiểm nhạy với tải, 4 CPU nên tranh nhau"*. Vòng `node --test` trên **toàn bộ** 1565 bài, song song, mặc định — **xanh** — mới tách được hai biến ra. Ghi lại ở đây vì đó là đúng cái bẫy mà `I-021` đếm: một con số đo được ghép với một lời giải thích chưa đo.
+
+---
+
 ## KF-044 · PR mở, CI xanh, **không mang nhãn cửa merge nào** — `automerge.yml` lọc theo nhãn nên nó không chậm, nó KHÔNG BAO GIỜ vào hàng đợi
 
 > Số **KF-044**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-043` (`#282`), nên `KF-044` không đụng ai.
