@@ -39,6 +39,8 @@
  * file đi kèm — và một ngoại lệ rộng là chỗ mà "PR riêng" bắt đầu rò.
  */
 
+import { rejectUnexpectedArgs } from './stdin-only-args.ts';
+
 const GOLDEN_PREFIX = 'ops/golden/';
 
 /**
@@ -103,6 +105,9 @@ export function goldenOnlyProblems(changedFiles: readonly string[]): string[] {
 const isMain = process.argv[1]?.endsWith('check-golden-pr.ts') === true;
 
 if (isMain) {
+  // P-062: script chỉ đọc stdin — một cờ lạ phải ném, không rơi mất.
+  rejectUnexpectedArgs('check-golden-pr.ts', process.argv.slice(2), 'git diff --name-only <base>...HEAD | node ops/scripts/check-golden-pr.ts');
+
   const input = await new Promise<string>((resolve, reject) => {
     let buffer = '';
     process.stdin.setEncoding('utf8');

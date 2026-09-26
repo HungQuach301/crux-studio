@@ -116,6 +116,19 @@ export interface Step0PendingInput {
   mergedLogIds: readonly string[];
   /** Mốc bây giờ, ISO 8601 có múi giờ. */
   now: string;
+  /**
+   * `mergedLogIds` đọc từ ĐÂU — một câu người đọc được, in nguyên vào báo cáo
+   * (mục `P-062`). Phép đo này chỉ đúng khi nguồn là nhánh chính; đọc từ cây
+   * làm việc của một nhánh lượt chạy vừa `cherry-pick` dòng log vào thì mọi
+   * nhánh chờ trông như đã gộp. Nên báo cáo phải NÓI nó đang đo cây nào.
+   */
+  mergedSource?: string;
+  /**
+   * Mã log có trong **cây làm việc** (không phải nhánh chính). Tuỳ chọn: chỉ để
+   * đánh dấu nhánh chờ nào lượt này đã `cherry-pick` nhưng chưa tới `main`,
+   * không bao giờ dùng để rút một nhánh khỏi `pending`.
+   */
+  treeLogIds?: readonly string[];
 }
 
 export interface Step0PendingBranchRow {
@@ -127,6 +140,12 @@ export interface Step0PendingBranchRow {
   ageHours: number;
   /** `true` khi `ageHours` tới hoặc quá `STEP0_PENDING_STALE_HOURS`. */
   stale: boolean;
+  /**
+   * `true` khi dòng log đã có trong cây làm việc nhưng CHƯA có trên nhánh
+   * chính — tức đã `cherry-pick` vào PR của lượt này, còn chờ PR đó merge.
+   * Vẫn là `pending`: tới `main` mới là tới (`KF-041`).
+   */
+  inTree: boolean;
 }
 
 export interface Step0PendingReport {
@@ -143,6 +162,12 @@ export interface Step0PendingReport {
    * `ops/scripts/heartbeat-source.ts`.
    */
   problems: string[];
+  /**
+   * Nguồn của `mergedLogIds`, chép từ đầu vào — `null` khi bên gọi không khai.
+   * Tuỳ chọn ở kiểu để bên dựng báo cáo bằng tay (bài kiểm của `render`) không
+   * phải khai; CLI luôn khai.
+   */
+  mergedSource?: string | null;
 }
 
 /**
@@ -155,10 +180,12 @@ export interface Step0PendingReport {
 export function step0PendingBranches(input: Step0PendingInput): Step0PendingReport {
   const problems: string[] = [];
   const nowMs = Date.parse(input.now);
+  const mergedSource = input.mergedSource ?? null;
   if (Number.isNaN(nowMs)) {
     return {
       pending: [],
       stale: [],
+      mergedSource,
       problems: [
         `Mốc \`now\` không đọc được: ${JSON.stringify(input.now)}. Không đo được tuổi nhánh nào.`,
       ],
@@ -166,6 +193,7 @@ export function step0PendingBranches(input: Step0PendingInput): Step0PendingRepo
   }
 
   const merged = new Set(input.mergedLogIds);
+  const inTree = new Set(input.treeLogIds ?? []);
   const pending: Step0PendingBranchRow[] = [];
 
   for (const branch of input.branches) {
@@ -212,11 +240,12 @@ export function step0PendingBranches(input: Step0PendingInput): Step0PendingRepo
       at: parsed.at,
       ageHours: age,
       stale: age >= STEP0_PENDING_STALE_HOURS,
+      inTree: inTree.has(logId),
     });
   }
 
   pending.sort((a, b) => b.ageHours - a.ageHours || a.branch.localeCompare(b.branch));
-  return { pending, stale: pending.filter((row) => row.stale), problems };
+  return { pending, stale: pending.filter((row) => row.stale), problems, mergedSource };
 }
 
 /** Báo cáo một dòng tiêu đề cộng một dòng cho mỗi nhánh — để dán vào thân cảnh báo. */
@@ -231,10 +260,12 @@ export function renderStep0PendingReport(report: Step0PendingReport): string {
     );
     for (const row of report.pending) {
       lines.push(
-        `  ${row.stale ? '⚠' : ' '} ${row.branch} — kẹt ${row.ageHours.toFixed(1)} giờ (mốc ${row.at})`,
+        `  ${row.stale ? '⚠' : ' '} ${row.branch} — kẹt ${row.ageHours.toFixed(1)} giờ (mốc ${row.at})` +
+          (row.inTree ? ' · đã có trong cây làm việc, chờ PR của lượt này tới nhánh chính' : ''),
       );
     }
   }
+  if (report.mergedSource != null) lines.push(`  (đối chiếu với: ${report.mergedSource})`);
   for (const problem of report.problems) lines.push(`  ⚠ ${problem}`);
   return lines.join('\n');
 }
@@ -249,6 +280,68 @@ export function mergedStep0LogIds(dir: string): string[] {
   return readdirSync(dir)
     .filter((name) => name.endsWith('.jsonl'))
     .map((name) => name.slice(0, -'.jsonl'.length));
+}
+
+/** Thư mục log bước 0, tương đối gốc repo — cùng chỗ `step0LogPath` ghi vào. */
+export const STEP0_LOG_DIR = 'ops/logs/integration';
+
+/**
+ * Mã log bước 0 có trên một **ref git** — mặc định của `pnpm step0:pending`
+ * là `origin/main` (mục `P-062`).
+ *
+ * Vì sao không đọc cây làm việc: bước 0f `cherry-pick` dòng log của nhánh chờ
+ * vào nhánh lượt chạy, rồi lượt đó (hay một lần chạy lại) đo lại trên chính
+ * cây ấy — và nhận *"không nhánh nào còn dòng log chưa vào nhánh chính"* trong
+ * khi `origin/main` vẫn thiếu đủ cả bảy (đo được lượt `crux-worker-2`
+ * `2026-09-26T22:3xZ`). Đúng câu mà `P-056` dựng ra để không bao giờ nói sai.
+ *
+ * Ném khi ref không tồn tại hoặc `git` thoát khác 0 — **không** trả rỗng:
+ * danh sách rỗng ở đây nghĩa là "chưa dòng nào tới nhánh chính", tức mọi
+ * nhánh chờ đều `pending` (hướng ồn, không phải hướng im) — nhưng một ref gõ
+ * sai vẫn phải là một lỗi cách dùng, không phải một phép đo.
+ */
+export function mergedStep0LogIdsFromRef(ref: string, dir = STEP0_LOG_DIR): string[] {
+  const verify = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], {
+    encoding: 'utf8',
+  });
+  if (verify.status !== 0) {
+    throw new Error(
+      `Không xác định được nhánh chính: ref \`${ref}\` không tồn tại trong kho này. ` +
+        `Chạy \`git fetch origin main\` rồi gọi lại. KHÔNG đo trên cây làm việc thay thế — ` +
+        'cây của một nhánh lượt chạy có thể đã mang sẵn dòng log vừa cherry-pick (mục P-062).',
+    );
+  }
+  // `--full-tree`: không có nó, `ls-tree` hiểu đường dẫn theo thư mục đang
+  // đứng — gọi từ `ops/` là rỗng với mã 0 (vòng soát bước 6 của P-062).
+  const run = spawnSync('git', ['ls-tree', '--full-tree', '--name-only', ref, '--', `${dir}/`], {
+    encoding: 'utf8',
+  });
+  if (run.status !== 0) {
+    throw new Error(
+      `git ls-tree ${ref} thoát ${run.status ?? 'không rõ'} — KHÔNG đọc được mã log trên nhánh chính. ` +
+        (run.stderr ?? '').trim(),
+    );
+  }
+  const ids = (run.stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.endsWith('.jsonl'))
+    .map((line) => line.slice(line.lastIndexOf('/') + 1, -'.jsonl'.length));
+  // Nhánh chính luôn có dòng log bước 0 từ `P-023`; rỗng nghĩa là thư mục sai
+  // hoặc ref sai, không phải "chưa dòng nào tới". Ném, đừng đo tiếp.
+  if (ids.length === 0) {
+    throw new Error(
+      `Ref \`${ref}\` không có file \`.jsonl\` nào dưới \`${dir}/\` — thư mục hoặc ref sai. ` +
+        'KHÔNG đo được mã log trên nhánh chính (mục P-062).',
+    );
+  }
+  return ids;
+}
+
+/** Mã sha ngắn của một ref, để báo cáo nói đúng nó đã đo ở đâu. */
+function shortSha(ref: string): string {
+  const run = spawnSync('git', ['rev-parse', '--short', ref], { encoding: 'utf8' });
+  return run.status === 0 ? (run.stdout ?? '').trim() : '?';
 }
 
 /**
@@ -280,8 +373,12 @@ export function listPendingBranchesFromRemote(remote = 'origin'): string[] {
 function usage(): never {
   process.stderr.write(
     'Dùng: node ops/scripts/step0-pending-branches.ts (--from-remote | --branches <file>) ' +
-      '[--logs-dir ops/logs/integration] [--now <ISO>] [--json]\n' +
+      '[--main-ref <ref> | --logs-dir <thư mục>] [--now <ISO>] [--json]\n' +
       '  --from-remote  tự hỏi `git ls-remote` danh sách nhánh chờ (đây là dạng `pnpm step0:pending`).\n' +
+      '                 Mặc định đối chiếu với `--main-ref origin/main`, KHÔNG với cây làm việc (P-062).\n' +
+      '  --main-ref     đọc mã log đã gộp từ ref git này (`git ls-tree`). Ném khi ref không tồn tại.\n' +
+      '  --logs-dir     đọc mã log đã gộp từ thư mục trên đĩa — chỉ đúng khi cây đang checkout LÀ\n' +
+      '                 nhánh chính (ca `watchdog.yml`). Mặc định của `--branches`.\n' +
       '  --branches     file văn bản, mỗi dòng một tên nhánh remote (đã cắt `refs/heads/`).\n' +
       '                 Dòng trống bị bỏ; dòng dạng `<sha>\\trefs/heads/<nhánh>` được cắt sẵn.\n',
   );
@@ -291,9 +388,18 @@ function usage(): never {
 function main(argv: readonly string[]): void {
   let branchesFile: string | undefined;
   let fromRemote = false;
-  let logsDir = 'ops/logs/integration';
+  let logsDir: string | undefined;
+  let mainRef: string | undefined;
   let now = new Date().toISOString();
   let asJson = false;
+
+  // Một cờ thiếu giá trị là lỗi cách dùng, không lặng lẽ rơi về mặc định —
+  // cùng chữ ký "gọi sai mà trả ca lành" của mục P-062.
+  const valueOf = (index: number): string => {
+    const value = argv[index];
+    if (value === undefined || value.startsWith('--')) usage();
+    return value;
+  };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]!;
@@ -302,16 +408,26 @@ function main(argv: readonly string[]): void {
     } else if (arg === '--from-remote') {
       fromRemote = true;
     } else if (arg === '--branches') {
-      branchesFile = argv[(index += 1)];
+      branchesFile = valueOf((index += 1));
     } else if (arg === '--logs-dir') {
-      logsDir = argv[(index += 1)] ?? logsDir;
+      logsDir = valueOf((index += 1));
+    } else if (arg === '--main-ref') {
+      mainRef = valueOf((index += 1));
     } else if (arg === '--now') {
-      now = argv[(index += 1)] ?? now;
+      now = valueOf((index += 1));
     } else {
       usage();
     }
   }
   if (fromRemote === (branchesFile !== undefined)) usage();
+  if (logsDir !== undefined && mainRef !== undefined) usage();
+  // `--from-remote` là dạng một lượt worker gõ trên nhánh CỦA NÓ, nên mặc định
+  // đối chiếu với `origin/main`. `--branches` là dạng `watchdog.yml` gọi trên
+  // bản checkout của `main`, nên giữ cây làm việc — và báo cáo nói ra điều đó.
+  if (logsDir === undefined && mainRef === undefined) {
+    if (fromRemote) mainRef = 'origin/main';
+    else logsDir = STEP0_LOG_DIR;
+  }
 
   const branches = fromRemote
     ? listPendingBranchesFromRemote()
@@ -323,7 +439,30 @@ function main(argv: readonly string[]): void {
         .map((line) => line.replace(/^[0-9a-f]{7,40}\s+refs\/heads\//, ''))
         .filter((line) => line.length > 0);
 
-  const report = step0PendingBranches({ branches, mergedLogIds: mergedStep0LogIds(logsDir), now });
+  const measured =
+    mainRef !== undefined
+      ? {
+          mergedLogIds: mergedStep0LogIdsFromRef(mainRef),
+          mergedSource: `ref \`${mainRef}\` (${shortSha(mainRef)}), thư mục \`${STEP0_LOG_DIR}/\``,
+        }
+      : {
+          mergedLogIds: mergedStep0LogIds(logsDir!),
+          mergedSource:
+            `CÂY LÀM VIỆC \`${logsDir}\` (HEAD ${shortSha('HEAD')}) — chỉ đúng khi cây này là nhánh chính`,
+        };
+  // Đánh dấu nhánh đã cherry-pick vào cây này — chỉ để người đọc biết lượt
+  // này đã làm phần của nó; không rút nhánh nào khỏi `pending`. Thư mục không
+  // đọc được thì bỏ phần đánh dấu, không bỏ phép đo.
+  let treeLogIds: string[] = [];
+  if (mainRef !== undefined) {
+    try {
+      treeLogIds = mergedStep0LogIds(STEP0_LOG_DIR);
+    } catch {
+      treeLogIds = [];
+    }
+  }
+
+  const report = step0PendingBranches({ branches, now, treeLogIds, ...measured });
   process.stdout.write(
     asJson
       ? `${JSON.stringify({ ...report, render: renderStep0PendingReport(report) })}\n`
