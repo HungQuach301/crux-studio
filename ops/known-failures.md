@@ -20,33 +20,49 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 **Chữ ký:** `pnpm -s check` (hoặc `pnpm -s test`) thoát 1 với đúng **một** bài đỏ — `TÁI HIỆN I-006` — kèm `AssertionError` *"The input did not match the regular expression /ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY/. Input: 'pnpm install --frozen-lockfile đỏ trên cây vừa gộp (mã 1): '"* (chuỗi rỗng sau dấu hai chấm), trong khi `pnpm check` trên **cùng** cây thoát 0.
 
-### Phép đo — sáu vòng đỏ, bốn vòng xanh, cùng một cây
+### Phép đo — một biến duy nhất, tách sạch
+
+**Phép đo quyết định — một file, một tiến trình, không `-s`, không song song.** Đây là hình dạng đúng của bằng chứng, vì nó đổi **đúng một** biến:
 
 ```
-cây: nhánh lượt này (chỉ thêm 7 file .jsonl) VÀ worktree origin/main b9f8b25, kết quả GIỐNG NHAU
-
-pnpm -s test           ×6  → 1564/1565 pass, 1 fail  (bài 734)
-pnpm test              ×1  → 1565/1565 pass, 0 fail
-node --test <4 glob>   ×1  → 1565/1565 pass, 0 fail   (song song, mặc định, nproc=4)
-pnpm exec node --test  ×1  → 1565/1565 pass, 0 fail
-node --test <1 file>   ×3  → 6/6 pass                 (chạy lẻ không bao giờ đỏ)
-pnpm check (thật)          → EXIT=0 · 1565/1565 · pnpm replay EXIT=0 · tập vàng 6/6 xưởng
-CI GitHub: main-ci trên b9f8b25 → success (2026-09-26T09:46:04Z)
+npm_config_reporter=silent node --test ops/test/integrator-clean-merge-lockfile.test.ts
+    → EXIT=1 · 6 test / 5 pass / 1 fail · not ok 1 - TÁI HIỆN I-006
+                           node --test ops/test/integrator-clean-merge-lockfile.test.ts
+    → EXIT=0 · 6/6 pass
 ```
 
-Biến duy nhất, đo trực tiếp bằng một gói rỗng trong `/tmp`:
+Biến đó do đâu ra, và nó làm gì — đo bằng một gói rỗng trong thư mục tạm:
 
 ```
 pnpm -s run dump  → npm_config_reporter=silent        ← có
 pnpm    run dump  → (không có biến đó)
 
-npm_config_reporter=silent pnpm install --frozen-lockfile  → rc=0, stdout 0B, stderr 0B
-                           pnpm install --frozen-lockfile  → rc=0, stdout 105B
+npm_config_reporter=silent pnpm install --frozen-lockfile → rc=0, stdout 0B,       stderr 0B
+                           pnpm install --frozen-lockfile → rc=0, stdout KHÁC RỖNG, stderr 0B
+```
+
+Chỗ phải khoá lại là **`0B` ↔ khác `0B`**, không phải một con số byte: đầu ra của `pnpm` chứa `Done in <ms>` và số workspace project, nên số byte tuyệt đối đổi theo lần chạy và theo cây (đo được **137B** trên kho này, **105B** trên một bản chép ba file trong thư mục tạm). Một bài kiểm neo vào con số byte là một bài kiểm sẽ đỏ vì lý do khác.
+
+### Cùng một cây, cùng một kết quả — bảng đối chứng
+
+```
+cây: nhánh lượt này VÀ worktree origin/main b9f8b25 cho kết quả GIỐNG NHAU
+
+ĐỎ (6 vòng):
+  pnpm -s test           ×6  → 1564/1565 pass, 1 fail  (bài 734)
+XANH (7 vòng):
+  pnpm test              ×1  → 1565/1565 pass, 0 fail
+  node --test <4 glob>   ×1  → 1565/1565 pass, 0 fail   (song song, mặc định, nproc=4)
+  pnpm exec node --test  ×1  → 1565/1565 pass, 0 fail
+  node --test <1 file>   ×3  → 6/6 pass
+  pnpm check (thật)      ×1  → EXIT=0 · 1565/1565 · pnpm replay EXIT=0 · tập vàng 6/6 xưởng
+                                                          → 13 vòng, 6 đỏ / 7 xanh
+CI GitHub: main-ci trên b9f8b25 → success (2026-09-26T09:46:04Z)
 ```
 
 ### Vì sao "song song" là chẩn đoán SAI, và nó đã suýt được ghi vào đây
 
-Bốn vòng đầu đều gọi `pnpm -s test`, và vòng đối chứng đầu tiên lại gọi `node --test` một file — nên hai biến (cách gọi cổng, và số bài chạy cùng lúc) đổi **cùng lúc**, và chẩn đoán dễ nhất là *"bài kiểm nhạy với tải, 4 CPU nên tranh nhau"*. Vòng `node --test` trên **toàn bộ** 1565 bài, song song, mặc định — **xanh** — mới tách được hai biến ra. Ghi lại ở đây vì đó là đúng cái bẫy mà `I-021` đếm: một con số đo được ghép với một lời giải thích chưa đo.
+Bốn vòng đầu đều gọi `pnpm -s test`, và vòng đối chứng đầu tiên lại gọi `node --test` một file — nên hai biến (cách gọi cổng, và số bài chạy cùng lúc) đổi **cùng lúc**, và chẩn đoán dễ nhất là *"bài kiểm nhạy với tải, 4 CPU nên tranh nhau"*. Vòng `node --test` trên **toàn bộ** 1565 bài, song song, mặc định — **xanh** — mới tách được hai biến ra, và phép đo một file ở đầu mục này mới khoá được nhân quả. Ghi lại ở đây vì đó là đúng cái bẫy mà `I-021` đếm: một con số đo được ghép với một lời giải thích chưa đo. Bảng 13 vòng ở trên là **đối chứng**, không phải bằng chứng — bằng chứng là hai dòng một biến.
 
 ---
 

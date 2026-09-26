@@ -19,10 +19,20 @@ Hai chỗ đau, và chỗ thứ hai đắt hơn:
 - nguồn: `ops/known-failures.md` `KF-045`; `ops/scripts/integrator-lockfile.ts` (`verifyLockfileInstall`); `ops/test/integrator-clean-merge-lockfile.test.ts:151`; phép đo bước 0 lượt `crux-worker-2` `2026-09-26T12:2xZ`
 - tiêu chí xong:
   - `verifyLockfileInstall` (và mọi chỗ khác trong `ops/scripts/**` spawn `pnpm`) chạy `pnpm` với **`npm_config_reporter` bị xoá khỏi `env`** — hoặc đặt tường minh về mức in đủ chữ. Chọn cách nào thì **ghi lý do tại chỗ**: một hàm cài thật mà đầu ra của nó là bằng chứng duy nhất cho một quyết định thì không được để người gọi tắt được đầu ra đó.
-  - **Bài tái hiện lỗi** (bất biến **I2**): một bài chạy `verifyLockfileInstall` trên đúng fixture lệch manifest **với `npm_config_reporter=silent` trong `process.env`** và đòi `reason` vẫn chứa `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Bài này phải **đỏ** trên `main` hôm nay — đó là phép đo, không phải lời khai.
+  - **Bài tái hiện lỗi** (bất biến **I2**): một bài chạy `verifyLockfileInstall` trên đúng fixture lệch manifest **với `npm_config_reporter=silent` trong `process.env`** và đòi `reason` vẫn chứa `ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`. Bài này phải **đỏ** trên `main` hôm nay — đó là phép đo, không phải lời khai. Hình dạng đã đo sẵn, vòng soát bước 6 của PR mở mục này dựng ra và nó **đổi đúng một biến** (một file, một tiến trình, không `-s`, không song song):
+
+    ```
+    npm_config_reporter=silent node --test ops/test/integrator-clean-merge-lockfile.test.ts
+        → EXIT=1 · 6 test / 5 pass / 1 fail
+                               node --test ops/test/integrator-clean-merge-lockfile.test.ts
+        → EXIT=0 · 6/6 pass
+    ```
+
+    Bài mới phải neo vào **`0B` ↔ khác `0B`**, không vào số byte: đầu ra của `pnpm` chứa `Done in <ms>` và số workspace project nên số byte đổi theo lần chạy (137B trên kho này, 105B trên một bản chép ba file) — xem `KF-045`.
   - Ca âm: cùng bài với biến đó **không** đặt, để bản sửa không rút thành "bỏ qua env của người gọi" một cách vô điều kiện.
-  - Một bài **rộng hơn một hàm**: quét `ops/scripts/**` tìm mọi `spawnSync`/`execFile` gọi `pnpm` mà **không** vô hiệu hoá `npm_config_reporter`, và đỏ khi có chỗ mới. Lý do: `integrator-lockfile.ts` là chỗ đo được, không có gì bảo đảm nó là chỗ duy nhất — và một cổng đếm bằng máy rẻ hơn một vòng đọc bằng mắt ở mọi lượt sau.
+  - Một bài **rộng hơn một hàm**: quét `ops/scripts/**` tìm mọi `spawnSync`/`execFile` gọi `pnpm` mà **không** vô hiệu hoá `npm_config_reporter`, và đỏ khi có chỗ mới. **Phạm vi đã đo:** hôm nay cổng đó trả về đúng **một** chỗ — `ops/scripts/integrator-lockfile.ts` dòng 139 và 184 (quét `kernel ops workshops spike`, trừ test). Nên nó là cổng **phòng xa**, không phải cổng dọn nợ; ai làm mục này đừng mong nó tìm ra thêm việc.
   - Khai rõ **cái không sửa ở đây**: `pnpm -s check` vẫn là một cách gọi hợp lệ và sẽ vẫn xanh sau bản sửa; mục này **không** cấm `-s` và **không** sửa `CLAUDE.md` để cấm — chặn ở tầng luật thì một chữ `-s` gõ tay vẫn lọt, còn chặn ở tầng hàm thì không.
+- ⚠️ **Thứ tự trong file này KHÔNG phải thứ tự ưu tiên.** Mục này nằm ở đầu file nên `pnpm backlog:status` trả nó ở `readyNow[0]`, **trước** `platform/P-014` đang tự khai *"ưu tiên cao"* — cùng chỗ mà `P-060` đã đặt tiền lệ khi chèn lên đầu. `CLAUDE.md` mục 2 nói nhận *"mục `readyNow` đầu tiên"* sau khi duyệt làn theo `ops/lanes/priority.md`, nên một lượt đọc thẳng `readyNow[0]` sẽ lấy mục này trước `P-014`. Lượt nào nhận việc thì đọc `ưu tiên cao` trong tên mục, đừng đọc thứ tự file. (Chỗ chữa tận gốc là một trường ưu tiên máy đọc trong backlog, không phải xếp lại file — nó là một mục khác.)
 
 ### P-060 · Máy đo PR nằm NGOÀI hàng đợi merge — không mang nhãn cửa merge nào (KF-044)
 
