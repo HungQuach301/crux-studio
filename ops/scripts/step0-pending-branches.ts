@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Mục `platform/P-056` — `KF-041`. **Nhánh chờ `step0-pending` nào chưa ai
+ * Mục `platform/P-056` — `KF-048`. **Nhánh chờ `step0-pending` nào chưa ai
  * gộp vào nhánh chính, và đã kẹt bao lâu.**
  *
  * ## Chỗ hỏng mục này canh
@@ -14,7 +14,7 @@
  * Vế một nằm trong đúng lượt viết ra nó, nên nó chạy. Vế hai nằm ở một lượt
  * **khác**, và không gì nhắc nó: phụ lục P1 bước 0 không nói tới nhánh chờ,
  * `CLAUDE.md` mục 1 không có lệnh nào liệt kê chúng, `pnpm check` không đọc
- * remote. Đo được ở `KF-041`: **bốn** nhánh chờ, nhánh cũ nhất kẹt **~34,9
+ * remote. Đo được ở `KF-048`: **bốn** nhánh chờ, nhánh cũ nhất kẹt **~34,9
  * giờ**, và `step0Streaks(readRunLogs("ops/logs"))` đếm `totalRuns: 114` —
  * thiếu đúng bốn. Bất biến **I8** thủng bốn lượt mà `pnpm check` xanh, CI
  * xanh, `main` xanh, `watchdog.yml` im: nhóm **Z** thuần.
@@ -23,7 +23,7 @@
  *
  * Phép đo cần hai thứ từ ngoài — danh sách nhánh trên remote và danh sách mã
  * log đã có trên nhánh chính. Cả hai là **đầu vào**, không phải việc của hàm:
- * nhờ vậy bốn nhánh quan sát được ở `KF-041` dựng lại được trong một bài
+ * nhờ vậy bốn nhánh quan sát được ở `KF-048` dựng lại được trong một bài
  * kiểm, không cần mạng.
  *
  * Nơi chạy định kỳ là `ops/workflows/watchdog.yml`, dấu hiệu số **7**. Đó là
@@ -75,7 +75,7 @@ export const STEP0_PENDING_MARGIN_HOURS = 12;
  *   (`12 + 8,6`, xem `STEP0_PENDING_MARGIN_HOURS`) — dưới mốc đó thì mọi PR
  *   `automerge-delayed` mang một nhánh chờ tự sinh một cảnh báo, tức gọi
  *   chủ dự án cho một hàng đợi đang chạy đúng (ngược CHARTER 1.3).
- * - **Dưới** 34,9 giờ đã đo được ở `KF-041` — trên mốc đó thì nó im ở đúng
+ * - **Dưới** 34,9 giờ đã đo được ở `KF-048` — trên mốc đó thì nó im ở đúng
  *   ca nó được viết ra để bắt.
  *
  * `12 + 12 = 24` nằm giữa `20,6` và `34,9`.
@@ -137,7 +137,7 @@ export interface Step0PendingReport {
   /**
    * Mọi thứ **không đo được**, khai riêng từng câu.
    *
-   * Không gộp vào `pending` và cũng không im lặng bỏ qua: `KF-041` là một
+   * Không gộp vào `pending` và cũng không im lặng bỏ qua: `KF-048` là một
    * chỗ hỏng im lặng, nên một nhánh có tên lạ phải nói ra chứ không biến
    * thành "không có nhánh nào kẹt". Cùng hình dạng `problems` của
    * `ops/scripts/heartbeat-source.ts`.

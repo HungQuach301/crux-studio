@@ -51,7 +51,7 @@
  *   Chiều hỏng là nhóm **Z**: `watchdog.yml` dấu hiệu 5 chỉ đọc nhịp tim
  *   **mới nhất** nên nó vẫn đúng, `pnpm check` xanh, `main` xanh — trong khi
  *   bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần. Đúng chỗ
- *   `KF-021` và `KF-041` đã khai là làm mọi chuỗi kẹt thành **cận dưới**.
+ *   `KF-021` và `KF-048` đã khai là làm mọi chuỗi kẹt thành **cận dưới**.
  *
  *   Nên khối lệnh nay dựng cây **THÊM**: `git ls-tree` liệt kê entry đang có,
  *   `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Bài

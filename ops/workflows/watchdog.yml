@@ -329,7 +329,7 @@ jobs:
           fi
           echo "$LANE_REPORT"
 
-          # 7 · Nhánh chờ `step0-pending` chưa ai gộp (`KF-041`, mục
+          # 7 · Nhánh chờ `step0-pending` chưa ai gộp (`KF-048`, mục
           #     `platform/P-056`). Một lượt bước 0 không gỡ được PR nào được
           #     quyền KHÔNG mở PR (`P-038`); dòng log của nó vẫn được ghi và
           #     đẩy lên nhánh chờ, rồi một lượt SAU phải `cherry-pick` nhánh
@@ -372,14 +372,14 @@ jobs:
           # đi đường thường: `git ls-remote` thoát 0 với đầu ra rỗng.
           if ! git ls-remote --heads origin "refs/heads/$STEP0_PENDING_PREFIX/*" \
               | sed 's#.*refs/heads/##' > "$PENDING_LIST"; then
-            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-041) — \`git ls-remote\` thoát khác 0. ĐÂY KHÔNG PHẢI \"không có nhánh nào kẹt\"; xem log của lượt chạy này."
+            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-048) — \`git ls-remote\` thoát khác 0. ĐÂY KHÔNG PHẢI \"không có nhánh nào kẹt\"; xem log của lượt chạy này."
             PENDING_STALE=0
             PENDING_PROBLEMS=1
           # `if !` chứ KHÔNG `|| VAR=…`, cùng lý do đã ghi ở dấu hiệu số 6:
           # `|| VAR=…` là một hình dạng nuốt lỗi mà luật Z9 không nhìn thấy.
           elif ! PENDING_JSON=$(node ops/scripts/step0-pending-branches.ts \
               --branches "$PENDING_LIST" --json); then
-            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-041) — script thoát khác 0. Xem log của lượt chạy này."
+            PENDING_REPORT="⚠ Không đo được nhánh chờ \`step0-pending\` (KF-048) — script thoát khác 0. Xem log của lượt chạy này."
             PENDING_STALE=0
             PENDING_PROBLEMS=1
           else
@@ -396,7 +396,7 @@ jobs:
             # vào phép so `-gt 0` (một chuỗi rỗng ở đó giết cả job).
             PENDING_PROBLEMS=$(echo "$PENDING_JSON" | jq -r '.problems | length' 2>/dev/null || true)
             if [ -z "$PENDING_REPORT" ] || [ -z "$PENDING_STALE" ] || [ -z "$PENDING_PROBLEMS" ]; then
-              PENDING_REPORT="⚠ Không đọc được báo cáo nhánh chờ (KF-041) — JSON không có \`render\`/\`stale\`/\`problems\`. ĐÂY KHÔNG PHẢI \"không có nhánh nào kẹt\"."
+              PENDING_REPORT="⚠ Không đọc được báo cáo nhánh chờ (KF-048) — JSON không có \`render\`/\`stale\`/\`problems\`. ĐÂY KHÔNG PHẢI \"không có nhánh nào kẹt\"."
               PENDING_STALE=0
               PENDING_PROBLEMS=1
             fi
@@ -406,13 +406,13 @@ jobs:
           # `problems` cũng phải tới được chỗ có người đọc, không chỉ nằm
           # trong log lượt chạy: một nhánh chờ mang mã log không đọc được
           # vẫn có thể đang giữ một dòng log chưa gộp, và im lặng ở đó đúng
-          # là chỗ hỏng `KF-041` ghi lại.
+          # là chỗ hỏng `KF-048` ghi lại.
           if [ "$PENDING_PROBLEMS" -gt 0 ] && [ "$PENDING_STALE" -eq 0 ]; then
-            add "Dấu hiệu số 7 (nhánh chờ \`step0-pending\`, \`KF-041\`) có $PENDING_PROBLEMS chỗ KHÔNG ĐO ĐƯỢC. Đây không phải \"không có nhánh nào kẹt\" — bất biến **I8** có thể đang thủng mà phép đo không thấy. Chi tiết từng chỗ ở ngay dưới."
+            add "Dấu hiệu số 7 (nhánh chờ \`step0-pending\`, \`KF-048\`) có $PENDING_PROBLEMS chỗ KHÔNG ĐO ĐƯỢC. Đây không phải \"không có nhánh nào kẹt\" — bất biến **I8** có thể đang thủng mà phép đo không thấy. Chi tiết từng chỗ ở ngay dưới."
           fi
 
           if [ "$PENDING_STALE" -gt 0 ]; then
-            add "Có $PENDING_STALE nhánh chờ \`$STEP0_PENDING_PREFIX/*\` mang dòng log bước 0 CHƯA vào nhánh chính quá ngưỡng (\`KF-041\`, mục \`platform/P-056\`; ngưỡng ở \`STEP0_PENDING_STALE_HOURS\`). Bất biến **I8** đang thủng đúng ngần ấy lượt chạy: mọi bên đọc log — \`ops/metrics.md\`, bản tin ngày, phép đếm chuỗi kẹt của phụ lục P1 bước 2 — đếm THẤP hơn sự thật. Cách gỡ: lượt worker kế tiếp \`cherry-pick\` các nhánh ấy vào PR của nó rồi xoá nhánh đã gộp (\`P-038\`). Chi tiết từng nhánh ở ngay dưới."
+            add "Có $PENDING_STALE nhánh chờ \`$STEP0_PENDING_PREFIX/*\` mang dòng log bước 0 CHƯA vào nhánh chính quá ngưỡng (\`KF-048\`, mục \`platform/P-056\`; ngưỡng ở \`STEP0_PENDING_STALE_HOURS\`). Bất biến **I8** đang thủng đúng ngần ấy lượt chạy: mọi bên đọc log — \`ops/metrics.md\`, bản tin ngày, phép đếm chuỗi kẹt của phụ lục P1 bước 2 — đếm THẤP hơn sự thật. Cách gỡ: lượt worker kế tiếp \`cherry-pick\` các nhánh ấy vào PR của nó rồi xoá nhánh đã gộp (\`P-038\`). Chi tiết từng nhánh ở ngay dưới."
           fi
 
           if [ "$TEST" = "true" ]; then

@@ -240,7 +240,7 @@ const STEP0_LOG_ID_SHAPE = new RegExp(
  * chính cái tên.
  *
  * Trả `null` cho mọi mã không đọc được, và bên gọi **phải nói ra** chỗ
- * `null` chứ không im lặng bỏ qua (`KF-041` là một chỗ hỏng im lặng; đừng
+ * `null` chứ không im lặng bỏ qua (`KF-048` là một chỗ hỏng im lặng; đừng
  * thêm chỗ thứ hai).
  *
  * ## Vì sao còn phải ghép lại rồi so, khi RegExp đã khớp

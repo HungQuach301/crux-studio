@@ -1,9 +1,9 @@
 /**
- * Mục `platform/P-056` — `KF-041`: nhánh chờ `step0-pending` không ai gộp
+ * Mục `platform/P-056` — `KF-048`: nhánh chờ `step0-pending` không ai gộp
  * lại, nên bốn lượt worker không có dòng log nào trên nhánh chính.
  *
  * **Bài tái hiện lỗi** (nhãn `fix`, bất biến **I2**) là bài đầu tiên dưới
- * đây: nó dựng lại đúng bốn nhánh quan sát được ở `KF-041` cộng danh sách mã
+ * đây: nó dựng lại đúng bốn nhánh quan sát được ở `KF-048` cộng danh sách mã
  * log của nhánh chính tại `0926b38`, và đòi hàm trả đủ **bốn**. Chạy bài này
  * trên luật cũ là không chạy được gì cả — luật cũ là một ô gạch đầu dòng
  * chưa tick trong một mục backlog đang treo, đúng chỗ hỏng mà mục này gỡ.
@@ -30,7 +30,7 @@ import {
   step0PendingBranches,
 } from '../scripts/step0-pending-branches.ts';
 
-/** Mốc đo của `KF-041` — chính `at` của dòng log lượt phát hiện, nên số kiểm lại được. */
+/** Mốc đo của `KF-048` — chính `at` của dòng log lượt phát hiện, nên số kiểm lại được. */
 const KF041_NOW = '2026-09-25T11:39:23Z';
 
 /** Bốn mã log quan sát được trên remote lúc `KF041_NOW`, không mã nào có trên nhánh chính. */
@@ -56,7 +56,7 @@ const MERGED_AT_0926B38 = [
 
 // ── Bài tái hiện lỗi (I2) ──────────────────────────────────────────────────
 
-test('KF-041: bốn nhánh chờ có thật, không mã nào trên nhánh chính → trả đủ BỐN', () => {
+test('KF-048: bốn nhánh chờ có thật, không mã nào trên nhánh chính → trả đủ BỐN', () => {
   const report = step0PendingBranches({
     branches: KF041_BRANCHES,
     mergedLogIds: MERGED_AT_0926B38,
@@ -72,14 +72,14 @@ test('KF-041: bốn nhánh chờ có thật, không mã nào trên nhánh chính
 
   // Kẹt lâu nhất trước — cùng luật bước 0a của phụ lục P3.
   assert.equal(report.pending[0]!.logId, KF041_LOG_IDS[0]);
-  // Con số của `KF-041`: ~34,9 · ~13,9 · ~11,3 · ~11,0 giờ.
+  // Con số của `KF-048`: ~34,9 · ~13,9 · ~11,3 · ~11,0 giờ.
   assert.deepEqual(
     report.pending.map((row) => Number(row.ageHours.toFixed(1))),
     [34.9, 13.9, 11.3, 11.0],
   );
 });
 
-test('KF-041: nhánh cũ nhất quá ngưỡng, ba nhánh kia thì chưa', () => {
+test('KF-048: nhánh cũ nhất quá ngưỡng, ba nhánh kia thì chưa', () => {
   const report = step0PendingBranches({
     branches: KF041_BRANCHES,
     mergedLogIds: MERGED_AT_0926B38,
@@ -137,7 +137,7 @@ test('ca biên: tên nhánh chờ mang mã log KHÔNG đọc được → nêu v
   assert.equal(report.problems.length, 1);
   assert.match(report.problems[0]!, /không đọc được/);
   // Phải nói rõ nhánh vẫn có thể đang giữ một dòng log — im lặng ở đây là
-  // đúng thứ `KF-041` ghi lại.
+  // đúng thứ `KF-048` ghi lại.
   assert.match(report.problems[0]!, /xem bằng tay/);
 });
 
@@ -181,7 +181,7 @@ test('ca biên: `now` không đọc được thì KHÔNG trả "không có nhán
 
 /** Hàng đợi merge đã từng đứng bao lâu — CHARTER 3.3, phép đo 2026-09-23, `KF-020`. */
 const MEASURED_QUEUE_STALL_HOURS = 8.6;
-/** Nhánh chờ cũ nhất đã từng kẹt bao lâu — `KF-041`, phép đo 2026-09-25. */
+/** Nhánh chờ cũ nhất đã từng kẹt bao lâu — `KF-048`, phép đo 2026-09-25. */
 const MEASURED_WORST_STUCK_HOURS = 34.9;
 
 test('ngưỡng nằm GIỮA hai mốc đo được, và suy ra chứ không phải số trần', () => {
@@ -204,7 +204,7 @@ test('ngưỡng nằm GIỮA hai mốc đo được, và suy ra chứ không ph�
   // CẬN TRÊN — trên mốc này thì nó im ở đúng ca nó được viết ra để bắt.
   assert.ok(
     STEP0_PENDING_STALE_HOURS < MEASURED_WORST_STUCK_HOURS,
-    `ngưỡng phải bắt được ca ${MEASURED_WORST_STUCK_HOURS} giờ của KF-041`,
+    `ngưỡng phải bắt được ca ${MEASURED_WORST_STUCK_HOURS} giờ của KF-048`,
   );
   assert.ok(STEP0_PENDING_FUTURE_TOLERANCE_MINUTES > 0);
 });
@@ -299,7 +299,7 @@ test('dấu hiệu 7: `problems` cũng phải tới được chỗ có người 
   // Chỗ CHẶN/NÊN SỬA thứ hai: một nhánh chờ mang mã log không đọc được sinh
   // một câu trong `problems` nói "phải xem bằng tay" — nhưng nếu chỉ
   // `PENDING_STALE` dẫn tới `add` thì câu đó chỉ nằm trong log lượt chạy,
-  // rồi workflow in "Nhà máy vẫn thở" và thoát. Im lặng ở đúng chỗ `KF-041`
+  // rồi workflow in "Nhà máy vẫn thở" và thoát. Im lặng ở đúng chỗ `KF-048`
   // ghi lại.
   const yaml = readFileSync('ops/workflows/watchdog.yml', 'utf8');
   assert.ok(

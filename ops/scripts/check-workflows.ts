@@ -78,7 +78,7 @@ export function runBlocks(source: string, file: string): RunBlock[] {
 }
 
 /**
- * Bắt khoá trùng trong CÙNG một mapping YAML (KF-016).
+ * Bắt khoá trùng trong CÙNG một mapping YAML (KF-047).
  *
  * Vì sao cần: hai khoá `env:` trong cùng một step làm cả workflow thành YAML
  * không hợp lệ. GitHub từ chối file đó ở mức khởi động — lần chạy ra
@@ -156,7 +156,7 @@ export function duplicateMappingKeys(source: string, file: string): string[] {
       problems.push(
         `${file}:${i + 1} — khoá \`${key}\` xuất hiện hai lần trong cùng một mapping ` +
           `(lần đầu ở dòng ${seen}). YAML không hợp lệ: GitHub từ chối cả workflow ` +
-          'ở mức khởi động (startup_failure, 0 job), đỏ ở mọi lần push (KF-016).',
+          'ở mức khởi động (startup_failure, 0 job), đỏ ở mọi lần push (KF-047).',
       );
     } else {
       frame.keys.set(key, i + 1);
