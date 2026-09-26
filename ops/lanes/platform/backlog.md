@@ -1387,3 +1387,26 @@ Luật đã có, và đã đủ chữ — `P-038` viết *"Lượt nào mở PR 
   - ⬜ **`pnpm check` KHÔNG phải chỗ đặt.** Khai ra để lượt sau không "tiện tay" thêm vào: cổng đó chạy trên mọi PR và không có remote trong CI nếu không thêm một lần fetch cho mỗi lượt chạy — trả tiền ở chỗ đắt nhất để canh một thứ đổi vài giờ một lần.
   - ⬜ **Ô ⬜ thứ hai của `P-038` (*"Dòng log của lượt `openPr: false` không bị mất…"*) trỏ sang mục này** khi làm xong, để hai mục không nói hai chuyện.
 - mã mục: dò `### P-` trên nhánh chính **và trên đầu cả 13 PR đang mở** lúc `2026-09-25T11:39Z` (`KF-005`, `KF-036`) — cao nhất `P-055` (`#261`), nên `P-056` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).
+
+### P-058 · Mã mục và mã `KF` trùng nhau sống trên `main` mà không cổng nào đỏ, nên `claimCheck` trả `free` cho mục đang có người giữ
+
+Tìm ra ở **bước 3** lượt `crux-worker-2` `2026-09-26T02:22Z`, đo được chứ không suy. Chi tiết đầy đủ, kèm hai lệnh tái lập và bảng hai PR: `ops/known-failures.md` `KF-042`.
+
+`backlog-status.ts` **đã** tính `duplicateIds` và lượt nào chạy nó cũng thấy `["platform/P-028 ↔ platform/P-028"]`, nhưng không cổng nào trong `pnpm check` đỏ vì nó. Hệ quả đo được: `readyNow` phát ra mã `platform/P-028`, hai bộ đọc hiểu nó theo hai nghĩa (một mục `done`, một mục `ready`), và `pnpm claims` trả **`free`** cho mục đang có **hai** PR mở làm đúng ba file của nó (`#224` mang mã `P-040`, `#274` mang mã `P-057`). Đó là `KF-025` lần thứ ba, đi qua đúng cái cổng dựng lên để chặn `KF-025`.
+
+**Thứ tự bắt buộc, không phải lời khuyên** (`deps: platform/P-057`). `#274` (mục `P-057`) đã đổi `### P-028` dòng 459 sang `### P-057`, tức nó xoá một trong ba cặp trùng. Dựng cổng **trước** khi `#274` merge thì cổng làm đỏ chính `main` (ba cặp đang nằm sẵn), và PR xây cổng buộc phải đổi tên các mục trùng — đụng thẳng diff của `#274`, đúng loại va chạm `KF-029` mô tả. Làm **sau** `#274` thì chỉ còn hai cặp `KF` phải dọn. Chừng nào `P-057` chưa vào `main`, `pnpm backlog:status` để mục này ở `blocked` chứ không ở `readyNow` — đó là hành vi đúng, không phải lỗi dữ liệu.
+
+Cùng cây còn **hai** `## KF-016` và **hai** `## KF-041`. Ba PR liên tiếp (`#261`, `#269`, `#231`) đều khai chỗ này và đều hẹn *"tách mục riêng"*; mục này là mục đó.
+
+- deps: platform/P-057
+- risk: medium — cổng mới đỏ trên một file mà **mọi** làn đều ghi vào (`ops/known-failures.md`, `ops/lanes/*/backlog.md`), nên một luật quá rộng sẽ chặn oan mọi PR. Hướng lệch phải là **báo nhầm không bao giờ, bỏ sót thì thà bỏ sót một ca lạ** — ngược hướng `claim-collision.ts`, và có lý do: cổng này **chặn merge**, còn `claimCheck` chỉ **đo**.
+- status: ready
+- nguồn: bước 3 lượt `crux-worker-2` `2026-09-26T02:22:36Z` (`pnpm claims` ra `free` trong khi `#224` và `#274` cùng mở); `ops/known-failures.md` `KF-042`; ba lời hẹn chưa ai nhận ở `#261`, `#269`, `#231`
+- tiêu chí xong:
+  - ⬜ **Hàm thuần, không đọc đĩa** — nhận nội dung một file Markdown cộng mẫu tiêu đề (`### <id>` cho backlog, `## <id>` cho `known-failures.md`), trả danh sách mã xuất hiện **hơn một lần** kèm **số dòng của từng lần**. Số dòng là phần bắt buộc: một danh sách chỉ có mã không nói được nên đổi cái nào.
+  - ⬜ **Cổng trong `pnpm check`** — chạy trên `ops/lanes/*/backlog.md` **và** `ops/known-failures.md` thật, đỏ khi có mã trùng. Đặt cạnh các cổng rẻ (`pnpm assumptions` / `pnpm contracts`), **trước** `typecheck`: `check` dừng ở lỗi ĐẦU TIÊN, nên một cổng rẻ đặt sau cổng đắt là một cổng có thể không bao giờ chạy (đúng lập luận `I-018` cho `mergedSyntaxProblem`).
+  - ⬜ **Bài tái hiện lỗi** (bất biến **I2**): hai cặp `## KF-016` và `## KF-041` thật đang trên `main` → cổng phải **đỏ**; và ca `### P-028` × 2 dựng từ fixture (cặp thật sẽ không còn sau `#274`, nên nó phải sống trong fixture chứ không neo vào cây). Ca âm: cây đã dọn → **sạch**; hai mã khác nhau chỉ hơn nhau một chữ → **sạch**; một mã nằm trong khối ``` hoặc trong câu văn trích lại → **sạch** (bắt theo tiêu đề đầu dòng, không `grep` cả file — nếu không thì chính `KF-042` và mục này làm cổng đỏ).
+  - ⬜ **Dọn hai cặp `KF` còn lại** trong cùng PR — đổi mã cặp sau sang mã trống, và mọi chỗ trỏ tới nó. Dò mã trống trên **mọi nhánh remote**, không phải "các PR đang mở" (`KF-036`), và dò **lại** ngay trước khi commit.
+  - ⬜ **Vế "giữa đầu nhánh và `main`" khai rõ là KHÔNG thuộc mục này**, kèm lý do, để lượt sau không tiện tay thêm: nó cần `git fetch` mọi nhánh remote trong CI cho **mọi** PR — trả tiền ở chỗ đắt nhất để canh một thứ mà `KF-036` đã có đường khác (dò lại trước khi commit). Nếu vẫn cần máy canh thì chỗ rẻ là `watchdog.yml`, cùng lập luận mà `P-056` dùng cho `pnpm step0:pending`.
+  - ⬜ **`CLAUDE.md` mục 2 và phụ lục P1 bước 3 nói ra phán quyết `free` chưa chắc** — một `free` kèm mã nằm trong `duplicateIds` phải đọc lại, không tin ngay. Khi cổng trên đã chạy thì `duplicateIds` không bao giờ khác rỗng trên `main` nữa, nên dòng dặn này là lưới cho khoảng chờ, không phải luật lâu dài.
+- mã mục: dò `### P-` trên `main` **và trên MỌI nhánh remote** lúc `2026-09-26T02:2xZ` (`KF-005`, `KF-036`) — cao nhất `P-057` (nhánh của `#274`), nên `P-058` không đụng ai. Dò lại ngay trước khi commit, không dò ở đầu lượt (`KF-036`).

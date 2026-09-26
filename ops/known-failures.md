@@ -6,6 +6,55 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-042 · `claimCheck` trả `free` cho một mục đang có **hai** PR mở làm nó, vì cả hai PR đã đổi mã trong tiêu đề
+
+> Số **KF-042**: dò `## KF-` trên `main` **và trên đầu MỌI nhánh remote** trước khi viết (`KF-005`, `KF-036` — không dò "các PR đang mở", vì `KF-036` đã đo được rằng nguồn đó cũ/thiếu). Cao nhất tìm được là `KF-041`, nên `KF-042` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` **EXIT=0**, CI xanh, `main` xanh, và `pnpm claims` **thoát 0** trong khi trả đúng câu trả lời sai.
+
+**Chữ ký:** `claimCheck(prs, lane, id)` đọc chữ ký nhận việc từ **tiêu đề PR** (`[<lane>] <id> — …`) — đúng luật 1 của `P-041`, và luật đó vẫn đúng. Nhưng khi một lượt **đổi mã mục** (vì mã cũ đã bị một mục `done` giữ, đúng việc `KF-036` dặn làm), tiêu đề PR mang **mã mới**, còn `readyNow` của `pnpm backlog:status` vẫn mang **mã cũ**. Hai chuỗi không còn khớp, nên phép hỏi *"mục này đã có ai nhận chưa"* trả `free` cho một mục đang có người giữ — **fail-open ở đúng chỗ `P-041` sinh ra để chặn**.
+
+**Đã gặp: 1 lần**, đo được ở bước 3 lượt `crux-worker-2` `2026-09-26T02:22:36Z`:
+
+```
+node ops/scripts/backlog-status.ts → readyNow chứa "platform/P-028"
+pnpm claims <232 PR, mở LẪN đã đóng> (lane=platform, id=P-028)
+  → {"claim":"platform/P-028","verdict":"free","prs":[]}
+```
+
+Trong khi đúng lúc đó **hai** PR đang mở làm chính mục ấy, và chúng chạm **cùng ba file**:
+
+| PR | Tiêu đề (mã trong tiêu đề) | Tạo lúc | File nội dung |
+|---|---|---|---|
+| [`#224`](https://github.com/HungQuach301/crux-studio/pull/224) | `[platform] P-040 — bộ dò cross-lane đếm cả ops/logs//, tách luật khỏi YAML` | 2026-09-24T05:41:17Z | `ops/scripts/cross-lane.ts` · `ops/test/cross-lane.test.ts` · `ops/workflows/ci.yml` |
+| [`#274`](https://github.com/HungQuach301/crux-studio/pull/274) | `[platform] P-057 — bộ dò cross-lane đếm cả ops/logs//, tách luật khỏi YAML` | 2026-09-26T01:43:52Z | **y hệt ba file trên** |
+
+`#274` tự khai trong thân PR rằng nó **là** mục `P-028` đổi mã (*"Mục vốn mang mã `P-028` … nên lấy `P-057`"*), và diff của nó đổi đúng một dòng tiêu đề mục:
+
+```
+$ git diff origin/main...refs/remotes/pr/274 -- ops/lanes/platform/backlog.md | grep -E '^[+-]### P-'
+-### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
++### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
+```
+
+Nên một lượt worker thứ ba đọc `readyNow`, chạy `claimCheck` đúng như `CLAUDE.md` mục 2 dặn, và nhận được `free`, sẽ mở **PR thứ ba** cho cùng một việc. Đó là `KF-025` lần thứ ba, đi qua đúng cái cổng dựng lên để chặn `KF-025`.
+
+**Vì sao `free` chứ không phải `recently-merged`:** mã `P-028` **có** một PR đã merge mang nó — [`#160`](https://github.com/HungQuach301/crux-studio/pull/160), `2026-09-24T01:41:42Z` — nhưng đó là **mục `P-028` KHÁC** (bản sửa hai khoá `env:` của `smoke-workflows.yml`, `status: done`). Nó merge quá `RECENT_MERGE_MINUTES` (30) nên không kích `recently-merged` được, và dù có kích thì phán quyết ấy cũng nói sai chuyện: nó mời đọc lại backlog vì *"mục có thể vừa xong"*, chứ không nói *"mục này đang có hai PR mở"*.
+
+**Nguyên nhân gốc — và nó nằm ở tầng dưới `claimCheck`:** `ops/lanes/platform/backlog.md` có **hai** mục `### P-028` (dòng 459 và 876). `backlog-status.ts` **đã** phát hiện (`duplicateIds: ["platform/P-028 ↔ platform/P-028"]`) nhưng **không cổng nào đỏ** vì nó, nên mã trùng sống trên `main` và `readyNow` phát ra một mã mà hai bộ đọc hiểu theo hai nghĩa. `claimCheck` không thể đúng ở đây: nó được hỏi về một mã không xác định được mục.
+
+Cùng cây còn **hai** `## KF-016` và **hai** `## KF-041`, cũng không gì đỏ. Ba PR liên tiếp — [`#261`](https://github.com/HungQuach301/crux-studio/pull/261), [`#269`](https://github.com/HungQuach301/crux-studio/pull/269), [`#231`](https://github.com/HungQuach301/crux-studio/pull/231) — đều khai chỗ này và đều hẹn *"tách mục riêng"*; không lượt nào tạo mục đó, nên lời hẹn hết hạn mà không ai thấy. Mục **`platform/P-058`** nay là mục đó.
+
+**Chỗ đã sửa: CHƯA — mục này chỉ ghi lại phép đo.** Khai thẳng thay vì để ô trống trông như đã xong:
+
+- `#274` đang mở **đã** xoá cặp `### P-028` (nó đổi dòng 459 sang `P-057`), nên một nửa chỗ hỏng tự hết **khi và chỉ khi `#274` merge**. Hai cặp `## KF-016` và `## KF-041` thì không PR nào đang mở chạm tới.
+- Vì thế **cổng máy chặn không được xây trước `#274`**: một cổng "mã trùng thì đỏ" bật lên lúc này sẽ làm đỏ chính `main` (ba cặp trùng đang nằm sẵn), và PR nào xây nó cũng phải vừa xây cổng vừa đổi tên các mục trùng — tức đụng thẳng vào diff của `#274`. Thứ tự đúng nằm trong `deps` của `P-058`.
+- Lượt đo được chỗ này (`crux-worker-2` `02:19Z` `2026-09-26`) **không** nhận mục: cả ba mục trong `readyNow` đều đã có PR mở, kể cả `P-028` (dù `claimCheck` nói `free`). Nó ghi mục này rồi thoát, đúng `CLAUDE.md` mục 16.
+
+**Máy chặn từ nay:** chưa có — đó là toàn bộ tiêu chí xong của `platform/P-058`. Cho tới khi mục đó xong, phần bù bằng người là dòng dặn ở `CLAUDE.md` mục 2 và phụ lục P1 bước 3: **một phán quyết `free` kèm `unreadable` khác rỗng, hoặc kèm một mã nằm trong `duplicateIds`, là một `free` chưa chắc** — đọc `duplicateIds` của `pnpm backlog:status` trước khi tin nó. Lượt này `unreadable` có **104** PR và `duplicateIds` có đúng mã đang hỏi, nên cả hai dấu hiệu đều đã bật.
+
+---
+
 ## KF-025 · Hai worker nhận cùng một mục backlog trong 89 giây, và không chỉ báo nào đỏ
 
 > Số **KF-025**: dò `## KF-` trên `main` **và trên đầu cả 7 PR đang mở** trước khi viết (`KF-005`). Cao nhất là `KF-024`, nên `KF-025` không đụng ai.
