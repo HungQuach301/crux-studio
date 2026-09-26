@@ -30,6 +30,31 @@
  *   (`step0LogPath` của kernel sinh ra nó). Hai worker chạy chồng nhau
  *   (CHARTER 2.1) không bao giờ chạm cùng một file, nên không có gì để
  *   xung đột — cùng lập luận `D-C04`, áp cho một nhánh dùng chung.
+ *
+ *   ⚠️ **"Không xung đột" KHÔNG có nghĩa là "không mất dữ liệu", và bản đầu
+ *   của khối lệnh dưới đây trộn hai điều đó.** Nó dựng cây `heartbeat/` lại
+ *   **từ đầu** bằng một `git mktree` chỉ mang **một** entry, rồi commit cây
+ *   đó với `-p $PARENT`. Không lần push nào bị từ chối — nhưng mỗi commit
+ *   **xoá** nhịp tim của mọi lượt trước. Git không báo gì: một cây hợp lệ
+ *   trỏ tới đúng một file vẫn là một cây hợp lệ.
+ *
+ *   **Đo trên chính nhánh này (2026-09-26T06:3xZ):** 33 trong 58 commit có
+ *   `-1` file hoặc hơn, và nhánh đứng ở **đúng một** file suốt ~20 giờ kể từ
+ *   lúc nó sinh ra. Hai commit phải đi chữa bằng tay, tên chúng nói ra chỗ
+ *   hỏng: `1bb6594` *"khôi phục nhịp tim 11:39:23Z bị lần đẩy trước ghi đè"*
+ *   và `c74534b` *"khôi phục dòng của crux-worker-1 03:38Z bị lần đẩy trước
+ *   ghi đè"*. Một commit còn xoá **hai** file một lúc (`715aab9`).
+ *
+ *   Chiều hỏng là nhóm **Z**: `watchdog.yml` dấu hiệu 5 chỉ đọc nhịp tim
+ *   **mới nhất** nên nó vẫn đúng, `pnpm check` xanh, `main` xanh — trong khi
+ *   bản ghi lịch sử mà `step0Streaks` đọc từ nhánh này bị xoá dần. Đúng chỗ
+ *   `KF-021` và `KF-041` đã khai là làm mọi chuỗi kẹt thành **cận dưới**.
+ *
+ *   Nên khối lệnh nay dựng cây **THÊM**: `git ls-tree` liệt kê entry đang có,
+ *   `awk` bỏ đúng entry cùng tên, `printf` thêm nhịp tim của lượt này. Bài
+ *   kiểm `ops/test/telemetry-beat.test.ts` chạy thật hai lần đẩy nối nhau
+ *   trên một kho tạm và đòi **cả hai** file còn sống; file này trước đó
+ *   **không có bài kiểm nào**, và đó là lý do chỗ hỏng sống được 33 lần.
  * - **Chỉ dòng bước 0 được vào.** `beatFileProblems` chặn mọi dòng khác.
  *
  *   ⚠️ Đây là **lớp phòng thủ thứ hai, không phải lớp duy nhất** — bản đầu của
@@ -143,6 +168,21 @@ export function beatContent(raw: string): string {
 }
 
 /**
+ * Số **byte** UTF-8 của nội dung sẽ nằm trên nhánh telemetry.
+ *
+ * Tồn tại vì bản đầu in `beatContent(raw).length` — `String.length`, tức số
+ * đơn vị mã **UTF-16**, không phải byte. Dòng log bước 0 là tiếng Việt có
+ * dấu cộng ký tự 🤖, nên hai con số không bao giờ bằng nhau và chênh lệch
+ * lệch theo hướng **báo nhỏ hơn thật**: đo trên một dòng thật của kho,
+ * `6763` in ra so với `8214` byte thật. Một trường tên `bytes` mang một
+ * đại lượng khác là đúng họ **I6** (mọi con số hiển thị phải có nguồn), và
+ * đây là con số duy nhất mà bước 0e in ra cho người đọc bản ghi lượt chạy.
+ */
+export function beatBytes(raw: string): number {
+  return Buffer.byteLength(beatContent(raw), 'utf8');
+}
+
+/**
  * Các lệnh git mà bên gọi chạy để đẩy bản sao lên nhánh telemetry.
  *
  * Script **in** chúng ra thay vì tự chạy, và đó là chủ đích: mọi thao tác ghi
@@ -169,7 +209,11 @@ export function telemetryPushCommands(logPath: string, sessionUrl: string): stri
     `# Đẩy nhịp tim lên nhánh ${TELEMETRY_BRANCH} — KHÔNG mở PR, nên không chạy CI.`,
     `git fetch --no-tags origin "+refs/heads/${TELEMETRY_BRANCH}:refs/crux/telemetry" || true`,
     `BLOB=$(git hash-object -w ${JSON.stringify(logPath)})`,
-    `INNER=$(printf '100644 blob %s\\t%s\\n' "$BLOB" ${JSON.stringify(name)} | git mktree)`,
+    `# Cây \`${TELEMETRY_DIR}/\` được dựng THÊM, không dựng lại từ đầu: \`git ls-tree\` liệt kê`,
+    '# mọi entry đang có trên nhánh, `awk` bỏ đúng entry cùng tên (để lần đẩy lại của',
+    '# cùng một lượt ghi đè chính nó), rồi dòng `printf` thêm nhịp tim của lượt này.',
+    '# KHÔNG được rút về một `git mktree` chỉ mang một entry — xem khối đầu file.',
+    `INNER=$({ git ls-tree refs/crux/telemetry:${TELEMETRY_DIR} 2>/dev/null | awk -F'\\t' -v n=${JSON.stringify(name)} '$2 != n'; printf '100644 blob %s\\t%s\\n' "$BLOB" ${JSON.stringify(name)}; } | git mktree)`,
     `ROOT=$(printf '040000 tree %s\\t${TELEMETRY_DIR}\\n' "$INNER" | git mktree)`,
     '# Trailer BẮT BUỘC, và nó không có PR nào để sửa về sau: commit trên nhánh này',
     '# không bao giờ vào `main`, nên `no-model-name`/`check-commit-trailers` không',
@@ -225,7 +269,7 @@ if (isMain) {
 
   const target = telemetryTargetPath(logPath);
   process.stdout.write(
-    `${JSON.stringify({ branch: TELEMETRY_BRANCH, target, bytes: beatContent(raw).length }, null, 2)}\n`,
+    `${JSON.stringify({ branch: TELEMETRY_BRANCH, target, bytes: beatBytes(raw) }, null, 2)}\n`,
   );
 
   if (argv.includes('--commands')) {
