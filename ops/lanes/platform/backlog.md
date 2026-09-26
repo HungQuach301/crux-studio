@@ -15,7 +15,7 @@ Hai chỗ đau, và chỗ thứ hai đắt hơn:
 
 - deps: —
 - risk: low — chỗ sửa là một phép **vô hiệu hoá biến môi trường kế thừa** ở đúng một hàm, cộng bài kiểm. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
-- status: ready
+- status: review
 - nguồn: `ops/known-failures.md` `KF-045`; `ops/scripts/integrator-lockfile.ts` (`verifyLockfileInstall`); `ops/test/integrator-clean-merge-lockfile.test.ts:151`; phép đo bước 0 lượt `crux-worker-2` `2026-09-26T12:2xZ`
 - tiêu chí xong:
   - `verifyLockfileInstall` (và mọi chỗ khác trong `ops/scripts/**` spawn `pnpm`) chạy `pnpm` với **`npm_config_reporter` bị xoá khỏi `env`** — hoặc đặt tường minh về mức in đủ chữ. Chọn cách nào thì **ghi lý do tại chỗ**: một hàm cài thật mà đầu ra của nó là bằng chứng duy nhất cho một quyết định thì không được để người gọi tắt được đầu ra đó.
@@ -33,6 +33,7 @@ Hai chỗ đau, và chỗ thứ hai đắt hơn:
   - Một bài **rộng hơn một hàm**: quét `ops/scripts/**` tìm mọi `spawnSync`/`execFile` gọi `pnpm` mà **không** vô hiệu hoá `npm_config_reporter`, và đỏ khi có chỗ mới. **Phạm vi đã đo:** hôm nay cổng đó trả về đúng **một** chỗ — `ops/scripts/integrator-lockfile.ts` dòng 139 và 184 (quét `kernel ops workshops spike`, trừ test). Nên nó là cổng **phòng xa**, không phải cổng dọn nợ; ai làm mục này đừng mong nó tìm ra thêm việc.
   - Khai rõ **cái không sửa ở đây**: `pnpm -s check` vẫn là một cách gọi hợp lệ và sẽ vẫn xanh sau bản sửa; mục này **không** cấm `-s` và **không** sửa `CLAUDE.md` để cấm — chặn ở tầng luật thì một chữ `-s` gõ tay vẫn lọt, còn chặn ở tầng hàm thì không.
 - ⚠️ **Thứ tự trong file này KHÔNG phải thứ tự ưu tiên.** Mục này nằm ở đầu file nên `pnpm backlog:status` trả nó ở `readyNow[0]`, **trước** `platform/P-014` đang tự khai *"ưu tiên cao"* — cùng chỗ mà `P-060` đã đặt tiền lệ khi chèn lên đầu. `CLAUDE.md` mục 2 nói nhận *"mục `readyNow` đầu tiên"* sau khi duyệt làn theo `ops/lanes/priority.md`, nên một lượt đọc thẳng `readyNow[0]` sẽ lấy mục này trước `P-014`. Lượt nào nhận việc thì đọc `ưu tiên cao` trong tên mục, đừng đọc thứ tự file. (Chỗ chữa tận gốc là một trường ưu tiên máy đọc trong backlog, không phải xếp lại file — nó là một mục khác.)
+- kết quả (lượt `crux-worker-1` `2026-09-26T13:3xZ`): `pnpmEnv()` ở `ops/scripts/pnpm-env.ts` xoá `npm_config_reporter` (mọi dạng hoa thường) — **xoá**, không đặt một mức khác, vì mức mặc định là mức duy nhất đã đo là có `ERR_PNPM_*`; lý do ghi tại chỗ. Bộ quét đo được **ba** lời gọi, không phải hai: phép `grep` một dòng lúc mở mục không thấy bước kiểm lại viết trên nhiều dòng của `regenerateLockfile`. Và chỗ thứ hai (`--lockfile-only --no-frozen-lockfile`) đắt hơn mục khai: phép dò `SEED_DISCARDED` đọc chính đầu ra đó, nên dưới `pnpm -s` *"pnpm đã vứt bản mồi"* xanh giả — có bài tái hiện riêng.
 
 ---
 
@@ -554,8 +555,16 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     đó; gộp vào đây là tự tạo một xung đột cho hàng đợi merge. Cả hai đáng một PR riêng.
   - `status` giữ **`ready`**: Z2, Z6, Z8 và Z14 vẫn đang chờ.
 
-### P-028 · Bộ dò `cross-lane` không thấy `ops/logs/<làn>/`, nên luật mềm im lặng ở đúng ca hay gặp nhất
+### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
+
+> **Đổi mã từ `P-028` sang `P-057`** (lượt `crux-worker-3`, 2026-09-26): mục này
+> lỡ mang mã `P-028` — đã có một mục **`done`** khác giữ mã đó (bản sửa hai khoá
+> `env:` của `smoke-workflows.yml`, cùng file này), nên `pnpm backlog:status`
+> báo `duplicateIds: ["platform/P-028 ↔ platform/P-028"]` và file log
+> `ops/logs/platform/P-028.jsonl` đã tồn tại của mục kia sẽ đụng `D-C04`
+> (một file cho mỗi mục). Mã cao nhất của làn là `P-056`, nên mục này lấy
+> `P-057`. Đổi mã một mục chưa nhận là `reversible` (nằm trong git).
 
 `ops/workflows/ci.yml` gắn nhãn `cross-lane` bằng `grep -Eo '^(workshops|ops/lanes)/[a-z]+'` trên danh sách file
 đã đổi. Hai tiền tố đó **không phủ `ops/logs/<làn>/`** — mà từ `D-C04` thì mỗi mục có một file log riêng dưới
@@ -567,15 +576,27 @@ phần còn lại của `P-014`.
 
 - deps: —
 - risk: low
-- status: ready
+- status: review
 - nguồn: vòng soát của `P-014` sóng 2; CHARTER mục 4; `D-C04`
 - tiêu chí xong:
   - Bộ dò đếm cả `ops/logs/<làn>/`, và **không** đếm trùng khi một PR chạm cả `ops/lanes/x/` lẫn `ops/logs/x/`
-    (cùng một làn `x`, không phải hai làn).
+    (cùng một làn `x`, không phải hai làn). ✅
   - Có test âm: một tập file đã đổi chạm `ops/lanes/platform/` và `ops/logs/integration/` phải ra **2** làn;
-    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**.
+    chạm `ops/lanes/platform/` và `ops/logs/platform/` phải ra **1**. ✅
   - Luật tách khỏi YAML sang một script có test, cùng lý do đã ghi ở `check-golden-pr.ts`: `ci.yml` chạy theo
-    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test.
+    định nghĩa trong nhánh PR, nên một luật viết thẳng vào workflow không phải chỗ đặt được test. ✅
+- ✅ **Đã làm, 2026-09-26 (lượt `crux-worker-3`):**
+  - `ops/scripts/cross-lane.ts` — quy mỗi đường dẫn về **tên làn** (`laneOfPath`) từ ba gốc
+    `workshops/<làn>/`, `ops/lanes/<làn>/`, `ops/logs/<làn>/`, rồi gom vào `Set` (`lanesTouched`) và đếm
+    (`countLanesTouched`). Đoạn tên phải khớp `LANES` của kernel — đoạn lạ quy về `null`, không dựng làn ma.
+    Bỏ dấu ngoặc `core.quotePath` (`unquote`) để file tên tiếng Việt không biến mất — cùng lỗi fail-open mà
+    `check-golden-pr.ts` đã chặn. CLI đọc stdin, in **số làn** ra stdout (máy đọc) và danh sách làn ra stderr
+    (không im lặng).
+  - `ops/test/cross-lane.test.ts` — 10 test, gồm hai ca âm tiêu chí đòi và ca hay gặp nhất (mục platform +
+    dòng log bước 0 của `integration` → 2), ca gộp `workshops/x`+`ops/lanes/x` → 1, và ca dấu ngoặc.
+  - `ops/workflows/ci.yml` — bước "Gắn nhãn theo cửa merge, và cross-lane" nay gọi
+    `node ops/scripts/cross-lane.ts < changed.txt` thay cho dòng `grep` cũ (chỉ thấy `workshops|ops/lanes`,
+    đếm theo chuỗi tiền tố nên vừa bỏ sót `ops/logs/<làn>/` vừa báo động giả `workshops/x`+`ops/lanes/x`).
 
 ### P-002 · `decision-relay.yml` và routine `crux-decision`
 Rút độ trễ trả lời quyết định từ một nhịp worker xuống vài phút.
@@ -1312,6 +1333,34 @@ Nhóm **Z**: `pnpm check` xanh, CI xanh, `git log` vẫn có commit, backlog v�
   - ⬜ **Điều kiện THÊM cho `P-038`, vòng soát ngữ cảnh sạch tìm ra:** nhánh `claude/telemetry` là một đường ghi vào repo **không đi qua cổng nào** — `ci.yml` chỉ kích bằng `pull_request: branches:[main]` và `workflow_dispatch`, nên push vào nhánh này không qua gitleaks (**I1**), không qua `no-model-name`, không qua `protected-area`. Hôm nay rủi ro thấp vì **cùng nội dung** cũng đi qua PR log của lượt chạy và được quét ở đó. Nó thành chỗ chịu tải đúng lúc `P-038` bỏ PR log, khi nhánh telemetry là đích **duy nhất**. Trường `note` của dòng log là văn xuôi tự do do agent viết và đi lên nguyên văn, nên đây không phải lo xa. Ghi thành điều kiện của `P-038`, không phải việc của PR này.
 - **mã mục nhận lúc 2026-09-24 ~08:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 9 PR đang mở — cao nhất là `P-042` (`main`), `P-041` (`#225`) và `P-040` (`#224`), nên `P-043` không đụng ai.
 
+### P-044 · fix · cảnh báo `main` đỏ không bao giờ được đóng, nên lần đỏ SAU có thể im 4 giờ
+
+CHARTER 2.4 viết "nhắc lại mỗi **4 giờ** tới khi `main` **xanh lại**". Vế "xanh lại" **không có ai thực thi**: không workflow nào trong repo đóng một issue nhãn `alert`. Đo được trên `main` `2329988` lúc `2026-09-24T09:38Z` — `#131` (`main` đỏ tại `a44d265`, mở `2026-09-22T10:14Z`, 17 comment) vẫn **mở**, trong khi `main-ci` xanh liên tiếp ba lượt từ `04:41Z` cùng ngày và `pnpm check` trên `main` xanh (1094 bài).
+
+Hệ quả không phải "một issue thừa trong danh sách". Nó là một lần **`main` đỏ mà không ai được gọi**:
+
+1. `main-ci.yml` **dùng lại** issue cảnh báo: `gh issue list --label alert --state open --search "main đỏ in:title"` lấy issue đầu tiên, **không** so `sha`. Một issue không bao giờ đóng thì mọi sự cố về sau rơi vào nó.
+2. `decideMention` (`ops/scripts/alert-escalation.ts`, mục `P-034`) đọc `createdAt` của mục mang mốc `<!-- crux-escalate-main-do -->` **mới nhất** trên **cả** thân issue và comment — tức trên cả hai sự cố gộp lại.
+3. Nên: `main` đỏ → @nhắc → sửa xong, `main` xanh → **đỏ lại vì một commit khác** trong vòng 4 giờ → `decideMention` thấy lần nhắc gần nhất mới 1 giờ → **`quiet`**. Sự cố mới không gọi ai cho tới hết 4 giờ của sự cố **cũ**.
+
+Đây đúng là chỗ hỏng mà `P-034` sinh ra để chữa (cảnh báo `#131` im 13 giờ), quay lại bằng một cửa khác — và lần này thì `pnpm check` xanh, CI xanh, `watchdog` xanh, issue vẫn nằm đó: nhóm **Z** của `ops/known-failures.md`.
+
+- deps: —
+- risk: high — chiều hỏng là **im lặng trên một `main` đỏ**, tức đúng chiều mà CHARTER 2.4 xếp vào bốn cảnh báo khẩn.
+- status: review
+- hold: kiểm bằng chạy thật — `ops/workflows/**` chỉ có hiệu lực sau khi merge và `sync-workflows` chép sang `.github/`, nên job `resolve-alert` chưa từng chạy thật lần nào. Chỉ đóng khi một lượt sau dispatch `main-ci` (`dry_run = true`) và dán kết quả; không đóng khi PR merge
+- nguồn: đo bằng chạy thật ở lượt `crux-worker-1` `2026-09-24 ~09:38Z` (bước 3 phụ lục P1); CHARTER 2.4 luật 1 và 2; `ops/scripts/alert-escalation.ts`; `ops/workflows/main-ci.yml` (job `alert`, bước dùng lại issue); `#131` còn mở
+- tiêu chí xong:
+  - ✅ `ops/scripts/alert-resolution.ts` (mới): `incidentSha` (khối máy đọc `crux-hotfix-scope` trước, tiêu đề `main đỏ tại <sha>` là lưới dự phòng cho cảnh báo mở trước `D-C07` như `#131`) và `decideClosure`. Phần **quyết định** nằm trong TypeScript chứ không trong khối `run:` — cùng lý do `P-034` đã chốt.
+  - ✅ `main-ci.yml` job `resolve-alert`: `if: success()` cộng chốt `github.ref == 'refs/heads/main'`, `fetch-depth: 0`, lọc tác giả `github-actions[bot]` (bất biến **I7**), tôn trọng `dry_run` (`P-010`), đọc danh sách qua fd 3, `--limit 100`, và **mọi** lệnh `gh` đều được bọc.
+  - ✅ Bài **tái hiện lỗi** (bất biến I2) dựng đúng cảnh hai sự cố cách nhau 1 giờ bằng hàm thật: `quiet` khi cảnh báo cũ còn mở, `mention` khi nó đã đóng.
+  - ✅ Ba tầng bài kiểm, và tầng thứ ba chỉ có vì vòng soát đo được hai tầng đầu **không đủ** — xem bảng ở `ops/known-failures.md` **KF-028**. 33 bài mới.
+  - ✅ **Phá thật, mỗi phép đỏ đúng chỗ rồi khôi phục** (15 phép): gỡ `fetch-depth: 0` · gỡ lọc tác giả · `success()`→`always()` · gỡ chốt `github.ref` · `unknown`→close · `not-ancestor`→close · đóng cả cảnh báo khác loại · `sha` null vẫn đóng · bỏ lưới tiêu đề · `parseScope` lấy khối ĐẦU · `decideClosure` luôn `keep` · **CLI biến `ancestry` lạ thành `ancestor`** · **đảo thứ tự tham số `merge-base`** · **đổi tên trường JSON `jq` đọc** · **đổi định dạng tiêu đề**. Bốn phép in đậm cho **20/20 xanh** trước vòng soát; phép `fetch-depth` cũng xanh ở bản đầu vì bài kiểm khớp cả chữ trong chú thích.
+  - ✅ Phạm vi **chỉ** cảnh báo `main` đỏ. Ba loại cảnh báo khẩn còn lại của CHARTER 2.4 (watchdog im lặng, chi phí, bảo mật) có điều kiện kết thúc khác nhau — một mục, một mục tiêu (`CLAUDE.md` mục 11). Có bài canh, không phải một thiếu sót.
+  - ⬜ **Kiểm bằng chạy thật, chưa làm được ở lượt này:** `ops/workflows/**` chỉ có hiệu lực sau khi PR merge và `sync-workflows` chép sang `.github/`. Lượt worker sau khi PR này vào `main` dispatch `main-ci` với `dry_run = true` và dán kết quả — đó mới là bằng chứng job chạy thật, chứ không phải bằng chứng về logic. **Không** tự chuyển `done` trước khi có nó.
+  - ⬜ Còn một chỗ mà bản sửa này **không** che: mắt xích "đóng issue → sự cố sau thấy danh sách rỗng → `mention`" nằm trong `gh issue list --state open` của bash, không trong code — bài kiểm phải đặt danh sách rỗng bằng tay. Khai ở `KF-028`.
+- **mã mục nhận lúc 2026-09-24 ~09:5x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của các PR đang mở, cao nhất là `P-043` (`#229`), nên `P-044` không đụng ai.
+
 ### P-046 · Bản tin chưa có khối "sẵn sàng duyệt", và chưa máy nào đọc được câu trả lời `Duyệt`
 
 Chỉ dẫn của chủ dự án trên issue bản tin [#193](https://github.com/HungQuach301/crux-studio/issues/193),
@@ -1367,6 +1416,87 @@ Ba cách đọc sai mà nửa đọc phải chặn bằng test, không phải b�
 - **mã mục nhận lúc 2026-09-24 ~12:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên đầu cả 13 PR đang mở, cao nhất là `P-045` (`#233`), nên `P-046` không đụng ai.
 ---
 
+### P-047 · fix · Một lượt `ci.yml` bị `concurrency` huỷ để lại check run `cancelled` mang tên check **bắt buộc**, và PR kẹt `blocked` vĩnh viễn
+Chỉ dẫn của chủ dự án trên issue bản tin [#241](https://github.com/HungQuach301/crux-studio/issues/241), comment `2026-09-24T14:59:40Z` (comment không mở đầu 🤖 trên issue nhãn `digest` → là lệnh, `CLAUDE.md` mục 5):
+
+> `#233`: đã merge. Xác minh nguyên nhân gốc lỗi 405 của `#226`: `#226` và `#224` chỉ có 1/1 check trong khi ruleset `protect-main` đòi 5 check bắt buộc — kiểm xem CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không; sửa gốc, ghi KF.
+
+`ops/known-failures.md` `KF-029` đã khai giả thuyết này và tự dặn *"Tách thành mục backlog riêng"*; ~10 giờ sau không mục nào giữ nó. Mục này giữ.
+
+- deps: —
+- risk: medium — chạm `ops/workflows/ci.yml` (vùng `automerge-delayed`). Không đổi tên, không gộp, không xoá job nào trong năm job mà ruleset `protect-main` đòi, nên **không** rơi vào nhóm `irreversible` số 8 của CHARTER 2.3.
+- status: review
+- hold: bản sửa `ci.yml` chỉ có hiệu lực sau khi PR vào `main` và `sync-workflows` chép sang `.github/` (`CLAUDE.md` mục 4) — chưa chạy thật lần nào
+- nguồn: chỉ dẫn chủ dự án trên `#241`; `ops/known-failures.md` `KF-029` và **`KF-031`**; `D-C08`; `ops/scripts/required-checks.ts`
+- tiêu chí xong:
+  - ✅ **Nguyên nhân gốc xác minh bằng đo, và cả hai vế của chỉ dẫn được trả lời — kể cả vế đo được là SAI.**
+    Vế *"CI có bỏ qua check bắt buộc với PR chỉ chạm `ops/logs/` không"*: **không**. `ci.yml` không có `paths:`
+    hay `paths-ignore:` nào (`grep -n "paths" ops/workflows/*.yml` → chỉ `labels.yml` và `smoke-workflows.yml`,
+    cả hai không sinh check bắt buộc); và `#226` cũng không phải PR chỉ chạm `ops/logs/` — nó chạm
+    `ops/known-failures.md`, `ops/lanes/`, `ops/scripts/`, `ops/test/`. Vế *"405 vì check bắt buộc không được
+    ruleset đọc thấy"*: **đúng**, nhưng nguyên nhân khác — xem `KF-031`. Bằng chứng là một phép thử tự nhiên
+    trên **cả 8 PR đang mở**: đúng **một** PR mang check run `cancelled` tên check bắt buộc (`#224`), và đó
+    cũng là đúng **một** PR ở `mergeable_state: "blocked"`; bảy PR còn lại chỉ có check run của một lượt và
+    không PR nào `blocked`.
+  - ✅ **Sửa gốc:** **bỏ hẳn khối `concurrency`** khỏi `ops/workflows/ci.yml`.
+    Bản sửa đầu của lượt này là `cancel-in-progress: false` + `group` mang `head.sha`, và **vòng soát ngữ
+    cảnh sạch bác nó**: `concurrency` còn đường huỷ thứ hai — một lượt đang **xếp hàng** trong nhóm bị huỷ
+    khi lượt sau tới, mà `cancel-in-progress` chỉ chi phối lượt đang **chạy**. `ci.yml` đăng ký năm loại sự
+    kiện nên ba sự kiện trên cùng một commit là chuyện thường. Vế này khai đúng mức là **suy luận từ ngữ
+    nghĩa nền tảng**, không phải một lần chạy thật (bất biến I6) — nhưng bỏ cả khối thì không còn đường huỷ
+    nào để phải đoán.
+  - ✅ **Máy chặn, tách khỏi YAML:** `ops/scripts/ci-concurrency.ts` → `concurrencyProblems`, nối vào
+    `pnpm lint:workflows`. Luật cấm cả **khối**, không chỉ cấm `cancel-in-progress: true` — vòng soát đo
+    được bản đầu **đọc sai bốn dạng viết hợp lệ** (flow mapping một dòng · `${{ true }}` · `True` viết hoa ·
+    giá trị ở dòng sau), cả bốn bật huỷ thật mà cổng vẫn `EXIT=0`. Một luật cấm cả khối không có mặt đó để
+    đọc sai. Đọc cả khối `concurrency` mức **job**. Thu hẹp bằng `requiredChecksOnPr` (chạy trên
+    `pull_request` **và** sinh check bắt buộc), nên `gpt-review.yml` và `main-ci.yml` không bị chặn oan —
+    cả hai đều có bài kiểm ca âm chạy trên file **thật**.
+  - ✅ **Bộ dò PR đang kẹt:** `blockedRequiredChecks` trong cùng file, cộng CLI
+    `node ops/scripts/ci-concurrency.ts <file.json>` (nhận cả mảng trần lẫn nguyên object `{"check_runs": […]}`
+    mà API trả về). Cờ `silent` tách ca "có cả lượt `success` cùng tên" — PR trông xanh mà vẫn kẹt. Bài kiểm
+    chạy trên **dữ liệu đo thật của `#224`**. Vòng soát bỏ `skipped` khỏi `NON_VERDICT_CONCLUSIONS`: GitHub
+    coi required check `skipped` là **đã qua**, và hai job có `if: github.event_name == 'pull_request'` ra
+    `skipped` ở mọi lượt `workflow_dispatch` → dương tính giả.
+  - ✅ Ghi `ops/known-failures.md` **`KF-031`**, gồm cả vế giả thuyết đo được là sai.
+  - ✅ **28 bài, ba tầng** (`ops/test/ci-concurrency.test.ts`): hàm thuần · `ops/workflows/**` thật trên đĩa ·
+    hợp đồng "`check-workflows.ts` phải THẬT SỰ gọi luật này". Tầng ba có vì hai tầng đầu **không đủ**: gỡ
+    lời gọi khỏi CLI làm **0** bài đỏ, đúng nhóm Z mà mục này sinh ra để giết.
+  - ✅ **Phá thử 17 phép, mỗi phép đỏ đúng chỗ rồi khôi phục**, cây sạch sau mỗi vòng. Sáu phép đầu đo ở
+    **cả** bài kiểm lẫn cổng thật (`pnpm lint:workflows` `EXIT=1`): thêm lại khối cũ → 2 đỏ · khối +
+    `cancel: false` → 1 · `${{ true }}` → 1 · `True` → 1 · flow mapping → 1 · giá trị ở dòng sau → 1. Mười
+    một phép còn lại trên module: gỡ lời gọi khỏi `check-workflows.ts` → 1 · `concurrencyProblems` luôn rỗng
+    → 9 · bỏ lọc trigger `pull_request` → 2 · thêm lại `skipped` → 1 · bỏ `cancelled` → 2 · bộ dò đếm mọi
+    tên → 1 · `silent` luôn `false` → 1 · bỏ qua khối mức job → 2 · `cancelsFromValue` về so sánh chặt của
+    bản đầu → 1 · `parseCheckRuns` nuốt dữ liệu lạ → 1 · bỏ nhận dạng flow mapping → 1. Khôi phục → **28/28
+    xanh**.
+- **vòng soát ngữ cảnh sạch (bước 6) — 1 CHẶN, 3 NÊN SỬA, sửa cả bốn.** Reviewer dựng worktree riêng ở
+  `origin/main`, tự chạy lệnh chứ không tin mô tả, và tự nghĩ thêm phép phá thử:
+  - **C1 (CHẶN) · dòng log của chính lượt này mang mốc `at` Ở TƯƠNG LAI.** `ops/logs/platform/P-047.jsonl`
+    ghi `at: 21:05:00.000Z` trong khi commit tạo lúc `20:56:15Z` — vượt `FUTURE_TOLERANCE_HOURS` (1 phút).
+    Hậu quả đo được: bài `Z7` của `ops/test/lane-heartbeat.test.ts` **đỏ** trong cửa sổ ~9 phút rồi tự lành,
+    nên lời khai "`pnpm check` xanh" **không tái lập được** trên chính cây đã commit; và trong khoảng đó làn
+    `platform` không bao giờ `stale` được, tức dấu hiệu 5 của CHARTER 2.4 bị tắt. Đây là **lần thứ tư** cùng
+    thói quen ghi mốc tròn bằng tay — `I-021` đã ghi ba mốc trước đó và viết sẵn *"cách chữa luôn là ghi
+    `at` bằng đồng hồ thật, không phải nới dung sai"*. Đã ghi lại bằng đồng hồ thật, và mọi con số kiểm tra
+    trong mục này là số **đo lại sau vòng soát**.
+  - **N1 · bốn lối đi vòng qua luật**, đo bằng một workflow `zz-evil.yml` dựng riêng: cả bốn làm
+    `pnpm lint:workflows` ra `EXIT=0` trong khi huỷ vẫn bật. Đã bịt bằng cách đổi luật từ "cấm một giá trị"
+    sang "cấm cả khối", cộng 5 bài mới.
+  - **N2 · `cancel-in-progress: false` không bỏ hẳn đường huỷ** — xem tiêu chí "Sửa gốc" ở trên.
+  - **N3 · CLI vỡ bằng stack trace thô** với đúng dạng dữ liệu mà chính nó chỉ người dùng đi lấy
+    (`{"check_runs": […]}`), và với file không tồn tại. Đã bọc: `parseCheckRuns` nhận cả hai hình dạng, lỗi
+    in một câu tiếng Việt và thoát 2.
+  - **Ghi nhận không chặn của reviewer, dán lại để không rơi mất:** mọi lời khai số trong `KF-031` và mục
+    này đều tái lập được (`ci.yml` không có `paths:` · `gpt-review.yml` không sinh check bắt buộc · nền
+    `main` 1222 · `lint:workflows` 16 file 45 khối · replay 6/6); 8 phép phá thử của bản đầu đúng cả 8;
+    I1/I2/I3/I8 đạt; `.github/` 0 dòng; trailer sạch tên model.
+- **luật mềm CHARTER mục 4, ghi nhận:** diff vượt ngưỡng ~400 dòng. Phần *code sửa lỗi* chỉ vài chục dòng;
+  phần lớn là bài kiểm và tài liệu. Không tách: tách cặp "test tái hiện + bản sửa" làm hỏng bất biến **I2**.
+  Bộ dò `cross-lane` hiện trên `main` đếm `^(workshops|ops/lanes)/[a-z]+` nên ra **1** làn (`platform`) và CI
+  sẽ không gắn nhãn; bộ dò mới của `P-040` (`#224`, đang mở) đếm cả `ops/logs/<làn>/` nên sẽ ra **2** làn —
+  khai ra đây thay vì để lượt sau tưởng nhãn bị sót.
+- **mã mục nhận lúc 2026-09-24 ~20:4x giờ UTC** (`KF-005`): dò `### P-` trên `main` **và** trên `refs/pull/N/head` của cả 8 PR đang mở (242, 238, 231, 229, 225, 224, 223, 39), cao nhất là `P-046` (`#238`), nên `P-047` không đụng ai. Mã `KF-031` nhận cùng cách, cao nhất là `KF-030` (`#231`, `#225`).
 ### P-049 · fix · Báo động giả trong cửa sổ chờ `sync-workflows` sau PR sửa `ops/workflows/**`
 
 Chỉ dẫn **D2** của chủ dự án trên [`#251`](https://github.com/HungQuach301/crux-studio/issues/251). Một PR sửa `ops/workflows/**` vào `main` mở một cửa sổ vài chục giây mà bản workflow đang chạy (`.github/`) lệch bản nguồn (`ops/workflows/`) cho tới khi `sync-workflows` chép sang. Trong cửa sổ đó tầng cảnh báo `@nhắc` chủ dự án dù `main` đang xanh — báo động giả (ngược nhóm Z). Đo được `2026-09-24T22:26Z` (`#229`/`a642919` → `843bbd4` sau 33 giây). Chi tiết: `ops/known-failures.md` `KF-033`.
