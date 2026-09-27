@@ -149,6 +149,56 @@ export function renderStep0PrunePlan(plan: Step0PrunePlan, source: string): stri
   return lines.join('\n');
 }
 
+/**
+ * Lớp kiểm thứ hai, theo NỘI DUNG (vòng soát bước 6 của `I-022`): mã log có
+ * trên `main` mới chỉ nói *tên file* đã tới. Một nhánh chờ có thêm commit sau
+ * đó — một dòng nối thêm, hay một file thứ hai — vẫn khớp tên, và xoá nó là
+ * xoá dữ liệu không có bản sao (CHARTER 2.3 nhóm 6). Nên mỗi nhánh trong
+ * `prune` phải qua `check`; trả chuỗi (không `null`) thì nhánh chuyển sang
+ * `problems` và KHÔNG bị xoá.
+ */
+export function confirmPruneContent(
+  plan: Step0PrunePlan,
+  check: (branch: string, logId: string) => string | null,
+): Step0PrunePlan {
+  const prune: string[] = [];
+  const problems = [...plan.problems];
+  for (const branch of plan.prune) {
+    const logId = step0LogIdFromPendingBranch(branch)!;
+    const problem = check(branch, logId);
+    if (problem === null) prune.push(branch);
+    else problems.push(`Nhánh chờ \`${branch}\` — KHÔNG xoá: ${problem}`);
+  }
+  return { prune, keep: plan.keep, problems };
+}
+
+/**
+ * Kiểm bằng git: (1) blob của file log trên nhánh chờ TRÙNG blob trên nhánh
+ * chính, và (2) so với nhánh chính, nhánh chờ chỉ mang đúng file đó
+ * (`git diff --name-only <main>...<nhánh>`). Nhánh đọc từ ref theo dõi
+ * `<branchRefPrefix><nhánh>` — chưa fetch thì là một problem, không phải một
+ * lần xoá mù.
+ */
+export function gitContentCheck(mainRef: string, branchRefPrefix: string) {
+  const git = (args: string[]) => spawnSync('git', args, { encoding: 'utf8' });
+  return (branch: string, logId: string): string | null => {
+    const ref = `${branchRefPrefix}${branch}`;
+    const path = `${STEP0_LOG_DIR}/${logId}.jsonl`;
+    const onBranch = git(['rev-parse', '--verify', '--quiet', `${ref}:${path}`]);
+    if (onBranch.status !== 0) return `không đọc được \`${path}\` trên \`${ref}\` (chưa fetch nhánh?)`;
+    const onMain = git(['rev-parse', '--verify', '--quiet', `${mainRef}:${path}`]);
+    if (onMain.status !== 0) return `không đọc được \`${path}\` trên \`${mainRef}\``;
+    if (onBranch.stdout.trim() !== onMain.stdout.trim()) {
+      return `nội dung \`${path}\` trên nhánh KHÁC bản trên \`${mainRef}\` — nhánh có dòng chưa tới nhánh chính`;
+    }
+    const diff = git(['diff', '--name-only', `${mainRef}...${ref}`]);
+    if (diff.status !== 0) return `\`git diff ${mainRef}...${ref}\` thoát ${diff.status ?? '?'} (lịch sử nông?)`;
+    const extra = diff.stdout.split('\n').map((l) => l.trim()).filter((l) => l.length > 0 && l !== path);
+    if (extra.length > 0) return `nhánh mang thêm file ngoài dòng log: ${extra.join(', ')}`;
+    return null;
+  };
+}
+
 function usage(): never {
   process.stderr.write(
     'Dùng: node ops/scripts/step0-pending-prune.ts (--from-remote | --branches <file>) ' +
@@ -156,6 +206,8 @@ function usage(): never {
       '  --from-remote  hỏi `git ls-remote` danh sách nhánh chờ.\n' +
       '  --branches     file văn bản, mỗi dòng một tên nhánh (nhận cả dạng `<sha>\\trefs/heads/<nhánh>`).\n' +
       '  --main-ref     ref của nhánh chính, mặc định `origin/main`. Ném khi ref không tồn tại.\n' +
+      '  --branch-ref-prefix  tiền tố ref theo dõi của nhánh chờ, mặc định `refs/remotes/origin/`.\n' +
+      '                 Nhánh chưa fetch về đó thì KHÔNG xoá (lớp kiểm nội dung).\n' +
       '  --json         in {prune, keep, problems, source} ra stdout; báo cáo người đọc ra stderr.\n' +
       'Không --json: stdout là danh sách nhánh xoá được, mỗi dòng một nhánh.\n' +
       'Thoát 2 khi KHÔNG ĐO ĐƯỢC — khi đó stdout rỗng, và bên gọi không được xoá gì.\n',
@@ -167,6 +219,7 @@ function main(argv: readonly string[]): void {
   let branchesFile: string | undefined;
   let fromRemote = false;
   let mainRef = 'origin/main';
+  let branchRefPrefix = 'refs/remotes/origin/';
   let asJson = false;
 
   const valueOf = (index: number): string => {
@@ -180,6 +233,7 @@ function main(argv: readonly string[]): void {
     else if (arg === '--from-remote') fromRemote = true;
     else if (arg === '--branches') branchesFile = valueOf((index += 1));
     else if (arg === '--main-ref') mainRef = valueOf((index += 1));
+    else if (arg === '--branch-ref-prefix') branchRefPrefix = valueOf((index += 1));
     else usage();
   }
   if (fromRemote === (branchesFile !== undefined)) usage();
@@ -203,7 +257,10 @@ function main(argv: readonly string[]): void {
 
   const sha = spawnSync('git', ['rev-parse', '--short', mainRef], { encoding: 'utf8' });
   const source = `ref \`${mainRef}\` (${sha.status === 0 ? sha.stdout.trim() : '?'}), thư mục \`${STEP0_LOG_DIR}/\``;
-  const plan = planStep0PendingPrune({ branches, mergedLogIds });
+  const plan = confirmPruneContent(
+    planStep0PendingPrune({ branches, mergedLogIds }),
+    gitContentCheck(mainRef, branchRefPrefix),
+  );
   process.stderr.write(`${renderStep0PrunePlan(plan, source)}\n`);
   process.stdout.write(
     asJson

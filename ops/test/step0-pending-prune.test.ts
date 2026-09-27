@@ -15,7 +15,11 @@ import { join } from 'node:path';
 
 import { step0LogId } from '../../kernel/src/log.ts';
 import { step0PendingBranch } from '../scripts/step0-pr-gate.ts';
-import { planStep0PendingPrune, renderStep0PrunePlan } from '../scripts/step0-pending-prune.ts';
+import {
+  confirmPruneContent,
+  planStep0PendingPrune,
+  renderStep0PrunePlan,
+} from '../scripts/step0-pending-prune.ts';
 
 const ON_MAIN = step0LogId('2026-09-27T08:38:49Z', 'crux-worker-1');
 const NOT_ON_MAIN = step0LogId('2026-09-27T11:39:25Z', 'crux-worker-1');
@@ -84,6 +88,22 @@ test('nhánh trùng tên chỉ xoá một lần, và danh sách sắp theo tên'
   assert.deepEqual(plan.prune, [step0PendingBranch(OTHER_ON_MAIN), step0PendingBranch(ON_MAIN)]);
 });
 
+test('lớp kiểm nội dung: nhánh bị `check` bác → sang `problems`, KHÔNG xoá', () => {
+  const plan = planStep0PendingPrune({
+    branches: [step0PendingBranch(ON_MAIN), step0PendingBranch(OTHER_ON_MAIN)],
+    mergedLogIds: [ON_MAIN, OTHER_ON_MAIN],
+  });
+  const seen: string[] = [];
+  const confirmed = confirmPruneContent(plan, (branch, logId) => {
+    seen.push(logId);
+    return logId === ON_MAIN ? 'nội dung lệch' : null;
+  });
+  assert.deepEqual(seen.sort(), [ON_MAIN, OTHER_ON_MAIN].sort(), 'mọi nhánh trong prune đều phải qua check');
+  assert.deepEqual(confirmed.prune, [step0PendingBranch(OTHER_ON_MAIN)]);
+  assert.equal(confirmed.problems.length, 1);
+  assert.match(confirmed.problems[0]!, /KHÔNG xoá: nội dung lệch/);
+});
+
 // ── CLI trên kho git thật ──────────────────────────────────────────────────
 
 const SCRIPT = join(process.cwd(), 'ops/scripts/step0-pending-prune.ts');
@@ -139,6 +159,49 @@ test('CLI --json: prune/keep/problems/source', () => {
   });
 });
 
+/** Đẩy thêm một commit lên nhánh chờ `ON_MAIN` của kho tạm rồi fetch lại. */
+function mutateOnMainBranch(dir: string, change: (logDir: string) => void): void {
+  const git = (...args: string[]): string => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+  git('checkout', '-q', step0PendingBranch(ON_MAIN));
+  change(join(dir, 'ops/logs/integration'));
+  git('add', '.');
+  git('commit', '-q', '-m', 'thêm sau khi dòng log đã tới main');
+  git('checkout', '-q', 'main');
+  git('fetch', '-q', 'origin');
+}
+
+test('CLI: nhánh có dòng NỐI THÊM sau khi file đã tới main → KHÔNG xoá (dữ liệu không bản sao)', () => {
+  withRepo((dir) => {
+    mutateOnMainBranch(dir, (logDir) => writeFileSync(join(logDir, `${ON_MAIN}.jsonl`), '{}\n{"x":1}\n'));
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote'], { cwd: dir, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /KHÔNG xoá: nội dung/);
+  });
+});
+
+test('CLI: nhánh mang thêm một file ngoài dòng log → KHÔNG xoá', () => {
+  withRepo((dir) => {
+    mutateOnMainBranch(dir, (logDir) => writeFileSync(join(logDir, 'khac.txt'), 'x\n'));
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote'], { cwd: dir, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /mang thêm file ngoài dòng log: ops\/logs\/integration\/khac\.txt/);
+  });
+});
+
+test('CLI: nhánh chưa fetch về ref theo dõi → KHÔNG xoá mù', () => {
+  withRepo((dir) => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--branch-ref-prefix', 'refs/khong-co/'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /chưa fetch nhánh/);
+  });
+});
+
 test('KHÔNG ĐO ĐƯỢC: ref nhánh chính không tồn tại → thoát 2, stdout RỖNG', () => {
   withRepo((dir) => {
     const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--main-ref', 'origin/khong-co'], {
@@ -170,19 +233,56 @@ test('CLI gọi sai (thiếu nguồn nhánh, hay cả hai nguồn) → thoát 2'
 
 // ── Workflow gọi đúng luật ─────────────────────────────────────────────────
 
-test('workflow: đo trên origin/main, xoá đúng danh sách của script, không `--force`, có dry_run', () => {
-  const source = readFileSync(join(process.cwd(), 'ops/workflows/step0-pending-prune.yml'), 'utf8');
-  const run = source
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('#'))
-    .join('\n');
+test('workflow: đo trên origin/main, xoá đúng danh sách của script, không ép ghi đè', () => {
+  const run = workflowRun();
   assert.match(run, /node ops\/scripts\/step0-pending-prune\.ts --from-remote --main-ref origin\/main > "\$LIST"/);
   assert.match(run, /xargs -n 50 git push origin --delete < "\$LIST"/);
   assert.doesNotMatch(run, /--force|\s-f\s/);
-  // Lệnh đo không được nuốt lỗi — thoát 2 phải làm bước đỏ trước khi xoá.
-  assert.doesNotMatch(run, /step0-pending-prune\.ts[^\n]*\|\|/);
   assert.match(run, /set -euo pipefail/);
-  assert.match(run, /dry_run:/);
   // Chỉ GITHUB_TOKEN — không secret nào khác (D-C01).
   assert.doesNotMatch(run, /secrets\./);
+  // Lớp kiểm nội dung cần nhánh chờ đã fetch về đúng ref theo dõi mặc định.
+  assert.match(run, /refs\/heads\/claude\/integration\/step0-pending\/\*:refs\/remotes\/origin\/claude\/integration\/step0-pending\/\*/);
+});
+
+/** Khối `run` của workflow, bỏ dòng chú thích. */
+function workflowRun(): string {
+  return readFileSync(join(process.cwd(), 'ops/workflows/step0-pending-prune.yml'), 'utf8')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+}
+
+test('workflow: đo hỏng thì DỪNG ĐỎ trước lệnh xoá — không nuốt mã thoát', () => {
+  const run = workflowRun();
+  const measure = run.indexOf('MEASURE=$?');
+  const bail = run.search(/if \[ "\$MEASURE" -ne 0 \]; then\n[^\n]*\n\s*exit "\$MEASURE"/);
+  const del = run.indexOf('git push origin --delete');
+  assert.ok(measure > 0 && bail > measure && del > bail, 'thứ tự phải là: đo → thoát khi đo hỏng → xoá');
+  assert.doesNotMatch(run, /step0-pending-prune\.ts[^\n]*\|\|/);
+});
+
+test('workflow: dry_run đọc từ input và THOÁT trước lệnh xoá', () => {
+  const run = workflowRun();
+  assert.match(run, /dry_run:/);
+  assert.match(run, /DRY_RUN: \$\{\{ inputs\.dry_run \|\| 'false' \}\}/);
+  const dry = run.search(/if \[ "\$DRY_RUN" = "true" \]; then(\n(?!\s*fi\b)[^\n]*)*\n\s*exit 0\n\s*fi/);
+  const del = run.indexOf('git push origin --delete');
+  assert.ok(dry > 0 && del > dry, 'khối dry_run phải có `exit 0` và đứng TRƯỚC lệnh xoá');
+});
+
+test('workflow: problems và báo cáo đi vào step summary, và problems làm bước đỏ', () => {
+  const run = workflowRun();
+  assert.match(run, /cat "\$REPORT"\n[^]*>> "\$GITHUB_STEP_SUMMARY"/);
+  assert.match(run, /if \[ "\$PROBLEMS" -gt 0 \]; then\n[^\n]*\n\s*exit 1/);
+});
+
+test('CLI --branches nhận cả dạng thô `<sha>\\trefs/heads/<nhánh>` của `git ls-remote`', () => {
+  withRepo((dir) => {
+    const list = join(dir, 'branches.txt');
+    writeFileSync(list, `${'a'.repeat(40)}\trefs/heads/${step0PendingBranch(ON_MAIN)}\n\n`);
+    const result = spawnSync(process.execPath, [SCRIPT, '--branches', list], { cwd: dir, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${step0PendingBranch(ON_MAIN)}\n`);
+  });
 });

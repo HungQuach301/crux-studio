@@ -3,6 +3,8 @@
 # Vế hai của `P-038` là "xoá nhánh chờ đã gộp". Phiên cloud của agent không làm
 # được: `git push --delete` trả HTTP 403. Workflow này làm thay bằng
 # `GITHUB_TOKEN` của Actions — không secret nào khác, không PAT mới (D-C01).
+# Quyền xoá của `GITHUB_TOKEN` là SUY LUẬN, chưa chạy thật: lần chạy đầu kiểm
+# nó (một ruleset trên `claude/**` có thể chặn; khi đó bước này đỏ, không im).
 #
 # Luật xoá nằm ở `ops/scripts/step0-pending-prune.ts`, KHÔNG ở đây: xoá một
 # nhánh khi và chỉ khi mã log của nó đã có trên `main`, đo bằng
@@ -11,7 +13,8 @@
 # `watchdog.yml` phải báo, và xoá nó là mất dòng log duy nhất của lượt ấy (I8).
 #
 # Không đo được (ls-remote hỏng, ref `main` không đọc được) → script thoát 2,
-# bước này đỏ, KHÔNG xoá nhánh nào.
+# bước này đỏ, KHÔNG xoá nhánh nào. Mỗi nhánh còn qua lớp kiểm NỘI DUNG: blob
+# file log trùng bản trên main và nhánh không mang file nào khác.
 name: step0-pending-prune
 
 on:
@@ -51,37 +54,65 @@ jobs:
           set -euo pipefail
           # Đo trên `origin/main` lấy thẳng từ remote, không trên cây đang
           # checkout: một lần gọi tay bằng `--ref <nhánh khác>` không được đổi
-          # nghĩa của phép đo (P-062).
-          git fetch --no-tags --depth=1 origin '+refs/heads/main:refs/remotes/origin/main'
+          # nghĩa của phép đo (P-062). Lịch sử ĐẦY ĐỦ của main và của mọi nhánh
+          # chờ: lớp kiểm nội dung chạy `git diff main...<nhánh>`, cần tổ tiên chung.
+          # `--unshallow` báo lỗi trên một kho đã đủ lịch sử; khi đó fetch thường.
+          # Fetch thường mà cũng hỏng thì `set -e` làm bước đỏ — không nuốt gì.
+          git fetch --no-tags --unshallow origin '+refs/heads/main:refs/remotes/origin/main' \
+            || git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          git fetch --no-tags origin \
+            '+refs/heads/claude/integration/step0-pending/*:refs/remotes/origin/claude/integration/step0-pending/*'
 
           BEFORE=$(git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*' | wc -l)
           echo "Nhánh chờ TRƯỚC khi dọn: $BEFORE"
 
           LIST="$RUNNER_TEMP/step0-pending-prune.txt"
-          # Không `|| true`: script thoát khác 0 thì bước này đỏ và KHÔNG xoá gì.
-          node ops/scripts/step0-pending-prune.ts --from-remote --main-ref origin/main > "$LIST"
+          REPORT="$RUNNER_TEMP/step0-pending-prune-report.txt"
+          # Script thoát khác 0 (không đo được) thì in báo cáo rồi DỪNG ĐỎ ở
+          # đây — trước mọi lệnh xoá. Không nuốt lỗi.
+          set +e
+          node ops/scripts/step0-pending-prune.ts --from-remote --main-ref origin/main > "$LIST" 2> "$REPORT"
+          MEASURE=$?
+          set -e
+          cat "$REPORT"
+          {
+            echo "### Dọn nhánh \`step0-pending\` (I-022)"
+            echo '```'
+            cat "$REPORT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$MEASURE" -ne 0 ]; then
+            echo "::error::KHÔNG ĐO ĐƯỢC (script thoát $MEASURE) — không xoá nhánh nào."
+            exit "$MEASURE"
+          fi
+
           # Z9 — `|| true` an toàn ở đúng đây: `grep -c` thoát 1 khi đếm được
           # 0 dòng, và 0 là một kết quả hợp lệ (nó vẫn in "0"). Lỗi thật của
-          # phép đo đã chặn ở dòng `node` ngay trên, không ở đây.
+          # phép đo đã chặn ở khối `MEASURE` ngay trên, không ở đây.
           COUNT=$(grep -c . "$LIST" || true)
-          echo "Xoá được: $COUNT"
+          # Z9 — `|| true` an toàn ở đúng đây: cùng lý do `grep -c` ở trên.
+          PROBLEMS=$(grep -c '⚠' "$REPORT" || true)
+          echo "Xoá được: $COUNT · không hiểu được: $PROBLEMS"
 
-          if [ "$COUNT" -eq 0 ]; then
-            echo "Không nhánh nào để xoá."
-            exit 0
-          fi
           if [ "$DRY_RUN" = "true" ]; then
             echo "CHẠY THỬ — ĐỊNH xoá $COUNT nhánh (xem danh sách ✂ ở trên), không xoá gì."
+            echo "CHẠY THỬ — không xoá gì." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          # Mỗi lần push tối đa 50 ref. Không `--force` nào: xoá một ref không
-          # cần, và một lỗi xoá phải đỏ chứ không được nuốt.
-          xargs -n 50 git push origin --delete < "$LIST"
+          if [ "$COUNT" -gt 0 ]; then
+            # Mỗi lần push tối đa 50 ref. Không ép ghi đè: xoá một ref không
+            # cần, và một lỗi xoá phải đỏ chứ không được nuốt.
+            xargs -n 50 git push origin --delete < "$LIST"
+          fi
 
           AFTER=$(git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*' | wc -l)
           echo "Nhánh chờ SAU khi dọn: $AFTER (trước: $BEFORE, xoá: $COUNT)"
-          {
-            echo "### Dọn nhánh \`step0-pending\` (I-022)"
-            echo "Trước: $BEFORE · xoá: $COUNT · sau: $AFTER"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Trước: $BEFORE · xoá: $COUNT · sau: $AFTER · không hiểu được: $PROBLEMS" >> "$GITHUB_STEP_SUMMARY"
+
+          # Nhánh không hiểu được (tên lạ, nội dung lệch main) KHÔNG bị xoá,
+          # nhưng phải lộ ra: bước đỏ để có người xem, sau khi đã dọn phần lành.
+          if [ "$PROBLEMS" -gt 0 ]; then
+            echo "::error::$PROBLEMS nhánh chờ không hiểu được — xem báo cáo ⚠ ở trên."
+            exit 1
+          fi
