@@ -249,14 +249,21 @@ function logShapeProblems(files: readonly string[], strictFrom: string): string[
       const where = `${name} (${line.ref} @ ${line.at})`;
       if (seen.has(key)) problems.push(`${where}: cặp (at, ref) TRÙNG với ${seen.get(key)}`);
       else seen.set(key, name);
-      if (!(line.costUsd >= 0)) problems.push(`${where}: costUsd âm (${line.costUsd})`);
+      if (!(typeof raw.costUsd === 'number' && Number.isFinite(raw.costUsd) && raw.costUsd >= 0)) {
+        problems.push(`${where}: costUsd ${JSON.stringify(raw.costUsd)} không phải số hữu hạn ≥ 0`);
+      }
+      const id = typeof line.ref === 'string' ? line.ref.slice(line.ref.indexOf('/') + 1) : '';
+      // Dòng bước 0 luôn là `kind: "lane"`, `lane: "integration"` — đo trên
+      // main: 245/245 dòng. Áp cho MỌI dòng, không cần mốc.
+      if (isStep0LogId(id) && (raw.kind !== 'lane' || raw.lane !== STEP0_LOG_LANE)) {
+        problems.push(`${where}: dòng bước 0 phải là kind "lane", lane "${STEP0_LOG_LANE}" (kind ${JSON.stringify(raw.kind)})`);
+      }
       if (line.at < strictFrom) continue;
       if (!VALID_KINDS.includes(raw.kind as string)) problems.push(`${where}: kind ${JSON.stringify(raw.kind)} ngoài tập hợp lệ`);
       if (!VALID_STATUSES.includes(raw.status as string)) problems.push(`${where}: status ${JSON.stringify(raw.status)} ngoài tập hợp lệ`);
       if (!(typeof raw.durationMs === 'number' && Number.isFinite(raw.durationMs) && raw.durationMs > 0)) {
         problems.push(`${where}: durationMs ${JSON.stringify(raw.durationMs)} — một lượt chạy không tốn 0 ms`);
       }
-      const id = typeof line.ref === 'string' ? line.ref.slice(line.ref.indexOf('/') + 1) : '';
       if (isStep0LogId(id)) {
         if (!Array.isArray(raw.step0)) problems.push(`${where}: dòng bước 0 thiếu mảng step0 (P-033)`);
         if (!(typeof raw.note === 'string' && raw.note.trim().length > 0)) problems.push(`${where}: dòng bước 0 thiếu note`);
@@ -277,9 +284,13 @@ test('KF-050 · trên ops/logs THẬT: không cặp (at, ref) trùng, và dòng 
 });
 
 /**
- * Ca âm cho từng phép phá (bài học `KF-003`): mỗi phép dưới đây đã **sống sót**
+ * Ca âm cho từng phép phá (bài học `KF-003`): các phép dưới đây đã **sống sót**
  * `pnpm check` ở vòng soát của `#309`. Dòng sạch ở đầu phải ra rỗng, rồi mỗi
  * phép áp riêng phải ra đúng một câu.
+ *
+ * ⚠️ Một phép **vẫn sống sót**, khai ra: `costUsd: 999` bịa. Bài này chỉ canh
+ * `costUsd` là số hữu hạn `>= 0` như tiêu chí `I-023` ghi — một con số dương
+ * bịa không có gì để so.
  */
 test('KF-050 · ca âm — từng phép phá trong sáu phép PHẢI bị bắt, dòng sạch thì không', () => {
   const dir = mkdtempSync(join(tmpdir(), 'crux-logs-shape-'));
@@ -307,9 +318,10 @@ test('KF-050 · ca âm — từng phép phá trong sáu phép PHẢI bị bắt,
     assert.deepEqual(check([clean]), [], 'dòng sạch mà bị báo sai');
     const mutations: [string, object[], RegExp][] = [
       ['hai dòng y hệt trong một file', [clean, clean], /TRÙNG/],
-      ['costUsd âm', [{ ...clean, costUsd: -1 }], /costUsd âm/],
+      ['costUsd âm', [{ ...clean, costUsd: -1 }], /costUsd -1 không phải số hữu hạn/],
+      ['kind "stage" trên dòng bước 0', [{ ...clean, kind: 'stage' }], /phải là kind "lane"/],
       ['status ngoài tập', [{ ...clean, status: 'xanh' }], /status "xanh"/],
-      ['kind ngoài tập', [{ ...clean, kind: 'item' }], /kind "item"/],
+      ['kind ngoài tập trên dòng thường', [{ ...clean, ref: 'integration/I-023', kind: 'item' }], /kind "item" ngoài tập/],
       ['durationMs 0', [{ ...clean, durationMs: 0 }], /durationMs 0/],
       ['thiếu step0', [noStep0], /thiếu mảng step0/],
       ['xoá note', [noNote], /thiếu note/],

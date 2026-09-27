@@ -628,8 +628,10 @@ test('I-023 "không đo được": file PR đang mở hỏng thì NÉM, không c
     assert.throws(() => readOpenPrs(bad('hong.json', '{'), 'origin/main'), /KHÔNG đo được/);
     assert.throws(() => readOpenPrs(bad('obj.json', '{}'), 'origin/main'), /phải là một mảng/);
     assert.throws(() => readOpenPrs(bad('so.json', '[{"changed":[]}]'), 'origin/main'), /number/);
-    assert.throws(() => readOpenPrs(bad('ca-hai.json', '[{"number":1,"changed":[],"head":"x"}]'), 'origin/main'), /ĐÚNG MỘT/);
-    assert.throws(() => readOpenPrs(bad('head.json', '[{"number":1,"head":"x"}]'), undefined), /--main-ref/);
+    assert.throws(() => readOpenPrs(bad('ca-hai.json', '[{"number":1,"changed":[],"head":"abc1234"}]'), 'origin/main'), /ĐÚNG MỘT/);
+    assert.throws(() => readOpenPrs(bad('head.json', '[{"number":1,"head":"abc1234"}]'), undefined), /--main-ref/);
+    // Tên nhánh vẫn phân giải được và cho một diff sai mà không lỗi nào — nên chỉ nhận sha.
+    assert.throws(() => readOpenPrs(bad('ten.json', '[{"number":1,"head":"main"}]'), 'origin/main'), /phải là sha/);
     // Ca âm: mảng rỗng là một phép đo thật, đọc được.
     assert.deepEqual(readOpenPrs(bad('rong.json', '[]'), 'origin/main'), []);
   } finally {
@@ -679,8 +681,9 @@ test('I-023 CLI (ca dương, dạng `head`): PR khác đã cherry-pick nhánh ch
 test('I-023 CLI (ca âm, dạng `head`): PR khác KHÔNG mang dòng đó → cherry-pick được', () => {
   withCherryPickedRepo((dir, logId) => {
     execFileSync('git', ['-C', dir, 'checkout', '-q', 'main']);
+    const mainSha = execFileSync('git', ['-C', dir, 'rev-parse', 'main'], { encoding: 'utf8' }).trim();
     const file = join(dir, 'open-prs.json');
-    writeFileSync(file, JSON.stringify([{ number: 311, head: 'main' }]));
+    writeFileSync(file, JSON.stringify([{ number: 311, head: mainSha }]));
     const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', file, '--json'], {
       cwd: dir,
       encoding: 'utf8',

@@ -340,12 +340,12 @@ export function renderStep0PendingReport(report: Step0PendingReport): string {
             : ''),
       );
     }
-    if (report.toCherryPick === null) {
+    if (report.toCherryPick === null && !(report.mergedSource ?? '').startsWith('CÂY LÀM VIỆC')) {
       lines.push(
         '  ⚠ CHƯA đối chiếu với PR đang mở — báo cáo này KHÔNG được dùng để chọn nhánh cherry-pick ' +
           '(mục I-023). Gọi lại với `--open-prs <file>`.',
       );
-    } else if (report.toCherryPick !== undefined) {
+    } else if (report.toCherryPick !== undefined && report.toCherryPick !== null) {
       lines.push(
         report.toCherryPick.length === 0
           ? '  Cherry-pick được: 0 nhánh.'
@@ -460,10 +460,13 @@ export function listPendingBranchesFromRemote(remote = 'origin'): string[] {
 }
 
 /**
- * Đọc file `--open-prs` (mục `I-023`): mảng JSON, mỗi phần tử
- * `{number, changed: string[]}` hoặc `{number, head: "<sha|ref>"}`. Dạng
- * `head` tự chạy `git diff --name-only <mainRef>...<head>` — đúng phép bước 0a
- * đã chạy cho mỗi PR, nên không thêm lần gọi API nào.
+ * Đọc file `--open-prs` (mục `I-023`): mảng JSON **mọi** PR đang mở trừ PR của
+ * lượt này — không phải hàng đợi xung đột của bước 0a, vì hàng đợi đó rỗng ở ca
+ * thường và một `[]` sai là đúng ca `KF-050`. Mỗi phần tử
+ * `{number, changed: string[]}` hoặc `{number, head: "<sha>"}`. Dạng `head` tự
+ * chạy `git diff --name-only <mainRef>...<head>`; nó đòi một **sha** (7–40 ký
+ * tự hex), không nhận tên nhánh: một tên như `main` hay một nhánh cục bộ cũ
+ * vẫn phân giải được và cho một diff sai mà không lỗi nào.
  *
  * **Ném** ở mọi chỗ không đọc được — file thiếu, JSON hỏng, phần tử sai dạng,
  * `git diff` thoát khác 0 — chứ không rơi về danh sách rỗng: rỗng nghĩa là
@@ -491,6 +494,9 @@ export function readOpenPrs(file: string, mainRef: string | undefined): OpenPrFi
     }
     const hasChanged = Array.isArray(e.changed) && e.changed.every((path) => typeof path === 'string');
     const hasHead = typeof e.head === 'string' && e.head.length > 0;
+    if (hasHead && !/^[0-9a-f]{7,40}$/.test(e.head as string)) {
+      throw new Error(`${where}: \`head\` phải là sha đầu nhánh (7–40 ký tự hex), không phải tên nhánh.`);
+    }
     if (hasChanged === hasHead) {
       throw new Error(`${where}: cần ĐÚNG MỘT trong hai trường \`changed\` (mảng chuỗi) hoặc \`head\` (sha/ref).`);
     }

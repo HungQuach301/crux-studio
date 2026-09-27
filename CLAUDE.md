@@ -97,8 +97,9 @@ pnpm -s telemetry:restore > /tmp/r.sh && bash /tmp/r.sh   # khôi phục. `-s` B
 # Bước 0f (mục P-056, `KF-048`): nhánh chờ nào của lượt log-only trước còn giữ một dòng log CHƯA tới
 # `main`? Chạy, đừng đọc `git branch -r` bằng mắt — và đừng coi "không in gì" là lành, lệnh này ném lỗi
 # khi không đo được chứ không trả danh sách rỗng:
-# `--open-prs` BẮT BUỘC (mục I-023, `KF-050`): mảng JSON các PR đang mở TRỪ PR của lượt này, dựng từ lần
-# liệt kê ở bước 0a — `[{"number":311,"head":"<sha đầu nhánh>"}]`, hoặc `[]` khi không có PR nào.
+# `--open-prs` BẮT BUỘC (mục I-023, `KF-050`): mảng JSON MỌI PR đang mở (`state=open`, KHÔNG phải hàng đợi
+# xung đột của bước 0a) TRỪ PR của lượt này — `[{"number":311,"head":"<sha đầu nhánh>"}]` sau
+# `git fetch origin pull/311/head`; `[]` chỉ khi thật sự không có PR nào mở.
 pnpm step0:pending --open-prs /tmp/open-prs.json
 # → CHỈ nhánh trong `toCherryPick` được `git cherry-pick` vào PR của lượt này rồi XOÁ nhánh đã gộp (vế hai
 #   của `P-038`). Nhánh mang `inOtherPr` đã nằm trong PR đang mở của lượt khác — gộp lần hai là `KF-050`.
