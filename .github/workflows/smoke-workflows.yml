@@ -99,7 +99,7 @@ jobs:
           # Trước đây `EVENT_BEFORE` ở một khối `env:` thứ hai; hai khoá `env`
           # trùng trong cùng một step là YAML không hợp lệ, GitHub từ chối cả
           # workflow (startup_failure, 0 job) nên smoke-workflows đỏ ở MỌI lần
-          # push mà `pnpm lint:workflows` không bắt (KF-016).
+          # push mà `pnpm lint:workflows` không bắt (KF-047).
           EVENT_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
