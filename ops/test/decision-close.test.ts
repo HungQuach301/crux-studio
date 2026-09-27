@@ -526,6 +526,24 @@ test('commentIsAfterOpen: thiếu/không đọc được mốc → true (hướn
   // Mốc đọc được cả hai: so đúng thứ tự.
   assert.equal(commentIsAfterOpen('2026-09-25T00:00:00Z', '2026-09-22T09:00:00Z'), true);
   assert.equal(commentIsAfterOpen('2026-09-20T00:00:00Z', '2026-09-22T09:00:00Z'), false);
+  // Biên: cùng mốc → true (`>=`, hướng an toàn: giữ). Khoá `>=` khỏi bị đổi thành `>`.
+  assert.equal(commentIsAfterOpen('2026-09-22T09:00:00Z', '2026-09-22T09:00:00Z'), true);
+});
+
+test('P-066 · comment của người TRƯỚC khi mở KHÔNG chặn — chốt commentIsAfterOpen trong predicate', () => {
+  // Đây là ca tổng hợp (comment thật luôn sau khi mở), nhưng nó khoá phần tử
+  // `commentIsAfterOpen` trong `.find()`: bỏ nó đi thì comment trước-khi-mở này
+  // biến source-2-close thành keep, và bài này đỏ.
+  const decision = decideDecisionClose(
+    issue({
+      number: 234,
+      createdAt: '2026-09-22T09:00:00Z',
+      linkedPrs: [{ number: 233, merged: true, closed: true }],
+      comments: [at('Nên dựng clip trước.', '2026-09-20T00:00:00Z')],
+    }),
+    OWNER,
+  );
+  assert.equal(decision.verdict, 'close');
 });
 
 test('findOwnerInstructionAfterOpen: chỉ trả comment của người, sau khi mở, không phải câu xong', () => {

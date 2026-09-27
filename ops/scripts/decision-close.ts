@@ -262,14 +262,6 @@ export function linkedPrNumbers(...sources: readonly string[]): number[] {
 }
 
 /**
- * Comment này có phải lời *"xong rồi"* của chủ dự án không?
- *
- * Cùng phép phân biệt người/máy với `isStopComment` của
- * `ops/invariants.merge-gate.ts`, và cùng lý do: agent dùng chính danh tính
- * GitHub của chủ dự án (CHARTER 3.1), nên tác giả một mình không phân biệt
- * được. Quy ước 🤖 (`CLAUDE.md` mục 5) là dấu vết duy nhất.
- */
-/**
  * Thân comment của **chủ dự án** sau khi bóc trích dẫn và mốc ẩn — hoặc `null`
  * khi comment KHÔNG phải của người (khác tác giả, mở đầu 🤖, hay rỗng).
  *
@@ -299,6 +291,15 @@ function ownerCommentBody(comment: DecisionComment, owner: string): string | nul
   return body;
 }
 
+/**
+ * Comment này có phải lời *"xong rồi"* của chủ dự án không?
+ *
+ * Cùng phép phân biệt người/máy với `isStopComment` của
+ * `ops/invariants.merge-gate.ts`, và cùng lý do: agent dùng chính danh tính
+ * GitHub của chủ dự án (CHARTER 3.1), nên tác giả một mình không phân biệt
+ * được. Quy ước 🤖 (`CLAUDE.md` mục 5) là dấu vết duy nhất — đo qua
+ * `ownerCommentBody`.
+ */
 export function isOwnerDoneComment(comment: DecisionComment, owner: string): boolean {
   const body = ownerCommentBody(comment, owner);
   if (body === null) return false;
