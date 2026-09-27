@@ -6,6 +6,47 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-049 · Chỉ dẫn của chủ dự án không có đường nào vào backlog — sáu lượt worker in `idle` đi qua chín chỉ dẫn, và mọi chỉ báo xanh
+
+> Số **KF-049**: dò `## KF-` trên `main` **và trên mọi nhánh remote** trước khi viết (`git fetch --prune` rồi quét 80 ref). Cao nhất tìm được là **`KF-048`** — nó cùng `KF-047` đang sống trên nhánh của PR `#293` (bản đổi mã của `platform/P-058`, chưa merge — nên `main` một mình sẽ nói `KF-046` và đó là con số sai). Vậy `KF-049` không đụng ai.
+
+**Lần gặp: 1** cho chữ ký này (*không có đường từ chỉ dẫn sang backlog*), nhưng nó là **họ gần** của `KF-035` (*bộ đọc chỉ dẫn lấy bản cũ*) mà chính chủ dự án gọi tên khi báo, và của `KF-041`/`KF-048` (*vế hai của một luật nằm ở lượt khác nên không gì nhắc*). Ba mục cùng một hình: **một việc đã tồn tại mà không hàng đợi nào giữ nó.**
+
+### Chữ ký
+
+Chủ dự án đăng chỉ dẫn ở một trong hai chỗ mà `CLAUDE.md` mục 5 công nhận — issue `#251`, hoặc issue `digest` của ngày — và **không gì** chuyển chúng thành mục `ops/lanes/*/backlog.md`. Phụ lục P1 bước 3 chỉ đọc `readyNow`, và `readyNow` chỉ đọc backlog. Nên chỉ dẫn nằm ngoài mọi phép đếm của mọi lượt.
+
+### Đo được, 2026-09-27
+
+| Nguồn | Mốc | Số chỉ dẫn | Có mục backlog nào không |
+|---|---|---|---|
+| `#292` (bản tin 2026-09-26), comment của chủ dự án | `2026-09-26T16:20:21Z` | 5 | **0** |
+| `#251` (luồng chỉ dẫn), comment của chủ dự án | `2026-09-27T01:48:14Z` | 4 | **0** |
+
+Phép dò: `grep -rn "#292" ops/lanes/*/backlog.md` → **rỗng**; `grep -rn "đường găng\|Phân bổ năng lực" ops/lanes/*/backlog.md ops/lanes/priority.md` → **rỗng**.
+
+Trong khoảng đó, **sáu lượt worker** in `idle` ở bước 3 — `02:15Z` `02:29Z` `02:38Z` `05:18Z` `05:29Z` `08:29Z` — và cả sáu **đúng** theo luật như luật được viết: `readyNow` có đúng hai mục (`platform/P-014`, `platform/P-058`), `pnpm claims` trả `open-pr` cho cả hai, nên không mục nào nhận được.
+
+### Vì sao không chỉ báo nào đỏ
+
+Đây là nhóm **Z** ở dạng khó thấy nhất: **mọi phép đo đều trả đúng**. `pnpm check` xanh · CI xanh · `main` xanh · hàng đợi xung đột trống (`merge-tree` EXIT=0 cho mọi PR) · nhịp tim 13 phút · `pickPrToHandle` trả `null` đúng · `readyNow` đúng · `lanes:heartbeat` đo được và báo được. Không phép đo nào **sai**; thứ thiếu là một phép đo **chưa tồn tại**. Và `idle` là một từ trông giống *"không có gì để làm"* trong khi nó chỉ có nghĩa *"không có gì trong backlog"*.
+
+Cái đắt nhất không phải chín chỉ dẫn bị chậm, mà là **thứ đắt nhất trong ngày** (CHARTER 1.3 — thời gian chủ dự án) đã bỏ ra để viết chúng, rồi rơi vào khoảng trống. Chỉ dẫn 5 của `#292` (*"`#223` hai ngày không có nhãn merge"*) là bằng chứng gấp đôi: anh đã hỏi **hai lần**, lần đầu là `D4` của `#251` ngày `2026-09-24`, và giữa hai lần đó không lượt nào mở một mục cho nó.
+
+### Chỗ đã sửa
+
+Mục **`platform/P-063`**: chín chỉ dẫn thành mục có chủ (`P-064`, `P-065`, `P-066`, `assembly/A-007`, trường `- hold:` của `verify/VF-G7` và của `assembly/A-001`), chỉ dẫn 4 vào `ops/lanes/priority.md` dưới dạng một **điều kiện nhận mục** đứng trên bảng, và chỉ dẫn 5 làm ngay trong lượt đó.
+
+### Máy chặn từ nay — CHƯA CÓ, và khai thẳng ra
+
+`P-063` làm chín chỉ dẫn **thành mục**; nó **không** dựng phép đo *"có chỉ dẫn nào của chủ dự án chưa thành mục backlog"*. Nên lần sau chữ ký này lặp lại, nó lại chỉ lộ ra khi một lượt worker **tình cờ** đọc tới — đúng cách lượt `2026-09-27T08:4xZ` tìm ra nó, chứ không phải nhờ một cổng nào.
+
+Đích rẻ nhất, đã ghi vào ô ⬜ của `P-063`: một dòng của `renderDigestMetrics` đứng cạnh **"Việc đang chờ anh"** (`platform/P-053`), đọc mọi comment **không** mở đầu 🤖 trên `#251` và trên issue `digest`, rồi đối chiếu với trường `nguồn:` của mọi mục backlog. Nó cần đúng bộ đọc chỉ dẫn mà `P-064` đang dựng, nên hai mục nối nhau chứ không chồng nhau.
+
+**Ngưỡng phải là 0 chỉ dẫn không có mục**, cùng lý do `pnpm telemetry:gaps` lấy ngưỡng 0: không có ca lành nào cho một chỉ dẫn không ai giữ.
+
+---
+
 ## KF-046 · `automerge.yml` đọc `draft` **tươi** rồi hành động **vài giây sau** mà không đọc lại — và endpoint của GitHub nhận một PR vừa chuyển nháp
 
 > Số **KF-046**: dò `## KF-` trên `main` **và trên MỌI nhánh remote** (26 ref) trước khi viết. Cao nhất tìm được là `KF-045`, nên `KF-046` không đụng ai.
