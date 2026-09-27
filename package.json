@@ -20,6 +20,7 @@
     "recheck:assumptions": "node ops/scripts/recheck-assumptions.ts",
     "backlog:status": "node ops/scripts/backlog-status.ts",
     "lanes:heartbeat": "node ops/scripts/lane-heartbeat.ts",
+    "cron:heartbeat": "node ops/scripts/cron-heartbeat.ts",
     "step0:pending": "node ops/scripts/step0-pending-branches.ts --from-remote",
     "telemetry:gaps": "node ops/scripts/telemetry-gaps.ts --from-remote",
     "telemetry:restore": "node ops/scripts/telemetry-gaps.ts --from-remote --restore",

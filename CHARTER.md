@@ -1056,6 +1056,13 @@ mỗi ngày, như trước khi đổi nhịp):
    và tự giữ lại mọi mục còn dấu treo, nên không cần phán đoán tay; đưa thay đổi đó vào PR của lượt chạy này.
    Rồi: đóng PR nháp đã bỏ quá 72 giờ (kèm ghi chú); tạo lại lockfile nếu có xung đột.
 3. Cập nhật ops/metrics.md: số file code so với số mục done, số lần revert, tỷ lệ main xanh.
+   Rồi đo nhịp tim cron (mục `P-014` sóng 5, chỗ `Z6`): dựng ảnh chụp từ `list_workflows` và, với mỗi workflow
+   theo lịch, `list_workflow_runs` lọc `event: schedule` lấy lượt mới nhất; rồi chạy
+   `pnpm -s cron:heartbeat <ảnh chụp.json>`. ĐỪNG tự so giờ bằng mắt: cron "mỗi giờ" trên repo này chạy khoảng 5 giờ
+   một lần khi đang khoẻ, nên phép đọc bằng mắt báo nhầm mỗi ngày. Thoát 1 (workflow `stale`, `disabled`, `never`,
+   `future`, `unsupported-cron` hay `missing`) thì mở issue `alert` kèm nguyên bản in; thoát 2 là KHÔNG ĐO ĐƯỢC, ghi
+   vào tóm tắt, không đọc thành "khoẻ". Chỗ này chạy ở routine chứ không ở Actions là CHỦ ĐÍCH: bên canh và bên bị
+   canh phải khác họ, nếu không thì chúng chết cùng nhau.
 4. Nếu hôm nay là thứ Hai: chạy lại các kiểm tra tự động trong docs/assumptions.md. Giả định nào đổi trạng thái thì mở [QĐ]
    kèm danh sách phần bị ảnh hưởng (CHARTER 11.1).
 5. Kết thúc bằng tóm tắt 5 dòng.
