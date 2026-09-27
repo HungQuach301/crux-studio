@@ -828,14 +828,15 @@ Lần này **vô hại** vì hai bên cherry-pick cùng một commit nên blob g
 
 - deps: —
 - risk: low — hướng lệch an toàn là **không** cherry-pick (dòng log ở lại nhánh chờ, dấu hiệu số 7 của `watchdog.yml` vẫn báo cho tới khi nó tới `main`). Mục này **không** đổi `step0PrGate`: chặn hai worker cùng mở PR cần trạng thái dùng chung, mà đó đúng là thứ `D-C04` đã bỏ tiền ra tránh — docblock của `step0-pr-gate.ts` tự khai chỗ chưa che này, và mục này chữa **hậu quả** (cherry-pick trùng) chứ không chữa **cuộc đua**.
-- status: ready
+- status: review
 - nguồn: `ops/known-failures.md` `KF-050`; vòng soát ngữ cảnh sạch của `#309` (`2026-09-27`); `platform/P-038` (`step0PrGate`, ô "chỗ chưa che"); `platform/P-056` (`step0-pending-branches.ts`); `platform/P-062` (`mergedStep0LogIdsFromRef`); `.gitattributes` (union không khử trùng lặp)
 - tiêu chí xong:
-  - `step0PendingReport` nhận thêm **danh sách mã log đang nằm trong PR đang mở nào** và trả cờ `inOtherPr` kèm **số PR** cho từng nhánh chờ. Dữ liệu vào đã có sẵn ở bước 0a (`git diff --name-only origin/main...<head>` cho mỗi PR đang mở), nên mục này **không** thêm lần gọi API nào mới.
-  - Bước 0f của phụ lục P1/P3 đọc cờ đó: nhánh mang `inOtherPr` thì **không** cherry-pick, và lý do được **in ra** chứ không im.
-  - **Bài kiểm**: ca dương (nhánh nằm trong PR mở khác → `inOtherPr` khác rỗng, không cherry-pick) · ca âm (nhánh không nằm trong PR nào → cherry-pick được) · ca *"không đo được"* (không liệt kê được PR đang mở → thoát khác 0, **không** lặng lẽ coi là rỗng).
-  - Sáu phép phá thử **sống sót** ở `KF-050` thành bài kiểm thật trong `ops/test/logs-layout.test.ts`, mỗi bài kèm ca âm của nó (bài học `KF-003`): không cặp `(at, ref)` trùng trong toàn `ops/logs` · `kind` và `status` thuộc tập hợp lệ · `durationMs > 0` và `costUsd` hữu hạn `>= 0` · dòng có `ref` bước 0 thì **phải** có `step0` và `note` khác rỗng.
-  - Khai rõ **cái không sửa ở đây**: mục này **không** chặn hai worker cùng mở PR bước 0 (cần trạng thái dùng chung — xem `risk`), và **không** sửa dòng `durationMs: 0` đã nằm trên `main` (log append-only, `D-C04`).
+  - ✅ `step0PendingReport` nhận thêm **danh sách mã log đang nằm trong PR đang mở nào** và trả cờ `inOtherPr` kèm **số PR** cho từng nhánh chờ. Dữ liệu vào đã có sẵn ở bước 0a (`git diff --name-only origin/main...<head>` cho mỗi PR đang mở), nên mục này **không** thêm lần gọi API nào mới.
+  - ✅ Bước 0f của phụ lục P1/P3 đọc cờ đó: nhánh mang `inOtherPr` thì **không** cherry-pick, và lý do được **in ra** chứ không im.
+  - ✅ **Bài kiểm**: ca dương (nhánh nằm trong PR mở khác → `inOtherPr` khác rỗng, không cherry-pick) · ca âm (nhánh không nằm trong PR nào → cherry-pick được) · ca *"không đo được"* (không liệt kê được PR đang mở → thoát khác 0, **không** lặng lẽ coi là rỗng).
+  - ✅ Sáu phép phá thử **sống sót** ở `KF-050` thành bài kiểm thật trong `ops/test/logs-layout.test.ts`, mỗi bài kèm ca âm của nó (bài học `KF-003`): không cặp `(at, ref)` trùng trong toàn `ops/logs` · `kind` và `status` thuộc tập hợp lệ · `durationMs > 0` và `costUsd` hữu hạn `>= 0` · dòng có `ref` bước 0 thì **phải** có `step0` và `note` khác rỗng.
+  - ✅ Khai rõ **cái không sửa ở đây**: mục này **không** chặn hai worker cùng mở PR bước 0 (cần trạng thái dùng chung — xem `risk`), và **không** sửa dòng `durationMs: 0` đã nằm trên `main` (log append-only, `D-C04`).
+- đã làm (PR #313): `step0PendingBranches` nhận `openPrs` (`{number, changed}`) và trả `inOtherPr` cho từng nhánh cộng `toCherryPick` (đã trừ nhánh nằm trong PR khác và nhánh đã có trong cây); `null` = chưa đo, không phải "cherry-pick hết". CLI `pnpm step0:pending` **bắt buộc** `--open-prs <file>` (thiếu → thoát 2; file hỏng, phần tử sai dạng, `git diff` của dạng `head` thoát khác 0 → ném). Sáu phép phá thành bài kiểm trong `ops/test/logs-layout.test.ts` trên log thật, mỗi bài kèm ca âm; ba luật `kind`/`status` · `durationMs > 0` · `step0`+`note` áp từ mốc `LOG_SHAPE_STRICT_FROM = 2026-09-27T10:30Z` vì log cũ vi phạm thật (423/515 dòng `durationMs: 0`, 6 dòng `kind: "item"`, 45 dòng bước 0 thiếu `step0`) và log append-only. `costUsd` chỉ canh `>= 0` như tiêu chí ghi — một con số bịa dương (`costUsd: 999`) vẫn lọt, khai ra.
 
 ### I-022 · 63 nhánh `step0-pending` tồn đọng, và vế hai của `P-038` không ai làm được — `git push --delete` trả HTTP 403
 
