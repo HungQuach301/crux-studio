@@ -330,8 +330,8 @@ Chỗ đau không phải một tính năng thiếu, mà là **một luật trong
 
 - deps: —
 - risk: medium — đường gọi này **tiêu tiền thật** (`T-008` trên corpus 38 video). Hướng lệch an toàn: lời gọi thử nhỏ **trước**, và `costUsd` ghi từ `usage.total_tokens` nhà cung cấp trả về chứ không ước lượng (bất biến **I8**, và `T-014` đã chốt luật đó). Không được đổi hướng thành "cứ gọi rồi tính sau".
-- status: ready
-- nguồn: `#251` comment `2026-09-27T01:27:41Z`; mục `topic/T-014` (tiêu chí *"thiếu secret thì DỪNG"* và trường `- hold:`); `topic/T-011` tiêu chí xong 1; `ops/scripts/novelty-embeddings-trial.ts`; `platform/P-063` ô ⬜ *"phần intake chưa xong"*
+- status: review
+- nguồn: `#251` comment `2026-09-27T01:27:41Z`; mục `topic/T-014` (tiêu chí *"thiếu secret thì DỪNG"* và trường `- hold:`); `topic/T-011` tiêu chí xong 1; `ops/scripts/novelty-embeddings-trial.ts`; `platform/P-063` (ô còn hở *"phần intake chưa xong"*)
 - tiêu chí xong:
   - Đường gọi phân biệt **hai môi trường** bằng `CLAUDE_CODE_REMOTE`: phiên cloud thiếu biến → **vẫn gọi**, và **không** tự đặt header `Authorization` (để proxy gắn); Actions → dùng secret như cũ. Hai nhánh, hai bài kiểm, mỗi bài một ca âm.
   - **Gỡ luật cũ ở đúng chỗ nó sống:** tiêu chí *"thiếu secret thì DỪNG"* của `T-014` và lời giữ của nó phải được viết lại, không để hai câu ngược nhau cùng tồn tại trong backlog. Đây là nửa dễ bị bỏ nhất, và bỏ nó là để nguyên chỗ hỏng.
@@ -339,6 +339,13 @@ Chỗ đau không phải một tính năng thiếu, mà là **một luật trong
   - **Không tự gửi secret đi đâu, và không tự tạo secret.** Luật *"không mượn `OPENAI_API_KEY`"* của `T-014` vẫn đứng: proxy gắn key là một chuyện, agent đọc key là chuyện khác và vẫn cấm.
   - Mọi lần chạy ghi một dòng log có `costUsd`, kể cả lần dừng (bất biến **I8**).
   - Khai rõ **cái không đo được từ trong phiên**: phiên cloud không đọc được cấu hình credential của environment, nên *"proxy có gắn header không"* chỉ trả lời được bằng **một lời gọi thật**, không bằng đọc tài liệu (CHARTER 11.1 luật 4).
+- ✅ **Xong, lượt `crux-worker-3` (`2026-09-27`):**
+  - `workshops/topic/src/embeddings.ts` — `resolveEmbeddingsAuth(env)` trả ba mode `secret`/`proxy`/`stop`; `OpenAiProviderOptions.apiKey` thành **tuỳ chọn** và provider **không** đặt header `Authorization` khi vắng khoá (proxy gắn). `redactSecret` nhận khoá rỗng an toàn.
+  - `ops/scripts/novelty-embeddings-trial.ts` — dùng `resolveEmbeddingsAuth`; `stop` là nhánh DUY NHẤT không gọi API. `package.json` `topic:novelty-trial` đặt `NODE_USE_ENV_PROXY=1` để node fetch (≥22.21) đi **qua** agent proxy — **đo được**: thiếu cờ này node fetch bỏ qua `HTTPS_PROXY` và trả **401**; có cờ → **200**. Đặt trong tiến trình thì muộn (global dispatcher đã dựng), nên phải đặt lúc khởi động; script cảnh báo khi ở proxy mode mà thiếu cờ.
+  - **Bài kiểm** (`workshops/topic/test/embeddings.test.ts`, +9): ba mode của `resolveEmbeddingsAuth` cộng ca âm (`CLAUDE_CODE_REMOTE` khác `"true"` → `stop`; không mượn `OPENAI_API_KEY`; secret khoảng trắng → thiếu); provider có khoá → header `Bearer`, không khoá → **không** header (ca âm đối chứng lẫn nhau).
+  - **Lời gọi thử nhỏ trước** (kiểm tay, KHÔNG ghi log): một đoạn văn bản gửi tới `api.openai.com/v1/embeddings` **không** kèm header `Authorization`, đi qua agent proxy → HTTP **200**, `usage.total_tokens` **6** — đó là bằng chứng proxy gắn key (fetch không qua proxy trả **401**). Chỉ sau khi nó xanh mới chạy thật.
+  - **Lần chạy thật (`T-008`)** qua `pnpm topic:novelty-trial` ở phiên cloud, mode `proxy`, **không** header `Authorization`: HTTP **200**, 3 model, **1998 token**, `costUsd` **$0.000166** — đây là lần **ghi log** (`ops/logs/topic/T-014.jsonl`, bất biến I8). Kết quả chọn model: **không model nào** đạt (`margin < 0.05`) → `null`, không chọn bừa; đó là việc hiệu chuẩn `T-009`, không phải lỗi đường gọi.
+  - **Cái không đo được từ trong phiên** (đã khai): không đọc được cấu hình credential của environment; câu trả lời "proxy có gắn header" chỉ đến từ chính lời gọi thật ở trên (200 khi đi qua proxy, 401 khi không) — CHARTER 11.1 luật 4.
 
 ### T-014 · So ngữ nghĩa cho `checkNovelty` bằng embeddings, đo lệch so với so từ vựng
 Chỉ dẫn của chủ dự án trên luồng chỉ dẫn [#251](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5825164876) (`2026-09-25T01:28:33Z`): *"T-011 mục 2: chọn OpenAI cho embeddings. Đã thêm secret `EMBEDDINGS_API_KEY` (key riêng, tách khỏi `OPENAI_API_KEY` để theo dõi chi phí). Chọn model embeddings rẻ nhất đủ chất lượng, chứng minh bằng chạy thật trên corpus mẫu 38 video: so kết quả `checkNovelty` giữa so từ vựng và so ngữ nghĩa, ghi `costUsd`. Đổi nhà cung cấp sau chỉ tốn chi phí nhúng lại corpus, nên coi là `reversible`. Mở khoá T-011 mục 2."*
@@ -350,16 +357,20 @@ Chỗ hỏng mà mục này chữa, đo được: `checkNovelty` so **từ vựn
 - deps: T-008, G20
 - risk: medium
 - status: review
-- hold: lần chạy THẬT chưa xảy ra — phiên agent không có `EMBEDDINGS_API_KEY` (secret chỉ sống trong
-  Actions). Gỡ treo khi `pnpm topic:novelty-trial` chạy được một lần có tính tiền và dán số vào đây; tới
-  lúc đó mục **không** tự chuyển `done`.
+- hold: chờ chủ dự án chấm kết quả chạy thật. **Lần chạy thật ĐÃ xảy ra** (`T-015`, `2026-09-27`): trong
+  phiên cloud, agent proxy gắn key cho `api.openai.com` nên không cần `EMBEDDINGS_API_KEY` trong môi
+  trường — `pnpm topic:novelty-trial` chạy ba model trên 38 video, `1998` token, `costUsd $0.000166`
+  (dòng log trong `ops/logs/topic/T-014.jsonl`). Kết quả: **không model nào** trong bảng tách được hai
+  nhóm cặp của tập thăm dò (mọi model `margin < 0.05`) — nên chưa chọn được model, và đây là việc hiệu
+  chuẩn (`T-009`, tập thăm dò 16 cặp có thể quá nhỏ hoặc ngưỡng cần đo lại), không phải lỗi đường gọi. Mục
+  **không** tự chuyển `done`: chủ dự án quyết có nới tập thăm dò / đổi model hay không.
 - nguồn: chỉ dẫn chủ dự án trên `#251` (`2026-09-25T01:28:33Z`); spec WP-014 mục 3c.2; `docs/assumptions.md` **G20**; mục `T-011` tiêu chí xong 1 (luật "thiếu secret thì DỪNG và báo tên")
 - **cửa merge:** chạm `workshops/topic/**`, `ops/scripts/**`, `ops/test/**`, `docs/assumptions.md`, `ops/lanes/**`, `package.json` — không chạm `CHARTER.md`, `ops/invariants.*`, `.claude/**`, `ops/workflows/**`. Chạy `node ops/invariants.protected-area.ts`, đừng đoán.
 - tiêu chí xong:
   - Giao diện nhà cung cấp **trung tính**: đổi OpenAI sang bên khác là viết một bản mới của đúng một interface, không sửa `checkNovelty`. Đó là thứ làm câu "reversible" của chủ dự án đúng trong code chứ không chỉ trong lời.
   - `checkNovelty` vẫn **thuần** (CHARTER 6.1): nhận bảng điểm đã tính sẵn, không gọi mạng. Hệ quả: `pnpm check` và tập vàng replay không bao giờ đi qua một API trả tiền.
   - "Rẻ nhất **đủ chất lượng**" là tiêu chí **đo được**, không phải lời khen: lọc theo phép tách hai nhóm cặp có nhãn trước, rồi mới lấy giá thấp nhất. Không ai đạt thì trả `null`, không hạ tiêu chí để có câu trả lời.
-  - Thiếu `EMBEDDINGS_API_KEY` thì **DỪNG và báo tên secret thiếu**, không tự tạo secret và **không** mượn `OPENAI_API_KEY` — hai khoá được tách cố ý để theo dõi chi phí riêng.
+  - Cách ký chọn theo môi trường (`resolveEmbeddingsAuth`, sửa ở `T-015` `2026-09-27`): Actions có secret → ký bằng nó; phiên cloud thiếu secret → **vẫn gọi**, không tự đặt header `Authorization` (agent proxy gắn key); ngoài cả hai → **DỪNG và báo tên secret thiếu**. Ở mọi nhánh **không** tự tạo secret và **không** mượn `OPENAI_API_KEY` — hai khoá được tách cố ý để theo dõi chi phí riêng.
   - `costUsd` tính từ `usage.total_tokens` nhà cung cấp trả về, không ước lượng. Mọi lần chạy ghi một dòng log kể cả lần dừng vì thiếu secret (bất biến **I8**).
   - Giá nằm trong **dữ liệu**, không nằm trong code (giả định **G20**, cùng khuôn `G19`).
 - ✅ **Xong phần chạy được không cần secret, 2026-09-25** (lượt `crux-worker-1`, N=1):
@@ -388,4 +399,5 @@ Chỗ hỏng mà mục này chữa, đo được: `checkNovelty` so **từ vựn
   phần thực chất của I3) · `CLAUDE.md` mục 5 mới kể **ba** chỗ mà comment không-🤖 là lệnh, trong khi luồng
   `[Chỉ dẫn]` `#251` do chính chủ dự án lập là chỗ **thứ tư** — chính là mục **E2** mà danh sách `#251` đang
   nợ.
-- ⬜ **CÒN TREO — lần chạy thật chưa xảy ra.** Chủ dự án đòi "chứng minh bằng chạy thật", và phiên agent **không có** `EMBEDDINGS_API_KEY` (secret chỉ sống trong Actions). Script dừng đúng luật và ghi dòng log `status: "skipped"`. Đường tới lần chạy thật là một workflow `workflow_dispatch` dùng secret đó — workflow **dùng secret** nằm trong vùng `owner-merge` (CHARTER mục 3), nên nó là **mục anh em riêng**, không gộp vào PR này. Tới khi nó chạy: `VF-G20` giữ `parked`, và câu "`costUsd` từ `usage` thật" là **thiết kế**, chưa phải quan sát.
+- ✅ **Lần chạy thật ĐÃ xảy ra — mục `T-015` (`2026-09-27`).** Chỗ treo cũ ("phiên agent không có `EMBEDDINGS_API_KEY`") **sai từ `2026-09-27T01:27:41Z`**: chủ dự án đo được key OpenAI đã gắn vào môi trường cloud dưới dạng credential của agent proxy. `T-015` sửa đường gọi (`resolveEmbeddingsAuth` + provider bỏ header khi thiếu khoá + `NODE_USE_ENV_PROXY=1` để node fetch đi qua proxy), và `pnpm topic:novelty-trial` chạy thật: ba model, `1998` token, `costUsd $0.000166`, dòng log `status: "failed"` trong `ops/logs/topic/T-014.jsonl`. Câu "`costUsd` từ `usage` thật" nay là **quan sát**, không còn là thiết kế. `VF-G20` gỡ được `parked` khi có phép đối chiếu hoá đơn.
+- ⬜ **CÒN TREO — chưa chọn được model.** Lần chạy thật cho thấy **không model nào** (`text-embedding-3-small`/`-large`/`ada-002`) tách được hai nhóm cặp của tập thăm dò (`margin` lần lượt `-0.012`/`0.038`/`-0.026`, đều `< 0.05`). `cheapestAdequateModel` trả `null` đúng luật ("không chọn bừa"). Đây là việc **hiệu chuẩn** (`T-009`): tập thăm dò 16 cặp có thể quá nhỏ, hoặc ngưỡng `DEFAULT_MIN_MARGIN`/`TRIAL_SEMANTIC_THRESHOLD` cần đo lại trên corpus thật — **không** phải lỗi đường gọi. Chủ dự án chấm hướng đi tiếp.
