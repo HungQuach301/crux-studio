@@ -838,6 +838,7 @@ Vì sao nó thành một mục riêng thay vì một dòng khai trong log: bốn
 - deps: —
 - risk: low — mục này **không** cần quyền mới cho agent. Hai đường đi đều nằm trong luật hiện có: một workflow trong `ops/workflows/**` (chạy bằng `GITHUB_TOKEN` của Actions, thứ **có** quyền xoá nhánh) hoặc một lần dọn của chủ dự án. Hướng lệch an toàn: chỉ xoá nhánh mà mã log của nó **đã có trên `main`**, đo bằng `mergedStep0LogIdsFromRef` — không bao giờ xoá theo tuổi.
 - status: review
+- hold: số nhánh SAU lần dọn đầu chưa đo được — workflow chỉ chạy sau khi sync sang `.github/` (`CLAUDE.md` mục 4); lượt đầu thấy lần chạy `step0-pending-prune` trong Actions ghi số `sau:` vào ô ⬜ dưới
 - nguồn: `platform/P-038` vế hai; `platform/P-062` (#301) — phép rút khỏi `pending` theo mã log trên `main`; `ops/known-failures.md` `KF-041`; phép đo HTTP 403 ở lượt `crux-worker-2` `2026-09-27T09:1xZ` và các lượt `#293`, `#260`, `#305`; `platform/P-063` (`KF-049`)
 - tiêu chí xong:
   - Một chỗ **chạy bằng máy** xoá nhánh `claude/integration/step0-pending/*` mà mã log của nó đã có trên `main`. Đặt trong `ops/workflows/**` (cửa `automerge-delayed`), **không** trong `.github/` (`CLAUDE.md` mục 4).
