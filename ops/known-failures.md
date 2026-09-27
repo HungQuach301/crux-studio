@@ -1895,3 +1895,38 @@ Phá thử **18 phép**, 17 phép đỏ đúng chỗ rồi khôi phục 28/28. P
 ### Ghi chú về chỗ đặt khối này
 
 Cả **6** PR đang mở lúc `07:2xZ` chạm `ops/lanes/platform/backlog.md`, **5/6** chạm file này (chỉ `#274` không), và `.gitattributes` cố ý **không** khai `merge=union` cho Markdown (*"union sẽ trộn lẫn hai mục thành một mục hỏng mà vẫn merge được — đúng nhóm lỗi Z"*). Chèn ở **đầu** file — chỗ `KF-042` nằm — là đẩy tới 5 PR vào xung đột phải giải **bằng tay** ngay sau khi hàng đợi vừa sạch ba lượt liên tiếp. Nên khối đặt ở **cuối** file, và lượt đó **đo lại bằng `git merge-tree --write-tree` trên cả 6 PR sau khi sửa** chứ không tin lập luận. Thứ tự các mục trong file này vốn không mang nghĩa (`KF-048` đã nằm cuối trước lượt này), nên đặt ở cuối không phá quy ước nào.
+
+## KF-050 · Hai worker mở hai PR bước 0 cách nhau 37 giây, cùng gộp cùng một bộ nhánh chờ — ba lớp canh đều mù
+
+**Đo được 2026-09-27**, vòng soát ngữ cảnh sạch của `#309` tìm ra. `#309` mở `11:38:12Z`, `#310` mở `11:38:49Z` — **37 giây**. Cả hai là lượt log-only, cả hai nhận `step0PrGate` = `heartbeat-due`, và cả hai `git cherry-pick` **cùng** bộ nhánh chờ `claude/integration/step0-pending/*`. `#310` merge trước (`11:43:54Z`), nên sáu cherry-pick của `#309` thành **no-op** và tiêu đề `… gộp 6 nhánh chờ` thành một câu sai trong lịch sử `main`.
+
+Đây là `KF-025` (hai worker nhận cùng một mục) **ở một tầng khác**: không phải mục backlog, mà là **bộ nhánh chờ**. Và ba lớp canh đã có đều không thấy nó:
+
+| Lớp | Vì sao mù |
+|---|---|
+| `step0PrGate.pushedPrs` | đếm PR của **chính lượt mình** (`ops/scripts/step0-pr-gate.ts`), nên không bao giờ thấy worker khác. Docblock của nó **tự khai** chỗ này: *"Hai worker chạy chồng nhau có thể cùng thấy nhịp tim quá mốc và cùng mở một PR log"* |
+| `claimCheck` | đọc mã mục từ **tiêu đề PR**, mà PR bước 0 **không mang mã mục** — đúng `unreadable` 54 PR mà `#309` đã khai |
+| `pnpm step0:pending` | đối chiếu với `origin/main`, nên không thấy một nhánh chờ đang nằm trong PR **đang mở** của người khác |
+
+**Lần này vô hại**, và lý do quan trọng hơn kết quả: hai bên cherry-pick **cùng một commit**, nên blob giống nhau từng byte và git giải add/add êm. Đo thật sau khi gộp: `git merge-tree --write-tree origin/main HEAD` EXIT=0, mỗi file **1 dòng JSON**, 0 cặp `(at, ref)` trùng.
+
+Nó **sẽ** hại khi hai lượt ghi hai dòng **khác nhau** cho cùng một lượt chạy — `.gitattributes` nói thẳng: *"Union **không** khử trùng lặp. Hai nhánh ghi y hệt một dòng thì file có hai dòng giống nhau."* Chi phí khi đó bị đếm hai lần mà `main` xanh: nhóm **Z**.
+
+⚠️ **Và chỗ `#309` tránh được ca này là nhờ đọc bằng MẮT, không bằng máy:** nó bỏ qua nhánh `083849Z-crux-worker-1` vì thấy dòng log đó đã nằm trong PR `#308` đang mở. Không lệnh nào trong repo nói ra điều đó. Một luật mà chỉ con mắt của lượt chạy thực thi là một luật sẽ thủng — đúng hình dạng `KF-041` vế hai.
+
+Bản sửa bằng máy: mục `integration/I-023`.
+
+### Sáu phép phá thử SỐNG SÓT trên dòng log bước 0, cùng vòng soát đó
+
+Nền `pnpm check` xanh (1727/1727) với **cả sáu** phép áp cùng lúc lên một dòng log:
+
+| Phép phá | Vì sao nó quan trọng |
+|---|---|
+| **hai dòng y hệt cùng `(at, ref)` trong MỘT file** | chính ca `.gitattributes` cảnh báo, và chính ca ở trên phải đọc bằng mắt để tránh |
+| `costUsd: 999` bịa | **I8** canh **sự có mặt** của `costUsd`, không canh giá trị — một con số tiền bịa vào `main` mà không gì đỏ, ngược **I6** |
+| xoá hẳn `note` | P3 bước 0d đòi `note` mang số PR đã giải và giờ kẹt, và CHARTER nói *"tới khi `P-005`/`P-007` xong, dòng log này là nơi duy nhất giữ số giờ kẹt"* |
+| xoá `step0` khỏi một dòng bước 0 | `step0` là nguồn `pickPrToHandle` đếm chuỗi kẹt (`P-033`) — vắng nó là im lặng, không đỏ |
+| `status: "xanh"` | ngoài tập `ok`/`failed`/`skipped` của `RunLogLine`; `tsc` không đọc JSON dữ liệu nên không bắt |
+| `kind: "stage"` trên một dòng `lane` | `deriveEpisodeState` và phép cộng tiền phân biệt hai giá trị này — đổi nhãn lặng lẽ đổi cách tính |
+
+Cộng một dòng `durationMs: 0` đã nằm sẵn trên `main` (`step0-2026-09-27T102833Z-crux-worker-3.jsonl`): một lượt bước 0 không chạy trong 0 ms, và không ai canh `durationMs`.
