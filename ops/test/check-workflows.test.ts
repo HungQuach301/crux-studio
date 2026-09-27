@@ -903,14 +903,14 @@ test('Z9 · cả sáu workflow thật trong ops/workflows/ đều đã giải th
   }
 });
 
-// ── KF-016 · khoá YAML trùng trong cùng một mapping ────────────────────────
+// ── KF-047 · khoá YAML trùng trong cùng một mapping ────────────────────────
 //
 // Bẫy thật: hai khoá `env:` trong cùng một step. YAML không hợp lệ, GitHub
 // từ chối cả workflow ở mức khởi động (startup_failure, 0 job), nên
 // smoke-workflows đỏ ở MỌI lần push — và chỉ hiện ra sau khi merge, vì agent
 // không ghi được `.github/`. `pnpm lint:workflows` cũ không bắt được.
 
-test('KF-016 · hai khoá `env:` trong cùng một step thì đỏ', () => {
+test('KF-047 · hai khoá `env:` trong cùng một step thì đỏ', () => {
   const broken = `name: x
 on: [workflow_dispatch]
 jobs:
@@ -934,7 +934,7 @@ jobs:
   assert.match(found[0]!, /startup_failure/);
 });
 
-test('KF-016 · hai phần tử `- name:` liền nhau KHÔNG phải khoá trùng — mỗi phần tử sequence là một mapping riêng', () => {
+test('KF-047 · hai phần tử `- name:` liền nhau KHÔNG phải khoá trùng — mỗi phần tử sequence là một mapping riêng', () => {
   const ok = `name: x
 on: [workflow_dispatch]
 jobs:
@@ -952,7 +952,7 @@ jobs:
   assert.deepEqual(duplicateMappingKeys(ok, 'x.yml'), []);
 });
 
-test('KF-016 · nội dung bên trong khối `run: |` không bị nhầm thành khoá YAML', () => {
+test('KF-047 · nội dung bên trong khối `run: |` không bị nhầm thành khoá YAML', () => {
   const body = `name: x
 on: [workflow_dispatch]
 jobs:
@@ -967,7 +967,7 @@ jobs:
   assert.deepEqual(duplicateMappingKeys(body, 'x.yml'), []);
 });
 
-test('KF-016 · khoá trùng ở cấp gốc (hai `on:`) cũng đỏ', () => {
+test('KF-047 · khoá trùng ở cấp gốc (hai `on:`) cũng đỏ', () => {
   const broken = `name: x
 on: [push]
 on: [workflow_dispatch]
@@ -981,7 +981,7 @@ jobs:
   assert.match(found[0]!, /`on`/);
 });
 
-test('KF-016 · cả các workflow thật trong ops/workflows/ đều không có khoá trùng', () => {
+test('KF-047 · cả các workflow thật trong ops/workflows/ đều không có khoá trùng', () => {
   const dir = join(process.cwd(), 'ops', 'workflows');
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
     const found = duplicateMappingKeys(readFileSync(join(dir, file), 'utf8'), file);

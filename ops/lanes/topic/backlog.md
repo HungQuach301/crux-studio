@@ -320,6 +320,26 @@ Mục này ở làn `topic` vì Channel Pack là vùng của `T-002`, không vì
 
 ---
 
+### T-015 · fix · Đường gọi embeddings phải chạy được trong phiên cloud qua agent proxy — luật "thiếu secret thì DỪNG" đang nói NGƯỢC chỉ dẫn mới nhất
+
+Chủ dự án đo được và nói rõ trên [`#251` `2026-09-27T01:27:41Z`](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5851619418), nguyên văn:
+
+> *"`T-008`: key OpenAI cho embeddings **đã gắn** vào môi trường cloud \"crux\" dưới dạng **API credential** — agent proxy tự thêm header `Authorization` cho `api.openai.com`; biến `EMBEDDINGS_API_KEY` **KHÔNG** có trong phiên. Sửa đường gọi embeddings: trong phiên cloud (`CLAUDE_CODE_REMOTE=true`), thiếu biến thì **vẫn gọi và không tự gửi header `Authorization`**, để proxy gắn key; trong GitHub Actions vẫn dùng secret như cũ. Thử trước bằng một lời gọi nhỏ, rồi chạy thật `T-008` và ghi `costUsd`. Kèm bài kiểm."*
+
+Chỗ đau không phải một tính năng thiếu, mà là **một luật trong repo đang nói ngược chỉ dẫn mới nhất**: tiêu chí xong của `T-014` ghi *"Thiếu `EMBEDDINGS_API_KEY` thì **DỪNG và báo tên secret thiếu**"*, và trường `- hold:` của nó ghi *"phiên agent không có `EMBEDDINGS_API_KEY` (secret chỉ sống trong Actions)"*. Cả hai câu đó **đúng khi viết** và **sai từ `2026-09-27T01:27:41Z`. Nên hôm nay một lượt worker đọc backlog sẽ làm đúng luật cũ, dừng lại, và không gì đỏ — cùng họ `KF-049`, chỉ khác chỗ cắn: chỉ dẫn mới **có** tới repo nhưng **không** ai gỡ luật cũ nó thay.
+
+- deps: —
+- risk: medium — đường gọi này **tiêu tiền thật** (`T-008` trên corpus 38 video). Hướng lệch an toàn: lời gọi thử nhỏ **trước**, và `costUsd` ghi từ `usage.total_tokens` nhà cung cấp trả về chứ không ước lượng (bất biến **I8**, và `T-014` đã chốt luật đó). Không được đổi hướng thành "cứ gọi rồi tính sau".
+- status: ready
+- nguồn: `#251` comment `2026-09-27T01:27:41Z`; mục `topic/T-014` (tiêu chí *"thiếu secret thì DỪNG"* và trường `- hold:`); `topic/T-011` tiêu chí xong 1; `ops/scripts/novelty-embeddings-trial.ts`; `platform/P-063` ô ⬜ *"phần intake chưa xong"*
+- tiêu chí xong:
+  - Đường gọi phân biệt **hai môi trường** bằng `CLAUDE_CODE_REMOTE`: phiên cloud thiếu biến → **vẫn gọi**, và **không** tự đặt header `Authorization` (để proxy gắn); Actions → dùng secret như cũ. Hai nhánh, hai bài kiểm, mỗi bài một ca âm.
+  - **Gỡ luật cũ ở đúng chỗ nó sống:** tiêu chí *"thiếu secret thì DỪNG"* của `T-014` và lời giữ của nó phải được viết lại, không để hai câu ngược nhau cùng tồn tại trong backlog. Đây là nửa dễ bị bỏ nhất, và bỏ nó là để nguyên chỗ hỏng.
+  - **Lời gọi thử nhỏ trước**, dán kết quả thật (mã trả về, số token, `costUsd`) vào mục này; chỉ sau khi nó xanh mới chạy thật `T-008`.
+  - **Không tự gửi secret đi đâu, và không tự tạo secret.** Luật *"không mượn `OPENAI_API_KEY`"* của `T-014` vẫn đứng: proxy gắn key là một chuyện, agent đọc key là chuyện khác và vẫn cấm.
+  - Mọi lần chạy ghi một dòng log có `costUsd`, kể cả lần dừng (bất biến **I8**).
+  - Khai rõ **cái không đo được từ trong phiên**: phiên cloud không đọc được cấu hình credential của environment, nên *"proxy có gắn header không"* chỉ trả lời được bằng **một lời gọi thật**, không bằng đọc tài liệu (CHARTER 11.1 luật 4).
+
 ### T-014 · So ngữ nghĩa cho `checkNovelty` bằng embeddings, đo lệch so với so từ vựng
 Chỉ dẫn của chủ dự án trên luồng chỉ dẫn [#251](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5825164876) (`2026-09-25T01:28:33Z`): *"T-011 mục 2: chọn OpenAI cho embeddings. Đã thêm secret `EMBEDDINGS_API_KEY` (key riêng, tách khỏi `OPENAI_API_KEY` để theo dõi chi phí). Chọn model embeddings rẻ nhất đủ chất lượng, chứng minh bằng chạy thật trên corpus mẫu 38 video: so kết quả `checkNovelty` giữa so từ vựng và so ngữ nghĩa, ghi `costUsd`. Đổi nhà cung cấp sau chỉ tốn chi phí nhúng lại corpus, nên coi là `reversible`. Mở khoá T-011 mục 2."*
 

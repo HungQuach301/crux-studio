@@ -60,7 +60,7 @@
  * ever = tip = 18  ⇒  phép đo trả "0 thiếu"  (sự thật: 33)
  * ```
  *
- * Đó đúng ca **BÁO YÊN** mà `KF-041` cấm — *"không im lặng, nó KHẲNG ĐỊNH LÀ
+ * Đó đúng ca **BÁO YÊN** mà `KF-048` cấm — *"không im lặng, nó KHẲNG ĐỊNH LÀ
  * LÀNH, và cái đó tệ hơn im lặng"*. Nên mục này bỏ `--depth=1` cho nhánh
  * telemetry, và khai thẳng rằng **đó là một thay đổi chi phí**:
  *
