@@ -39,12 +39,12 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
   cheapestAdequateModel,
-  checkEmbeddingsSecret,
   cosineSimilarity,
   measureSeparation,
   openAiEmbeddingProvider,
   readEmbeddingModelTable,
   readNoveltyProbe,
+  resolveEmbeddingsAuth,
   type EmbeddingModel,
   type EmbeddingProvider,
   type ModelCandidate,
@@ -165,8 +165,10 @@ export async function trialOneModel(
 
 async function main(): Promise<void> {
   const at = new Date().toISOString();
-  const secret = checkEmbeddingsSecret(process.env);
-  if (!secret.ok) {
+  // Mục `T-015`: chọn cách ký theo môi trường. `stop` là nhánh DUY NHẤT không
+  // gọi API — phiên cloud (`proxy`) và Actions (`secret`) đều gọi thật.
+  const auth = resolveEmbeddingsAuth(process.env);
+  if (auth.mode === 'stop') {
     // Bất biến I8: lần chạy bị bỏ qua VẪN có một dòng log.
     writeLogLine({
       at,
@@ -176,14 +178,23 @@ async function main(): Promise<void> {
       status: 'skipped',
       durationMs: 0,
       costUsd: 0,
-      note: `Bỏ qua phép đo embeddings: ${secret.message} Không gọi API, không tốn tiền.`,
+      note: `Bỏ qua phép đo embeddings: ${auth.message} Không gọi API, không tốn tiền.`,
     });
-    console.error(secret.message);
-    console.error(
-      'Lần chạy thật cần secret đó, nên nó chạy trong GitHub Actions chứ không trong phiên agent.',
-    );
+    console.error(auth.message);
     process.exitCode = 2;
     return;
+  }
+  console.log(`Cách ký: ${auth.mode} — ${auth.message}`);
+  // Nhánh `proxy` chỉ chạy được khi node fetch ĐI QUA agent proxy. Node không
+  // đọc `HTTPS_PROXY` cho `fetch` trừ khi có `NODE_USE_ENV_PROXY=1` lúc khởi
+  // động (node ≥ 22.21) — mà `pnpm topic:novelty-trial` đặt sẵn. Đặt trong
+  // tiến trình thì MUỘN (global dispatcher đã dựng), nên đây chỉ cảnh báo,
+  // không tự sửa được.
+  if (auth.mode === 'proxy' && process.env.HTTPS_PROXY && process.env.NODE_USE_ENV_PROXY !== '1') {
+    console.error(
+      '⚠ Nhánh proxy nhưng NODE_USE_ENV_PROXY != "1": node fetch sẽ KHÔNG đi qua agent proxy ' +
+        'và lời gọi sẽ trả 401. Chạy qua `pnpm topic:novelty-trial` (đã đặt sẵn cờ đó).',
+    );
   }
 
   const started = Date.now();
@@ -195,7 +206,8 @@ async function main(): Promise<void> {
     );
   }
   const table = readEmbeddingModelTable();
-  const apiKey = process.env.EMBEDDINGS_API_KEY as string;
+  // `secret` → khoá; `proxy` → undefined (provider bỏ header, proxy gắn key).
+  const apiKey = auth.apiKey;
   const checkedAt = at;
 
   const candidates: ModelCandidate[] = [];
@@ -216,7 +228,7 @@ async function main(): Promise<void> {
 
   try {
     for (const model of table.models) {
-      const provider = openAiEmbeddingProvider({ apiKey, model });
+      const provider = openAiEmbeddingProvider(apiKey === undefined ? { model } : { apiKey, model });
       const result = await trialOneModel(provider, model, corpus, probe, checkedAt);
       candidates.push(result.candidate);
       costUsd += result.costUsd;
