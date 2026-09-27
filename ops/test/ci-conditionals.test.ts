@@ -161,6 +161,19 @@ test('Không đọc được khối `on:` mà có job bắt buộc → ĐỎ (fa
   assert.deepEqual(requiredCheckConditionProblems(noOn.replace(/fix-has-test/gu, 'lint-only')), []);
 });
 
+test('`on:` cùng dòng ở dạng flow, neo hay thẻ → không đọc được → ĐỎ (fail closed), không thành tên trigger giả', () => {
+  const bad = fixHasTest('    steps:', ...step('if: env.X'));
+  for (const variant of [
+    bad.replace('on:\n  pull_request:\n  workflow_dispatch:', 'on: { pull_request: {} }'),
+    bad.replace('on:\n  pull_request:\n  workflow_dispatch:', 'on: {pull_request: null, push: null}'),
+    bad.replace('on:\n', 'on: &t\n'),
+    bad.replace('on:\n', 'on: !!map\n'),
+  ]) {
+    assert.equal(workflowTriggers(variant), null, variant.split('\n')[1]);
+    assert.equal(requiredCheckConditionProblems(variant).length, 1, variant.split('\n')[1]);
+  }
+});
+
 test('Khoá job có nháy hoặc chú thích, `jobs:` có chú thích — job bắt buộc vẫn bị áp', () => {
   const bad = fixHasTest('    steps:', ...step('if: env.X'));
   for (const variant of [

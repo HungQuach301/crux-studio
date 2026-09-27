@@ -699,7 +699,7 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
   - `status` giữ **`ready`**: Z2, Z6 và Z8 vẫn đang chờ.
 - **Sóng 4 — xong: Z2** (lượt `crux-worker-1`, 2026-09-27).
   - **Z2** (`if:` làm bước hoặc job bắt buộc ra `skipped` trong khi check vẫn xanh): `requiredCheckConditionProblems`
-    trong `ops/scripts/ci-conditionals.ts`, gọi từ `pnpm lint:workflows` cạnh luật `P-047`. **24** bài ở
+    trong `ops/scripts/ci-conditionals.ts`, gọi từ `pnpm lint:workflows` cạnh luật `P-047`. **25** bài ở
     `ops/test/ci-conditionals.test.ts`.
   - **Câu hỏi thiết kế còn để ngỏ từ sóng 2 (ca mức job) có lời đáp kiểm được.** Luật áp cho job sinh check bắt buộc
     (`REQUIRED_CHECKS`). Cổng `github.event_name == 'pull_request'` được phép vì trên một lượt do PR kích hoạt,
@@ -717,7 +717,7 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     đó đỏ, có bài riêng. Cùng vòng soát, ba chỗ luật **tắt im lặng** vì khuôn viết khác, đều đã sửa và có bài kiểm:
     `"on":` hay trigger thụt 4 (không đọc được `on:` thì nay đỏ, không bỏ qua) · khoá job có nháy hoặc chú thích ·
     `name:` là biểu thức. Bài đếm `if:` trên cây thật nay đếm ở **mọi** độ thụt, trừ thân khối `run:`. Phần trừ đó
-    lấy từ `runBlocks`, một bộ đọc khác, để phép đếm không dùng chung giả định với bộ đọc của luật.
+    lấy từ `runBlocks`, một bộ đọc khác, để phép đếm không dùng chung giả định với bộ đọc của luật. Vòng soát lại tìm thêm một chỗ tắt im lặng do chính bản sửa gây ra: `on:` cùng dòng ở dạng `{ … }`, neo `&t` hay thẻ `!!map` bị đọc thành một tên trigger giả. Nay các dạng đó trả "không đọc được", và luật báo đỏ.
   - **Bốn phép phá, cả bốn đều bị bắt:** gỡ lời gọi trong CLI (bài chạy thật `check-workflows.ts` trên cây tạm đỏ) ·
     bỏ luật mức job · bộ đọc step lệch độ thụt · quên phân biệt `pull_request_target`.
   - **Chưa che, khai ra:** cổng sự kiện vẫn sinh check `skipped` **mang tên check bắt buộc** khi ai đó chạy `ci.yml`

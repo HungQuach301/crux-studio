@@ -247,9 +247,13 @@ export function workflowTriggers(source: string): string[] | null {
     if (root === null) continue;
     const inline = root[2]!.replace(/\s+#.*$/, '').trim();
     if (inline !== '' && !inline.startsWith('#')) {
+      // Chỉ nhận hai dạng cùng dòng: một tên, hoặc một danh sách tên. Mọi dạng
+      // khác (`{ … }`, neo `&x`, thẻ `!!map`) trả `null` — đọc nó thành một tên
+      // trigger giả là luật tắt im lặng (vòng soát bước 6 đo được).
       const list = /^\[(.*)\]$/.exec(inline);
-      const items = list !== null ? list[1]!.split(',') : [inline];
-      return items.map((item) => unquote(item.trim())).filter((item) => item !== '');
+      const items = (list !== null ? list[1]!.split(',') : [inline]).map((item) => unquote(item.trim()));
+      if (!items.every((item) => /^[A-Za-z_][A-Za-z0-9_-]*$/.test(item))) return null;
+      return items;
     }
     const triggers: string[] = [];
     let childIndent = -1;
