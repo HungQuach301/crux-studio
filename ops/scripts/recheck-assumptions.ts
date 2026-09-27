@@ -207,6 +207,18 @@ export function isToolCommit(subject: string): boolean {
   // Mục `I-012`: commit của workflow `sync-workflows` (chép `ops/workflows/**`
   // sang `.github/workflows/`, CLAUDE.md mục 4) — máy sinh, không đi qua agent.
   if (/^chore: sync workflows from ops\/workflows\b/.test(bare)) return true;
+  // Mục `topic/T-006b`: commit bằng chứng cấp kiểm 4 do
+  // `ops/workflows/model-assumption-check.yml` đẩy lên nhánh
+  // `claude/tier4-evidence`. Máy sinh trong một job Actions, **không có
+  // phiên nào** để ghi `Claude-Session`. Thiếu dòng này thì G14 đọc nó là
+  // commit của agent và báo `sai` vì một commit KHÔNG PR NÀO CHỮA ĐƯỢC —
+  // nhánh đó không bao giờ vào `main`, đúng cái bẫy mà CHARTER phụ lục P3
+  // bước 0e đã nêu cho nhánh `claude/telemetry`.
+  //
+  // Subject là chuỗi CỐ ĐỊNH do workflow gõ cứng, không phải một mẫu mở:
+  // nới nó ra thành `^chore: ` là biến danh sách trắng thành danh sách đen
+  // trá hình, đúng chỗ hỏng mà docblock ngay trên đã lên án.
+  if (/^chore: tier4 evidence from ops\/scripts\/model-assumption-check$/.test(bare)) return true;
   // Mục `I-012`: merge tay "Gộp main vào <nhánh>" / "Gộp origin/main vào
   // <nhánh>" (agent tự gõ message thay vì để git sinh mặc định, ví dụ khi
   // nhận PR ở phụ lục P1 bước 2 ca `aborted-ineligible`). Cùng bản chất cơ

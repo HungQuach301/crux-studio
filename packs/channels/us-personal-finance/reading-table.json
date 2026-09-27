@@ -1,0 +1,103 @@
+{
+  "$note": "🤖 Bảng đọc của kênh us-personal-finance (mục audio/AU-007). Chuẩn hoá văn bản TRƯỚC khi đưa vào TTS: đây là DỮ LIỆU của kênh, không phải mã. Bộ chuẩn hoá của xưởng audio (workshops/audio/src/normalize.ts) áp các luật này theo đúng thứ tự khai, và KHÔNG gọi nhà cung cấp nào — chạy được khi providers.tts còn null. Mỗi luật kèm MỘT ca kiểm; xưởng chạy tất cả ca kiểm trên văn bản thật (ops/golden), không trên ví dụ tự bịa.",
+  "$source": "Kiến trúc (a) của khối GIỌNG ĐỌC, chỉ dẫn chủ dự án trên issue bản tin #193; mục backlog audio/AU-007. Các cách đọc lấy từ voice-spec.md và persona.md của cùng kênh.",
+  "channel": "us-personal-finance",
+  "rules": [
+    {
+      "id": "retirement-401k",
+      "description": "401(k) đọc thành 'four oh one k', không đọc dấu ngoặc.",
+      "pattern": "401\\(k\\)",
+      "flags": "g",
+      "replacement": "four oh one k",
+      "test": { "input": "max out your 401(k) first", "expected": "max out your four oh one k first" }
+    },
+    {
+      "id": "sp-500",
+      "description": "S&P 500 đọc thành 'S and P five hundred' (chủ dự án nêu nguyên văn, #193).",
+      "pattern": "S&P 500",
+      "flags": "g",
+      "replacement": "S and P five hundred",
+      "test": { "input": "the S&P 500 index", "expected": "the S and P five hundred index" }
+    },
+    {
+      "id": "initialism-apr",
+      "description": "APR đọc từng chữ.",
+      "pattern": "\\bAPR\\b",
+      "flags": "g",
+      "replacement": "A P R",
+      "test": { "input": "a high APR card", "expected": "a high A P R card" }
+    },
+    {
+      "id": "initialism-etf",
+      "description": "ETF đọc từng chữ.",
+      "pattern": "\\bETF\\b",
+      "flags": "g",
+      "replacement": "E T F",
+      "test": { "input": "a broad ETF", "expected": "a broad E T F" }
+    },
+    {
+      "id": "initialism-hsa",
+      "description": "HSA đọc từng chữ.",
+      "pattern": "\\bHSA\\b",
+      "flags": "g",
+      "replacement": "H S A",
+      "test": { "input": "fund the HSA", "expected": "fund the H S A" }
+    },
+    {
+      "id": "initialism-ira",
+      "description": "IRA đọc từng chữ.",
+      "pattern": "\\bIRA\\b",
+      "flags": "g",
+      "replacement": "I R A",
+      "test": { "input": "a Roth IRA", "expected": "a Roth I R A" }
+    },
+    {
+      "id": "fico",
+      "description": "FICO đọc thành 'FYE-koh' (chủ dự án nêu nguyên văn, #193).",
+      "pattern": "\\bFICO\\b",
+      "flags": "g",
+      "replacement": "FYE-koh",
+      "test": { "input": "your FICO score", "expected": "your FYE-koh score" }
+    },
+    {
+      "id": "currency-usd",
+      "description": "Ký hiệu $ đứng trước số đọc thành '<số> dollars' để TTS không đọc 'dollar sign'.",
+      "pattern": "\\$([0-9][0-9,]*)",
+      "flags": "g",
+      "replacement": "$1 dollars",
+      "test": { "input": "about $1,200 saved", "expected": "about 1,200 dollars saved" }
+    },
+    {
+      "id": "percent",
+      "description": "Ký hiệu % đọc thành 'percent'.",
+      "pattern": "([0-9]+)%",
+      "flags": "g",
+      "replacement": "$1 percent",
+      "test": { "input": "a 5% return", "expected": "a 5 percent return" }
+    },
+    {
+      "id": "fiscal-quarter",
+      "description": "Q1..Q4 đọc thành 'quarter <n>'.",
+      "pattern": "\\bQ([1-4])\\b",
+      "flags": "g",
+      "replacement": "quarter $1",
+      "test": { "input": "in Q3 the rate rose", "expected": "in quarter 3 the rate rose" }
+    },
+    {
+      "id": "versus",
+      "description": "'vs' / 'vs.' đọc đầy đủ thành 'versus'.",
+      "pattern": "\\bvs\\b\\.?",
+      "flags": "gi",
+      "replacement": "versus",
+      "test": { "input": "rent vs. buy", "expected": "rent versus buy" }
+    },
+    {
+      "id": "us-abbrev",
+      "description": "'US' đứng riêng đọc thành 'U.S.' để TTS không đọc thành từ 'us'.",
+      "pattern": "\\bUS\\b",
+      "flags": "g",
+      "replacement": "U.S.",
+      "test": { "input": "a US household", "expected": "a U.S. household" }
+    }
+  ]
+}

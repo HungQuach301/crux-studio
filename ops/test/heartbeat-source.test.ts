@@ -189,8 +189,8 @@ test('nguồn có dòng log mà KHÔNG dòng nào là bước 0 vẫn phải bá
 
 test('một nguồn hỏng thành MỘT DÒNG báo cáo, không thành ngoại lệ giết cả phép đo', () => {
   // `parseRunLogs` của kernel NÉM khi `costUsd` không phải số. Dấu hiệu số 5
-  // là một trong sáu dấu hiệu của người canh; để ngoại lệ đó nổi lên là nuốt
-  // năm dấu hiệu kia (đúng luật Z9 mà `watchdog.yml` ghi cho từng chỗ nuốt lỗi).
+  // là một trong tám dấu hiệu của người canh; để ngoại lệ đó nổi lên là nuốt
+  // bảy dấu hiệu kia (đúng luật Z9 mà `watchdog.yml` ghi cho từng chỗ nuốt lỗi).
   const broken = scratch({ 'x.jsonl': '{"at":"2026-09-24T08:00:00Z","ref":"integration/step0-x","costUsd":"0"}\n' });
   const main = scratch({ 'integration/step0-a.jsonl': beat('2026-09-24T07:00:00Z') });
   try {
@@ -430,8 +430,18 @@ test('các lệnh git mà script IN RA phải chạy được, và phải mang t
 
   // Và nó phải đẩy lên đúng nhánh, đúng thư mục, không `--force` dưới bất kỳ hình dạng nào.
   assert.ok(script.includes(`refs/heads/${TELEMETRY_BRANCH}`));
-  assert.ok(script.includes(`\\t${TELEMETRY_DIR}\\n`));
-  assert.doesNotMatch(script, /--force/);
+  // Tên thư mục nay là **tham số** của `printf` chứ không nằm trong chuỗi định
+  // dạng (`…%s\\t%s\\n` … "$INNER" "heartbeat"), vì cây gốc đã đổi sang dựng
+  // THÊM — xem `telemetry-beat.ts`. Nên phép kiểm đổi HÌNH DẠNG chứ không đổi
+  // độ mạnh: vẫn đòi đúng một entry `040000 tree` mang đúng tên thư mục đó.
+  assert.match(script, /printf '040000 tree %s\\t%s\\n'/);
+  assert.ok(script.includes(`"$INNER" ${JSON.stringify(TELEMETRY_DIR)}`));
+  // Chỉ soi các dòng LỆNH: một dòng chú thích nói "không `--force` nào" là lời
+  // khai, không phải một cờ — soi cả chú thích thì phép kiểm bắt chính nó.
+  assert.doesNotMatch(
+    commands.filter((line) => !line.trimStart().startsWith('#')).join('\n'),
+    /--force/,
+  );
 });
 
 test('bản sao lên nhánh telemetry là NGUYÊN VĂN file gốc, chỉ chuẩn hoá dấu xuống dòng cuối', () => {

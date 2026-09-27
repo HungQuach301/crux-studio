@@ -37,6 +37,7 @@ import {
   dependencyCycles,
   isValidStatus,
   VALID_STATUSES,
+  joinHoldLines,
 } from '../scripts/backlog-status.ts';
 
 const BACKLOG = [
@@ -278,6 +279,116 @@ test('parseBacklog: đọc trường `- hold:` — hoa/thường/thụt lề l�
   assert.equal(items[1]!.holdField, 'chờ tập thật đầu tiên');
   assert.equal(items[2]!.holdField, null);
   assert.equal(items[3]!.holdField, null); // `- hold:` trống là khai thiếu, không phải một lời giữ
+});
+
+test('KF-041 · joinHoldLines: nối dòng xuống dòng, và DỪNG ở mọi thứ mở một khối mới', () => {
+  // Ca lành: một dòng, không có gì để nối.
+  assert.equal(joinHoldLines('chờ chủ dự án', ['- nguồn: x']), 'chờ chủ dự án');
+
+  // Ca của `KF-041`: lý do xuống dòng. Nối bằng MỘT khoảng trắng — xuống dòng
+  // trong Markdown không phải một đoạn mới, nên thiếu khoảng trắng là dán hai
+  // từ vào nhau.
+  assert.equal(
+    joinHoldLines('chờ chủ dự án — tạo OAuth client scope', [
+      '  `youtube.upload`, rồi đặt refresh token vào Secrets.',
+      '  Mở lại `ready` khi secret có mặt.',
+      '- nguồn: CHARTER',
+    ]),
+    'chờ chủ dự án — tạo OAuth client scope `youtube.upload`, rồi đặt refresh token vào Secrets. Mở lại `ready` khi secret có mặt.',
+  );
+
+  // Bốn thứ DỪNG phép nối. Mỗi dòng dưới đây là một ca riêng, vì gộp lại thì
+  // một mẫu hỏng vẫn có thể xanh nhờ mẫu khác.
+  assert.equal(joinHoldLines('lý do', ['  - gạch con']), 'lý do', 'gạch đầu dòng con bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['  * gạch con']), 'lý do', 'gạch `*` bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['  + gạch con']), 'lý do', 'gạch `+` bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['  > ghi chú ⚠️']), 'lý do', 'khối trích dẫn bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['  | a | b |']), 'lý do', 'hàng bảng bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['']), 'lý do', 'dòng trống bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['- deps: x']), 'lý do', 'trường khác bị nối vào');
+  assert.equal(joinHoldLines('lý do', ['### R-003 · mục sau']), 'lý do', 'tiêu đề mục sau bị nối vào');
+
+  // Nối rồi DỪNG: dòng thứ hai là gạch con, nên chỉ dòng đầu được nối.
+  assert.equal(joinHoldLines('lý do', ['  còn lại của câu', '  - gạch con', '  KHÔNG được nối']), 'lý do còn lại của câu');
+});
+
+test('KF-041 · parseBacklog: lý do `- hold:` xuống dòng KHÔNG bị cắt giữa câu', () => {
+  // Đúng hai hình dạng thật đã đo được trên kho: `topic/T-014` (2 dòng nối) và
+  // `release/R-002` (3 dòng nối). Với mẫu một dòng cũ, mục đầu mất 142 ký tự
+  // và mục sau mất 243 — và `pnpm check` vẫn EXIT=0, nhóm Z.
+  const content = [
+    '### W-001 · Lý do xuống dòng',
+    '- status: review',
+    '- hold: lần chạy THẬT chưa xảy ra — phiên agent không có `EMBEDDINGS_API_KEY` (secret chỉ sống trong',
+    '  Actions). Gỡ treo khi lệnh chạy được một lần có tính tiền; tới lúc đó mục **không** tự chuyển `done`.',
+    '- nguồn: WP-014',
+    '',
+    '### W-002 · Một dòng, không đổi',
+    '- status: parked',
+    '- hold: chờ chủ dự án đặt secret',
+    '- deps: —',
+    '',
+  ].join('\n');
+  const items = parseBacklog(content);
+  assert.equal(
+    items[0]!.holdField,
+    'lần chạy THẬT chưa xảy ra — phiên agent không có `EMBEDDINGS_API_KEY` (secret chỉ sống trong Actions). Gỡ treo khi lệnh chạy được một lần có tính tiền; tới lúc đó mục **không** tự chuyển `done`.',
+  );
+  // Dấu ngoặc mở `(secret` phải được đóng trong chính lý do — chỗ cắt cũ để
+  // lại một ngoặc chưa đóng, tức câu gửi tới chủ dự án hỏng thấy được.
+  assert.ok(items[0]!.holdField!.includes('(secret chỉ sống trong Actions)'), 'ngoặc vẫn bị cắt');
+  assert.equal(items[1]!.holdField, 'chờ chủ dự án đặt secret', 'hình dạng một dòng bị đổi nghĩa');
+});
+
+test('KF-041 · trên backlog THẬT: không lý do `- hold:` nào bị cắt giữa câu', () => {
+  // Phép đo hai chiều trên dữ liệu thật, không phải trên fixture: dựng lại giá
+  // trị của mẫu MỘT DÒNG cũ rồi đòi `parseBacklog` không bao giờ trả đúng nó
+  // khi có dòng nối tiếp. Bài này đỏ trước bản sửa `KF-041` (2 mục), xanh sau.
+  const oneLine = /^\s*-\s*hold:\s*(\S.*?)\s*$/i;
+  const lanesRoot = join(import.meta.dirname, '..', 'lanes');
+  const truncated: string[] = [];
+  for (const lane of readdirSync(lanesRoot, { withFileTypes: true })) {
+    if (!lane.isDirectory()) continue;
+    let content: string;
+    try {
+      content = readFileSync(join(lanesRoot, lane.name, 'backlog.md'), 'utf8');
+    } catch {
+      continue;
+    }
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const m = oneLine.exec(lines[i]!);
+      if (m === null) continue;
+      const joined = joinHoldLines(m[1]!, lines.slice(i + 1));
+      if (joined !== m[1]!) truncated.push(`${lane.name}: dòng ${i + 1} — mẫu một dòng mất ${joined.length - m[1]!.length} ký tự`);
+    }
+  }
+  // KHÔNG đòi danh sách rỗng: lý do xuống dòng là hợp lệ từ `KF-041`. Đòi
+  // `parseBacklog` đọc ĐỦ, tức không mục nào có `holdField` bằng đúng bản cắt.
+  for (const lane of readdirSync(lanesRoot, { withFileTypes: true })) {
+    if (!lane.isDirectory()) continue;
+    let content: string;
+    try {
+      content = readFileSync(join(lanesRoot, lane.name, 'backlog.md'), 'utf8');
+    } catch {
+      continue;
+    }
+    const lines = content.split('\n');
+    for (const item of parseBacklog(content)) {
+      if (item.holdField === null) continue;
+      for (let i = 0; i < lines.length; i++) {
+        const m = oneLine.exec(lines[i]!);
+        if (m === null || !item.holdField.startsWith(m[1]!)) continue;
+        const joined = joinHoldLines(m[1]!, lines.slice(i + 1));
+        assert.equal(
+          item.holdField,
+          joined,
+          `${lane.name}/${item.id}: \`holdField\` không phải bản nối đủ — ${truncated.join(' · ')}`,
+        );
+        break;
+      }
+    }
+  }
 });
 
 test('heldReason: trường thắng lời văn; không có cả hai thì null', () => {
@@ -1073,6 +1184,65 @@ test('I-019 · C2 · CLI in `invalidStatus` và `cycles` KỂ CẢ KHI RỖNG', 
     assert.ok('cycles' in out, 'khoá `cycles` VẮNG MẶT khi rỗng — đúng chỗ im lặng mục này cấm');
     assert.deepEqual(out.invalidStatus, []);
     assert.deepEqual(out.cycles, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('KF-030 · CLI in `parked` KỂ CẢ KHI RỖNG — mục `parked` không còn vô hình', () => {
+  // Chữ ký `KF-030` (`ops/known-failures.md`): *"một mục backlog có thật, đọc
+  // được, hợp lệ về hình thức, mà KHÔNG xuất hiện ở bất kỳ nhóm nào của
+  // `pnpm backlog:status`"*. Mục `parked` là đúng ca đó và không bài nào bắt:
+  // `readyQueue` lọc `status !== 'ready'`, còn `reviewFindings` chỉ xét `review`
+  // cộng `status` sai — mà `parked` NẰM TRONG `VALID_STATUSES`. Đo trên kho thật
+  // `2026-09-25`: **12** mục im như vậy, gồm `release/R-002` và `verify/VF-G21`.
+  const dir = mkdtempSync(join(tmpdir(), 'backlog-parked-'));
+  const git = (...args: string[]) => {
+    const r = spawnSync('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
+  };
+  const runCli = () =>
+    JSON.parse(
+      spawnSync(
+        process.execPath,
+        ['--experimental-strip-types', join(import.meta.dirname, '..', 'scripts', 'backlog-status.ts')],
+        { cwd: dir, encoding: 'utf8' },
+      ).stdout,
+    ) as Record<string, unknown>;
+  try {
+    git('init', '--quiet', '--initial-branch', 'main');
+    git('commit', '--quiet', '--allow-empty', '-m', '[demo] D-001 — xong');
+    mkdirSync(join(dir, 'ops', 'lanes', 'demo'), { recursive: true });
+
+    // Chiều 1 — KHÔNG có mục `parked`: khoá vẫn phải có mặt, mảng rỗng.
+    writeFileSync(
+      join(dir, 'ops', 'lanes', 'demo', 'backlog.md'),
+      lane([['D-001', 'review', '—'], ['D-002', 'ready', 'D-001']]),
+      'utf8',
+    );
+    const clean = runCli();
+    assert.ok('parked' in clean, 'khoá `parked` VẮNG MẶT khi rỗng — đúng chỗ im lặng mà luật này cấm');
+    assert.deepEqual(clean.parked, []);
+
+    // Chiều 2 — CÓ một mục `parked`: nó phải hiện ra, và KHÔNG được lẫn vào
+    // nhóm nào khác (`readyNow`, `blocked`, `invalidStatus`).
+    writeFileSync(
+      join(dir, 'ops', 'lanes', 'demo', 'backlog.md'),
+      lane([['D-001', 'review', '—'], ['D-002', 'parked', 'D-001'], ['D-003', 'ready', '—']]),
+      'utf8',
+    );
+    const withParked = runCli();
+    assert.deepEqual(withParked.parked, ['demo/D-002']);
+    assert.deepEqual(withParked.invalidStatus, [], '`parked` bị tính là `status` sai');
+    assert.deepEqual(
+      withParked.readyNow,
+      ['demo/D-003 — mục D-003'],
+      '`parked` lọt vào `readyNow`, hoặc mục `ready` thật bị mất',
+    );
+    assert.deepEqual(withParked.blocked, [], '`parked` bị xếp vào `blocked`');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

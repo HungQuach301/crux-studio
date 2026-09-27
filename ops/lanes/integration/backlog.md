@@ -555,7 +555,7 @@ nhưng backlog vẫn đọc `T-001` là `review`, nên cả làn `topic` (ưu ti
 - deps: —
 - risk: low
 - nguồn: `I-010` (hai phần chưa đánh dấu xong của nó); CHARTER phụ lục P1 bước 3, P3 bước 2; `ops/known-failures.md` nhóm Z
-- status: review
+- status: done
 - **cửa merge: `automerge-delayed`** — chạm `CHARTER.md` (mục phụ lục) và `CLAUDE.md`, không chạm mục 1 hay mục 3.
   Đo bằng `node ops/invariants.protected-area.ts --changed … --base-charter …`, đừng đoán.
 - tiêu chí xong:
@@ -705,7 +705,7 @@ Cả hai đều là nhóm **Z**: mọi chỉ báo xanh, chỉ có hàng đợi v
 
 - deps: I-015
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát `I-015` (PR `#112`); `ops/lanes/README.md`; `ops/known-failures.md` nhóm Z, nay là `KF-030`
 - **Số hiệu I-019:** mục này mở ra trong PR `#112` với số `I-016`, rồi lùi sang `I-017` (lúc `11:32Z`,
   khi `I-016` vào `main` qua PR `#132`) và sang `I-018` (lúc `14:45Z`, khi `I-017` vào `main` qua PR
@@ -769,7 +769,7 @@ nhánh việc.
 
 - deps: —
 - risk: medium
-- status: review
+- status: done
 - **Số hiệu I-020:** `I-019` do PR `#112` giữ (nhánh `claude/hopeful-dirac-ekbass`); dò trên `main` **và mọi** nhánh PR đang mở trước khi nhận mã (`KF-005`).
 - nguồn: `ops/known-failures.md` `KF-023`; mục `integration/I-010`; `ops/lanes/README.md` (định nghĩa `deps`)
 - tiêu chí xong:
@@ -817,6 +817,34 @@ nhánh việc.
     đúng tên mục. Khôi phục → 30/30 xanh.
 
 ---
+
+### I-022 · 63 nhánh `step0-pending` tồn đọng, và vế hai của `P-038` không ai làm được — `git push --delete` trả HTTP 403
+
+Vế hai của `P-038` là *"xoá nhánh đã gộp"*. Đo thật ở lượt `crux-worker-2` `2026-09-27T09:1xZ`, thử chứ không chép lời khai của lượt trước:
+
+```
+git push origin --delete claude/integration/step0-pending/step0-2026-09-27T083849Z-crux-worker-1
+→ error: RPC failed; HTTP 403 curl 22
+  send-pack: unexpected disconnect while reading sideband packet
+git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*' | wc -l   → 63
+```
+
+**Vô hại cho dấu hiệu số 7** của `watchdog.yml`, và đó là lý do nó im lâu được: sau bản sửa `P-062` (#301), `step0-pending-branches.ts` rút một nhánh khỏi `pending` bằng `mergedStep0LogIdsFromRef("origin/main")` — **theo mã log đã có trên `main`**, không theo việc nhánh còn tồn tại. Nên cảnh báo tắt đúng lúc dòng log tới `main`, dù 63 nhánh vẫn còn.
+
+Nhưng nó **không** vô hại với phép đo: 63 ref rác làm mọi lệnh quét nhánh remote (dò mã `KF-`, dò mã mục, `git fetch --prune`) chậm và ồn hơn, và con số chỉ tăng — mỗi lượt log-only thêm một nhánh. Ba lượt worker mỗi giờ nghĩa là **hàng chục nhánh mỗi ngày**.
+
+Vì sao nó thành một mục riêng thay vì một dòng khai trong log: bốn lượt trước đã khai đúng câu này trong ghi chú (*"đáng một mục riêng, không phải việc của PR này"*) và **không lượt nào mở mục**, nên nó là đúng chữ ký `KF-049` — một việc đã tồn tại mà không hàng đợi nào giữ. Ghi chú không phải hàng đợi.
+
+- deps: —
+- risk: low — mục này **không** cần quyền mới cho agent. Hai đường đi đều nằm trong luật hiện có: một workflow trong `ops/workflows/**` (chạy bằng `GITHUB_TOKEN` của Actions, thứ **có** quyền xoá nhánh) hoặc một lần dọn của chủ dự án. Hướng lệch an toàn: chỉ xoá nhánh mà mã log của nó **đã có trên `main`**, đo bằng `mergedStep0LogIdsFromRef` — không bao giờ xoá theo tuổi.
+- status: ready
+- nguồn: `platform/P-038` vế hai; `platform/P-062` (#301) — phép rút khỏi `pending` theo mã log trên `main`; `ops/known-failures.md` `KF-041`; phép đo HTTP 403 ở lượt `crux-worker-2` `2026-09-27T09:1xZ` và các lượt `#293`, `#260`, `#305`; `platform/P-063` (`KF-049`)
+- tiêu chí xong:
+  - Một chỗ **chạy bằng máy** xoá nhánh `claude/integration/step0-pending/*` mà mã log của nó đã có trên `main`. Đặt trong `ops/workflows/**` (cửa `automerge-delayed`), **không** trong `.github/` (`CLAUDE.md` mục 4).
+  - **Điều kiện xoá đọc từ `mergedStep0LogIdsFromRef("origin/main")`**, dùng lại hàm của `P-062` — **không** viết bản thứ hai của luật đó, và **không** xoá theo tuổi nhánh: một nhánh 25 giờ mà dòng log chưa tới `main` là đúng thứ dấu hiệu số 7 phải báo.
+  - **Bài kiểm**: ca dương (mã log đã trên `main` → xoá được) và ca âm (chưa trên `main` → **không** xoá, và nói ra). Cộng ca *"không đo được"* → thoát khác 0 chứ không lặng lẽ xoá gì.
+  - Khai rõ con số trước và sau lần dọn đầu (`git ls-remote … | wc -l`), để lượt sau biết phép dọn có chạy thật hay không.
+  - Khai rõ **cái không sửa ở đây**: mục này **không** bỏ nhánh chờ. Nhánh chờ là vế một của `P-038` và nó đang làm đúng việc của nó (giữ dòng log của lượt log-only cho tới khi một lượt có PR gộp lại).
 
 ### I-021 · fix · Ghi `KF-026` và dọn sáu chỗ sót của vòng soát `I-020` — phần luật tách PR riêng
 Vòng soát ngữ cảnh sạch (bước 6) của PR `#222` chạy **sau khi** PR đó đã merge: nhãn `automerge` gắn từ vòng

@@ -24,6 +24,7 @@ import {
   secretsUsedWithoutEmptyCheck,
   undocumentedSwallows,
   duplicateMappingKeys,
+  mergeGateLabelProblems,
   EXTERNAL_CONSUMERS,
 } from '../scripts/check-workflows.ts';
 
@@ -902,14 +903,14 @@ test('Z9 · cả sáu workflow thật trong ops/workflows/ đều đã giải th
   }
 });
 
-// ── KF-016 · khoá YAML trùng trong cùng một mapping ────────────────────────
+// ── KF-047 · khoá YAML trùng trong cùng một mapping ────────────────────────
 //
 // Bẫy thật: hai khoá `env:` trong cùng một step. YAML không hợp lệ, GitHub
 // từ chối cả workflow ở mức khởi động (startup_failure, 0 job), nên
 // smoke-workflows đỏ ở MỌI lần push — và chỉ hiện ra sau khi merge, vì agent
 // không ghi được `.github/`. `pnpm lint:workflows` cũ không bắt được.
 
-test('KF-016 · hai khoá `env:` trong cùng một step thì đỏ', () => {
+test('KF-047 · hai khoá `env:` trong cùng một step thì đỏ', () => {
   const broken = `name: x
 on: [workflow_dispatch]
 jobs:
@@ -933,7 +934,7 @@ jobs:
   assert.match(found[0]!, /startup_failure/);
 });
 
-test('KF-016 · hai phần tử `- name:` liền nhau KHÔNG phải khoá trùng — mỗi phần tử sequence là một mapping riêng', () => {
+test('KF-047 · hai phần tử `- name:` liền nhau KHÔNG phải khoá trùng — mỗi phần tử sequence là một mapping riêng', () => {
   const ok = `name: x
 on: [workflow_dispatch]
 jobs:
@@ -951,7 +952,7 @@ jobs:
   assert.deepEqual(duplicateMappingKeys(ok, 'x.yml'), []);
 });
 
-test('KF-016 · nội dung bên trong khối `run: |` không bị nhầm thành khoá YAML', () => {
+test('KF-047 · nội dung bên trong khối `run: |` không bị nhầm thành khoá YAML', () => {
   const body = `name: x
 on: [workflow_dispatch]
 jobs:
@@ -966,7 +967,7 @@ jobs:
   assert.deepEqual(duplicateMappingKeys(body, 'x.yml'), []);
 });
 
-test('KF-016 · khoá trùng ở cấp gốc (hai `on:`) cũng đỏ', () => {
+test('KF-047 · khoá trùng ở cấp gốc (hai `on:`) cũng đỏ', () => {
   const broken = `name: x
 on: [push]
 on: [workflow_dispatch]
@@ -980,10 +981,134 @@ jobs:
   assert.match(found[0]!, /`on`/);
 });
 
-test('KF-016 · cả các workflow thật trong ops/workflows/ đều không có khoá trùng', () => {
+test('KF-047 · cả các workflow thật trong ops/workflows/ đều không có khoá trùng', () => {
   const dir = join(process.cwd(), 'ops', 'workflows');
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
     const found = duplicateMappingKeys(readFileSync(join(dir, file), 'utf8'), file);
+    assert.deepEqual(found, [], `${file}: ${found.join(' | ')}`);
+  }
+});
+
+// ── KF-032 / D4a: mỗi cửa merge phải tự gắn nhãn của mình ──────────────────
+//
+// `automerge.yml` lọc hàng đợi theo NHÃN, không theo cửa. Nhánh `case` của một
+// cửa mà không `--add-label` nhãn của cửa đó thì PR của cửa đó không bao giờ
+// vào hàng đợi — CI vẫn xanh (nhóm Z). #223 kẹt ~20 giờ vì đúng chỗ này.
+
+// Dựng đúng hình dạng khối gắn nhãn của `ci.yml`, cho phép bỏ `--add-label`
+// của từng nhánh để tái hiện lỗi.
+function gateBlock(opts: { owner?: boolean; delayed?: boolean; open?: boolean } = {}): string {
+  const owner = opts.owner ?? true;
+  const delayed = opts.delayed ?? true;
+  const open = opts.open ?? true;
+  return `          case "$GATE" in
+            owner-merge)
+              ${owner ? 'gh pr edit "$PR" --add-label owner-merge' : ': không gắn nhãn'}
+              rm_label automerge-delayed
+              rm_label automerge
+              ;;
+            automerge-delayed)
+              ${delayed ? 'gh pr edit "$PR" --add-label automerge-delayed' : ': không gắn nhãn'}
+              rm_label owner-merge
+              rm_label automerge
+              ;;
+            *)
+              ${open ? 'gh pr edit "$PR" --add-label automerge' : ': không gắn nhãn'}
+              rm_label owner-merge
+              rm_label automerge-delayed
+              ;;
+          esac
+`;
+}
+
+test('KF-032 · TÁI HIỆN LỖI · nhánh `*)` chỉ gỡ nhãn mà không --add-label automerge thì đỏ (#223)', () => {
+  // Đây là ĐÚNG khối đã có trên `main` trước bản sửa: cửa `open` không gắn nhãn.
+  const buggy = `          rm_label() { gh pr edit "$PR" --remove-label "$1" || true; }
+${gateBlock({ open: false })}`;
+  const found = mergeGateLabelProblems(buggy, 'ci.yml');
+  assert.equal(found.length, 1, found.join(' | '));
+  assert.match(found[0]!, /cửa `open`/);
+  assert.match(found[0]!, /automerge/);
+});
+
+test('KF-032 · khối đủ cả ba nhãn thì sạch', () => {
+  assert.deepEqual(mergeGateLabelProblems(gateBlock(), 'ci.yml'), []);
+});
+
+test('KF-032 · nhánh `owner-merge)` thiếu --add-label owner-merge thì đỏ', () => {
+  const found = mergeGateLabelProblems(gateBlock({ owner: false }), 'ci.yml');
+  assert.equal(found.length, 1, found.join(' | '));
+  assert.match(found[0]!, /cửa `owner-merge`/);
+});
+
+test('KF-032 · nhánh `automerge-delayed)` thiếu --add-label automerge-delayed thì đỏ', () => {
+  const found = mergeGateLabelProblems(gateBlock({ delayed: false }), 'ci.yml');
+  assert.equal(found.length, 1, found.join(' | '));
+  assert.match(found[0]!, /cửa `automerge-delayed`/);
+});
+
+test('KF-032 · thiếu nhiều nhánh thì báo nhiều lỗi cùng lúc', () => {
+  const found = mergeGateLabelProblems(gateBlock({ owner: false, open: false }), 'ci.yml');
+  assert.equal(found.length, 2, found.join(' | '));
+});
+
+test('KF-032 · nhánh `*)` gắn NHẦM `automerge-delayed` thay vì `automerge` thì vẫn đỏ (không lọt vì tiền tố)', () => {
+  // `automerge` là tiền tố của `automerge-delayed`; một regex neo bằng `\b`
+  // sẽ coi `--add-label automerge-delayed` là đã gắn `automerge`. Cửa `open`
+  // gắn nhầm nhãn của cửa khác thì PR vẫn không vào đúng chỗ.
+  const wrong = `          case "$GATE" in
+            owner-merge)
+              gh pr edit "$PR" --add-label owner-merge
+              ;;
+            automerge-delayed)
+              gh pr edit "$PR" --add-label automerge-delayed
+              ;;
+            *)
+              gh pr edit "$PR" --add-label automerge-delayed
+              ;;
+          esac
+`;
+  const found = mergeGateLabelProblems(wrong, 'ci.yml');
+  assert.equal(found.length, 1, found.join(' | '));
+  assert.match(found[0]!, /cửa `open`/);
+});
+
+test('KF-032 · thiếu hẳn nhánh cửa `open` (không có `*)`) thì đỏ', () => {
+  const noOpen = `          case "$GATE" in
+            owner-merge)
+              gh pr edit "$PR" --add-label owner-merge
+              ;;
+            automerge-delayed)
+              gh pr edit "$PR" --add-label automerge-delayed
+              ;;
+          esac
+`;
+  const found = mergeGateLabelProblems(noOpen, 'ci.yml');
+  assert.equal(found.length, 1, found.join(' | '));
+  assert.match(found[0]!, /thiếu nhánh cho cửa `open`/);
+});
+
+test('KF-032 · workflow KHÔNG có khối gắn nhãn theo cửa merge thì luật im (không kêu oan)', () => {
+  // `case "$GATE"` dùng cho việc khác, không có nhánh owner-merge)/automerge-delayed).
+  const other = `          case "$GATE" in
+            a) echo a ;;
+            *) echo b ;;
+          esac
+`;
+  assert.deepEqual(mergeGateLabelProblems(other, 'other.yml'), []);
+  // Không có `case "$GATE"` nào.
+  assert.deepEqual(mergeGateLabelProblems('name: x\non: push\n', 'x.yml'), []);
+});
+
+test('KF-032 · ci.yml THẬT trong ops/workflows/ gắn đủ nhãn cho cả ba cửa', () => {
+  const source = readFileSync(join(process.cwd(), 'ops', 'workflows', 'ci.yml'), 'utf8');
+  assert.deepEqual(mergeGateLabelProblems(source, 'ci.yml'), []);
+});
+
+test('KF-032 · mọi workflow thật khác trong ops/workflows/ không bị luật kêu oan', () => {
+  const dir = join(process.cwd(), 'ops', 'workflows');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const found = mergeGateLabelProblems(readFileSync(join(dir, file), 'utf8'), file);
     assert.deepEqual(found, [], `${file}: ${found.join(' | ')}`);
   }
 });

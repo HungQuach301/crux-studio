@@ -466,6 +466,28 @@ test('pnpm nói nó đã vứt bản mồi: coi là thất bại, dù thoát 0',
   }
 });
 
+test('TÁI HIỆN `P-061`: người gọi mang `npm_config_reporter=silent` thì phép dò "vứt bản mồi" không được xanh giả', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-unit-'));
+  const saved = process.env.npm_config_reporter;
+  try {
+    // pnpm giả làm đúng điều pnpm thật làm (đo ở `KF-045`): biến đó có mặt
+    // thì in 0 byte. Nên bài này chỉ xanh khi `regenerateLockfile` KHÔNG
+    // chuyền biến của người gọi xuống.
+    const pnpmCommand = fakePnpm(
+      dir,
+      '[ "$npm_config_reporter" = silent ] || echo "WARN  Ignoring broken lockfile at /repo: khong phan giai duoc"\nexit 0',
+    );
+    process.env.npm_config_reporter = 'silent';
+    const result = regenerateLockfile(dir, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n", { pnpmCommand });
+    assert.equal(result.ok, false, 'bản mồi bị vứt mà phép dò không thấy: pnpm lồng đã im theo người gọi');
+    assert.match(result.reason ?? '', /đã VỨT bản mồi/);
+  } finally {
+    if (saved === undefined) delete process.env.npm_config_reporter;
+    else process.env.npm_config_reporter = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('lệnh sinh mang đúng --no-frozen-lockfile, rồi mới tới lượt kiểm lại', () => {
   const dir = mkdtempSync(join(tmpdir(), 'integrator-lockfile-unit-'));
   try {
