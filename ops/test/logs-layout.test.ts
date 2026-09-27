@@ -208,3 +208,124 @@ test('P-023 · file log bước 0: mốc trong tên file khớp `at` của từn
     }
   }
 });
+
+// ── Mục `integration/I-023` — sáu phép phá SỐNG SÓT của `KF-050` ────────────
+
+/**
+ * Mốc bắt đầu áp ba luật **chặt** (`kind`/`status` thuộc tập hợp lệ,
+ * `durationMs > 0`, dòng bước 0 mang `step0` và `note`) lên log THẬT.
+ *
+ * Vì sao có mốc: log append-only (`D-C04`) nên dòng cũ **không** sửa được, và
+ * đo trên `main` lúc viết mục này thì dòng cũ vi phạm thật — 423/515 dòng
+ * `durationMs: 0` (mới nhất `step0-2026-09-27T102833Z-crux-worker-3`), 6 dòng
+ * `kind: "item"` (`P-050`, `P-061`, `P-062`, mới nhất `2026-09-26T23:48Z`), 45
+ * dòng bước 0 thiếu `step0` (mới nhất `2026-09-24T03:41Z`, trước `P-033`).
+ * Mốc đặt ngay sau dòng vi phạm mới nhất; mọi dòng từ đó trở đi đo được là
+ * sạch. Cùng hình dạng mốc ân hạn của job `no-model-name` (`🤖 [QĐ] #165`).
+ *
+ * Chỗ chưa che, khai ra: mốc đọc từ `at` do chính bên ghi khai, nên một dòng
+ * ghi lùi `at` về trước mốc thì lọt. Bài `P-023` ở trên buộc `at` khớp mốc
+ * trong tên file **bước 0**; dòng thường thì chưa có gì buộc.
+ */
+const LOG_SHAPE_STRICT_FROM = '2026-09-27T10:30:00.000Z';
+
+const VALID_KINDS: readonly string[] = ['stage', 'lane'];
+const VALID_STATUSES: readonly string[] = ['ok', 'failed', 'skipped'];
+
+/**
+ * Mọi chỗ sai hình dạng trong một tập file log, mỗi chỗ một câu. Đọc **thô**
+ * từng file chứ không qua `readRunLogs`: phép đếm trùng phải thấy hai dòng
+ * y hệt trong **một** file — đúng ca `.gitattributes` cảnh báo *"Union không
+ * khử trùng lặp"*.
+ */
+function logShapeProblems(files: readonly string[], strictFrom: string): string[] {
+  const problems: string[] = [];
+  const seen = new Map<string, string>();
+  for (const path of files) {
+    const name = relative(process.cwd(), path);
+    for (const line of parseRunLogs([readFileSync(path, 'utf8')])) {
+      const raw = line as unknown as Record<string, unknown>;
+      const key = `${line.at}|${line.ref}`;
+      const where = `${name} (${line.ref} @ ${line.at})`;
+      if (seen.has(key)) problems.push(`${where}: cặp (at, ref) TRÙNG với ${seen.get(key)}`);
+      else seen.set(key, name);
+      if (!(line.costUsd >= 0)) problems.push(`${where}: costUsd âm (${line.costUsd})`);
+      if (line.at < strictFrom) continue;
+      if (!VALID_KINDS.includes(raw.kind as string)) problems.push(`${where}: kind ${JSON.stringify(raw.kind)} ngoài tập hợp lệ`);
+      if (!VALID_STATUSES.includes(raw.status as string)) problems.push(`${where}: status ${JSON.stringify(raw.status)} ngoài tập hợp lệ`);
+      if (!(typeof raw.durationMs === 'number' && Number.isFinite(raw.durationMs) && raw.durationMs > 0)) {
+        problems.push(`${where}: durationMs ${JSON.stringify(raw.durationMs)} — một lượt chạy không tốn 0 ms`);
+      }
+      const id = typeof line.ref === 'string' ? line.ref.slice(line.ref.indexOf('/') + 1) : '';
+      if (isStep0LogId(id)) {
+        if (!Array.isArray(raw.step0)) problems.push(`${where}: dòng bước 0 thiếu mảng step0 (P-033)`);
+        if (!(typeof raw.note === 'string' && raw.note.trim().length > 0)) problems.push(`${where}: dòng bước 0 thiếu note`);
+      }
+    }
+  }
+  return problems;
+}
+
+test('KF-050 · trên ops/logs THẬT: không cặp (at, ref) trùng, và dòng từ mốc chặt đúng hình dạng', () => {
+  const files = listLogFiles(LOGS_DIR);
+  assert.ok(files.length > 0, 'không thấy file log nào — bài kiểm này sẽ xanh giả');
+  assert.ok(
+    parseRunLogs(files.map((path) => readFileSync(path, 'utf8'))).some((line) => line.at >= LOG_SHAPE_STRICT_FROM),
+    'không dòng nào từ mốc chặt trở đi — ba luật chặt đang không kiểm gì',
+  );
+  assert.deepEqual(logShapeProblems(files, LOG_SHAPE_STRICT_FROM), []);
+});
+
+/**
+ * Ca âm cho từng phép phá (bài học `KF-003`): mỗi phép dưới đây đã **sống sót**
+ * `pnpm check` ở vòng soát của `#309`. Dòng sạch ở đầu phải ra rỗng, rồi mỗi
+ * phép áp riêng phải ra đúng một câu.
+ */
+test('KF-050 · ca âm — từng phép phá trong sáu phép PHẢI bị bắt, dòng sạch thì không', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crux-logs-shape-'));
+  const at = '2026-09-27T12:00:00.000Z';
+  const id = step0LogId(at, 'crux-worker-1');
+  const clean = {
+    at,
+    lane: STEP0_LOG_LANE,
+    kind: 'lane',
+    ref: `${STEP0_LOG_LANE}/${id}`,
+    status: 'ok',
+    durationMs: 300000,
+    costUsd: 0,
+    step0: [],
+    note: 'Bước 0 lượt thử.',
+  };
+  const check = (lines: readonly object[]): string[] => {
+    const file = join(dir, `${id}.jsonl`);
+    writeFileSync(file, lines.map((line) => `${JSON.stringify(line)}\n`).join(''), 'utf8');
+    return logShapeProblems([file], LOG_SHAPE_STRICT_FROM);
+  };
+  const { step0: _step0, ...noStep0 } = clean;
+  const { note: _note, ...noNote } = clean;
+  try {
+    assert.deepEqual(check([clean]), [], 'dòng sạch mà bị báo sai');
+    const mutations: [string, object[], RegExp][] = [
+      ['hai dòng y hệt trong một file', [clean, clean], /TRÙNG/],
+      ['costUsd âm', [{ ...clean, costUsd: -1 }], /costUsd âm/],
+      ['status ngoài tập', [{ ...clean, status: 'xanh' }], /status "xanh"/],
+      ['kind ngoài tập', [{ ...clean, kind: 'item' }], /kind "item"/],
+      ['durationMs 0', [{ ...clean, durationMs: 0 }], /durationMs 0/],
+      ['thiếu step0', [noStep0], /thiếu mảng step0/],
+      ['xoá note', [noNote], /thiếu note/],
+      ['note rỗng', [{ ...clean, note: '  ' }], /thiếu note/],
+    ];
+    for (const [label, lines, expected] of mutations) {
+      const problems = check(lines);
+      assert.equal(problems.length, 1, `${label}: ${problems.join(' · ')}`);
+      assert.match(problems[0]!, expected, label);
+    }
+    // Mốc ân hạn: cùng phép phá trên dòng TRƯỚC mốc thì không bị bắt (trừ trùng
+    // và costUsd âm, hai luật áp cho mọi dòng) — dòng cũ append-only không sửa được.
+    const old = { ...clean, at: '2026-09-27T10:28:33.495Z', durationMs: 0, kind: 'item', ref: 'platform/P-062', lane: 'platform' };
+    assert.deepEqual(check([old]), []);
+    assert.equal(check([old, old]).length, 1, 'trùng (at, ref) phải bị bắt cả trước mốc');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

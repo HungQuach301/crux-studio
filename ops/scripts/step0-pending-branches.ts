@@ -32,6 +32,18 @@
  * chạy mỗi giờ độc lập với Claude — đúng thứ cần cho một chỗ hỏng mà mọi
  * chỉ báo bên trong đều xanh.
  *
+ * ## Nhánh chờ đã nằm trong PR đang mở của lượt khác (mục `integration/I-023`)
+ *
+ * Đối chiếu với nhánh chính thôi thì chưa đủ để **chọn** nhánh `cherry-pick`:
+ * `KF-050` đo được hai PR bước 0 (`#309`, `#310`) mở cách nhau 37 giây cùng
+ * gộp một bộ nhánh chờ, và lần tránh duy nhất trước đó là con mắt của lượt
+ * chạy. Nên dạng `--from-remote` — dạng bước 0f dùng — **bắt buộc** nhận thêm
+ * danh sách PR đang mở (`--open-prs`), trả `inOtherPr` cho từng nhánh và tập
+ * `toCherryPick` đã trừ đi. Chưa đo thì `toCherryPick` là `null`, không phải
+ * "cherry-pick hết". Mục này **không** chặn hai worker cùng mở PR bước 0 — cần
+ * trạng thái dùng chung, xem docblock của `step0-pr-gate.ts` — nó chỉ chặn
+ * **hậu quả**: cùng một dòng log vào hai PR.
+ *
  * **`pnpm check` KHÔNG phải chỗ đặt**, khai ra để lượt sau không "tiện tay"
  * thêm vào: cổng đó chạy trên **mọi** PR và không có remote trong CI nếu
  * không thêm một lần fetch cho mỗi lượt chạy — tức trả tiền ở chỗ đắt nhất
@@ -129,6 +141,23 @@ export interface Step0PendingInput {
    * không bao giờ dùng để rút một nhánh khỏi `pending`.
    */
   treeLogIds?: readonly string[];
+  /**
+   * PR **đang mở** cùng danh sách file của mỗi PR so với nhánh chính (mục
+   * `integration/I-023`, `KF-050`). Bỏ trống = **chưa đo**, và khi đó
+   * `toCherryPick` là `null` chứ không phải "mọi nhánh pending": một báo cáo
+   * chưa đối chiếu với PR của người khác không được dùng để chọn nhánh
+   * `cherry-pick`. Mảng rỗng là một phép đo thật — "0 PR đang mở".
+   *
+   * Liệt kê mọi PR đang mở **trừ** PR của chính lượt này: dòng đã
+   * `cherry-pick` vào cây của lượt này thì `inTree` nói rồi.
+   */
+  openPrs?: readonly OpenPrFiles[];
+}
+
+/** Một PR đang mở và các file nó đổi so với nhánh chính (`git diff --name-only <main>...<đầu PR>`). */
+export interface OpenPrFiles {
+  number: number;
+  changed: readonly string[];
 }
 
 export interface Step0PendingBranchRow {
@@ -146,6 +175,13 @@ export interface Step0PendingBranchRow {
    * Vẫn là `pending`: tới `main` mới là tới (`KF-041`).
    */
   inTree: boolean;
+  /**
+   * Số các PR **đang mở khác** đã mang sẵn dòng log của nhánh này (mục
+   * `I-023`). Khác rỗng thì bước 0f **không** `cherry-pick` nhánh đó: hai PR
+   * cùng mang một dòng là đúng ca `#309`/`#310` của `KF-050`, và union
+   * **không** khử trùng lặp khi hai dòng lệch nhau. `null` = chưa đo.
+   */
+  inOtherPr: number[] | null;
 }
 
 export interface Step0PendingReport {
@@ -168,6 +204,13 @@ export interface Step0PendingReport {
    * phải khai; CLI luôn khai.
    */
   mergedSource?: string | null;
+  /**
+   * Phần của `pending` mà bước 0f được phép `cherry-pick`: chưa có trong cây
+   * làm việc, và không PR đang mở nào khác mang nó (mục `I-023`). `null` khi
+   * chưa đối chiếu với PR đang mở — **không** phải "cherry-pick hết".
+   * Tuỳ chọn ở kiểu vì cùng lý do `mergedSource`.
+   */
+  toCherryPick?: Step0PendingBranchRow[] | null;
 }
 
 /**
@@ -194,6 +237,7 @@ export function step0PendingBranches(input: Step0PendingInput): Step0PendingRepo
 
   const merged = new Set(input.mergedLogIds);
   const inTree = new Set(input.treeLogIds ?? []);
+  const inOpenPr = input.openPrs === undefined ? null : openPrsByLogId(input.openPrs);
   const pending: Step0PendingBranchRow[] = [];
 
   for (const branch of input.branches) {
@@ -241,11 +285,40 @@ export function step0PendingBranches(input: Step0PendingInput): Step0PendingRepo
       ageHours: age,
       stale: age >= STEP0_PENDING_STALE_HOURS,
       inTree: inTree.has(logId),
+      inOtherPr: inOpenPr === null ? null : (inOpenPr.get(logId) ?? []),
     });
   }
 
   pending.sort((a, b) => b.ageHours - a.ageHours || a.branch.localeCompare(b.branch));
-  return { pending, stale: pending.filter((row) => row.stale), problems, mergedSource };
+  const toCherryPick =
+    inOpenPr === null ? null : pending.filter((row) => !row.inTree && row.inOtherPr!.length === 0);
+  return { pending, stale: pending.filter((row) => row.stale), problems, mergedSource, toCherryPick };
+}
+
+/**
+ * Mã log bước 0 nằm trong một danh sách file đổi — đúng file
+ * `ops/logs/integration/<mã>.jsonl` mà `step0LogPath` sinh ra, không gì khác.
+ */
+export function step0LogIdsInChanged(changed: readonly string[]): string[] {
+  const prefix = `${STEP0_LOG_DIR}/`;
+  return changed
+    .filter((path) => path.startsWith(prefix) && path.endsWith('.jsonl'))
+    .map((path) => path.slice(prefix.length, -'.jsonl'.length))
+    .filter((id) => !id.includes('/') && parseStep0LogId(id) !== null);
+}
+
+/** Mã log → các số PR đang mở mang nó, sắp tăng dần. */
+function openPrsByLogId(openPrs: readonly OpenPrFiles[]): Map<string, number[]> {
+  const byLogId = new Map<string, number[]>();
+  for (const pr of openPrs) {
+    for (const logId of step0LogIdsInChanged(pr.changed)) {
+      const list = byLogId.get(logId) ?? [];
+      if (!list.includes(pr.number)) list.push(pr.number);
+      byLogId.set(logId, list);
+    }
+  }
+  for (const list of byLogId.values()) list.sort((a, b) => a - b);
+  return byLogId;
 }
 
 /** Báo cáo một dòng tiêu đề cộng một dòng cho mỗi nhánh — để dán vào thân cảnh báo. */
@@ -261,7 +334,23 @@ export function renderStep0PendingReport(report: Step0PendingReport): string {
     for (const row of report.pending) {
       lines.push(
         `  ${row.stale ? '⚠' : ' '} ${row.branch} — kẹt ${row.ageHours.toFixed(1)} giờ (mốc ${row.at})` +
-          (row.inTree ? ' · đã có trong cây làm việc, chờ PR của lượt này tới nhánh chính' : ''),
+          (row.inTree ? ' · đã có trong cây làm việc, chờ PR của lượt này tới nhánh chính' : '') +
+          (row.inOtherPr !== undefined && row.inOtherPr !== null && row.inOtherPr.length > 0
+            ? ` · đã nằm trong PR đang mở ${row.inOtherPr.map((n) => `#${n}`).join(', ')} — KHÔNG cherry-pick`
+            : ''),
+      );
+    }
+    if (report.toCherryPick === null) {
+      lines.push(
+        '  ⚠ CHƯA đối chiếu với PR đang mở — báo cáo này KHÔNG được dùng để chọn nhánh cherry-pick ' +
+          '(mục I-023). Gọi lại với `--open-prs <file>`.',
+      );
+    } else if (report.toCherryPick !== undefined) {
+      lines.push(
+        report.toCherryPick.length === 0
+          ? '  Cherry-pick được: 0 nhánh.'
+          : `  Cherry-pick được: ${report.toCherryPick.length} nhánh — ` +
+              report.toCherryPick.map((row) => row.branch).join(', '),
       );
     }
   }
@@ -370,12 +459,71 @@ export function listPendingBranchesFromRemote(remote = 'origin'): string[] {
     .filter((line) => line.length > 0);
 }
 
+/**
+ * Đọc file `--open-prs` (mục `I-023`): mảng JSON, mỗi phần tử
+ * `{number, changed: string[]}` hoặc `{number, head: "<sha|ref>"}`. Dạng
+ * `head` tự chạy `git diff --name-only <mainRef>...<head>` — đúng phép bước 0a
+ * đã chạy cho mỗi PR, nên không thêm lần gọi API nào.
+ *
+ * **Ném** ở mọi chỗ không đọc được — file thiếu, JSON hỏng, phần tử sai dạng,
+ * `git diff` thoát khác 0 — chứ không rơi về danh sách rỗng: rỗng nghĩa là
+ * "0 PR đang mở", tức mọi nhánh pending thành cherry-pick được, và đó đúng là
+ * ca `KF-050` mà phép đối chiếu này sinh ra để chặn.
+ */
+export function readOpenPrs(file: string, mainRef: string | undefined): OpenPrFiles[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `Không đọc được danh sách PR đang mở \`${file}\`: ${(error as Error).message}. ` +
+        'KHÔNG đo được nhánh chờ nào đã nằm trong PR khác — đây không phải "0 PR đang mở" (mục I-023).',
+    );
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error(`\`${file}\` phải là một mảng JSON các PR đang mở (mảng rỗng = 0 PR đang mở).`);
+  }
+  return raw.map((entry: unknown, index): OpenPrFiles => {
+    const e = entry as { number?: unknown; changed?: unknown; head?: unknown };
+    const where = `\`${file}\` phần tử ${index}`;
+    if (typeof e !== 'object' || e === null || !Number.isInteger(e.number) || (e.number as number) <= 0) {
+      throw new Error(`${where}: thiếu \`number\` là số PR nguyên dương.`);
+    }
+    const hasChanged = Array.isArray(e.changed) && e.changed.every((path) => typeof path === 'string');
+    const hasHead = typeof e.head === 'string' && e.head.length > 0;
+    if (hasChanged === hasHead) {
+      throw new Error(`${where}: cần ĐÚNG MỘT trong hai trường \`changed\` (mảng chuỗi) hoặc \`head\` (sha/ref).`);
+    }
+    if (hasChanged) return { number: e.number as number, changed: e.changed as string[] };
+    if (mainRef === undefined) {
+      throw new Error(`${where}: dạng \`head\` cần \`--main-ref\` để biết so với nhánh nào.`);
+    }
+    const run = spawnSync('git', ['diff', '--name-only', `${mainRef}...${e.head as string}`], { encoding: 'utf8' });
+    if (run.status !== 0) {
+      throw new Error(
+        `${where}: \`git diff --name-only ${mainRef}...${e.head as string}\` thoát ${run.status ?? 'không rõ'} — ` +
+          `chưa fetch đầu nhánh của PR #${e.number as number}? (\`git fetch origin pull/${e.number as number}/head\`) ` +
+          (run.stderr ?? '').trim(),
+      );
+    }
+    return {
+      number: e.number as number,
+      changed: (run.stdout ?? '').split('\n').map((line) => line.trim()).filter((line) => line.length > 0),
+    };
+  });
+}
+
 function usage(): never {
   process.stderr.write(
     'Dùng: node ops/scripts/step0-pending-branches.ts (--from-remote | --branches <file>) ' +
-      '[--main-ref <ref> | --logs-dir <thư mục>] [--now <ISO>] [--json]\n' +
+      '[--main-ref <ref> | --logs-dir <thư mục>] [--open-prs <file>] [--now <ISO>] [--json]\n' +
       '  --from-remote  tự hỏi `git ls-remote` danh sách nhánh chờ (đây là dạng `pnpm step0:pending`).\n' +
       '                 Mặc định đối chiếu với `--main-ref origin/main`, KHÔNG với cây làm việc (P-062).\n' +
+      '                 BẮT BUỘC đi kèm `--open-prs` (mục I-023): dạng này là dạng bước 0f dùng để chọn\n' +
+      '                 nhánh cherry-pick, nên nó không được chạy mà chưa đối chiếu với PR đang mở.\n' +
+      '  --open-prs     file JSON: mảng PR đang mở TRỪ PR của lượt này, mỗi phần tử\n' +
+      '                 `{"number":311,"head":"<sha đầu nhánh>"}` hoặc `{"number":311,"changed":[…]}`.\n' +
+      '                 `[]` = 0 PR đang mở. File hỏng thì NÉM, không coi là rỗng.\n' +
       '  --main-ref     đọc mã log đã gộp từ ref git này (`git ls-tree`). Ném khi ref không tồn tại.\n' +
       '  --logs-dir     đọc mã log đã gộp từ thư mục trên đĩa — chỉ đúng khi cây đang checkout LÀ\n' +
       '                 nhánh chính (ca `watchdog.yml`). Mặc định của `--branches`.\n' +
@@ -390,6 +538,7 @@ function main(argv: readonly string[]): void {
   let fromRemote = false;
   let logsDir: string | undefined;
   let mainRef: string | undefined;
+  let openPrsFile: string | undefined;
   let now = new Date().toISOString();
   let asJson = false;
 
@@ -413,6 +562,8 @@ function main(argv: readonly string[]): void {
       logsDir = valueOf((index += 1));
     } else if (arg === '--main-ref') {
       mainRef = valueOf((index += 1));
+    } else if (arg === '--open-prs') {
+      openPrsFile = valueOf((index += 1));
     } else if (arg === '--now') {
       now = valueOf((index += 1));
     } else {
@@ -421,6 +572,13 @@ function main(argv: readonly string[]): void {
   }
   if (fromRemote === (branchesFile !== undefined)) usage();
   if (logsDir !== undefined && mainRef !== undefined) usage();
+  if (fromRemote && openPrsFile === undefined) {
+    process.stderr.write(
+      '⚠ `--from-remote` cần `--open-prs <file>` (mục I-023, KF-050): không đối chiếu với PR đang mở thì\n' +
+        '  hai lượt cherry-pick cùng một nhánh chờ vào hai PR. Không có PR nào đang mở thì truyền file `[]`.\n',
+    );
+    usage();
+  }
   // `--from-remote` là dạng một lượt worker gõ trên nhánh CỦA NÓ, nên mặc định
   // đối chiếu với `origin/main`. `--branches` là dạng `watchdog.yml` gọi trên
   // bản checkout của `main`, nên giữ cây làm việc — và báo cáo nói ra điều đó.
@@ -462,7 +620,15 @@ function main(argv: readonly string[]): void {
     }
   }
 
-  const report = step0PendingBranches({ branches, now, treeLogIds, ...measured });
+  const openPrs = openPrsFile === undefined ? undefined : readOpenPrs(openPrsFile, mainRef);
+
+  const report = step0PendingBranches({
+    branches,
+    now,
+    treeLogIds,
+    ...measured,
+    ...(openPrs === undefined ? {} : { openPrs }),
+  });
   process.stdout.write(
     asJson
       ? `${JSON.stringify({ ...report, render: renderStep0PendingReport(report) })}\n`
