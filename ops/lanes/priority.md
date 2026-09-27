@@ -22,6 +22,17 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 >
 > Dòng ghim `P-016` **vẫn còn**, và hai dòng ghim cũ `0a`/`0b` gộp lại thành một dòng `0`. Lý do giữ: `P-016` **chưa** `done`. Thân mục ghi rõ "chưa kiểm bằng chạy thật … không tự chuyển `done` ở đây", và lý do ghim vẫn đúng theo số đo — `ops/logs/platform/P-016.jsonl` ghi PR #39 ra `aborted-ineligible` **năm lượt liên tiếp**. Gỡ ghim lúc này là gỡ tín hiệu trong khi tắc nghẽn còn nguyên.
 
+> **Phân bổ năng lực — chỉ dẫn chủ dự án trên `#292` `2026-09-26T16:20:21Z`, chỉ dẫn 4.** Anh đo được *"8 làn quá ngưỡng nhịp tim vì mọi worker dồn vào `platform`"* và ràng buộc lại, nguyên văn:
+>
+> > *"Từ lượt tới, `platform` chỉ nhận mục `fix` đang chặn `main`/hàng đợi merge hoặc chỉ dẫn của tôi; mọi lượt khác ưu tiên mục trên đường găng tới cổng Mốc 3 (`topic`, `editorial`, `verify`, `kernel`)."*
+>
+> Đọc thành luật nhận mục, và nó đứng **trên** bảng trên:
+>
+> 1. Mục làn `platform` chỉ nhận được khi nó là **một trong hai** ca: mục `fix` đang chặn `main` hoặc hàng đợi merge · hoặc mục sinh ra từ **chỉ dẫn của chủ dự án** (trường `nguồn:` của mục trỏ tới một comment không mở đầu 🤖 trên `#251` hay trên một issue `digest`).
+> 2. Mọi lượt khác duyệt **đường găng tới cổng Mốc 3 trước**: `topic` → `editorial` → `verify` → `kernel`. Bốn làn này đi trước bảng trên; hết mục `readyNow` ở cả bốn thì mới quay lại thứ tự của bảng.
+>
+> ⚠️ Đây là một **điều kiện nhận mục**, không phải một dòng của bảng — nên nó không sửa cột `#`. Trộn hai thứ vào một cột là cách một luật biến mất: bảng trả lời *"duyệt làn theo thứ tự nào"*, khối này trả lời *"mục này có được nhận không"*. Máy canh cho chính luật này **chưa có** (mục `platform/P-063` ô ⬜): tới khi có, đây là lời dặn, và một lượt nhận sai chỉ lộ ra ở bản tin.
+
 Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt bảng:
 
 0. **Bước 0 của phụ lục P3** — giải xung đột merge cho hàng đợi. Chạy ở đầu **mọi** lượt worker, trước cả hai mục dưới đây.

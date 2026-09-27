@@ -4,6 +4,75 @@ Làn nền. Hạ tầng đã đủ dùng sau Đợt 0; phần còn lại là tă
 
 ---
 
+### P-063 · Chỉ dẫn chủ dự án không có đường vào backlog — chín chỉ dẫn nằm ngoài mọi hàng đợi, sáu lượt worker in `idle` đi qua
+
+Hai comment của chủ dự án — [`#292` `2026-09-26T16:20:21Z`](https://github.com/HungQuach301/crux-studio/issues/292#issuecomment-5847837775) (5 chỉ dẫn) và [`#251` `2026-09-27T01:48:14Z`](https://github.com/HungQuach301/crux-studio/issues/251#issuecomment-5851738849) (4 chỉ dẫn) — **không sinh ra một mục backlog nào**. Hệ quả đo được: sáu lượt worker liên tiếp (`02:15Z` `02:29Z` `02:38Z` `05:18Z` `05:29Z` `08:29Z` ngày 2026-09-27) đều in `idle` ở bước 3, vì `readyNow` chỉ đọc `ops/lanes/*/backlog.md` và chín chỉ dẫn đó không nằm ở đó.
+
+Nhóm **Z** thuần, và tệ theo đúng kiểu nhóm Z: `pnpm check` xanh, CI xanh, `main` xanh, `pnpm backlog:status` trả `readyNow` **đúng** (hai mục, cả hai đã có PR), `pickPrToHandle` trả `null` **đúng**, nhịp tim xanh, hàng đợi xung đột trống. **Mọi chỉ báo nói nhà máy đang chạy đúng**, trong khi thứ đắt nhất trong ngày — thời gian của chủ dự án (CHARTER 1.3) — đã bỏ ra để viết chín chỉ dẫn mà không lượt nào đọc tới.
+
+Đây là **cùng một chữ ký** với `KF-035` mà chính chỉ dẫn 1 của `#292` gọi tên (*"Bản tin đọc chỉ dẫn cũ ở #270, bỏ qua chỉ dẫn mới hơn — lặp KF-035"*), chỉ khác chỗ cắn: `KF-035` cắn ở **bản tin đọc sai chỉ dẫn nào**, mục này cắn ở **không có đường nào từ chỉ dẫn sang backlog**. Hai chỗ, nên hai mục: phần bộ đọc là `P-064`.
+
+- deps: —
+- risk: low — mục này **chỉ** chuyển chỉ dẫn thành mục backlog và đổi thứ tự ưu tiên theo đúng lời chủ dự án. Không code mới, không chạm vùng bảo vệ, không chạm `automerge.yml`, không tự quyết thay chủ dự án ở mục nào. Hướng lệch an toàn: một mục mở oan chỉ tốn một lượt worker đọc rồi đóng; một chỉ dẫn rơi mất thì không gì đỏ.
+- status: review
+- nguồn: `#292` comment `2026-09-26T16:20:21Z` (chỉ dẫn 1–5); `#251` comment `2026-09-27T01:48:14Z` (chỉ dẫn 1–4); `ops/known-failures.md` `KF-035` và `KF-049` (mục này); `ops/scripts/backlog-status.ts` (`readyNow` chỉ đọc backlog); phép đo bước 0 lượt `crux-worker-2` `2026-09-27T08:4xZ`
+- tiêu chí xong:
+  - ✅ **Chín chỉ dẫn thành mục có chủ**, không mục nào là một câu văn trôi nổi: chỉ dẫn 1 của `#292` → `P-064` · chỉ dẫn 2 và 4 của `#292` → `P-065` · chỉ dẫn 3 của `#292` → trường `- hold:` của `verify/VF-G7` · chỉ dẫn 5 của `#292` → đã làm ngay ở lượt này (xem dưới) · chỉ dẫn 1 của `#251` → `assembly/A-001` trường `- hold:` cộng `assembly/A-007` · chỉ dẫn 2, 3, 4 của `#251` → `P-066`.
+  - ✅ **Chỉ dẫn 4 của `#292` (phân bổ năng lực) vào `ops/lanes/priority.md`**, nguyên văn ràng buộc: từ lượt tới, `platform` **chỉ** nhận mục `fix` đang chặn `main`/hàng đợi merge hoặc chỉ dẫn của chủ dự án; mọi lượt khác ưu tiên đường găng tới cổng Mốc 3 (`topic`, `editorial`, `verify`, `kernel`). Đặt ở khối **"Ngoại lệ đứng trên bảng này"** chứ không sửa cột `#` của bảng: bảng là thứ tự duyệt làn, còn đây là một **điều kiện nhận mục** — trộn hai thứ vào một cột là cách một luật biến mất.
+  - ✅ **Chỉ dẫn 5 của `#292` (`#223` hai ngày không có nhãn merge) làm NGAY ở lượt này, không thành mục:** chủ dự án đã hỏi câu này **hai lần** (lần đầu là `D4` của `#251` `2026-09-24T23:54:32Z`, lượt đó chọn *"nêu lý do"*), và lý do đã hết hiệu lực — chỗ hỏng `P-048`/`KF-032` đã sửa trên `main` `2026-09-25T18:46:27Z`. Nên lần này chọn **gắn nhãn**, sau một vòng soát ngữ cảnh sạch (`CLAUDE.md` mục 13). Số đo kèm theo trong dòng log bước 0 của lượt này.
+  - ✅ **`ops/known-failures.md` `KF-049`** — cả `#292` chỉ dẫn 1 và `#251` chỉ dẫn 4 đều đòi *"ghi KF"*. Số dò trên `main` **và mọi nhánh remote**: `KF-047`/`KF-048` đang sống trên nhánh của `#293`, nên `main` một mình cho con số sai.
+  - ⬜ **Máy canh cho chính chỗ hỏng này — PR RIÊNG, không nống vào đây.** Mục này làm chín chỉ dẫn **thành mục**; nó **không** dựng thứ đo *"có chỉ dẫn nào của chủ dự án chưa thành mục backlog"*. Thiếu máy canh thì lần sau lại phải một lượt worker tình cờ đọc tới. Đích rẻ nhất: một dòng của `renderDigestMetrics` đứng cạnh **"Việc đang chờ anh"** (`P-053`), đọc comment không mở đầu 🤖 trên `#251` và trên issue `digest` rồi đối chiếu với `nguồn:` của mọi mục backlog. Vì sao tách: nó cần đúng bộ đọc chỉ dẫn mà `P-064` đang dựng, nên làm ở đây là dựng hai bản.
+
+### P-064 · fix · Bộ đọc chỉ dẫn lấy chỉ dẫn CŨ thay vì mới nhất, và bản tin in một khối sai (chỉ dẫn 1 của #292, lặp KF-035)
+
+Chủ dự án đo được và nói thẳng: *"Khối \"Điều tiết chưa có hiệu lực\" sai: worker-2 dừng từ ~13:00 thứ Sáu, worker-1 từ ~21:30 thứ Sáu (đối chiếu History của routine) … Bản tin đọc chỉ dẫn cũ ở `#270`, bỏ qua chỉ dẫn mới hơn — lặp `KF-035`."*
+
+Chỗ hỏng là **thứ tự**: bộ đọc chỉ dẫn lấy một comment vì nó tìm thấy comment đó, không vì comment đó là **mới nhất theo thời gian**. Chỉ dẫn sống ở **hai** nơi (`#251` và issue `digest` của ngày), nên một bộ đọc chỉ nhìn một nơi, hay nhìn cả hai mà không sắp theo `createdAt`, sẽ đọc đúng một chỉ dẫn đã bị thay.
+
+- deps: —
+- risk: medium — sửa thứ tự đọc thì mọi lượt sau đổi hành vi theo. Hướng lệch an toàn phải là **ném** khi không sắp được (thiếu `createdAt`, hai comment cùng mốc), không phải rơi về comment đầu tiên gặp được: cùng luật `claimCheck` (`CLAUDE.md` mục 1) — *"ném" không bao giờ được đọc thành "không có chỉ dẫn nào"*.
+- status: ready
+- nguồn: `#292` comment `2026-09-26T16:20:21Z` chỉ dẫn 1; `ops/known-failures.md` `KF-035`; `#270`; `ops/scripts/digest-metrics.ts`
+- tiêu chí xong:
+  - Một hàm **thuần** trả về chỉ dẫn **mới nhất theo `createdAt`** trên hợp của hai nguồn (`#251` và issue `digest`), chỉ tính comment **không** mở đầu 🤖 (`CLAUDE.md` mục 5), và **ném** khi không sắp được.
+  - **Bài tái hiện lỗi** (bất biến **I2**): fixture dựng đúng ca đã xảy ra — một chỉ dẫn `#270` cũ cộng một chỉ dẫn `#292` mới hơn — và đòi hàm trả bản mới. Bài này phải **đỏ** trên `main` hôm nay.
+  - Bỏ khối **"Điều tiết chưa có hiệu lực"** khỏi bản tin, và khai trong mục này **vì sao** nó sai theo số của chủ dự án (worker-2 dừng ~13:00 thứ Sáu, worker-1 ~21:30 thứ Sáu).
+  - Khai rõ **cái không đo được**: `History` của routine nằm ngoài repo, nên mốc dừng của từng worker là **lời khai của chủ dự án**, không phải phép đo của mục này. Đừng viết nó vào tài liệu như một con số đã đo.
+
+### P-065 · Bản tin bỏ sót comment mới nhất của #251, và thiếu số mục done theo làn (chỉ dẫn 2 và 4 của #292)
+
+Hai chỉ dẫn, **một** chỗ sửa (`ops/scripts/digest-metrics.ts`), nên một mục:
+
+1. **Chỉ dẫn 2** — *"Comment gần nhất của tôi trên `#251` chưa phản ánh trong bản tin: cấu hình model từng routine, chỉ số tách theo worker/integrator, số lần đặt lại đồng hồ 12h theo PR, điều kiện an toàn khi tắt worker. Nêu trạng thái từng mục."* Bốn mục đó phải có **trạng thái từng mục** trong bản tin, không phải một câu gộp.
+2. **Chỉ dẫn 4, vế báo cáo** — *"Bản tin báo số mục done theo làn trong 24h."* Mục `Tiến độ` hiện có số done **tổng** và theo **đợt** (`P-019`), không theo **làn** — mà chính chỉ dẫn 4 dùng con số theo làn để thấy mọi worker đang dồn vào `platform`.
+
+- deps: P-064 · chỉ vế "trạng thái từng mục" chờ bộ đọc chỉ dẫn mới nhất; vế "số mục done theo làn" không chờ ai. Lời giải thích ở đây cố ý **không** chứa dấu phẩy: `parseDeps` cắt dòng này ở dấu phẩy nên một mệnh đề phụ sẽ thành một phần phụ thuộc "không tra được" và giữ mục chờ vĩnh viễn
+- risk: low — thêm hai dòng đọc được vào một báo cáo; không cổng nào chặn, không chạm vùng bảo vệ
+- status: ready
+- nguồn: `#292` comment `2026-09-26T16:20:21Z` chỉ dẫn 2 và 4; `ops/scripts/digest-metrics.ts`; mục `platform/P-019`, `platform/P-053`
+- tiêu chí xong:
+  - `renderDigestMetrics` in **trạng thái từng mục** cho bốn mục của chỉ dẫn 2, và in cả khi trạng thái là *"chưa làm"* — im lặng ở đây đúng là thứ `Z7` cấm.
+  - Số mục `done` **theo làn** trong 24 giờ, dựng trên cùng nguồn `readRunLogs` + backlog mà `collectMetrics` đã dùng; **không** tự `cat` log rồi tự sắp (`CLAUDE.md` mục 15).
+  - Bài kiểm cho mỗi dòng mới, mỗi ca dương một ca âm — gồm ca **0 mục done** ở một làn (phải in `0`, không được vắng mặt).
+
+### P-066 · fix · Luật tự đóng `[QĐ]` che mất chỉ dẫn chủ dự án đăng sau khi issue mở (chỉ dẫn 1–4 của #251)
+
+Chủ dự án đo được: *"`#92` bị `decision-close` đóng sai (`P-050`/`D3`): máy chỉ kiểm PR `#89` đã merge, bỏ qua chỉ dẫn sau đó của tôi trên chính `#92` (\"dựng clip `V-002` ở 30fps và 60fps NGAY ở lượt tới, đăng link + phiếu chấm chỉ số 4–6 `WP-003` mục 5, đưa vào Việc đang chờ anh\"). Clip chưa từng được dựng; `A-001` và `V-002` bị giữ vì chờ tôi chấm."*
+
+`ops/scripts/decision-close.ts` xét ba nguồn bằng chứng, và nguồn (2) — *mọi PR issue nêu tên đều đã merge* — **đủ mạnh để đóng** trong khi một chỉ dẫn mới hơn trên chính issue đó **chưa có bằng chứng thực hiện**. Cùng họ nhóm **Z** với `P-063`: một luật dựng ra để tiết kiệm thời gian chủ dự án lại **xoá** một việc đang chờ chính anh.
+
+- deps: —
+- risk: medium — nới điều kiện đóng thì `[QĐ]` đã xong sẽ nằm mở lâu hơn, và đó là hướng lệch **đúng**: một issue mở oan tốn một dòng bản tin, một issue đóng oan xoá hẳn một việc khỏi hộp quyết định duy nhất (CHARTER 2.5).
+- status: ready
+- nguồn: `#251` comment `2026-09-27T01:48:14Z` chỉ dẫn 1–4; `ops/scripts/decision-close.ts`; mục `platform/P-050`; issue `#92`; `assembly/A-001`; `visual/V-002`
+- tiêu chí xong:
+  - `decisionClose` **không** tự đóng khi issue có comment của chủ dự án đăng **SAU** khi `[QĐ]` mở mà chứa chỉ dẫn chưa có bằng chứng thực hiện. "Comment của chủ dự án" = comment **không** mở đầu 🤖 (`CLAUDE.md` mục 5), không phải "comment của tài khoản `HungQuach301`" — agent dùng chung danh tính đó.
+  - **Bài tái hiện lỗi** (bất biến **I2**): fixture dựng đúng ca `#92` — PR `#89` đã merge, cộng một comment chỉ dẫn mới hơn — và đòi phán quyết là **không đóng**. Bài phải **đỏ** trên `main` hôm nay.
+  - **Rà mọi `[QĐ]` đã tự đóng** từ khi `P-050` vào `main` theo cùng tiêu chí, và **mở lại** ca nào đóng sai. Danh sách kèm phán quyết từng issue, không phải một câu "đã rà".
+  - **Mở lại `#92`** và đưa nó vào *"Việc đang chờ anh"*.
+  - `ops/known-failures.md` có mục cho chữ ký này (chỉ dẫn 4 của `#251` đòi đúng thế).
+  - Khai rõ: việc **dựng hai clip** không thuộc mục này — nó là `assembly/A-007`, xem trường `- hold:` của `assembly/A-001`.
+
 ### P-062 · Hai phép đo của bước 0 trả "sạch" cho một lần gọi sai, và không gì đỏ
 
 Hai chỗ khác nhau, **cùng một chữ ký**: một phép đo của bước 0 nhận đầu vào không phải thứ nó định đo, rồi trả **ca lành** thay vì ném. Cả hai đều là nhóm **Z** — `pnpm check` xanh, CI xanh, `main` xanh.

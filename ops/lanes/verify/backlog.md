@@ -72,6 +72,7 @@ Mã mục khớp mã giả định: `VF-<mã giả định>`.
 - deps: —
 - risk: high
 - status: parked
+- hold: chờ **chủ dự án** mở đường mạng cho 16 đích đã đo trả `000`, hoặc chọn phương án đọc hộ ở `#36`. Cụ thể, để không phải hỏi lại: **đích cần mở** — `elevenlabs.io`, `api.elevenlabs.io`, `play.ht`, `murf.ai`, `openai.com` (điều khoản TTS) · `www.pexels.com`, `unsplash.com`, `pixabay.com` (ảnh/video stock) · `fonts.google.com`, `scripts.sil.org`, `openfontlicense.org` (font và OFL FAQ) · `www.openstreetmap.org`, `www.naturalearthdata.com` (bản đồ) · `aws.amazon.com`, `docs.aws.amazon.com`, `learn.microsoft.com` (điều khoản nhà cung cấp). **Mở ở đâu:** chính sách mạng của environment phiên cloud, trang tạo/sửa environment ở `claude.ai/code` (cùng chỗ đặt biến môi trường) — không phải một file trong repo, nên agent không mở được. **Để làm gì:** đọc nguyên văn điều khoản thương mại của giả định **G7**, thứ đang chặn `audio/AU-001` và giữ `voice.commercialLicenseVerified` ở `false`. **Nếu anh không muốn mở mạng:** phương án đọc hộ ở `#36` — anh dán nguyên văn đoạn điều khoản vào issue, agent trích dẫn kèm ngày đọc; rẻ hơn cho anh nhưng chỉ phủ được nhà cung cấp anh dán.
 - kiểm: đọc điều khoản từng nhà cung cấp, trích dẫn kèm ngày đọc.
 - dự phòng nếu sai: đổi nhà cung cấp.
 - ghi chú: cùng việc với AU-001 nhưng ở góc sổ giả định; kết quả ghi vào `ops/license-ledger.md`.
