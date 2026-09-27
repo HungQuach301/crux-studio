@@ -27,6 +27,7 @@
     "digest:approval": "node ops/scripts/digest-approval.ts",
     "gate:flow": "node ops/scripts/gate-flow.ts",
     "claims": "node ops/scripts/claim-collision.ts",
+    "owner:directives": "node ops/scripts/owner-directives.ts",
     "queue:orphans": "node ops/scripts/merge-queue-orphans.ts",
     "topic:novelty-trial": "NODE_USE_ENV_PROXY=1 node ops/scripts/novelty-embeddings-trial.ts",
     "typecheck": "tsc --noEmit",

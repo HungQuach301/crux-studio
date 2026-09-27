@@ -811,6 +811,12 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    Ghi vào bản tin hôm nay, mục "Đã nhận câu trả lời": `choices` để worker xử lý ở lượt sau, và `unresolved`
    cộng `problems` NGUYÊN VĂN — đó là phần chủ dự án tưởng đã trả lời xong mà máy không chốt được, nên
    nuốt nó là đúng thứ nhóm Z mà mục này sinh ra để chặn.
+   Chỉ dẫn TỰ DO (không phải dạng duyệt) thì đọc bằng `pnpm owner:directives` (`ops/scripts/owner-directives.ts`,
+   mục `platform/P-064`) trên HỢP comment của `#251` và các issue bản tin, lấy bản MỚI NHẤT theo `createdAt` —
+   có `--matching` cho "chỉ dẫn mới nhất về một chuyện" (ví dụ điều tiết worker). Đừng dẫn một chỉ dẫn chỉ vì
+   nó nằm trên bản tin hôm trước: `#292` in khối "Điều tiết hạn mức — CHƯA có hiệu lực" theo chỉ dẫn `#270`
+   trong khi `#251` đã nói "Hết điều tiết" 15 giờ sau đó (`KF-035` lần 3). Tool NÉM khi không sắp được,
+   và "ném" không bao giờ đọc thành "không có chỉ dẫn nào".
 
 2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang **kẹt ở hàng đợi
    merge** — xung đột với main, HOẶC gộp sạch rồi chạy thử thì đỏ (mục P-025; PR loại này KHÔNG xung đột,
