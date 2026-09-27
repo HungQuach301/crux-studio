@@ -147,7 +147,14 @@ export function costUsdFor(totalTokens: number, usdPerMillionTokens: number): nu
 }
 
 export interface OpenAiProviderOptions {
-  apiKey: string;
+  /**
+   * Khoá ký request. **Tuỳ chọn** từ mục `topic/T-015`: trong phiên cloud,
+   * `EMBEDDINGS_API_KEY` KHÔNG có trong môi trường — agent proxy tự gắn header
+   * `Authorization` cho `api.openai.com`. Vắng khoá thì provider **không** tự
+   * đặt header `Authorization`, để proxy gắn (xem `resolveEmbeddingsAuth`).
+   * Trong GitHub Actions vẫn truyền secret vào như cũ.
+   */
+  apiKey?: string;
   model: EmbeddingModel;
   endpoint?: string;
   /** Tiêm để test không cần mạng. Mặc định là `globalThis.fetch`. */
@@ -180,12 +187,16 @@ export function openAiEmbeddingProvider(options: OpenAiProviderOptions): Embeddi
       if (texts.length === 0) {
         return { model: options.model.model, vectors: [], usage: { totalTokens: 0, costUsd: 0 } };
       }
+      // Vắng khoá (phiên cloud) → KHÔNG tự đặt `Authorization`; agent proxy
+      // gắn key khi request đi qua nó (mục `T-015`). Có khoá (Actions) → ký
+      // như cũ. KHÔNG bao giờ mượn `OPENAI_API_KEY` ở đây.
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (options.apiKey !== undefined && options.apiKey.length > 0) {
+        headers.authorization = `Bearer ${options.apiKey}`;
+      }
       const response = await doFetch(endpoint, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${options.apiKey}`,
-        },
+        headers,
         body: JSON.stringify({ model: options.model.model, input: texts }),
       });
       if (!response.ok) {
@@ -194,7 +205,7 @@ export function openAiEmbeddingProvider(options: OpenAiProviderOptions): Embeddi
         // hiện của khoá bằng `***` TRƯỚC, rồi mới cắt cho ngắn. Actions có che
         // secret đã đăng ký, nhưng luật phải nằm trong code chứ không nằm
         // trong may mắn.
-        const body = redactSecret(await response.text(), options.apiKey).slice(0, 200);
+        const body = redactSecret(await response.text(), options.apiKey ?? '').slice(0, 200);
         throw new Error(
           `Gọi embeddings thất bại: HTTP ${response.status}. Đoạn đầu thân lỗi: ${body}`,
         );
@@ -248,9 +259,15 @@ export interface SecretCheck {
 }
 
 /**
- * Luật của `T-011` tiêu chí xong 1, áp nguyên cho mục này: **thiếu secret thì
- * dừng và báo tên secret thiếu, không tự tạo secret**. Trả về một kết quả
- * thay vì ném, để bên gọi in ra được một câu người đọc hiểu.
+ * Luật của `T-011` tiêu chí xong 1: **thiếu secret thì dừng và báo tên secret
+ * thiếu, không tự tạo secret**. Trả về một kết quả thay vì ném, để bên gọi in
+ * ra được một câu người đọc hiểu.
+ *
+ * ⚠️ **Đường gọi thật đã chuyển sang `resolveEmbeddingsAuth`** (mục `T-015`):
+ * hàm này chỉ còn là phép kiểm *"có secret hay không"* thuần, KHÔNG quyết định
+ * gọi hay dừng — vì trong phiên cloud thiếu secret vẫn gọi (proxy gắn key).
+ * Giữ lại vì nó là một phép kiểm hợp lệ và có bài kiểm riêng; sửa luật ký thì
+ * sửa ở `resolveEmbeddingsAuth`, đừng để hai chỗ nói hai điều.
  */
 export function checkEmbeddingsSecret(env: Record<string, string | undefined>): SecretCheck {
   const value = env[EMBEDDINGS_SECRET_NAME];
@@ -264,6 +281,65 @@ export function checkEmbeddingsSecret(env: Record<string, string | undefined>): 
       `Thiếu secret \`${EMBEDDINGS_SECRET_NAME}\`. DỪNG, không tự tạo secret và không thay ` +
       `bằng \`OPENAI_API_KEY\` — chủ dự án cố ý tách hai khoá để theo dõi chi phí riêng ` +
       `(chỉ dẫn #251, 2026-09-25T01:28:33Z).`,
+  };
+}
+
+/**
+ * Ba cách ký một lời gọi embeddings, chọn theo môi trường — mục `topic/T-015`.
+ * Đây là chỗ luật cũ *"thiếu secret thì DỪNG"* được viết lại: chủ dự án đo được
+ * và chốt trên `#251` (`2026-09-27T01:27:41Z`) rằng key OpenAI **đã gắn** vào
+ * môi trường cloud dưới dạng credential của agent proxy, nên trong phiên cloud
+ * thiếu biến **không** còn là lý do dừng.
+ *
+ * - `secret` — `EMBEDDINGS_API_KEY` có trong môi trường (GitHub Actions): ký
+ *   request bằng nó như cũ.
+ * - `proxy` — thiếu biến **và** đang ở phiên cloud (`CLAUDE_CODE_REMOTE=true`):
+ *   **vẫn gọi**, KHÔNG tự đặt header `Authorization` — agent proxy gắn key cho
+ *   `api.openai.com`. (Đường gọi vẫn phải đi **qua** proxy; xem lời khai ở
+ *   `ops/scripts/novelty-embeddings-trial.ts` về `NODE_USE_ENV_PROXY`.)
+ * - `stop` — thiếu biến và KHÔNG ở phiên cloud (chạy tay ngoài Actions, ngoài
+ *   cloud): DỪNG và báo tên secret thiếu, y như luật `T-011`. Không tự tạo
+ *   secret, không mượn `OPENAI_API_KEY`.
+ *
+ * Luật *"không mượn `OPENAI_API_KEY`"* **vẫn đứng** ở cả ba nhánh: proxy gắn
+ * key là việc của proxy, code này không bao giờ đọc một khoá nào ngoài
+ * `EMBEDDINGS_API_KEY`.
+ */
+export type EmbeddingsAuthMode = 'secret' | 'proxy' | 'stop';
+
+export interface EmbeddingsAuth {
+  mode: EmbeddingsAuthMode;
+  /** Chỉ có mặt ở `mode === 'secret'`. */
+  apiKey?: string;
+  message: string;
+}
+
+export function resolveEmbeddingsAuth(env: Record<string, string | undefined>): EmbeddingsAuth {
+  const value = env[EMBEDDINGS_SECRET_NAME];
+  if (value && value.trim().length > 0) {
+    return {
+      mode: 'secret',
+      // `.trim()`: một secret dính `\n` cuối (dán từ Actions) sẽ thành
+      // `Bearer sk-x\n` và hỏng xác thực — cắt khoảng trắng hai đầu ở đây.
+      apiKey: value.trim(),
+      message: `Có \`${EMBEDDINGS_SECRET_NAME}\` — ký request bằng secret.`,
+    };
+  }
+  if (env.CLAUDE_CODE_REMOTE === 'true') {
+    return {
+      mode: 'proxy',
+      message:
+        `Không có \`${EMBEDDINGS_SECRET_NAME}\` trong phiên cloud (\`CLAUDE_CODE_REMOTE=true\`) — ` +
+        `gọi KHÔNG kèm header \`Authorization\` để agent proxy gắn key cho \`api.openai.com\` ` +
+        `(chỉ dẫn #251, 2026-09-27T01:27:41Z). Không mượn \`OPENAI_API_KEY\`, không tự tạo secret.`,
+    };
+  }
+  return {
+    mode: 'stop',
+    message:
+      `Thiếu secret \`${EMBEDDINGS_SECRET_NAME}\` và KHÔNG ở phiên cloud ` +
+      `(\`CLAUDE_CODE_REMOTE\` != "true"). DỪNG, không tự tạo secret và không mượn ` +
+      `\`OPENAI_API_KEY\` — hai khoá tách cố ý để theo dõi chi phí riêng.`,
   };
 }
 
