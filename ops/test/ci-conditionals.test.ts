@@ -19,13 +19,14 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { runBlocks } from '../scripts/check-workflows.ts';
 import {
-  hasPlainPullRequestTrigger,
   jobConditions,
   normalizeExpression,
   PR_EVENT_GATE,
   requiredCheckConditionProblems,
   STATUS_ONLY_STEP_CONDITIONS,
+  workflowTriggers,
 } from '../scripts/ci-conditionals.ts';
 
 const root = join(import.meta.dirname, '..', '..');
@@ -74,6 +75,15 @@ test('`if:` dạng khối nhiều dòng (`>-`) vẫn bị đọc — không lọ
   assert.match(problems[0]!, /github\.event_name == 'pull_request' && github\.actor != 'x'/u);
 });
 
+test('`failure()` và `cancelled()` ở mức step → ĐỎ: chúng bỏ qua bước ĐÚNG LÚC job đang xanh', () => {
+  // Ca vòng soát ngữ cảnh sạch dựng được: bước kiểm thật sau `if: failure()`
+  // không bao giờ chạy trên một job xanh, và check vẫn xanh.
+  for (const condition of ['failure()', 'cancelled()', '${{ failure() }}']) {
+    const source = fixHasTest('    steps:', ...step(`if: ${condition}`));
+    assert.equal(requiredCheckConditionProblems(source).length, 1, condition);
+  }
+});
+
 test('Hàm trạng thái ở mức step KHÔNG đỏ — chúng không bỏ qua bước khi job đang xanh', () => {
   for (const condition of STATUS_ONLY_STEP_CONDITIONS) {
     for (const written of [condition, `\${{ ${condition} }}`]) {
@@ -114,8 +124,63 @@ test('Cổng sự kiện PR trong workflow chỉ nghe `pull_request_target` → 
     '  pull_request:',
     '  pull_request_target:',
   );
-  assert.equal(hasPlainPullRequestTrigger(source), false);
+  assert.deepEqual(workflowTriggers(source), ['pull_request_target', 'workflow_dispatch']);
   assert.equal(requiredCheckConditionProblems(source).length, 1);
+});
+
+test('Cổng sự kiện PR khi workflow nghe CẢ `pull_request` lẫn `pull_request_target` → ĐỎ', () => {
+  // Mỗi PR khi đó có thêm một lượt `pull_request_target` sinh check `skipped`
+  // mang cùng tên check bắt buộc — cùng họ với ca `workflow_dispatch` chưa đo.
+  const source = fixHasTest(`    if: ${PR_EVENT_GATE}`, '    steps:', ...step()).replace(
+    '  pull_request:',
+    '  pull_request:\n  pull_request_target:',
+  );
+  assert.equal(requiredCheckConditionProblems(source).length, 1);
+});
+
+test('Khối `on:` viết khác khuôn vẫn đọc được — `"on":`, `\'on\':`, thụt 4, chuỗi, danh sách', () => {
+  const bad = fixHasTest('    steps:', ...step('if: env.X'));
+  const variants = [
+    bad.replace('on:\n', '"on":\n'),
+    bad.replace('on:\n', "'on':\n"),
+    bad.replace('  pull_request:\n  workflow_dispatch:', '    pull_request:\n    workflow_dispatch:'),
+    bad.replace('on:\n  pull_request:\n  workflow_dispatch:', 'on: pull_request'),
+    bad.replace('on:\n  pull_request:\n  workflow_dispatch:', 'on: [push, pull_request] # c'),
+  ];
+  for (const variant of variants) {
+    assert.equal(requiredCheckConditionProblems(variant).length, 1, variant.split('\n').slice(0, 4).join(' | '));
+  }
+});
+
+test('Không đọc được khối `on:` mà có job bắt buộc → ĐỎ (fail closed), không có job bắt buộc → im', () => {
+  const noOn = fixHasTest('    steps:', ...step()).replace('on:\n  pull_request:\n  workflow_dispatch:\n', '');
+  assert.equal(workflowTriggers(noOn), null);
+  const problems = requiredCheckConditionProblems(noOn);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0]!, /không đọc được khối `on:`/u);
+  assert.deepEqual(requiredCheckConditionProblems(noOn.replace(/fix-has-test/gu, 'lint-only')), []);
+});
+
+test('Khoá job có nháy hoặc chú thích, `jobs:` có chú thích — job bắt buộc vẫn bị áp', () => {
+  const bad = fixHasTest('    steps:', ...step('if: env.X'));
+  for (const variant of [
+    bad.replace('jobs:', 'jobs: # c'),
+    bad.replace('  fix-has-test:', '  fix-has-test: # c').replace('    name: fix-has-test\n', ''),
+    bad.replace('  fix-has-test:', '  "fix-has-test":').replace('    name: fix-has-test\n', ''),
+    bad.replace("        if: env.X", "        'if': env.X"),
+  ]) {
+    assert.equal(requiredCheckConditionProblems(variant).length, 1, variant);
+  }
+});
+
+test('`name:` là biểu thức trong workflow nghe PR → ĐỎ: không biết job đó sinh check tên gì', () => {
+  const source = fixHasTest('    steps:', ...step('if: env.X')).replace(
+    '    name: fix-has-test',
+    "    name: ${{ 'fix-has-test' }}",
+  );
+  const problems = requiredCheckConditionProblems(source);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0]!, /biểu thức/u);
 });
 
 test('Job KHÔNG bắt buộc được dùng `if:` tuỳ ý — luật chỉ áp cho check bắt buộc', () => {
@@ -181,28 +246,26 @@ test('Mọi `ops/workflows/*.yml` trên đĩa qua luật Z2', () => {
   }
 });
 
-test('Bộ đọc THẤY đủ mọi `if:` trong `ops/workflows/` — đếm độc lập bằng grep theo độ thụt', () => {
-  // Đếm độc lập: `if:` thụt đúng 4 là mức job; `if:` là khoá của một bước
-  // (thụt 8, hoặc ngay sau `- ` thụt 6) là mức step. Bộ đọc đếm thiếu thì
-  // luật xanh vì mù — đúng chỗ nhóm Z không bao giờ tự báo.
-  let jobIfs = 0;
-  let stepIfs = 0;
-  let seenJobs = 0;
-  let seenSteps = 0;
+test('Bộ đọc THẤY đủ mọi `if:` trong `ops/workflows/` — đếm độc lập, không cùng giả định thụt lề', () => {
+  // Đếm độc lập: MỌI dòng mang khoá `if:` ở BẤT KỲ độ thụt nào, trừ dòng
+  // nằm trong thân khối `run: |` (lấy từ `runBlocks` của `check-workflows.ts`,
+  // một bộ đọc khác). Bộ đọc của luật đếm thiếu thì luật xanh vì mù — đúng
+  // chỗ nhóm Z không bao giờ tự báo.
+  let counted = 0;
+  let seen = 0;
   for (const file of workflowFiles) {
     const source = readWorkflow(file);
-    for (const line of source.split('\n')) {
-      if (/^ {4}if:/.test(line)) jobIfs += 1;
-      if (/^ {8}if:/.test(line) || /^ {6}- if:/.test(line)) stepIfs += 1;
+    const inRun = new Set<number>();
+    for (const block of runBlocks(source, file)) {
+      for (let k = 1; k <= block.lines.length; k += 1) inRun.add(block.startLine + k);
     }
-    for (const job of jobConditions(source)) {
-      if (job.jobIf !== null) seenJobs += 1;
-      seenSteps += job.stepIfs.length;
-    }
+    source.split('\n').forEach((line, index) => {
+      if (!inRun.has(index + 1) && /^\s*(-\s+)?(["']?)if\2:/.test(line)) counted += 1;
+    });
+    for (const job of jobConditions(source)) seen += (job.jobIf === null ? 0 : 1) + job.stepIfs.length;
   }
-  assert.ok(jobIfs > 0 && stepIfs > 0, 'cây phải có cả hai loại `if:` thì phép đếm mới có nghĩa');
-  assert.equal(seenJobs, jobIfs);
-  assert.equal(seenSteps, stepIfs);
+  assert.ok(counted > 0, 'cây phải có `if:` thì phép đếm mới có nghĩa');
+  assert.equal(seen, counted);
 });
 
 test('`ci.yml`: mọi job bắt buộc có `if:` mức job đều dùng ĐÚNG cổng sự kiện PR', () => {

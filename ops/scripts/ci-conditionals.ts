@@ -22,14 +22,17 @@
  * luật `P-047` (`ci-concurrency.ts`). Job không bắt buộc bị bỏ qua cũng không
  * làm PR nào qua cửa sai, nên luật không áp — áp rộng hơn chỉ tạo tiếng ồn.
  *
- * 1. **`if:` mức step** chỉ được mang hàm trạng thái: `always()`,
- *    `!cancelled()`, `failure()`, `cancelled()`. Bốn hàm đó không bao giờ bỏ
- *    qua một bước trong khi job đang xanh — `always()`/`!cancelled()` chạy
- *    NHIỀU hơn mặc định, còn `failure()`/`cancelled()` chỉ bỏ qua khi job
- *    vốn đã không xanh. Mọi điều kiện khác đều có thể sai trong khi job
- *    xanh, tức đúng hình dạng `KF-008`. Muốn rẽ nhánh thì làm như `P-009`:
- *    bước luôn chạy, đọc điều kiện trong `run:`, **in kết luận**, tự chọn
- *    thoát 0 hay 1.
+ * 1. **`if:` mức step** chỉ được mang ba hàm trạng thái: `always()`,
+ *    `!cancelled()`, `success()`. Ba hàm đó không bao giờ bỏ qua một bước
+ *    trong khi job đang xanh: `always()`/`!cancelled()` chạy NHIỀU hơn mặc
+ *    định, còn `success()` chính là mặc định — nó chỉ bỏ qua khi một bước
+ *    trước đã đỏ, tức job vốn đã đỏ. **`failure()` và `cancelled()` thì
+ *    ngược lại**: chúng bỏ qua bước ĐÚNG LÚC job đang xanh, nên một bước
+ *    kiểm thật đặt sau `if: failure()` không bao giờ chạy mà check vẫn xanh
+ *    (vòng soát ngữ cảnh sạch của sóng này dựng được đúng ca đó). Mọi điều
+ *    kiện khác cũng có thể sai trong khi job xanh, tức đúng hình dạng
+ *    `KF-008`. Muốn rẽ nhánh thì làm như `P-009`: bước luôn chạy, đọc điều
+ *    kiện trong `run:`, **in kết luận**, tự chọn thoát 0 hay 1.
  *
  * 2. **`if:` mức job** chỉ được đúng một dạng: cổng sự kiện
  *    `github.event_name == 'pull_request'`, và chỉ trong workflow có trigger
@@ -39,7 +42,15 @@
  *    nó chỉ bỏ qua job ở `workflow_dispatch`, nơi không có PR để kiểm. Một
  *    workflow nghe `pull_request_target` thì `event_name` lại là
  *    `pull_request_target`, và cùng cổng đó bỏ qua job trên MỌI PR — nên cổng
- *    chỉ được chấp nhận khi trigger `pull_request:` có thật trong file.
+ *    chỉ được chấp nhận khi trigger `pull_request:` có thật trong file, và
+ *    **không** kèm `pull_request_target` (kèm thì mỗi PR có thêm một lượt
+ *    sinh check `skipped` mang cùng tên, xem "chỗ chưa che" dưới đây).
+ *
+ * 3. **Không đọc được thì đỏ, không xanh.** Workflow có job mang tên check
+ *    bắt buộc mà không đọc được khối `on:`, hoặc job của workflow nghe PR có
+ *    `name:` là biểu thức `${{ … }}` (không biết nó sinh check tên gì), thì
+ *    luật báo lỗi thay vì bỏ qua — một luật tắt im lặng vì khuôn viết khác là
+ *    đúng nhóm Z.
  *
  * ## Chỗ chưa che, khai ra thay vì giả vờ đã che
  *
@@ -52,11 +63,15 @@
  * đo, luật này giữ cổng đó là ngoại lệ **duy nhất** — thêm dạng thứ hai là
  * phải sửa file này và bài kiểm của nó.
  *
- * Bộ đọc YAML ở đây là bộ đọc theo dòng, cùng giả định với `ciJobNames`:
- * job thụt 2 dấu cách dưới `jobs:`, khoá của job thụt 4. Một job viết khác
- * khuôn đó thì `ciJobNames` cũng không thấy nó, và `pnpm test`
- * (`required-checks.test.ts`) đỏ trước — không có đường nào để một job bắt
- * buộc vô hình với luật này mà vẫn xanh ở đó.
+ * Bộ đọc YAML ở đây là bộ đọc theo dòng: job thụt 2 dấu cách dưới `jobs:`,
+ * khoá của job thụt 4 (chịu được nháy quanh khoá và chú thích sau khoá). Các
+ * dạng sau **lọt** luật, khai ra để không ai đọc "✅" thành "kín":
+ * - job thụt khác 2/4 — với `ci.yml` thì `ciJobNames` cũng không thấy job đó
+ *   và `required-checks.test.ts` đỏ trước, nhưng bài đó chỉ đọc `ci.yml`;
+ * - bước viết dạng flow (`- { name: x, if: y, run: z }`);
+ * - `continue-on-error: true` trên job hoặc bước bắt buộc — cũng biến đỏ
+ *   thành xanh, nhưng không phải `if:`. Luật Z9 (`undocumentedSwallows`) chỉ
+ *   đòi nó có chú thích, và `trailer-warn` dùng nó đúng thiết kế (luật mềm).
  */
 
 import { readFileSync } from 'node:fs';
@@ -84,12 +99,7 @@ export interface JobConditions {
 }
 
 /** Hàm trạng thái không bao giờ bỏ qua một bước khi job đang xanh. Xem luật 1. */
-export const STATUS_ONLY_STEP_CONDITIONS: readonly string[] = [
-  'always()',
-  '!cancelled()',
-  'failure()',
-  'cancelled()',
-];
+export const STATUS_ONLY_STEP_CONDITIONS: readonly string[] = ['always()', '!cancelled()', 'success()'];
 
 /** Dạng DUY NHẤT được phép ở `if:` mức job của một job bắt buộc. Xem luật 2. */
 export const PR_EVENT_GATE = "github.event_name == 'pull_request'";
@@ -152,7 +162,7 @@ export function jobConditions(source: string): JobConditions[] {
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!;
-    if (/^jobs:\s*$/.test(line)) {
+    if (/^(["']?)jobs\1:\s*(#.*)?$/.test(line)) {
       inJobs = true;
       continue;
     }
@@ -166,10 +176,10 @@ export function jobConditions(source: string): JobConditions[] {
       continue;
     }
 
-    const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
+    const job = /^ {2}(["']?)([A-Za-z0-9_-]+)\1:\s*(#.*)?$/.exec(line);
     if (job !== null) {
       flush();
-      current = { id: job[1]!, checkName: job[1]!, jobIf: null, stepIfs: [] };
+      current = { id: job[2]!, checkName: job[2]!, jobIf: null, stepIfs: [] };
       continue;
     }
     if (current === null) continue;
@@ -177,16 +187,17 @@ export function jobConditions(source: string): JobConditions[] {
     const indent = line.length - line.trimStart().length;
 
     // Khoá mức job (thụt 4) — cũng là chỗ khối `steps:` kết thúc.
-    const jobKey = /^ {4}([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
+    const jobKey = /^ {4}(["']?)([A-Za-z0-9_-]+)\1:\s*(.*)$/.exec(line);
     if (jobKey !== null) {
-      inSteps = jobKey[1] === 'steps';
+      const key = jobKey[2]!;
+      inSteps = key === 'steps';
       dashIndent = -1;
-      if (jobKey[1] === 'name' && !hasName) {
-        current.checkName = unquote(jobKey[2]!);
+      if (key === 'name' && !hasName) {
+        current.checkName = unquote(jobKey[3]!);
         hasName = true;
       }
-      if (jobKey[1] === 'if') {
-        current.jobIf = { line: i + 1, expression: normalizeExpression(readIfValue(lines, i, 4, jobKey[2]!)) };
+      if (key === 'if') {
+        current.jobIf = { line: i + 1, expression: normalizeExpression(readIfValue(lines, i, 4, jobKey[3]!)) };
       }
       continue;
     }
@@ -199,21 +210,21 @@ export function jobConditions(source: string): JobConditions[] {
     const dash = /^(\s*)-\s+(.*)$/.exec(line);
     if (dash !== null && (dashIndent === -1 || dash[1]!.length === dashIndent)) {
       dashIndent = dash[1]!.length;
-      const onDash = /^if:\s*(.*)$/.exec(dash[2]!);
+      const onDash = /^(["']?)if\1:\s*(.*)$/.exec(dash[2]!);
       if (onDash !== null) {
         current.stepIfs.push({
           line: i + 1,
-          expression: normalizeExpression(readIfValue(lines, i, dashIndent, onDash[1]!)),
+          expression: normalizeExpression(readIfValue(lines, i, dashIndent, onDash[2]!)),
         });
       }
       continue;
     }
     if (dashIndent !== -1 && indent === dashIndent + 2) {
-      const stepIf = /^\s*if:\s*(.*)$/.exec(line);
+      const stepIf = /^\s*(["']?)if\1:\s*(.*)$/.exec(line);
       if (stepIf !== null) {
         current.stepIfs.push({
           line: i + 1,
-          expression: normalizeExpression(readIfValue(lines, i, indent, stepIf[1]!)),
+          expression: normalizeExpression(readIfValue(lines, i, indent, stepIf[2]!)),
         });
       }
     }
@@ -223,52 +234,78 @@ export function jobConditions(source: string): JobConditions[] {
   return jobs;
 }
 
-/** Workflow có trigger `pull_request:` thật (không tính `pull_request_target`). */
-export function hasPlainPullRequestTrigger(source: string): boolean {
-  let inOn = false;
-  for (const line of source.split('\n')) {
-    if (/^on:/.test(line)) {
-      inOn = true;
-      if (/^on:\s*\[?[^#]*\bpull_request\b(?!_)/.test(line)) return true;
-      continue;
+/**
+ * Tên các trigger dưới khoá gốc `on:` (cả `"on":`/`'on':`), đọc được ở ba
+ * dạng: một chuỗi (`on: pull_request`), một danh sách (`on: [push, pull_request]`),
+ * hoặc một mapping thụt bất kỳ. `null` khi không có khoá `on:` đọc được —
+ * bên gọi phải coi đó là "không biết", không phải "không nghe PR" (luật 3).
+ */
+export function workflowTriggers(source: string): string[] | null {
+  const lines = source.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const root = /^(["']?)on\1:\s*(.*)$/.exec(lines[i]!);
+    if (root === null) continue;
+    const inline = root[2]!.replace(/\s+#.*$/, '').trim();
+    if (inline !== '' && !inline.startsWith('#')) {
+      const list = /^\[(.*)\]$/.exec(inline);
+      const items = list !== null ? list[1]!.split(',') : [inline];
+      return items.map((item) => unquote(item.trim())).filter((item) => item !== '');
     }
-    if (inOn && /^\S/.test(line)) inOn = false;
-    if (inOn && /^ {2}pull_request:/.test(line)) return true;
-  }
-  return false;
-}
-
-/** Workflow có nghe PR theo bất kỳ cách nào — tức luật có chỗ để áp. */
-function listensToPullRequests(source: string): boolean {
-  let inOn = false;
-  for (const line of source.split('\n')) {
-    if (/^on:/.test(line)) {
-      inOn = true;
-      if (/\bpull_request(_target)?\b/.test(line)) return true;
-      continue;
+    const triggers: string[] = [];
+    let childIndent = -1;
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const line = lines[j]!;
+      if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+      const indent = line.length - line.trimStart().length;
+      if (indent === 0) break;
+      if (childIndent === -1) childIndent = indent;
+      if (indent !== childIndent) continue;
+      const key = /^\s*(["']?)([A-Za-z0-9_-]+)\1:/.exec(line);
+      if (key !== null) triggers.push(key[2]!);
     }
-    if (inOn && /^\S/.test(line)) inOn = false;
-    if (inOn && /^ {2}pull_request(_target)?:/.test(line)) return true;
+    return triggers;
   }
-  return false;
+  return null;
 }
 
 /** Lời báo lỗi cho một workflow, hoặc mảng rỗng nếu lành. */
 export function requiredCheckConditionProblems(source: string): string[] {
-  if (!listensToPullRequests(source)) return [];
   const required = new Set(REQUIRED_CHECKS);
-  const plainPr = hasPlainPullRequestTrigger(source);
+  const jobs = jobConditions(source);
+  const triggers = workflowTriggers(source);
+
+  if (triggers === null) {
+    // Luật 3: không đọc được `on:` thì không biết workflow có nghe PR không.
+    const named = jobs.filter((job) => required.has(job.checkName)).map((job) => job.checkName);
+    return named.length === 0
+      ? []
+      : [
+          `có job sinh check bắt buộc (${named.join(', ')}) mà không đọc được khối \`on:\` — ` +
+            'luật Z2 không biết workflow này có chạy trên PR không, nên báo đỏ thay vì bỏ qua.',
+        ];
+  }
+
+  const listensToPr = triggers.includes('pull_request') || triggers.includes('pull_request_target');
+  if (!listensToPr) return [];
+  const plainPrOnly = triggers.includes('pull_request') && !triggers.includes('pull_request_target');
   const problems: string[] = [];
 
-  for (const job of jobConditions(source)) {
+  for (const job of jobs) {
+    if (job.checkName.includes('${{')) {
+      problems.push(
+        `job \`${job.id}\` có \`name: ${job.checkName}\` là biểu thức — luật Z2 không biết job này sinh check ` +
+          'tên gì, nên không biết nó có phải check bắt buộc không. Đặt tên tĩnh.',
+      );
+      continue;
+    }
     if (!required.has(job.checkName)) continue;
 
-    if (job.jobIf !== null && !(plainPr && job.jobIf.expression === PR_EVENT_GATE)) {
+    if (job.jobIf !== null && !(plainPrOnly && job.jobIf.expression === PR_EVENT_GATE)) {
       problems.push(
         `dòng ${job.jobIf.line}: job \`${job.id}\` sinh check BẮT BUỘC \`${job.checkName}\` mà có ` +
           `\`if: ${job.jobIf.expression}\` mức job (Z2). Job bị bỏ qua ra \`skipped\`, và check bắt buộc ` +
           `\`skipped\` KHÔNG đỏ. Dạng duy nhất được phép là \`if: ${PR_EVENT_GATE}\` trong workflow có ` +
-          'trigger `pull_request:` — xem `ops/scripts/ci-conditionals.ts`.',
+          'trigger `pull_request:` (không kèm `pull_request_target`) — xem `ops/scripts/ci-conditionals.ts`.',
       );
     }
 

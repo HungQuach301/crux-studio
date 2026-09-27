@@ -699,23 +699,34 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
   - `status` giữ **`ready`**: Z2, Z6 và Z8 vẫn đang chờ.
 - **Sóng 4 — xong: Z2** (lượt `crux-worker-1`, 2026-09-27).
   - **Z2** (`if:` làm bước hoặc job bắt buộc ra `skipped` trong khi check vẫn xanh): `requiredCheckConditionProblems`
-    trong `ops/scripts/ci-conditionals.ts`, gọi từ `pnpm lint:workflows` cạnh luật `P-047`. **18** bài ở
+    trong `ops/scripts/ci-conditionals.ts`, gọi từ `pnpm lint:workflows` cạnh luật `P-047`. **24** bài ở
     `ops/test/ci-conditionals.test.ts`.
   - **Câu hỏi thiết kế còn để ngỏ từ sóng 2 (ca mức job) có lời đáp kiểm được.** Luật áp cho job sinh check bắt buộc
     (`REQUIRED_CHECKS`). Cổng `github.event_name == 'pull_request'` được phép vì trên một lượt do PR kích hoạt,
     `event_name` luôn là `pull_request`, nên cổng không bao giờ bỏ qua job trên một PR. Nhưng cổng chỉ được phép khi
     workflow có trigger `pull_request:` thật: dưới `pull_request_target` chính cổng đó bỏ qua MỌI PR. Mọi `if:` mức job
-    khác trên job bắt buộc đều đỏ. Ở mức step chỉ bốn hàm trạng thái được phép, vì chúng không bỏ qua bước khi job đang
-    xanh. `always() && x` vẫn đỏ.
+    khác trên job bắt buộc đều đỏ. Ở mức step chỉ `always()`, `!cancelled()` và `success()` được phép, vì chúng không
+    bỏ qua bước khi job đang xanh. `always() && x` vẫn đỏ.
   - **Đo trên cây thật:** 18 `if:` mức step và 10 `if:` mức job trong `ops/workflows/` (một bài đếm độc lập theo độ thụt
     để bộ đọc không xanh vì mù). 3/5 job bắt buộc (`fix-has-test`, `protected-area`, `trailer-warn`) mang cổng sự kiện
     PR; 0 job bắt buộc có `if:` mức step. Cây sạch, không phải sửa workflow nào.
+  - **Vòng soát ngữ cảnh sạch (phụ lục P1 bước 6) tìm ra một chỗ CHẶN, đã sửa trước khi rời nháp.** Bản đầu cho qua
+    `failure()` và `cancelled()` ở mức step, với lý do "chỉ bỏ qua khi job vốn đã không xanh". Lý do đó **ngược**:
+    `if: failure()` bỏ qua bước **đúng lúc** job đang xanh. Vòng soát dựng được ca bước kiểm thật đặt sau
+    `if: failure()` → 0 lỗi, tức luật cho qua chính hình dạng `KF-008`. Bài kiểm cũ còn khoá luôn lỗi đó. Nay hai hàm
+    đó đỏ, có bài riêng. Cùng vòng soát, ba chỗ luật **tắt im lặng** vì khuôn viết khác, đều đã sửa và có bài kiểm:
+    `"on":` hay trigger thụt 4 (không đọc được `on:` thì nay đỏ, không bỏ qua) · khoá job có nháy hoặc chú thích ·
+    `name:` là biểu thức. Bài đếm `if:` trên cây thật nay đếm ở **mọi** độ thụt, trừ thân khối `run:`. Phần trừ đó
+    lấy từ `runBlocks`, một bộ đọc khác, để phép đếm không dùng chung giả định với bộ đọc của luật.
   - **Bốn phép phá, cả bốn đều bị bắt:** gỡ lời gọi trong CLI (bài chạy thật `check-workflows.ts` trên cây tạm đỏ) ·
     bỏ luật mức job · bộ đọc step lệch độ thụt · quên phân biệt `pull_request_target`.
   - **Chưa che, khai ra:** cổng sự kiện vẫn sinh check `skipped` **mang tên check bắt buộc** khi ai đó chạy `ci.yml`
     bằng `workflow_dispatch` trên nhánh của một PR (cùng SHA). GitHub có lấy check đó thay check đỏ của lượt
     `pull_request` hay không thì **chưa đo**, cùng họ với `KF-031`. Đo nó cần một `workflow_dispatch` thật trên một PR
-    đỏ. Tới khi có số đo, cổng này là ngoại lệ **duy nhất** của luật.
+    đỏ. Tới khi có số đo, cổng này là ngoại lệ **duy nhất** của luật. Ba dạng nữa lọt luật, đã khai trong docblock của
+    `ci-conditionals.ts`: bước viết dạng flow (`- { if: … }`) · job thụt khác 2/4 ngoài `ci.yml` ·
+    `continue-on-error: true` trên job bắt buộc. Dạng cuối cũng biến đỏ thành xanh nhưng không phải `if:`; luật Z9 chỉ
+    đòi nó có chú thích, và `trailer-warn` dùng nó đúng thiết kế.
   - `status` giữ **`ready`**: Z6 và Z8 vẫn đang chờ.
 
 ### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
