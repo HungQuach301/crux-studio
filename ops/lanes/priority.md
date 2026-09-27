@@ -22,6 +22,18 @@ Worker duyệt các làn theo đúng thứ tự dưới đây, và nhận mục 
 >
 > Dòng ghim `P-016` **vẫn còn**, và hai dòng ghim cũ `0a`/`0b` gộp lại thành một dòng `0`. Lý do giữ: `P-016` **chưa** `done`. Thân mục ghi rõ "chưa kiểm bằng chạy thật … không tự chuyển `done` ở đây", và lý do ghim vẫn đúng theo số đo — `ops/logs/platform/P-016.jsonl` ghi PR #39 ra `aborted-ineligible` **năm lượt liên tiếp**. Gỡ ghim lúc này là gỡ tín hiệu trong khi tắc nghẽn còn nguyên.
 
+> **Phân bổ năng lực — chỉ dẫn chủ dự án trên `#292` `2026-09-26T16:20:21Z`, chỉ dẫn 4.** Anh đo được *"8 làn quá ngưỡng nhịp tim vì mọi worker dồn vào `platform`"* và ràng buộc lại, nguyên văn:
+>
+> > *"Từ lượt tới, `platform` chỉ nhận mục `fix` đang chặn `main`/hàng đợi merge hoặc chỉ dẫn của tôi; mọi lượt khác ưu tiên mục trên đường găng tới cổng Mốc 3 (`topic`, `editorial`, `verify`, `kernel`)."*
+>
+> Đọc thành luật nhận mục, cộng ba chỗ **cố ý đọc hẹp** để nó không nói ngược nguồn cao hơn:
+>
+> 1. **Đường găng đi trước phần CÒN LẠI của bảng, KHÔNG đi trước hàng 0 và hàng 1.** Hàng **1 `integration`** (*"`main` đỏ chặn mọi làn khác. Revert trước, làm việc mới sau"*) và dòng **ghim hàng 0** vẫn đứng trên tất cả: CHARTER 6.5 và `CLAUDE.md` mục 13 đòi revert `main` đỏ **ngay**, và không chỉ dẫn nào về phân bổ năng lực được phép hoãn việc đó. Sau hai hàng đó, worker ưu tiên bốn làn đường găng — `topic`, `editorial`, `verify`, `kernel` — **trước** các hàng 4–10 của bảng.
+> 2. **Bốn làn đó KHÔNG được sắp lại thứ tự với nhau.** Chủ dự án viết một **danh sách trong ngoặc**, không một dãy mũi tên; đọc nó thành `topic → editorial → verify → kernel` sẽ hạ `verify` từ vị trí 2 xuống thứ ba, mà lý do `verify` ở vị trí 2 là CHARTER 11.1 luật 2 (*"Kiểm trước, dựa vào sau"*) ghi ngay trong bảng. Nên trong bốn làn đó, thứ tự **của bảng** vẫn quyết định: `verify` → `topic` → `kernel` → `editorial`.
+> 3. **Mục `platform` MỚI** chỉ nhận được khi nó là **một trong hai** ca: mục `fix` đang chặn `main` hoặc hàng đợi merge · hoặc mục sinh từ **chỉ dẫn của chủ dự án**, hiểu theo **cả ba** chỗ mà `CLAUDE.md` mục 5 công nhận — issue nhãn `decision`, issue `digest`, và một lời `dừng` trên PR — không chỉ `#251` và bản tin. Điều kiện này áp cho **mục mở từ 2026-09-27 trở đi**; mục `platform` đã có trước chỉ dẫn này (đo được hôm nay: `P-016` đang được **ghim hàng 0**, `P-014` *"ưu tiên cao"*, `P-058`) **không** bị nó chặn — chặn chúng là dùng một chỉ dẫn về phân bổ năng lực để giết chính dòng ghim mà file này dặn giữ tới khi `P-016` `done`.
+>
+> ⚠️ Đây là một **điều kiện nhận mục**, không phải một dòng của bảng — nên nó không sửa cột `#`. Trộn hai thứ vào một cột là cách một luật biến mất: bảng trả lời *"duyệt làn theo thứ tự nào"*, khối này trả lời *"mục này có được nhận không"*. Máy canh cho chính luật này **chưa có** (mục `platform/P-063` ô ⬜): tới khi có, đây là lời dặn, và một lượt nhận sai chỉ lộ ra ở bản tin.
+
 Theo phụ lục P1, worker xử lý những việc sau **trước** khi duyệt bảng:
 
 0. **Bước 0 của phụ lục P3** — giải xung đột merge cho hàng đợi. Chạy ở đầu **mọi** lượt worker, trước cả hai mục dưới đây.
