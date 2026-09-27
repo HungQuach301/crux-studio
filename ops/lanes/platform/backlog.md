@@ -83,15 +83,16 @@ Chủ dự án đo được: *"`#92` bị `decision-close` đóng sai (`P-050`/`
 
 - deps: —
 - risk: medium — nới điều kiện đóng thì `[QĐ]` đã xong sẽ nằm mở lâu hơn, và đó là hướng lệch **đúng**: một issue mở oan tốn một dòng bản tin, một issue đóng oan xoá hẳn một việc khỏi hộp quyết định duy nhất (CHARTER 2.5).
-- status: ready
+- status: review
 - nguồn: `#251` comment `2026-09-27T01:48:14Z` chỉ dẫn 1–4; `ops/scripts/decision-close.ts`; mục `platform/P-050`; issue `#92`; `assembly/A-001`; `visual/V-002`
 - tiêu chí xong:
-  - `decisionClose` **không** tự đóng khi issue có comment của chủ dự án đăng **SAU** khi `[QĐ]` mở mà chứa chỉ dẫn chưa có bằng chứng thực hiện. "Comment của chủ dự án" = comment **không** mở đầu 🤖 (`CLAUDE.md` mục 5), không phải "comment của tài khoản `HungQuach301`" — agent dùng chung danh tính đó.
-  - **Bài tái hiện lỗi** (bất biến **I2**): fixture dựng đúng ca `#92` — PR `#89` đã merge, cộng một comment chỉ dẫn mới hơn — và đòi phán quyết là **không đóng**. Bài phải **đỏ** trên `main` hôm nay.
-  - **Rà mọi `[QĐ]` đã tự đóng** từ khi `P-050` vào `main` theo cùng tiêu chí, và **mở lại** ca nào đóng sai. Danh sách kèm phán quyết từng issue, không phải một câu "đã rà".
-  - **Mở lại `#92`** và đưa nó vào *"Việc đang chờ anh"*.
-  - `ops/known-failures.md` có mục cho chữ ký này (chỉ dẫn 4 của `#251` đòi đúng thế).
-  - Khai rõ: việc **dựng hai clip** không thuộc mục này — nó là `assembly/A-007`, xem trường `- hold:` của `assembly/A-001`.
+  - ✅ `decisionClose` **không** tự đóng khi issue có comment của chủ dự án đăng **SAU** khi `[QĐ]` mở mà chứa chỉ dẫn chưa có bằng chứng thực hiện. → `findOwnerInstructionAfterOpen` + `commentIsAfterOpen` (`ops/scripts/decision-close.ts`), chặn đứng **sau** nguồn 1 và **trước** nguồn 2/3. "Comment của chủ dự án" đo qua `ownerCommentBody` (tác giả == owner, đã bóc trích dẫn và mốc ẩn, **không** mở đầu 🤖) — không phải "comment của tài khoản `HungQuach301`", vì agent dùng chung danh tính đó.
+  - ✅ **Bài tái hiện lỗi** (bất biến **I2**): `ops/test/decision-close.test.ts` dựng đúng ca `#92` — PR `#89` merge cộng comment "dựng clip NGAY" — đòi `keep`. Đỏ trên `main` hôm nay đã kiểm: `git grep findOwnerInstructionAfterOpen origin/main` **rỗng** → `import` symbol không có → file test đỏ.
+  - ✅ **Rà mọi `[QĐ]` đã tự đóng** từ `P-050` (12 issue của đợt tự đóng trên `#270`): bảng phán quyết từng issue nằm ở `ops/known-failures.md` `KF-051`. Chỉ **`#92`** và **`#248`** đóng sai — việc thật chưa xong; còn lại đã xong hoặc không có chỉ dẫn của người.
+  - ✅ **Mở lại `#92`** (và `#248`), kèm comment 🤖 nêu lý do. `#92` là `[QĐ]` `reversible` đang chờ chủ dự án chấm clip, nên `ownerWaitingRows` (`P-053`) đưa nó vào *"Việc đang chờ anh"* của bản tin; việc dựng clip là `assembly/A-007` (`#316`). `wasAutoClosedBefore` giữ cho hai issue mở lại không bị đóng lại.
+  - ✅ `ops/known-failures.md` có mục `KF-051` cho chữ ký này (chỉ dẫn 4 của `#251`).
+  - ✅ Khai rõ: việc **dựng hai clip** không thuộc mục này — nó là `assembly/A-007` (đang có PR `#316`), xem trường `- hold:` của `assembly/A-001`. Mục này chỉ sửa **luật đóng** và mở lại issue bị đóng sai.
+  - Khai giới hạn: máy chặn (`decideDecisionClose`) **giữ** mọi issue có comment người sau khi mở vì nó không chứng minh được "đã làm" — hướng lệch an toàn. Phần *"đã làm chưa"* của bảng rà là do lượt chạy **đọc từng issue** kết luận, không phải phép đo của tool; đó là vì sao chỉ 2/6 issue có comment người được mở lại, không phải cả 6.
 
 ### P-062 · Hai phép đo của bước 0 trả "sạch" cho một lần gọi sai, và không gì đỏ
 

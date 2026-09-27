@@ -6,6 +6,43 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-051 · Luật tự đóng `[QĐ]` đóng một issue theo PR đã merge, che mất một chỉ dẫn chủ dự án đăng SAU khi issue mở
+
+> Số **KF-051**: dò `## KF-` trên `main` **và trên mọi nhánh remote đã fetch** trước khi viết (`KF-005`). Cao nhất là `KF-049` trên `main`, và `KF-050` sống trên nhánh của PR `#313` (`I-023`, chưa merge — nên `main` một mình nói `KF-049` và đó là con số thấp). Vậy `KF-051` không đụng ai.
+
+**Nhóm Z** — hỏng mà mọi chỉ báo đều xanh: `pnpm check` xanh, CI xanh, `main` xanh. Cái thiếu là một việc chủ dự án đang chờ bị **xoá khỏi hộp quyết định duy nhất** (CHARTER 2.5) mà không gì đỏ. Cùng họ với `KF-035` (bộ đọc lấy bản cũ) và `KF-037` (việc chờ người rơi khỏi bản tin): một luật dựng ra để tiết kiệm thời gian chủ dự án lại **quay ra xoá** một việc chờ chính anh.
+
+**Chữ ký:** `decision-close.ts` (`platform/P-050`) có ba nguồn bằng chứng để đóng. Nguồn 2 — *mọi PR issue nêu tên đều đã merge* — **đủ mạnh để đóng**, và nó không hỏi *"chủ dự án có đăng gì SAU khi issue mở mà chưa xong không"*. Nên một `[QĐ]` mà PR gắn với nó đã merge bị đóng, kể cả khi chủ dự án vừa để lại một chỉ dẫn mới trên chính issue đó.
+
+**Quan sát được — ca `#92` (chủ dự án gọi tên, chỉ dẫn 1–4 của `#251` `2026-09-27T01:48:14Z`):**
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-21T23:42:30Z` | `#92` mở — `[QĐ] A-001` (30fps hay 60fps), phương án C đã làm ở PR `#89`. |
+| `2026-09-24T16:36:11Z` | Chủ dự án comment: *"C: xác nhận. PR #89 đã merge, nên **dựng clip V-002 ở cả 30fps và 60fps NGAY** ở lượt tới, đăng link + phiếu chấm chỉ số 4–6 WP-003 mục 5 … đưa vào 'Việc đang chờ anh'."* — một **chỉ dẫn mới**, không phải câu "xong". |
+| `2026-09-25T23:08:12Z` | `decision-close` đóng `#92` theo nguồn 2 (PR `#89` merge). Clip **chưa từng được dựng**. |
+
+**Nguyên nhân gốc:** nguồn 2 và 3 không đọc ordering giữa *chỉ dẫn của chủ dự án* và *bằng chứng PR merge*. Một PR merge trước khi chủ dự án nói thêm là "xong"; một chỉ dẫn đăng sau đó là "còn việc" — và luật cũ không phân biệt hai ca.
+
+**Máy chặn từ nay (mục `platform/P-066`):** `decideDecisionClose` thêm một chặn đứng **sau** nguồn 1 (chủ dự án nói xong) và **trước** nguồn 2/3: nếu có một comment của chủ dự án (không mở đầu 🤖) đăng **sau** `createdAt` của issue mà **không** phải câu "xong", coi đó là một chỉ dẫn còn sống → `keep`. `findOwnerInstructionAfterOpen` + `commentIsAfterOpen`, kèm bài kiểm tái hiện ca `#92` trong `ops/test/decision-close.test.ts`. Hướng lệch an toàn: mốc không đọc được → coi như "sau khi mở" (giữ). Workflow `ops/workflows/decision-close.yml` nay truyền `createdAt` của issue vào ảnh chụp.
+
+**Rà lại các `[QĐ]` đã tự đóng từ `P-050` (chỉ dẫn 3 của `#251`), phán quyết từng issue:**
+
+| Issue | Đóng theo | Có chỉ dẫn của chủ dự án sau khi mở? | Việc đó xong chưa? | Phán quyết |
+|---|---|---|---|---|
+| `#92` | nguồn 2 (PR #89) | có — dựng clip V-002 | **CHƯA** (clip chưa dựng; là `assembly/A-007`) | **mở lại** |
+| `#248` | nguồn 2 (PR #247) | có — "A, ba điều kiện" (tạo kênh, OAuth, đo quota) | **CHƯA** (chờ chủ dự án làm, không có "xong bước 6") | **mở lại** |
+| `#213` | nguồn 2 (PR #212) | có — "đồng ý bỏ, có điều kiện" | rồi (`P-043` #229 làm; điều kiện là việc máy) | giữ đóng |
+| `#101` | nguồn 2 (PR #100) | có — ghi quota, mở khoá T-011/T-008 | rồi (việc máy đã chạy qua PR đã merge) | giữ đóng |
+| `#14` | nguồn 2 (PR #10/#11/#13) | có — "B" + hai điều kiện | rồi (`D-C04` merge; chủ dự án xác nhận ở `#270`) | giữ đóng |
+| `#5` | nguồn 2 (PR #4) | có — trả lời 5 câu | rồi (câu trả lời đã được nhận; mục 4 TTS theo `#158`) | giữ đóng |
+| `#127` | nguồn 1 (chủ dự án nói xong) | — | — | giữ đóng |
+| `#265` `#107` `#96` `#67` `#63` | nguồn 2/3 | không (chỉ comment 🤖 hoặc mốc tự đóng) | — | giữ đóng |
+
+Chỉ **`#92`** và **`#248`** là *đóng sai* (việc thật còn treo, đã xoá khỏi bản tin) — đã mở lại. Máy chặn (`decideDecisionClose`) cố ý **giữ** mọi issue có comment người sau khi mở vì nó không chứng minh được "đã làm"; phần *"đã làm chưa"* của bảng này là do lượt chạy **đọc từng issue** kết luận, không phải phép đo của tool. `wasAutoClosedBefore` giữ cho issue mở lại không bị đóng lại lần nữa.
+
+---
+
 ## KF-049 · Chỉ dẫn của chủ dự án không có đường nào vào backlog — sáu lượt worker in `idle` đi qua chín chỉ dẫn, và mọi chỉ báo xanh
 
 > Số **KF-049**: dò `## KF-` trên `main` **và trên mọi nhánh remote** trước khi viết (`git fetch --prune` rồi quét 80 ref). Cao nhất tìm được là **`KF-048`** — nó cùng `KF-047` đang sống trên nhánh của PR `#293` (bản đổi mã của `platform/P-058`, chưa merge — nên `main` một mình sẽ nói `KF-046` và đó là con số sai). Vậy `KF-049` không đụng ai.

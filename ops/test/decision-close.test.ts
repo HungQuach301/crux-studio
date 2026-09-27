@@ -7,7 +7,9 @@ import {
   assertEvidence,
   attachLinkedPrs,
   closeComment,
+  commentIsAfterOpen,
   decideDecisionClose,
+  findOwnerInstructionAfterOpen,
   isOwnerDoneComment,
   linkedPrNumbers,
   markDecisionDocs,
@@ -428,4 +430,118 @@ test('C2 · không neo cuối số thì `#16` khớp oan `#169`', () => {
 
 test('C2 · không có file quyết định nào → mọi issue false (hướng an toàn)', () => {
   assert.equal(markDecisionDocs([issue({ number: 169 })], '')[0]!.hasDecisionDoc, false);
+});
+
+// ─── P-066 · chỉ dẫn của chủ dự án đăng SAU khi [QĐ] mở chặn nguồn 2/3 ────────
+
+const at = (body: string, createdAt: string, author = OWNER): DecisionComment => ({
+  author,
+  body,
+  createdAt,
+});
+
+test('P-066 · BÀI TÁI HIỆN LỖI ca #92: PR đã merge NHƯNG chủ dự án bảo dựng clip NGAY sau đó → keep', () => {
+  // #92 mở, PR #89 merge (nguồn 2 đủ để đóng), rồi chủ dự án comment một chỉ
+  // dẫn mới — "dựng clip V-002 ở 30fps và 60fps NGAY… đưa vào Việc đang chờ
+  // anh" — clip chưa từng dựng. Bản cũ đóng #92 theo PR #89, che việc đang chờ.
+  const decision = decideDecisionClose(
+    issue({
+      number: 92,
+      createdAt: '2026-09-22T09:00:00Z',
+      linkedPrs: [{ number: 89, merged: true, closed: true }],
+      comments: [
+        at(
+          'Dựng clip V-002 ở 30fps và 60fps NGAY ở lượt tới, đăng link + phiếu chấm chỉ số 4–6 ' +
+            'WP-003 mục 5, đưa vào Việc đang chờ anh.',
+          '2026-09-24T23:54:32Z',
+        ),
+      ],
+    }),
+    OWNER,
+  );
+  assert.equal(decision.verdict, 'keep');
+  assert.match(decision.reason, /P-066/);
+});
+
+test('P-066 · chỉ dẫn sau khi mở chặn cả nguồn 3 (docs/decisions)', () => {
+  const decision = decideDecisionClose(
+    issue({
+      number: 92,
+      createdAt: '2026-09-22T09:00:00Z',
+      hasDecisionDoc: true,
+      comments: [at('Còn phải dựng clip trước đã, chưa đóng được.', '2026-09-25T10:00:00Z')],
+    }),
+    OWNER,
+  );
+  assert.equal(decision.verdict, 'keep');
+});
+
+test('P-066 · chủ dự án NÓI XONG (nguồn 1) vẫn đóng, dù có chỉ dẫn — nguồn 1 chạy trước', () => {
+  // Nguồn 1 tìm BẤT KỲ câu "xong" nào; đặt một câu done thì đóng. Đây là ranh
+  // giới: chặn P-066 chỉ đứng SAU nguồn 1, không đè nó.
+  const decision = decideDecisionClose(
+    issue({
+      number: 200,
+      createdAt: '2026-09-22T09:00:00Z',
+      linkedPrs: [{ number: 89, merged: true, closed: true }],
+      comments: [at('Đã thực hiện qua #168.', '2026-09-24T23:54:32Z')],
+    }),
+    OWNER,
+  );
+  assert.equal(decision.verdict, 'close');
+});
+
+test('P-066 · comment 🤖 của agent sau khi mở KHÔNG chặn — chỉ comment của người', () => {
+  const decision = decideDecisionClose(
+    issue({
+      number: 234,
+      createdAt: '2026-09-22T09:00:00Z',
+      linkedPrs: [{ number: 233, merged: true, closed: true }],
+      comments: [at('🤖 Tự đóng đề xuất, chờ soát.', '2026-09-25T10:00:00Z')],
+    }),
+    OWNER,
+  );
+  assert.equal(decision.verdict, 'close');
+});
+
+test('P-066 · comment của người KHÁC / bot sau khi mở KHÔNG chặn', () => {
+  for (const author of ['someone-else', 'github-actions[bot]']) {
+    const decision = decideDecisionClose(
+      issue({
+        number: 234,
+        createdAt: '2026-09-22T09:00:00Z',
+        linkedPrs: [{ number: 233, merged: true, closed: true }],
+        comments: [at('Nên dựng clip trước.', '2026-09-25T10:00:00Z', author)],
+      }),
+      OWNER,
+    );
+    assert.equal(decision.verdict, 'close', author);
+  }
+});
+
+test('commentIsAfterOpen: thiếu/không đọc được mốc → true (hướng an toàn: giữ)', () => {
+  assert.equal(commentIsAfterOpen('2026-09-25T00:00:00Z', undefined), true);
+  assert.equal(commentIsAfterOpen('không-đọc-được', '2026-09-22T09:00:00Z'), true);
+  assert.equal(commentIsAfterOpen('2026-09-25T00:00:00Z', 'không-đọc-được'), true);
+  // Mốc đọc được cả hai: so đúng thứ tự.
+  assert.equal(commentIsAfterOpen('2026-09-25T00:00:00Z', '2026-09-22T09:00:00Z'), true);
+  assert.equal(commentIsAfterOpen('2026-09-20T00:00:00Z', '2026-09-22T09:00:00Z'), false);
+});
+
+test('findOwnerInstructionAfterOpen: chỉ trả comment của người, sau khi mở, không phải câu xong', () => {
+  const base = {
+    number: 92,
+    createdAt: '2026-09-22T09:00:00Z',
+  } as const;
+  // Câu "xong" KHÔNG bị coi là chỉ dẫn.
+  assert.equal(
+    findOwnerInstructionAfterOpen(issue({ ...base, comments: [at('Đã thực hiện qua #168.', '2026-09-25T00:00:00Z')] }), OWNER),
+    undefined,
+  );
+  // Chỉ dẫn thật thì trả về đúng comment đó.
+  const found = findOwnerInstructionAfterOpen(
+    issue({ ...base, comments: [at('Dựng clip NGAY.', '2026-09-25T00:00:00Z')] }),
+    OWNER,
+  );
+  assert.equal(found?.createdAt, '2026-09-25T00:00:00Z');
 });
