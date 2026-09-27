@@ -56,6 +56,7 @@ import {
 import { stripAgentPrefix } from './agent-prefix.ts';
 import { parseBacklog, type BacklogItem } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
+import { claimKeyFromTitle } from './claim-collision.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
 import {
   conflictRows,
@@ -572,61 +573,58 @@ export function computeProgress(
   return { doneLast24h, done3d, throughputPerDay: round2(done3d / 3), byBatch, bottleneck, routineRuns24h };
 }
 
-// --- Z14: cân đối số PR merged với số dòng log theo làn (mục `platform/P-014` sóng 3) ---
+// --- Z14: mỗi PR merged của một mục có dòng log của CHÍNH mục đó (mục `platform/P-014` sóng 3) ---
 
 /**
- * Ngưỡng lệch cho phép giữa số PR đã merge của một làn và số dòng log **của
- * việc** (không kể dòng bước 0) của làn đó trong cùng cửa sổ. `1`: dòng log
- * của một mục mang `at` lúc việc chạy, có thể sớm hơn mép cửa sổ một chút,
- * nên một PR merge trong cửa sổ mà dòng log của nó rơi ngay ngoài mép là ca
- * lệch một hợp lệ — chỉ báo từ lệch **hai** trở lên.
+ * Số PR merged thiếu dòng log mà một làn được phép có trước khi bị báo. `0`:
+ * phép đo ghép từng PR với dòng log của chính mục nó (xem `laneLogBalance`),
+ * nên không còn ca lệch hợp lệ nào cần hấp thụ — một PR thiếu là một PR thiếu.
  */
-export const LANE_LOG_GAP_THRESHOLD = 1;
+export const LANE_LOG_GAP_THRESHOLD = 0;
 
 export interface LaneLogBalanceRow {
   lane: LaneName;
-  /** PR đã merge mang mã mục của làn này (`laneFromTitle`), `mergedAt` trong cửa sổ. */
+  /** PR đã merge mang chữ ký mục `[<lane>] <id> — …` của làn này (`claimKeyFromTitle`), `mergedAt` trong cửa sổ. PR bước 0 không tính. */
   mergedPrs: number;
-  /** Dòng log của làn này trong cửa sổ, **trừ** dòng bước 0 (nhịp tim, không gắn với một mục). */
-  logLines: number;
-  /** `mergedPrs - logLines`. Dương = ghi log THIẾU so với việc đã vào `main` (bất biến I8 có thể đã thủng). */
+  /** Trong số đó, bao nhiêu PR có ít nhất một dòng log `ref = <lane>/<id>` (bất kể mốc `at`). */
+  withLog: number;
+  /** PR không có dòng log nào của mục mình, dạng `#<số> <id>`, theo thứ tự `mergedAt`. */
+  missing: string[];
+  /** `missing.length`. Dương = ghi log THIẾU so với việc đã vào `main` (bất biến I8 có thể đã thủng). */
   gap: number;
   /** `gap > threshold`. */
   flagged: boolean;
 }
 
 /**
- * Z14 (`ops/known-failures.md` nhóm Z): một lần chạy chết **sau khi** việc
- * vào `main` nhưng **trước** khi ghi dòng `costUsd` (bất biến I8) không làm
- * gì đỏ — chi phí thật cao hơn chi phí thấy được, và ngân sách học trôi.
- * Phép bắt đúng công thức nhóm Z: **một thứ ở ngoài đếm và so**, không phải
- * một thứ tự khai.
+ * Z14 (`ops/known-failures.md` nhóm Z): một lần chạy đưa việc vào `main` mà
+ * không ghi dòng `costUsd` (bất biến I8) không làm gì đỏ — chi phí thật cao
+ * hơn chi phí thấy được, và ngân sách học trôi. Phép bắt đúng công thức nhóm
+ * Z: **một thứ ở ngoài đếm và so**, không phải một thứ tự khai.
  *
- * So **số PR đã merge theo làn** với **số dòng log của làn** trong cùng cửa
- * sổ (`at` / `mergedAt` ≥ `since`). Báo **một chiều** — chỉ khi số dòng log
- * ÍT hơn số PR merged quá ngưỡng: chiều ngược lại (log nhiều hơn merge) là
- * bình thường, vì một mục chạy nhiều lượt trước khi merge và việc chưa merge
- * vẫn ghi log. Dòng **bước 0** bị loại khỏi phép đếm: nó là nhịp tim ghi ở
- * mọi lượt (phụ lục P1/P3 bước 0) và dồn hết vào làn `integration`, nên tính
- * vào sẽ vừa thổi phồng `integration` vừa che đúng ca thiếu log của chính
- * làn đó.
+ * Với mỗi PR merged trong cửa sổ (`mergedAt` ≥ `since`) mang chữ ký mục
+ * `[<lane>] <id> — …`, tìm **một** dòng log có `ref = <lane>/<id>`. Không có
+ * thì PR đó vào `missing`. **Không** đòi `at` ≤ `mergedAt`: `at` là mốc tự
+ * khai, và các dòng ghi bù ngày đầu mang mốc làm tròn **sau** lúc merge
+ * (`I-003`, `I-010`, `P-016`, `VF-G9`, `T-001` — đo trên `main` 26738ff);
+ * đòi thứ tự mốc sẽ báo nhầm đúng những mục ĐÃ có dòng log.
  *
- * ⚠️ Giới hạn đã khai, không giấu — cả hai chiều:
- * - **Che (thiếu, false-negative):** phép đếm là **số dòng**, gồm cả dòng
- *   `kind: 'stage'` của lượt chạy tập, nên nhiều lượt hoặc nhiều stage của
- *   một mục có thể che một mục khác thiếu hẳn dòng log trong cùng làn + cửa
- *   sổ.
- * - **Báo thừa (false-positive):** dòng log mang `at` lúc **việc chạy**, còn
- *   `mergedAt` là lúc **merge** — và cơ chế merge của dự án tách hai mốc ra
- *   xa (`automerge-delayed` chờ ≥12 giờ, `owner-merge` có thể nhiều ngày).
- *   Một làn merge ≥2 PR trong cửa sổ mà dòng log của chúng đã rơi ra ngoài
- *   cửa sổ sẽ bị báo nhầm dù mọi lượt đã ghi log đúng; ngưỡng chỉ hấp thụ
- *   một ca như vậy mỗi làn.
+ * **Vì sao ghép từng PR, không đếm theo cửa sổ** (bản đầu của mục này đếm
+ * "số PR merged của làn" so với "số dòng log của làn" trong cùng cửa sổ, và
+ * vòng soát `#223` đo được nó báo nhầm **2/2** làn hoạt động):
+ * - PR bước 0 (`[integration] bước 0 lượt …`) mở bằng tiền tố làn mà không
+ *   mang mã mục. Đếm chúng ở vế merge trong khi vế log loại dòng bước 0 cho
+ *   `integration` 16 merged / 0 log ở 24 giờ — lệch cấu trúc, mỗi ngày.
+ * - Dòng log mang `at` lúc **việc chạy**, `mergedAt` là lúc **merge**, và
+ *   `automerge-delayed` tách hai mốc ≥ 12 giờ. Đo trên `main` 26738ff: cửa
+ *   sổ 24 giờ cho `platform` 5 merged / 2 log, trong khi **cả 5** mục đều có
+ *   dòng log — chỉ là dòng đó nằm trước mép cửa sổ.
+ * Ghép theo mục thì cả hai ca biến mất, nên ngưỡng về `0`.
  *
- * Cả hai chấp nhận được vì đây là **báo động** (CHARTER mục 4), không phải
- * cổng chặn: nó bắt ca cả một làn im (merge có mà dòng log không), và báo
- * thừa là chiều an toàn của nhóm Z. Chỗ đọc bản tin xem đây là gợi ý cần
- * xác minh, không phải kết luận.
+ * ⚠️ Giới hạn đã khai, không giấu: mục chạy nhiều **sóng** (nhiều PR cho một
+ * mã, như chính `P-014`) — dòng log của sóng trước đủ để sóng sau qua, nên
+ * một sóng sau thiếu dòng log không bị bắt. Và phép đo chỉ nói "có dòng", không
+ * nói `costUsd` trong dòng đó là thật.
  */
 export function laneLogBalance(
   mergedPrs: readonly GhPr[],
@@ -635,32 +633,37 @@ export function laneLogBalance(
   threshold: number = LANE_LOG_GAP_THRESHOLD,
 ): LaneLogBalanceRow[] {
   const sinceMs = Date.parse(since);
-  const inWindow = (iso: string): boolean => {
-    const t = Date.parse(iso);
-    return Number.isFinite(t) && t >= sinceMs;
-  };
 
-  const merged = new Map<LaneName, number>();
-  for (const pr of mergedPrs) {
-    if (typeof pr.mergedAt !== 'string' || !inWindow(pr.mergedAt)) continue;
-    const lane = laneFromTitle(pr.title);
-    if (lane === null) continue; // PR gộp/revert/sync không mang mã mục — không phải một mục done.
-    merged.set(lane, (merged.get(lane) ?? 0) + 1);
-  }
+  // KHÔNG loại dòng bước 0 ở đây: ref của nó (`integration/step0-<mốc>-…`)
+  // không bao giờ trùng `<lane>/<id>` của một mục nên nó tự không khớp, còn
+  // hình dạng cũ `platform/P-016` CHÍNH LÀ ref của mục `P-016` — loại nó đi
+  // là báo nhầm mục đó (đo được ở cửa sổ 7 ngày trên `main` 26738ff).
+  const refs = new Set(logLines.map((line) => line.ref));
 
-  const logs = new Map<LaneName, number>();
-  for (const line of logLines) {
-    if (isStep0Line(line) || !inWindow(line.at)) continue;
-    logs.set(line.lane, (logs.get(line.lane) ?? 0) + 1);
+  const inWindow = mergedPrs
+    .map((pr) => ({ pr, t: typeof pr.mergedAt === 'string' ? Date.parse(pr.mergedAt) : Number.NaN }))
+    .filter(({ t }) => Number.isFinite(t) && t >= sinceMs)
+    .sort((a, b) => a.t - b.t);
+
+  const byLane = new Map<LaneName, { merged: number; withLog: number; missing: string[] }>();
+  for (const { pr } of inWindow) {
+    // Chỉ PR mang CHỮ KÝ MỤC (`claimKeyFromTitle`), không phải mọi tiêu đề mở
+    // bằng `[<lane>]`: PR gộp/revert/sync/bước 0 không phải một mục done.
+    const key = claimKeyFromTitle(stripAgentPrefix(pr.title));
+    if (key === null) continue;
+    const acc = byLane.get(key.lane) ?? { merged: 0, withLog: 0, missing: [] };
+    acc.merged++;
+    if (refs.has(`${key.lane}/${key.id}`)) acc.withLog++;
+    else acc.missing.push(`#${pr.number} ${key.id}`);
+    byLane.set(key.lane, acc);
   }
 
   const rows: LaneLogBalanceRow[] = [];
   for (const lane of LANES) {
-    const m = merged.get(lane) ?? 0;
-    const l = logs.get(lane) ?? 0;
-    if (m === 0 && l === 0) continue; // làn không hoạt động trong cửa sổ — không có gì để so.
-    const gap = m - l;
-    rows.push({ lane, mergedPrs: m, logLines: l, gap, flagged: gap > threshold });
+    const acc = byLane.get(lane);
+    if (acc === undefined) continue; // làn không merge mục nào trong cửa sổ — không có gì để so.
+    const gap = acc.missing.length;
+    rows.push({ lane, mergedPrs: acc.merged, withLog: acc.withLog, missing: acc.missing, gap, flagged: gap > threshold });
   }
   return rows;
 }
@@ -704,8 +707,8 @@ export interface DigestMetrics {
   /** Mục "Tiến độ" (mục `platform/P-019`). */
   progress: ProgressMetrics;
   /**
-   * Z14 (mục `platform/P-014` sóng 3): cân đối số PR merged với số dòng log
-   * theo làn. Mọi làn hoạt động trong cửa sổ, cả làn khớp lẫn làn lệch —
+   * Z14 (mục `platform/P-014` sóng 3): mỗi PR merged của một mục có dòng log
+   * của chính mục đó không, gom theo làn. Mọi làn có merge trong cửa sổ, cả làn khớp lẫn làn lệch —
    * `renderDigestMetrics` lọc lấy `flagged`, nhưng giữ cả để bên đọc máy
    * thấy được số thật của từng làn.
    */
@@ -825,11 +828,11 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
   const flaggedBalance = metrics.laneLogBalance.filter((row) => row.flagged);
   out.push('', `Cân đối log/merge theo làn (Z14): ${flaggedBalance.length} làn lệch`);
   if (flaggedBalance.length === 0) {
-    out.push('  Mọi làn hoạt động khớp số dòng log với số PR merged trong ngưỡng.');
+    out.push('  Mọi PR merged của một mục đều có dòng log của chính mục đó.');
   } else {
     for (const row of flaggedBalance) {
       out.push(
-        `- ${row.lane}: ${row.mergedPrs} PR merged / ${row.logLines} dòng log (thiếu ${row.gap} dòng — bất biến I8 có thể đã thủng)`,
+        `- ${row.lane}: ${row.gap}/${row.mergedPrs} PR merged không có dòng log của mục (${row.missing.join(', ')}) — bất biến I8 có thể đã thủng`,
       );
     }
   }

@@ -664,32 +664,37 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     dài nhiều ngày sẽ thành nhiều chục lần @nhắc, và đúng sáu làn đang quá ngưỡng ngay hôm nay. Nhịp cảnh báo là
     phạm vi mục `P-034`. Đường phát hiện **độc lập** của Z7 đi qua bản tin ngày: CHARTER phụ lục P2 mục "Tiến độ"
     nay gọi `pnpm lanes:heartbeat` — một lần mỗi ngày, 0 lần thao tác thêm của chủ dự án.
-- **Sóng 3 — xong thêm: Z14** (lượt `crux-worker-2`, 2026-09-24).
-  - **Z14** (so số PR merged theo làn với số dòng log cùng khoảng): `laneLogBalance` trong
+- **Sóng 3 — xong thêm: Z14** (lượt `crux-worker-2`, 2026-09-24; viết lại sau vòng soát ở lượt `crux-worker-1`, 2026-09-27).
+  - **Z14** (mỗi PR merged của một mục có dòng log của chính mục đó): `laneLogBalance` trong
     `ops/scripts/digest-metrics.ts`, đưa vào bản tin ngày qua `renderDigestMetrics` (mục "Cân đối log/merge theo
-    làn (Z14)") và trường `laneLogBalance` của `DigestMetrics`. **7** bài ở `ops/test/digest-metrics.test.ts`
-    (nền 39 → 46). PR `#194` từng sửa cùng file nay đã đóng/merge, nên không còn xung đột hàng đợi để né.
-  - **Đúng công thức nhóm Z — một thứ ở ngoài đếm và so, không tự khai.** So số PR đã merge theo làn
-    (`laneFromTitle`) với số dòng log **của việc** theo làn trong cùng cửa sổ `since`. Báo **một chiều**: chỉ khi
-    log ÍT hơn merge quá `LANE_LOG_GAP_THRESHOLD` (1) — log nhiều hơn merge là bình thường (một mục chạy nhiều
-    lượt trước khi merge, việc chưa merge vẫn ghi log).
-  - **Ba chỗ dễ làm sai, mỗi chỗ một bài âm:** (1) **dòng bước 0 bị loại** (`isStep0Line`) — bước 0 ghi một dòng
-    ở mọi lượt và dồn vào `integration`, tính vào thì vừa thổi phồng vừa che ca thiếu log của chính làn đó; bài âm
-    dựng "integration chỉ có dòng bước 0" và khẳng định vẫn `flagged`. (2) **ngưỡng dùng `>` không `>=`** — bài âm
-    khẳng định lệch = ngưỡng thì KHÔNG báo, lệch > ngưỡng thì báo. (3) **in cả khi 0 làn lệch** — im lặng ở đây
-    đúng là thứ nhóm Z cấm (bài học Z7/Z15); bài kiểm khẳng định dòng "Mọi làn … khớp …" xuất hiện.
-  - **Giới hạn đã khai, không giấu:** phép đếm là **số dòng**, nên nhiều lượt của một mục có thể che một mục khác
-    thiếu hẳn dòng log trong cùng làn + cửa sổ. Đây là báo động (CHARTER mục 4), không phải cổng chặn — bắt ca cả
-    một làn im, không hứa bắt mọi dòng lẻ.
+    làn (Z14)") và trường `laneLogBalance` của `DigestMetrics`. **11** bài ở `ops/test/digest-metrics.test.ts`.
+  - **Đúng công thức nhóm Z — một thứ ở ngoài đếm và so, không tự khai.** Với mỗi PR merged trong cửa sổ `since`
+    mang chữ ký mục `[<lane>] <id> — …` (`claimKeyFromTitle`, cùng bộ đọc với `pnpm claims`), tìm một dòng log
+    `ref = <lane>/<id>`. Không có thì PR vào `missing` (dạng `#<số> <id>`); làn có `missing` khác rỗng thì
+    `flagged` (`LANE_LOG_GAP_THRESHOLD` = **0**). Bản tin in cả khi 0 làn lệch (bài học Z7/Z15).
+  - ✅ **Hai chỗ CHẶN của vòng soát `2026-09-27T09:12Z` (PR `#223`) — đã sửa, đo lại trên log thật.**
+    1. **PR bước 0 bị đếm ở vế merge.** Nay vế merge chỉ nhận tiêu đề mang **mã mục**, nên `[integration] bước 0
+       lượt …` và `[integration] crux-integrator hằng ngày …` không còn được tính. Sửa riêng chỗ đó **chưa đủ**: đo
+       lại trên `main` `26738ff` vẫn ra `platform` **5 merged / 2 log → flagged** ở 24 giờ, trong khi **cả 5** mục
+       đều có dòng log. Lý do là lệch mốc `at`/`mergedAt` mà docblock cũ đã khai, và `automerge-delayed` biến nó
+       thành ca thường, không còn là ngoại lệ. Nên phép đo đổi từ *đếm theo cửa sổ* sang *ghép từng PR với dòng
+       log của mục nó*. Dòng log bất kể mốc `at` vẫn được tính, vì các dòng ghi bù ngày đầu mang mốc làm tròn
+       **sau** lúc merge (`I-003`, `I-010`, `VF-G9`, `T-001`).
+    2. **Đường nối `collectMetrics → laneLogBalance` không có bài kiểm.** Nay có bài dựng cây tạm và
+       `assert.deepEqual` trên `metrics.laneLogBalance`.
+  - **Đo trên `main` `26738ff`** (PR từ `git log --first-parent`, log từ `readRunLogs`). Cửa sổ 24 giờ: **0 làn
+    lệch**, trước đây là 2/2 báo nhầm. Cửa sổ 72 giờ: 1 PR thiếu (`#290 KF-046`, tiêu đề mang mã KF, không phải mã
+    mục, và không có dòng log nào). Cửa sổ 7 ngày thêm các PR thiếu thật: `#226 I-021`, `#166 P-030`, cùng vài
+    PR ngày đầu (`#2 P-001`, `#4 VF-001`…). Mọi PR được báo đều **không có file log** của mục mình.
+  - **Tám phép phá thử, cả tám đều bị bắt:** đường nối rỗng · bỏ phép lọc `flagged` của bản tin · `>=` thành `>` ở
+    mép cửa sổ · bỏ sắp theo `mergedAt` · ngưỡng `>` thành `>=` · quay về `laneFromTitle` · loại lại dòng bước 0
+    ở vế log · để mốc hỏng (`NaN`) lọt cửa sổ.
+  - **Giới hạn đã khai, không giấu:** mục nhiều **sóng** (nhiều PR một mã, như chính `P-014`) thì dòng log của sóng
+    trước đủ cho sóng sau qua. Phép đo chỉ nói "có dòng", không nói `costUsd` trong dòng là thật.
   - **Z6 chưa làm.** Z6 (nhịp tim của `cron`) đòi `main-ci` ghi một file vào repo, tức một đường ghi vào `main`
     không qua PR, cộng bước đọc của `crux-integrator` mỗi thứ Hai — câu hỏi thiết kế riêng, chạm workflow, đáng
     một PR riêng.
   - `status` giữ **`ready`**: Z2, Z6 và Z8 vẫn đang chờ.
-  - ⬜ **Z14 (PR `#223`) — vòng soát ngữ cảnh sạch ngày 2026-09-27 tìm HAI chỗ CHẶN, cả hai đã đo lại độc lập.** PR `#223` **không** được gắn nhãn merge vì hai chỗ này, không vì nhãn rỗng của `KF-044` nữa (chỗ đó đã sửa ở `P-048`):
-    1. **Phép loại dòng bước 0 chỉ áp cho một vế**, nên chính hiện vật của bước 0 thành báo động. `laneLogBalance` bỏ dòng log bước 0 khỏi vế **log** (`isStep0Line`) nhưng vẫn đếm **PR** bước 0 ở vế **merge** — mà PR bước 0 gần như là toàn bộ PR làn `integration`. Đo thật trên `origin/main` `196a034`: `integration` **16 merged / 0 log / gap 16 → flagged** (24h), **26 / 0 / 26** (48h), **37 / 1 / 36** (72h); `platform` **9 / 3 / 6 → flagged** (24h) và **14 / 7 / 7** (48h). Ngưỡng là **1**, nên lệch cấu trúc vượt ngưỡng 6–36 lần, và hôm nay **2 trên 2** làn hoạt động đều là **báo nhầm** — tỉ lệ tín hiệu 0/2. Đúng thứ `ops/known-failures.md` cấm: *"một luật không ai qua được là một luật sẽ bị tắt"*. Docblock chỉ khai một chiều báo thừa (lệch mốc `at`/`mergedAt`) và kết luận ngưỡng hấp thụ *"một ca mỗi làn"* — ca này không hấp thụ được.
-    2. **Đường nối `collectMetrics → laneLogBalance` không có bài kiểm nào.** Phá thử: đổi dòng `laneLogBalance: laneLogBalance(...)` trong `collectMetrics` thành `laneLogBalance: []` → **58/58 xanh**. Nghĩa là đường nối chết thì bản tin in `0 làn lệch` mãi mãi và không gì đỏ — đúng nhóm **Z** mà chính Z14 sinh ra để giết. Fixture của bài `collectMetrics: đọc backlog và log thật…` đã dựng sẵn cây tạm, nên thêm một `assert.deepEqual` là đủ.
-    Cộng **năm** phép phá thử sống sót nữa (báo hai chiều · phép lọc `flagged` của bản tin · PR không mã mục bị dồn vào một làn · `laneFromTitle` đổi thành `laneFromBranch` · ngày hỏng rơi ra ngoài cửa sổ) — bài kiểm yếu, không phải mã yếu, và khai ra chứ không nhận là đã phủ.
-    Cây đã gộp `origin/main` `196a034` chạy **`pnpm check` EXIT=0 · 1735/1735 pass · 0 fail · 0 skipped**, tập vàng khớp 6/6 — tức hai chỗ trên **không** làm `main` đỏ; chúng làm bản tin nói sai mỗi ngày. Cửa merge vẫn là `open`.
 
 ### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
