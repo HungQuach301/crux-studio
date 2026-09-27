@@ -270,7 +270,7 @@ export function isStep0PendingBranch(branch: string): boolean {
  * (`<tiền tố>/` trơn) — bên gọi **phải nói ra** chỗ `null` chứ không im
  * lặng bỏ qua. Nó KHÔNG kiểm mã có hợp lệ không: việc đó là của
  * `parseStep0LogId`, và trộn hai phép kiểm vào một hàm là cách một trong
- * hai thành mã chết (`KF-041`, vòng soát của `P-056`).
+ * hai thành mã chết (`KF-048`, vòng soát của `P-056`).
  */
 export function step0LogIdFromPendingBranch(branch: string): string | null {
   if (!isStep0PendingBranch(branch)) return null;
