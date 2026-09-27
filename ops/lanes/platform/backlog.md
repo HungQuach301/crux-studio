@@ -102,7 +102,7 @@ Hai chỗ khác nhau, **cùng một chữ ký**: một phép đo của bước 0
 
 - deps: —
 - risk: low — cả hai chỗ sửa là *làm cho phép đo ném thay vì trả ca lành*. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
-- status: review
+- status: done
 - nguồn: vòng soát ngữ cảnh sạch (bước 6) của PR bước 0 lượt `crux-worker-2` `2026-09-26T22:18Z`, phát hiện `N6` và phép phá thử thứ 15; `ops/scripts/step0-pending-branches.ts`; `ops/scripts/cross-lane.ts`; `ops/known-failures.md` `KF-041`; mục `platform/P-056`
 - tiêu chí xong:
   - `step0PendingBranches` đo **đối chiếu với `origin/main`**, không với cây làm việc — hoặc, nếu giữ mặc định cây, thì **nói ra** trong báo cáo rằng nó đang đo cây nào và ném khi không xác định được nhánh chính. Im lặng là thứ duy nhất không được phép.
@@ -130,7 +130,7 @@ Hai chỗ đau, và chỗ thứ hai đắt hơn:
 
 - deps: —
 - risk: low — chỗ sửa là một phép **vô hiệu hoá biến môi trường kế thừa** ở đúng một hàm, cộng bài kiểm. Không chạm vùng bảo vệ, không chạm `automerge.yml`, không đổi luật cổng nào.
-- status: review
+- status: done
 - nguồn: `ops/known-failures.md` `KF-045`; `ops/scripts/integrator-lockfile.ts` (`verifyLockfileInstall`); `ops/test/integrator-clean-merge-lockfile.test.ts:151`; phép đo bước 0 lượt `crux-worker-2` `2026-09-26T12:2xZ`
 - tiêu chí xong:
   - `verifyLockfileInstall` (và mọi chỗ khác trong `ops/scripts/**` spawn `pnpm`) chạy `pnpm` với **`npm_config_reporter` bị xoá khỏi `env`** — hoặc đặt tường minh về mức in đủ chữ. Chọn cách nào thì **ghi lý do tại chỗ**: một hàm cài thật mà đầu ra của nó là bằng chứng duy nhất cho một quyết định thì không được để người gọi tắt được đầu ra đó.
@@ -696,7 +696,7 @@ phần còn lại của `P-014`.
 
 - deps: —
 - risk: low
-- status: review
+- status: done
 - nguồn: vòng soát của `P-014` sóng 2; CHARTER mục 4; `D-C04`
 - tiêu chí xong:
   - Bộ dò đếm cả `ops/logs/<làn>/`, và **không** đếm trùng khi một PR chạm cả `ops/lanes/x/` lẫn `ops/logs/x/`
@@ -1798,7 +1798,7 @@ Mục này có **hai vế**, và chúng **không** cùng một chỗ hỏng — 
 
 - deps: platform/P-057
 - risk: medium — cổng mới đỏ trên một file mà **mọi** làn đều ghi vào (`ops/known-failures.md`, `ops/lanes/*/backlog.md`), nên một luật quá rộng sẽ chặn oan mọi PR. Hướng lệch phải là **báo nhầm không bao giờ, bỏ sót thì thà bỏ sót một ca lạ** — ngược hướng `claim-collision.ts`, và có lý do: cổng này **chặn merge**, còn `claimCheck` chỉ **đo**.
-- status: review
+- status: done
 - nguồn: bước 3 lượt `crux-worker-2` `2026-09-26T02:22:36Z` (`pnpm claims` ra `free` trong khi `#224` và `#274` cùng mở); `ops/known-failures.md` `KF-042` và `KF-025` (lần thứ ba); ba lời hẹn chưa ai nhận ở `#261`, `#269`, `#231`
 - tiêu chí xong:
   - ✅ **Hàm thuần, không đọc đĩa** — nhận nội dung một file Markdown cộng mẫu tiêu đề (`### <id>` cho backlog, `## <id>` cho `known-failures.md`), trả danh sách mã xuất hiện **hơn một lần** kèm **số dòng của từng lần**. Số dòng là phần bắt buộc: một danh sách chỉ có mã không nói được nên đổi cái nào. ✅ `ops/scripts/duplicate-headings.ts` — `duplicateHeadings(content, level)`, hàm thuần, không đọc đĩa; `lines` là số dòng 1-based của **từng** lần. Phá thử "số dòng lệch 1" → 4 bài đỏ. **Vòng soát ngữ cảnh sạch siết lại luật đọc mã:** bản đầu cắt ở khoảng trắng bằng `[A-Za-z0-9._-]*`, và lớp ký tự đó dừng ở chữ có dấu — `## Cách thêm một mục` cộng `## Cấu trúc một khối` ra cùng "mã" `C`, `## Nhóm Z` cộng `## Nhóm Y` ra `Nh`. Cả hai tiêu đề gốc **đã nằm sẵn** trong `ops/known-failures.md`, nên một mục mới tên tiếng Việt làm `pnpm check` đỏ cho MỌI PR của MỌI làn — đúng chiều hỏng mà docblock tự khai là đã tránh. Nay `ID` đòi **hình dạng mã** (`^[A-Za-z]{1,3}-[A-Za-z]?\d+[a-z]?`), tiêu đề không mang mã thì bỏ qua; ba bài mới ghim cả hai chiều, gồm một bài dán `## Nhóm Y` vào chính file thật.
@@ -1840,7 +1840,7 @@ thiếu ở đầu nhánh                           → 33   ← ổn định �
 
 - deps: —
 - risk: medium — chạm `ops/workflows/watchdog.yml` (workflow **không** dùng secret và **không** phát hành, nên cửa merge là `automerge-delayed`, không phải `owner-merge`; vẫn **chạy tool mà lấy nhãn**, đừng đoán — `CLAUDE.md` mục 2). Hiệu lực chỉ tới sau khi PR vào nhánh chính và `sync-workflows.yml` chép sang (`CLAUDE.md` mục 4), nên đừng chờ nó chạy trên nhánh PR.
-- status: review
+- status: done
 - nguồn: bước 0e lượt `crux-worker-2` `2026-09-26T07:25:25Z`; `ops/known-failures.md` `KF-043`; món nợ mà `#281` tự khai và hoãn; `P-043` (vế ghi của nhịp tim) và `P-056` (tiền lệ một dấu hiệu `watchdog.yml` đọc remote)
 - tiêu chí xong:
   - ✅ **Hàm thuần, không đụng mạng, không đọc đĩa** — nhận hai danh sách tên file (`heartbeat/` ở đầu nhánh, và `heartbeat/` qua mọi commit) và trả về những tên **thiếu ở đầu nhánh** kèm mốc của từng tên. Mốc tách ra khỏi tên bằng **`parseStep0LogId`** của kernel (`kernel/src/log.ts`, phép **đảo** của `step0LogId` — `step0LogId` chỉ *ghép* tên, đừng gọi nó để đọc ngược), **không** tự cắt chuỗi. Cùng luật `P-056` đã dùng.

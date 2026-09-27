@@ -17,6 +17,7 @@ import {
   openAiEmbeddingProvider,
   readEmbeddingModelTable,
   redactSecret,
+  resolveEmbeddingsAuth,
   type EmbeddingModel,
   type ProbePair,
 } from '../src/embeddings.ts';
@@ -245,4 +246,77 @@ test('cheapestAdequateModel: không ai đạt thì trả null, không hạ tiêu
     { model: MODEL, separation: { model: MODEL.model, minSame: 0.2, maxDifferent: 0.5, margin: -0.3, adequate: false } },
   ]);
   assert.equal(pick, null);
+});
+
+/* ------------------- T-015: chọn cách ký theo môi trường ------------------- */
+
+test('resolveEmbeddingsAuth: có secret → mode `secret`, kèm khoá để ký', () => {
+  const auth = resolveEmbeddingsAuth({ [EMBEDDINGS_SECRET_NAME]: 'sk-x' });
+  assert.equal(auth.mode, 'secret');
+  assert.equal(auth.apiKey, 'sk-x');
+});
+
+test('resolveEmbeddingsAuth: thiếu secret + phiên cloud → mode `proxy`, KHÔNG kèm khoá', () => {
+  const auth = resolveEmbeddingsAuth({ CLAUDE_CODE_REMOTE: 'true' });
+  assert.equal(auth.mode, 'proxy');
+  assert.equal(auth.apiKey, undefined);
+});
+
+test('resolveEmbeddingsAuth: thiếu secret + KHÔNG phải phiên cloud → mode `stop`', () => {
+  assert.equal(resolveEmbeddingsAuth({}).mode, 'stop');
+  // `CLAUDE_CODE_REMOTE` khác đúng chuỗi "true" vẫn là stop — không đoán.
+  assert.equal(resolveEmbeddingsAuth({ CLAUDE_CODE_REMOTE: 'false' }).mode, 'stop');
+  assert.equal(resolveEmbeddingsAuth({ CLAUDE_CODE_REMOTE: '1' }).mode, 'stop');
+});
+
+test('resolveEmbeddingsAuth: KHÔNG mượn OPENAI_API_KEY, kể cả trong phiên cloud', () => {
+  // Có OPENAI_API_KEY nhưng thiếu EMBEDDINGS_API_KEY, ở phiên cloud → proxy,
+  // và apiKey vẫn undefined: không bao giờ lấy OPENAI_API_KEY làm khoá.
+  const auth = resolveEmbeddingsAuth({ OPENAI_API_KEY: 'sk-khac', CLAUDE_CODE_REMOTE: 'true' });
+  assert.equal(auth.mode, 'proxy');
+  assert.equal(auth.apiKey, undefined);
+  // Ngoài cloud, có OPENAI_API_KEY cũng KHÔNG cứu được: vẫn stop.
+  assert.equal(resolveEmbeddingsAuth({ OPENAI_API_KEY: 'sk-khac' }).mode, 'stop');
+});
+
+test('resolveEmbeddingsAuth: secret toàn khoảng trắng là thiếu (cloud → proxy)', () => {
+  assert.equal(resolveEmbeddingsAuth({ [EMBEDDINGS_SECRET_NAME]: '   ', CLAUDE_CODE_REMOTE: 'true' }).mode, 'proxy');
+});
+
+/** Fetch giả bắt lại headers của request để kiểm nhánh có/không `Authorization`. */
+function capturingFetch(): { fetch: typeof fetch; lastHeaders: () => Record<string, string> } {
+  let captured: Record<string, string> = {};
+  const impl = (async (_url: string, init: RequestInit) => {
+    captured = { ...(init.headers as Record<string, string>) };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ index: 0, embedding: [1, 0, 0] }], usage: { total_tokens: 1 } }),
+      text: async () => '',
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+  return { fetch: impl, lastHeaders: () => captured };
+}
+
+test('T-015 · provider CÓ khoá → gửi header `Authorization: Bearer`', async () => {
+  const cap = capturingFetch();
+  const provider = openAiEmbeddingProvider({ apiKey: 'sk-x', model: MODEL, fetchImpl: cap.fetch });
+  await provider.embed(['a']);
+  assert.equal(cap.lastHeaders().authorization, 'Bearer sk-x');
+});
+
+test('T-015 · provider KHÔNG khoá (phiên cloud) → KHÔNG tự đặt `Authorization`', async () => {
+  const cap = capturingFetch();
+  const provider = openAiEmbeddingProvider({ model: MODEL, fetchImpl: cap.fetch });
+  await provider.embed(['a']);
+  assert.equal('authorization' in cap.lastHeaders(), false, 'phải để proxy gắn key, không tự đặt header');
+  // Ca âm đối chứng: nhánh có khoá thì header PHẢI xuất hiện (đã kiểm ở test trên).
+  assert.equal(cap.lastHeaders()['content-type'], 'application/json');
+});
+
+test('T-015 · provider khoá rỗng cũng KHÔNG đặt header (không gửi `Bearer `)', async () => {
+  const cap = capturingFetch();
+  const provider = openAiEmbeddingProvider({ apiKey: '', model: MODEL, fetchImpl: cap.fetch });
+  await provider.embed(['a']);
+  assert.equal('authorization' in cap.lastHeaders(), false);
 });
