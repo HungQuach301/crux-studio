@@ -818,6 +818,25 @@ nhánh việc.
 
 ---
 
+### I-023 · Hai worker mở hai PR bước 0 cùng gộp cùng một bộ nhánh chờ, và phép tránh duy nhất là con mắt của lượt chạy
+
+`KF-050`, đo được `2026-09-27` bởi vòng soát ngữ cảnh sạch của `#309`: `#309` mở `11:38:12Z`, `#310` mở `11:38:49Z` — **37 giây** — cả hai nhận `step0PrGate` = `heartbeat-due` và cùng `cherry-pick` cùng bộ nhánh chờ. `#310` merge trước nên sáu cherry-pick của `#309` thành **no-op**, và tiêu đề `… gộp 6 nhánh chờ` thành một câu sai trong lịch sử `main`.
+
+Lần này **vô hại** vì hai bên cherry-pick cùng một commit nên blob giống nhau từng byte (đo thật: `git merge-tree` EXIT=0, mỗi file 1 dòng JSON, 0 cặp `(at, ref)` trùng). Nó **sẽ** hại khi hai lượt ghi hai dòng **khác nhau** cho cùng một lượt chạy: `.gitattributes` khai rõ *"Union **không** khử trùng lặp"*, nên chi phí bị đếm hai lần mà `main` xanh — nhóm **Z**.
+
+⚠️ **Chỗ đắt nhất:** `#309` tránh được một ca trùng (nhánh `083849Z` đã nằm trong PR `#308` đang mở) **bằng mắt**, không bằng máy. Không lệnh nào trong repo nói ra điều đó — `pnpm step0:pending` chỉ đối chiếu với `origin/main`. Một luật mà chỉ con mắt của lượt chạy thực thi là một luật sẽ thủng (vế hai của `KF-041`, và chính chữ ký `KF-049`).
+
+- deps: —
+- risk: low — hướng lệch an toàn là **không** cherry-pick (dòng log ở lại nhánh chờ, dấu hiệu số 7 của `watchdog.yml` vẫn báo cho tới khi nó tới `main`). Mục này **không** đổi `step0PrGate`: chặn hai worker cùng mở PR cần trạng thái dùng chung, mà đó đúng là thứ `D-C04` đã bỏ tiền ra tránh — docblock của `step0-pr-gate.ts` tự khai chỗ chưa che này, và mục này chữa **hậu quả** (cherry-pick trùng) chứ không chữa **cuộc đua**.
+- status: ready
+- nguồn: `ops/known-failures.md` `KF-050`; vòng soát ngữ cảnh sạch của `#309` (`2026-09-27`); `platform/P-038` (`step0PrGate`, ô "chỗ chưa che"); `platform/P-056` (`step0-pending-branches.ts`); `platform/P-062` (`mergedStep0LogIdsFromRef`); `.gitattributes` (union không khử trùng lặp)
+- tiêu chí xong:
+  - `step0PendingReport` nhận thêm **danh sách mã log đang nằm trong PR đang mở nào** và trả cờ `inOtherPr` kèm **số PR** cho từng nhánh chờ. Dữ liệu vào đã có sẵn ở bước 0a (`git diff --name-only origin/main...<head>` cho mỗi PR đang mở), nên mục này **không** thêm lần gọi API nào mới.
+  - Bước 0f của phụ lục P1/P3 đọc cờ đó: nhánh mang `inOtherPr` thì **không** cherry-pick, và lý do được **in ra** chứ không im.
+  - **Bài kiểm**: ca dương (nhánh nằm trong PR mở khác → `inOtherPr` khác rỗng, không cherry-pick) · ca âm (nhánh không nằm trong PR nào → cherry-pick được) · ca *"không đo được"* (không liệt kê được PR đang mở → thoát khác 0, **không** lặng lẽ coi là rỗng).
+  - Sáu phép phá thử **sống sót** ở `KF-050` thành bài kiểm thật trong `ops/test/logs-layout.test.ts`, mỗi bài kèm ca âm của nó (bài học `KF-003`): không cặp `(at, ref)` trùng trong toàn `ops/logs` · `kind` và `status` thuộc tập hợp lệ · `durationMs > 0` và `costUsd` hữu hạn `>= 0` · dòng có `ref` bước 0 thì **phải** có `step0` và `note` khác rỗng.
+  - Khai rõ **cái không sửa ở đây**: mục này **không** chặn hai worker cùng mở PR bước 0 (cần trạng thái dùng chung — xem `risk`), và **không** sửa dòng `durationMs: 0` đã nằm trên `main` (log append-only, `D-C04`).
+
 ### I-022 · 63 nhánh `step0-pending` tồn đọng, và vế hai của `P-038` không ai làm được — `git push --delete` trả HTTP 403
 
 Vế hai của `P-038` là *"xoá nhánh đã gộp"*. Đo thật ở lượt `crux-worker-2` `2026-09-27T09:1xZ`, thử chứ không chép lời khai của lượt trước:
