@@ -17,13 +17,22 @@
  * Bộ test của mục này chạy **ngoại tuyến** bằng một nhà cung cấp giả tất
  * định — xem `workshops/topic/test/embeddings.test.ts`.
  *
- * ## Hai lớp canh, cùng khuôn với `gpt-review.ts`
+ * ## Cách ký chọn theo môi trường (mục `T-015`, `2026-09-27`)
  *
- *   1. Thiếu `EMBEDDINGS_API_KEY` thì **DỪNG và in tên secret thiếu**, không
- *      tự tạo secret và **không** mượn `OPENAI_API_KEY` — chủ dự án cố ý
- *      tách hai khoá để theo dõi chi phí riêng. Đây là nhánh BÌNH THƯỜNG ở
- *      phiên agent (secret chỉ có trong Actions), nên nó không ném.
- *   2. Mọi lần chạy — kể cả lần dừng vì thiếu secret — ghi **một dòng** vào
+ *   1. `resolveEmbeddingsAuth(process.env)` trả ba mode:
+ *      - `secret` (GitHub Actions có `EMBEDDINGS_API_KEY`): ký request bằng nó.
+ *      - `proxy` (phiên cloud, `CLAUDE_CODE_REMOTE=true`, thiếu secret): **vẫn
+ *        gọi**, KHÔNG tự đặt header `Authorization` — agent proxy gắn key cho
+ *        `api.openai.com`. Đường gọi phải đi **qua** proxy: `pnpm topic:novelty-trial`
+ *        đặt `NODE_USE_ENV_PROXY=1` để node fetch (≥22.21) đọc `HTTPS_PROXY`
+ *        (đo được: thiếu cờ → 401, có cờ → 200).
+ *      - `stop` (thiếu secret và KHÔNG ở phiên cloud): **DỪNG và in tên secret
+ *        thiếu**. Đây là nhánh DUY NHẤT không gọi API.
+ *      Ở cả ba nhánh: **không** tự tạo secret, **không** mượn `OPENAI_API_KEY`.
+ *      Chủ dự án đo được (`#251`, `2026-09-27T01:27:41Z`) rằng key đã gắn vào
+ *      môi trường cloud dưới dạng credential của proxy, nên "thiếu biến ở phiên
+ *      cloud" **không** còn là lý do dừng.
+ *   2. Mọi lần chạy — kể cả lần `stop` vì thiếu secret — ghi **một dòng** vào
  *      `ops/logs/topic/T-014.jsonl` có `costUsd` (bất biến **I8**).
  *
  * Nội dung gửi đi là tiêu đề và mô tả video trong corpus, cộng câu thesis.

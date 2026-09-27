@@ -259,9 +259,15 @@ export interface SecretCheck {
 }
 
 /**
- * Luật của `T-011` tiêu chí xong 1, áp nguyên cho mục này: **thiếu secret thì
- * dừng và báo tên secret thiếu, không tự tạo secret**. Trả về một kết quả
- * thay vì ném, để bên gọi in ra được một câu người đọc hiểu.
+ * Luật của `T-011` tiêu chí xong 1: **thiếu secret thì dừng và báo tên secret
+ * thiếu, không tự tạo secret**. Trả về một kết quả thay vì ném, để bên gọi in
+ * ra được một câu người đọc hiểu.
+ *
+ * ⚠️ **Đường gọi thật đã chuyển sang `resolveEmbeddingsAuth`** (mục `T-015`):
+ * hàm này chỉ còn là phép kiểm *"có secret hay không"* thuần, KHÔNG quyết định
+ * gọi hay dừng — vì trong phiên cloud thiếu secret vẫn gọi (proxy gắn key).
+ * Giữ lại vì nó là một phép kiểm hợp lệ và có bài kiểm riêng; sửa luật ký thì
+ * sửa ở `resolveEmbeddingsAuth`, đừng để hai chỗ nói hai điều.
  */
 export function checkEmbeddingsSecret(env: Record<string, string | undefined>): SecretCheck {
   const value = env[EMBEDDINGS_SECRET_NAME];
@@ -313,7 +319,9 @@ export function resolveEmbeddingsAuth(env: Record<string, string | undefined>): 
   if (value && value.trim().length > 0) {
     return {
       mode: 'secret',
-      apiKey: value,
+      // `.trim()`: một secret dính `\n` cuối (dán từ Actions) sẽ thành
+      // `Bearer sk-x\n` và hỏng xác thực — cắt khoảng trắng hai đầu ở đây.
+      apiKey: value.trim(),
       message: `Có \`${EMBEDDINGS_SECRET_NAME}\` — ký request bằng secret.`,
     };
   }
