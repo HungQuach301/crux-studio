@@ -837,7 +837,7 @@ Vì sao nó thành một mục riêng thay vì một dòng khai trong log: bốn
 
 - deps: —
 - risk: low — mục này **không** cần quyền mới cho agent. Hai đường đi đều nằm trong luật hiện có: một workflow trong `ops/workflows/**` (chạy bằng `GITHUB_TOKEN` của Actions, thứ **có** quyền xoá nhánh) hoặc một lần dọn của chủ dự án. Hướng lệch an toàn: chỉ xoá nhánh mà mã log của nó **đã có trên `main`**, đo bằng `mergedStep0LogIdsFromRef` — không bao giờ xoá theo tuổi.
-- status: ready
+- status: review
 - nguồn: `platform/P-038` vế hai; `platform/P-062` (#301) — phép rút khỏi `pending` theo mã log trên `main`; `ops/known-failures.md` `KF-041`; phép đo HTTP 403 ở lượt `crux-worker-2` `2026-09-27T09:1xZ` và các lượt `#293`, `#260`, `#305`; `platform/P-063` (`KF-049`)
 - tiêu chí xong:
   - Một chỗ **chạy bằng máy** xoá nhánh `claude/integration/step0-pending/*` mà mã log của nó đã có trên `main`. Đặt trong `ops/workflows/**` (cửa `automerge-delayed`), **không** trong `.github/` (`CLAUDE.md` mục 4).
@@ -845,6 +845,13 @@ Vì sao nó thành một mục riêng thay vì một dòng khai trong log: bốn
   - **Bài kiểm**: ca dương (mã log đã trên `main` → xoá được) và ca âm (chưa trên `main` → **không** xoá, và nói ra). Cộng ca *"không đo được"* → thoát khác 0 chứ không lặng lẽ xoá gì.
   - Khai rõ con số trước và sau lần dọn đầu (`git ls-remote … | wc -l`), để lượt sau biết phép dọn có chạy thật hay không.
   - Khai rõ **cái không sửa ở đây**: mục này **không** bỏ nhánh chờ. Nhánh chờ là vế một của `P-038` và nó đang làm đúng việc của nó (giữ dòng log của lượt log-only cho tới khi một lượt có PR gộp lại).
+- đã làm (PR #311, lượt `crux-worker-1` 2026-09-27):
+  - ✅ `ops/scripts/step0-pending-prune.ts` — hàm thuần `planStep0PendingPrune` + CLI. Điều kiện xoá đọc từ `mergedStep0LogIdsFromRef` (dùng lại, không viết lại). Nhánh tên lạ → `problems`, không xoá. Không đo được → thoát 2, stdout rỗng.
+  - ✅ `ops/workflows/step0-pending-prune.yml` — cron `17 */6 * * *` + dispatch `dry_run`, chỉ `GITHUB_TOKEN` (`contents: write`), đo trên `origin/main` fetch thẳng từ remote, in số nhánh TRƯỚC/SAU vào log và `$GITHUB_STEP_SUMMARY`. Cửa `automerge-delayed`.
+  - ✅ `ops/test/step0-pending-prune.test.ts` — 12 bài: dương · âm · không xoá theo tuổi · tên lạ · danh sách rỗng · CLI trên kho git thật · hai ca không đo được · workflow gọi đúng luật.
+  - ✅ Số trước lần dọn đầu: `git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*' | wc -l` → **69** (`2026-09-27T12:0xZ`); script trên `origin/main` `3d30e34` → **69 xoá được · 0 ở lại · 0 không hiểu được**.
+  - ⬜ Số SAU lần dọn đầu — chỉ đo được khi workflow đã sync sang `.github/` và chạy (`CLAUDE.md` mục 4). Lượt đầu tiên thấy lần chạy `step0-pending-prune` trong Actions thì ghi số `sau:` của step summary vào đây.
+  - ⚠️ Phá thử: bỏ điều kiện `merged.has` → 4 bài đỏ · nuốt lỗi đo → 2 bài đỏ · bỏ phép kiểm tiền tố → **sống sót**, vì `step0LogIdFromPendingBranch` phía sau cũng trả `null` cho tiền tố lạ — hai lớp cho cùng một luật, cố ý giữ cả hai.
 
 ### I-021 · fix · Ghi `KF-026` và dọn sáu chỗ sót của vòng soát `I-020` — phần luật tách PR riêng
 Vòng soát ngữ cảnh sạch (bước 6) của PR `#222` chạy **sau khi** PR đó đã merge: nhãn `automerge` gắn từ vòng

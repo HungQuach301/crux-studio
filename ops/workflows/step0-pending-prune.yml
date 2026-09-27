@@ -1,0 +1,87 @@
+# 🤖 Dọn nhánh `claude/integration/step0-pending/*` đã hết việc (mục `integration/I-022`).
+#
+# Vế hai của `P-038` là "xoá nhánh chờ đã gộp". Phiên cloud của agent không làm
+# được: `git push --delete` trả HTTP 403. Workflow này làm thay bằng
+# `GITHUB_TOKEN` của Actions — không secret nào khác, không PAT mới (D-C01).
+#
+# Luật xoá nằm ở `ops/scripts/step0-pending-prune.ts`, KHÔNG ở đây: xoá một
+# nhánh khi và chỉ khi mã log của nó đã có trên `main`, đo bằng
+# `mergedStep0LogIdsFromRef` của `P-062`. Không bao giờ xoá theo tuổi nhánh —
+# một nhánh cũ mà dòng log chưa tới `main` là đúng thứ dấu hiệu số 7 của
+# `watchdog.yml` phải báo, và xoá nó là mất dòng log duy nhất của lượt ấy (I8).
+#
+# Không đo được (ls-remote hỏng, ref `main` không đọc được) → script thoát 2,
+# bước này đỏ, KHÔNG xoá nhánh nào.
+name: step0-pending-prune
+
+on:
+  schedule:
+    # Mỗi 6 giờ, lệch phút 17 khỏi `watchdog.yml` để hai lần quét ref không chồng nhau.
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Chạy thử: in danh sách nhánh ĐỊNH xoá, không xoá gì'
+        type: boolean
+        default: false
+
+permissions:
+  # write: `git push origin --delete` cần quyền ghi Contents. Checkout cũng
+  # cần `contents` (KF-003) — `write` bao hàm `read`.
+  contents: write
+
+concurrency:
+  group: step0-pending-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: prune
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Dọn nhánh chờ có dòng log đã trên main
+        env:
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          # Đo trên `origin/main` lấy thẳng từ remote, không trên cây đang
+          # checkout: một lần gọi tay bằng `--ref <nhánh khác>` không được đổi
+          # nghĩa của phép đo (P-062).
+          git fetch --no-tags --depth=1 origin '+refs/heads/main:refs/remotes/origin/main'
+
+          BEFORE=$(git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*' | wc -l)
+          echo "Nhánh chờ TRƯỚC khi dọn: $BEFORE"
+
+          LIST="$RUNNER_TEMP/step0-pending-prune.txt"
+          # Không `|| true`: script thoát khác 0 thì bước này đỏ và KHÔNG xoá gì.
+          node ops/scripts/step0-pending-prune.ts --from-remote --main-ref origin/main > "$LIST"
+          # Z9 — `|| true` an toàn ở đúng đây: `grep -c` thoát 1 khi đếm được
+          # 0 dòng, và 0 là một kết quả hợp lệ (nó vẫn in "0"). Lỗi thật của
+          # phép đo đã chặn ở dòng `node` ngay trên, không ở đây.
+          COUNT=$(grep -c . "$LIST" || true)
+          echo "Xoá được: $COUNT"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "Không nhánh nào để xoá."
+            exit 0
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "CHẠY THỬ — ĐỊNH xoá $COUNT nhánh (xem danh sách ✂ ở trên), không xoá gì."
+            exit 0
+          fi
+
+          # Mỗi lần push tối đa 50 ref. Không `--force` nào: xoá một ref không
+          # cần, và một lỗi xoá phải đỏ chứ không được nuốt.
+          xargs -n 50 git push origin --delete < "$LIST"
+
+          AFTER=$(git ls-remote --heads origin 'refs/heads/claude/integration/step0-pending/*' | wc -l)
+          echo "Nhánh chờ SAU khi dọn: $AFTER (trước: $BEFORE, xoá: $COUNT)"
+          {
+            echo "### Dọn nhánh \`step0-pending\` (I-022)"
+            echo "Trước: $BEFORE · xoá: $COUNT · sau: $AFTER"
+          } >> "$GITHUB_STEP_SUMMARY"
