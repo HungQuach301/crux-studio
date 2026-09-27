@@ -730,7 +730,7 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
   - `status` giữ **`ready`**: Z6 và Z8 vẫn đang chờ.
 - **Sóng 5 — xong: Z6** (lượt `crux-worker-1`, 2026-09-27).
   - **Z6** (workflow theo lịch ngừng chạy mà không gì đỏ): `cronHeartbeats` trong `ops/scripts/cron-heartbeat.ts`,
-    script `pnpm cron:heartbeat <ảnh chụp.json>`, **17** bài ở `ops/test/cron-heartbeat.test.ts`. Gọi từ phụ lục P3
+    script `pnpm cron:heartbeat <ảnh chụp.json>`, **25** bài ở `ops/test/cron-heartbeat.test.ts`. Gọi từ phụ lục P3
     bước 3 (routine `crux-integrator`, mỗi ngày).
   - **Lệch có chủ đích so với ô Z6:** không ghi file nhịp tim nào vào repo. Ghi vào `main` không qua PR là cửa sau
     của I2; đi qua PR thì mỗi giờ một PR log, đúng thứ tiền CI mà `#193` cấm. GitHub đã tự giữ bản ghi: mỗi lượt
@@ -743,12 +743,29 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     `event: schedule`: `main-ci` 36 lượt (trung vị 287,6 phút, lớn nhất 405,9) · `watchdog` 32 (299,9 / **670,6**) ·
     `automerge` 34 (280,2 / 408,2) · `decision-close` 2 (1397,3). Cron "mỗi giờ" thật ra chạy **khoảng 5 giờ một
     lần**. Ngưỡng theo chu kỳ danh nghĩa (3 × 60 phút) sẽ đỏ gần như mỗi lượt; nay là chu kỳ + 12 giờ (mỗi giờ → 13 giờ,
-    mỗi ngày → 72 giờ), và bài kiểm đòi mọi khoảng hở đã đo nằm dưới ngưỡng. Lượt đo `2026-09-27T21:45Z`: 4/4 `fresh`.
+    mỗi ngày → 36 giờ, mỗi tuần → 7,5 ngày), và bài kiểm đòi mọi khoảng hở đã đo nằm dưới ngưỡng. Cơ sở cho cron mỗi
+    ngày **mỏng**: `decision-close` mới có 2 lượt (tạo `2026-09-25T18:47Z`), tức một khoảng hở — khai ở chú thích
+    `STALE_FLOOR_MINUTES`. Lượt đo `2026-09-27T21:45Z`: 4/4 `fresh`.
   - Số đo đó **bác lời khai dự phòng của `G2`** ("`main` vẫn được kiểm trong vòng một giờ"); đã sửa ở
     `docs/assumptions.md`. Nó cũng lộ ra một chỗ nhóm Z khác, ghi thành mục **`P-067`** thay vì sửa ở đây.
-  - **Mười phép phá, cả mười bị bắt:** bỏ luật `disabled` · `>` thành `>=` ở mép ngưỡng · bỏ `future` · sàn 8 giờ ·
-    `missing` thành `fresh` · ảnh chụp rỗng không ném · không dừng khối `schedule` · `never` thành khoẻ · chu kỳ lấy
-    `max` thay vì `min`. Phép thứ bảy lúc đầu **sống sót**; đã thêm bài dựng một dòng `- cron:` nằm trong thân `run:`.
+  - **Vòng soát ngữ cảnh sạch (phụ lục P1 bước 6): 0 CHẶN, 4 NÊN SỬA, 4 nit — sửa cả bốn NÊN SỬA và ba nit.** Hai trong
+    bốn là đường đi tới "khoẻ" khi cron đã chết thật:
+    - **Lấy nhầm lượt không phải `schedule`** ⇒ `main-ci` `fresh` mãi, vì `automerge` gọi nó bằng `workflow_dispatch`
+      sau mỗi merge. Ảnh chụp nay mang `event` của lượt; khác `schedule` thì **ném**.
+    - **`now` tự khai** ⇒ ảnh chụp cũ, hay `now` đặt bằng giờ lượt cuối, ra `fresh`. CLI nay đối chiếu `now` với đồng hồ
+      thật (lệch quá 60 phút thì thoát 2), thiếu `now` thì lấy đồng hồ thật.
+    - Chú thích ngưỡng nói `× 3` "chỉ cắn với cron mỗi tuần" — sai, nó cắn cả cron mỗi ngày (72 giờ thay vì 36). Bỏ hẳn
+      `× 3`, ngưỡng thống nhất là chu kỳ + 12 giờ, có bài chốt `staleThresholdMinutes(1440)`.
+    - Bộ đọc mù với danh sách thụt ngang khoá cha và dạng `schedule: [{cron: …}]`, và bài đếm độc lập mù đúng chỗ đó.
+      Nay đọc được cả hai; file nhắc `cron:` mà không đọc được biểu thức nào thì **ném**; bài đếm độc lập đổi sang
+      `\bcron\s*:`.
+    - nit đã sửa: trùng tên workflow trong ảnh chụp thì ném · `createdAt` ở tương lai ra `future` · đếm sai số phán
+      quyết trong chú thích. nit **để lại**: thêm dòng `pnpm cron:heartbeat` vào `CLAUDE.md` mục 1 — ngoài phạm vi.
+  - **Mười sáu phép phá, cả mười sáu bị bắt:** bỏ luật `disabled` · `>` thành `>=` ở mép ngưỡng · bỏ `future` · sàn 8
+    giờ · `missing` thành `fresh` · ảnh chụp rỗng không ném · không nhận danh sách thụt ngang cột · `never` thành khoẻ ·
+    chu kỳ lấy `max` thay vì `min` · bỏ kiểm `event` · bỏ kiểm trùng tên · bỏ `future` của `createdAt` · bỏ kiểm lệch
+    đồng hồ · bỏ phép ném khi bộ đọc mù · bỏ dạng dòng · quay về `× 3`. Ở bản đầu có một phép (không dừng khối
+    `schedule`) **sống sót**; đã thêm bài dựng một dòng `- cron:` nằm trong thân `run:`.
   - **Chưa che, khai ra:** `disabled_inactivity` mới là "tài liệu nói vậy". Phép đo chạy **một lần mỗi ngày**, nên
     tệ nhất là phát hiện sau ngưỡng + 24 giờ. Bộ đọc cron chỉ nhận `M * * * *`, `M H * * *`, `M H * * D`; biểu thức
     khác ra `unsupported-cron` và đỏ, và bài trên cây thật đòi mọi cron trong cây nằm trong tập đó.

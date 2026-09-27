@@ -43,7 +43,7 @@
  * thiếu thì ra `missing` và ĐỎ — một ảnh chụp cụt không được đọc thành "mọi
  * cron đều khoẻ" (bài học `Z15`).
  *
- * ## Bảy phán quyết, sáu trong đó là vấn đề
+ * ## Tám phán quyết, sáu trong đó là vấn đề
  *
  * `fresh` là phán quyết DUY NHẤT không đỏ, cộng `pending-first` cho workflow
  * vừa tạo chưa tới giờ chạy đầu. Mọi ca "không đo được" đều là một phán quyết
@@ -117,29 +117,29 @@ export const CRON_MEASURED_MAX_GAP_MINUTES = {
   'decision-close.yml': 1397.3,
 } as const;
 
-/** Số chu kỳ danh nghĩa được phép lỡ — chỉ cắn với cron mỗi tuần trở lên. */
-export const STALE_PERIODS = 3;
-
 /**
  * Sàn cộng thêm, tính bằng phút: **12 giờ**. Với cron mỗi giờ, ngưỡng thành
  * 13 giờ = 780 phút, trên khoảng hở lớn nhất đã đo (670,6) một khoảng 16%.
- * Chọn sàn cộng thêm thay vì nhân chu kỳ vì khoảng hở đo được không tỉ lệ với
- * chu kỳ: nó là độ trễ của hàng đợi Actions, gần như hằng số theo giờ.
+ * Cộng thêm chứ không nhân chu kỳ, vì khoảng hở đo được không tỉ lệ với chu
+ * kỳ: nó là độ trễ của hàng đợi Actions, gần như hằng số theo giờ.
+ *
+ * ⚠️ Cơ sở số liệu cho cron **mỗi ngày** mỏng, khai ra: `decision-close.yml`
+ * mới có 2 lượt `schedule` (tạo `2026-09-25T18:47Z`), tức MỘT khoảng hở. Với
+ * nó ngưỡng là 36 giờ — lỡ trọn một lượt hằng ngày là đỏ. Nếu điều đó báo
+ * nhầm thật, sửa ở đây kèm số đo mới, đừng nới bằng mắt.
  */
 export const STALE_FLOOR_MINUTES = 12 * 60;
 
 /**
- * Ngưỡng `stale`, tính bằng phút, cho một chu kỳ danh nghĩa.
- *
- * `max(chu kỳ × STALE_PERIODS, chu kỳ + STALE_FLOOR_MINUTES)`: cron mỗi giờ
- * → 13 giờ · mỗi ngày → 72 giờ · mỗi tuần → 21 ngày. Hướng lệch đã chọn là
- * **báo muộn chứ không báo thừa**: Z6 là ca workflow NGỪNG hẳn (tự ngưng vì
- * im lâu, hoặc bị tắt), không phải ca trễ vài giờ — trễ vài giờ là hành vi
- * bình thường của `schedule` trên Actions (bảng trên). Một ngưỡng báo mỗi
- * ngày sẽ bị học cách lờ đi, và luật bị lờ là luật đã chết.
+ * Ngưỡng `stale`, tính bằng phút: `chu kỳ + STALE_FLOOR_MINUTES`. Cron mỗi
+ * giờ → 13 giờ · mỗi ngày → 36 giờ · mỗi tuần → 7,5 ngày. Hướng lệch đã chọn
+ * là **báo muộn chứ không báo thừa** với cron dày: Z6 là ca workflow NGỪNG
+ * hẳn, còn trễ vài giờ là hành vi bình thường của `schedule` trên Actions
+ * (bảng trên). Một ngưỡng báo mỗi ngày sẽ bị học cách lờ đi, và luật bị lờ
+ * là luật đã chết.
  */
 export function staleThresholdMinutes(periodMinutes: number): number {
-  return Math.max(periodMinutes * STALE_PERIODS, periodMinutes + STALE_FLOOR_MINUTES);
+  return periodMinutes + STALE_FLOOR_MINUTES;
 }
 
 /** Dung sai đồng hồ trước khi một mốc bị gọi là `future` (bài học Z7). */
@@ -165,19 +165,39 @@ export function cronExpressions(yaml: string): string[] {
   const out: string[] = [];
   let inSchedule = false;
   let scheduleIndent = -1;
+  let mentionsCron = false;
   for (const raw of yaml.split('\n')) {
     const line = raw.replace(/\s+#.*$/, '');
     if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+    if (/\bcron\s*:/.test(line)) mentionsCron = true;
     const indent = line.length - line.trimStart().length;
+    // Dạng dòng: `schedule: [{cron: '…'}, …]`.
+    const flow = /^\s*schedule:\s*\[(.*)\]\s*$/.exec(line);
+    if (flow) {
+      for (const m of flow[1]!.matchAll(/cron:\s*(['"])([^'"]+)\1/g)) out.push(m[2]!.trim());
+      inSchedule = false;
+      continue;
+    }
     if (/^\s*schedule:\s*$/.test(line)) {
       inSchedule = true;
       scheduleIndent = indent;
       continue;
     }
-    if (inSchedule && indent <= scheduleIndent) inSchedule = false;
+    // Danh sách YAML được phép thụt NGANG khoá cha (`schedule:` rồi `- cron:`
+    // cùng cột), nên dòng `-` cùng cột chưa phải là hết khối.
+    const isItem = /^\s*-\s/.test(line);
+    if (inSchedule && (indent < scheduleIndent || (indent === scheduleIndent && !isItem))) inSchedule = false;
     if (!inSchedule) continue;
     const m = /^\s*-\s*cron:\s*(['"]?)([^'"]+)\1\s*$/.exec(line);
     if (m) out.push(m[2]!.trim());
+  }
+  // File có nhắc `cron:` mà bộ đọc không lấy được gì: một dạng viết bộ đọc
+  // chưa biết. NÉM thay vì trả rỗng — trả rỗng là workflow đó rơi khỏi danh
+  // sách canh mà không gì đỏ. Chiều ngược lại (đọc thừa một khoá tên
+  // `schedule` ở chỗ khác) là fail-closed: nó ra `unsupported-cron` hay
+  // `missing`, tức đỏ.
+  if (mentionsCron && out.length === 0) {
+    throw new Error('cron-heartbeat: file có `cron:` mà bộ đọc không lấy được biểu thức nào — dạng viết chưa hỗ trợ');
   }
   return out;
 }
@@ -187,7 +207,13 @@ export function scheduledWorkflows(dir: string): ScheduledWorkflow[] {
   return readdirSync(dir)
     .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
     .sort()
-    .map((file) => ({ file, crons: cronExpressions(readFileSync(join(dir, file), 'utf8')) }))
+    .map((file) => {
+      try {
+        return { file, crons: cronExpressions(readFileSync(join(dir, file), 'utf8')) };
+      } catch (err) {
+        throw new Error(`${file}: ${(err as Error).message}`);
+      }
+    })
     .filter((w) => w.crons.length > 0);
 }
 
@@ -199,8 +225,14 @@ export interface WorkflowSnapshot {
   path: string;
   /** `state` của API — chỉ `active` là khoẻ. */
   state: string;
-  /** `created_at` của lượt `event: schedule` mới nhất; `null` khi chưa có lượt nào. */
-  lastScheduleRunAt: string | null;
+  /**
+   * Lượt `event: schedule` mới nhất (`created_at` và `event` của API), `null`
+   * khi chưa có lượt nào. Mang `event` để code tự kiểm: `main-ci.yml` còn được
+   * gọi bằng `workflow_dispatch` sau mỗi lần merge, nên quên lọc
+   * `event: schedule` một lần là `main-ci` `fresh` mãi trong khi cron đã chết.
+   * `event` khác `schedule` thì NÉM (không đo được), không phải `fresh`.
+   */
+  lastScheduleRun: { createdAt: string; event: string } | null;
   /** `created_at` của chính workflow, để phân biệt "mới tạo" với "chưa từng chạy". */
   createdAt?: string;
 }
@@ -256,7 +288,16 @@ export function cronHeartbeats(scheduled: readonly ScheduledWorkflow[], snapshot
   if (snapshot.workflows.length === 0) throw new Error('cron-heartbeat: ảnh chụp không có workflow nào — chưa đo, không kết luận được');
   const now = parseTime('now', snapshot.now);
   const byFile = new Map<string, WorkflowSnapshot>();
-  for (const w of snapshot.workflows) byFile.set(baseName(w.path), w);
+  for (const w of snapshot.workflows) {
+    const key = baseName(w.path);
+    // Trùng tên thì dòng sau đè dòng trước, và một dòng `active` đè được
+    // dòng `disabled_inactivity`. Ảnh chụp như vậy là ảnh chụp hỏng.
+    if (byFile.has(key)) throw new Error(`cron-heartbeat: ảnh chụp có hai dòng cho ${key} — không kết luận được`);
+    if (w.lastScheduleRun !== null && w.lastScheduleRun?.event !== 'schedule') {
+      throw new Error(`cron-heartbeat: lượt mới nhất của ${key} mang event ${JSON.stringify(w.lastScheduleRun?.event)}, không phải "schedule" — ảnh chụp lấy nhầm lượt`);
+    }
+    byFile.set(key, w);
+  }
 
   return scheduled.map(({ file, crons }) => {
     const periods = crons.map(cronPeriodMinutes);
@@ -267,7 +308,7 @@ export function cronHeartbeats(scheduled: readonly ScheduledWorkflow[], snapshot
     if (snap === undefined) {
       return { ...base, state: null, lastScheduleRunAt: null, ageMinutes: null, verdict: 'missing' as const };
     }
-    const last = snap.lastScheduleRunAt;
+    const last = snap.lastScheduleRun === null ? null : snap.lastScheduleRun.createdAt;
     const ageMinutes = last === null ? null : (now - parseTime(`lastScheduleRunAt của ${file}`, last)) / 60000;
     const row = { ...base, state: snap.state, lastScheduleRunAt: last, ageMinutes };
     const verdict = ((): CronVerdict => {
@@ -279,6 +320,7 @@ export function cronHeartbeats(scheduled: readonly ScheduledWorkflow[], snapshot
       if (ageMinutes === null) {
         if (snap.createdAt === undefined) return 'never';
         const sinceCreated = (now - parseTime(`createdAt của ${file}`, snap.createdAt)) / 60000;
+        if (sinceCreated < -FUTURE_TOLERANCE_MINUTES) return 'future';
         return sinceCreated <= thresholdMinutes ? 'pending-first' : 'never';
       }
       if (ageMinutes < -FUTURE_TOLERANCE_MINUTES) return 'future';
@@ -319,9 +361,17 @@ export function renderCronHeartbeats(rows: readonly CronHeartbeat[]): string {
 //
 //   node ops/scripts/cron-heartbeat.ts <snapshot.json> [--json] [--dir ops/workflows]
 //
+// `now` của ảnh chụp phải nằm trong `NOW_DRIFT_MAX_MINUTES` quanh đồng hồ
+// thật: một ảnh chụp cũ, hay một `now` đặt bằng giờ của lượt cuối, cho "khoẻ"
+// với một cron đã chết. Thiếu `now` thì lấy đồng hồ thật. Lệch quá thì thoát 2.
+// Hàm thuần vẫn nhận `now` tường minh để bài kiểm tái lập được.
+//
 // Thoát 0 khi 0 vấn đề · 1 khi CÓ vấn đề · 2 khi KHÔNG ĐO ĐƯỢC (đầu vào hỏng,
 // ảnh chụp rỗng, cây không có lịch). Ba mã tách nhau để "không đo được" không
 // bao giờ đọc thành "khoẻ" — cùng quy ước với `pnpm telemetry:gaps`.
+
+/** Độ lệch tối đa giữa `now` của ảnh chụp và đồng hồ thật, phút. */
+export const NOW_DRIFT_MAX_MINUTES = 60;
 
 const isMain = process.argv[1]?.endsWith('cron-heartbeat.ts') === true;
 
@@ -338,8 +388,12 @@ if (isMain) {
   let rows: CronHeartbeat[];
   try {
     const snapshot = JSON.parse(readFileSync(file, 'utf8')) as CronSnapshot;
-    if (typeof snapshot.now !== 'string' || !Array.isArray(snapshot.workflows)) {
-      throw new Error('ảnh chụp thiếu `now` (chuỗi ISO) hoặc `workflows` (mảng)');
+    if (!Array.isArray(snapshot.workflows)) throw new Error('ảnh chụp thiếu `workflows` (mảng)');
+    if (snapshot.now === undefined) snapshot.now = new Date().toISOString();
+    if (typeof snapshot.now !== 'string') throw new Error('`now` phải là chuỗi ISO');
+    const drift = Math.abs(Date.parse(snapshot.now) - Date.now()) / 60000;
+    if (!(drift <= NOW_DRIFT_MAX_MINUTES)) {
+      throw new Error(`\`now\` của ảnh chụp lệch đồng hồ thật ${Number.isNaN(drift) ? '(không đọc được)' : `${drift.toFixed(0)} phút`} — ảnh chụp cũ không đo được hôm nay`);
     }
     rows = cronHeartbeats(scheduledWorkflows(dir), snapshot);
   } catch (err) {
