@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { requiredCheckConditionProblems } from './ci-conditionals.ts';
 import { concurrencyProblems } from './ci-concurrency.ts';
 import { externalSideEffects, hasDryRunInput, hasWorkflowDispatch } from './smoke-workflows.ts';
 
@@ -763,6 +764,12 @@ if (isMain) {
       // `cancel-in-progress: true`. Luật nằm ở `ops/scripts/ci-concurrency.ts`,
       // tách khỏi YAML để có bài kiểm — cùng lối `alert-escalation.ts` đã đi.
       for (const problem of concurrencyProblems(source)) {
+        problems.push(`${file} — ${problem}`);
+      }
+      // Rà soát Z2 (mục `P-014`): job sinh check BẮT BUỘC không được có `if:`
+      // làm nó hay một bước của nó ra `skipped` trên một PR. Luật và lý do
+      // nằm ở `ops/scripts/ci-conditionals.ts`, có bài kiểm riêng.
+      for (const problem of requiredCheckConditionProblems(source)) {
         problems.push(`${file} — ${problem}`);
       }
       problems.push(...mergeGateLabelProblems(source, file));

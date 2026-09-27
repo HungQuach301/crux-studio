@@ -697,6 +697,26 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     không qua PR, cộng bước đọc của `crux-integrator` mỗi thứ Hai — câu hỏi thiết kế riêng, chạm workflow, đáng
     một PR riêng.
   - `status` giữ **`ready`**: Z2, Z6 và Z8 vẫn đang chờ.
+- **Sóng 4 — xong: Z2** (lượt `crux-worker-1`, 2026-09-27).
+  - **Z2** (`if:` làm bước hoặc job bắt buộc ra `skipped` trong khi check vẫn xanh): `requiredCheckConditionProblems`
+    trong `ops/scripts/ci-conditionals.ts`, gọi từ `pnpm lint:workflows` cạnh luật `P-047`. **18** bài ở
+    `ops/test/ci-conditionals.test.ts`.
+  - **Câu hỏi thiết kế còn để ngỏ từ sóng 2 (ca mức job) có lời đáp kiểm được.** Luật áp cho job sinh check bắt buộc
+    (`REQUIRED_CHECKS`). Cổng `github.event_name == 'pull_request'` được phép vì trên một lượt do PR kích hoạt,
+    `event_name` luôn là `pull_request`, nên cổng không bao giờ bỏ qua job trên một PR. Nhưng cổng chỉ được phép khi
+    workflow có trigger `pull_request:` thật: dưới `pull_request_target` chính cổng đó bỏ qua MỌI PR. Mọi `if:` mức job
+    khác trên job bắt buộc đều đỏ. Ở mức step chỉ bốn hàm trạng thái được phép, vì chúng không bỏ qua bước khi job đang
+    xanh. `always() && x` vẫn đỏ.
+  - **Đo trên cây thật:** 18 `if:` mức step và 10 `if:` mức job trong `ops/workflows/` (một bài đếm độc lập theo độ thụt
+    để bộ đọc không xanh vì mù). 3/5 job bắt buộc (`fix-has-test`, `protected-area`, `trailer-warn`) mang cổng sự kiện
+    PR; 0 job bắt buộc có `if:` mức step. Cây sạch, không phải sửa workflow nào.
+  - **Bốn phép phá, cả bốn đều bị bắt:** gỡ lời gọi trong CLI (bài chạy thật `check-workflows.ts` trên cây tạm đỏ) ·
+    bỏ luật mức job · bộ đọc step lệch độ thụt · quên phân biệt `pull_request_target`.
+  - **Chưa che, khai ra:** cổng sự kiện vẫn sinh check `skipped` **mang tên check bắt buộc** khi ai đó chạy `ci.yml`
+    bằng `workflow_dispatch` trên nhánh của một PR (cùng SHA). GitHub có lấy check đó thay check đỏ của lượt
+    `pull_request` hay không thì **chưa đo**, cùng họ với `KF-031`. Đo nó cần một `workflow_dispatch` thật trên một PR
+    đỏ. Tới khi có số đo, cổng này là ngoại lệ **duy nhất** của luật.
+  - `status` giữ **`ready`**: Z6 và Z8 vẫn đang chờ.
 
 ### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
