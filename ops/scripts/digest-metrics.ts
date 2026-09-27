@@ -56,6 +56,7 @@ import {
 import { stripAgentPrefix } from './agent-prefix.ts';
 import { parseBacklog, type BacklogItem } from './backlog-status.ts';
 import { laneFromBranch } from './pr-triage.ts';
+import { claimKeyFromTitle } from './claim-collision.ts';
 import { BUDGET_LOW_USD, budgetPercent, linesSince, sumCostUsd } from './update-metrics.ts';
 import {
   conflictRows,
@@ -572,6 +573,105 @@ export function computeProgress(
   return { doneLast24h, done3d, throughputPerDay: round2(done3d / 3), byBatch, bottleneck, routineRuns24h };
 }
 
+// --- Z14: mỗi PR merged của một mục có dòng log của CHÍNH mục đó (mục `platform/P-014` sóng 3) ---
+
+/**
+ * Số PR merged thiếu dòng log mà một làn được phép có trước khi bị báo. `0`:
+ * phép đo ghép từng PR với dòng log của chính mục nó (xem `laneLogBalance`),
+ * nên không còn ca lệch hợp lệ nào cần hấp thụ — một PR thiếu là một PR thiếu.
+ */
+export const LANE_LOG_GAP_THRESHOLD = 0;
+
+export interface LaneLogBalanceRow {
+  lane: LaneName;
+  /** PR đã merge mang chữ ký mục `[<lane>] <id> — …` của làn này (`claimKeyFromTitle`), `mergedAt` trong cửa sổ. PR bước 0 không tính. */
+  mergedPrs: number;
+  /** Trong số đó, bao nhiêu PR có ít nhất một dòng log `ref = <lane>/<id>` (bất kể mốc `at`). */
+  withLog: number;
+  /** PR không có dòng log nào của mục mình, dạng `#<số> <id>`, theo thứ tự `mergedAt`. */
+  missing: string[];
+  /** `missing.length`. Dương = ghi log THIẾU so với việc đã vào `main` (bất biến I8 có thể đã thủng). */
+  gap: number;
+  /** `gap > threshold`. */
+  flagged: boolean;
+}
+
+/**
+ * Z14 (`ops/known-failures.md` nhóm Z): một lần chạy đưa việc vào `main` mà
+ * không ghi dòng `costUsd` (bất biến I8) không làm gì đỏ — chi phí thật cao
+ * hơn chi phí thấy được, và ngân sách học trôi. Phép bắt đúng công thức nhóm
+ * Z: **một thứ ở ngoài đếm và so**, không phải một thứ tự khai.
+ *
+ * Với mỗi PR merged trong cửa sổ (`mergedAt` ≥ `since`) mang chữ ký mục
+ * `[<lane>] <id> — …`, tìm **một** dòng log có `ref = <lane>/<id>`. Không có
+ * thì PR đó vào `missing`. **Không** đòi `at` ≤ `mergedAt`: `at` là mốc tự
+ * khai, và các dòng ghi bù ngày đầu mang mốc làm tròn **sau** lúc merge
+ * (`I-003`, `I-010`, `VF-G9`, `T-001` — đo trên `main` 26738ff);
+ * đòi thứ tự mốc sẽ báo nhầm đúng những mục ĐÃ có dòng log.
+ *
+ * **Vì sao ghép từng PR, không đếm theo cửa sổ** (bản đầu của mục này đếm
+ * "số PR merged của làn" so với "số dòng log của làn" trong cùng cửa sổ, và
+ * vòng soát `#223` đo được nó báo nhầm **2/2** làn hoạt động):
+ * - PR bước 0 (`[integration] bước 0 lượt …`) mở bằng tiền tố làn mà không
+ *   mang mã mục. Đếm chúng ở vế merge trong khi vế log loại dòng bước 0 cho
+ *   `integration` 16 merged / 0 log ở 24 giờ — lệch cấu trúc, mỗi ngày.
+ * - Dòng log mang `at` lúc **việc chạy**, `mergedAt` là lúc **merge**, và
+ *   `automerge-delayed` tách hai mốc ≥ 12 giờ. Đo trên `main` 26738ff: cửa
+ *   sổ 24 giờ cho `platform` 5 merged / 2 log, trong khi **cả 5** mục đều có
+ *   dòng log — chỉ là dòng đó nằm trước mép cửa sổ.
+ * Ghép theo mục thì cả hai ca biến mất, nên ngưỡng về `0`.
+ *
+ * ⚠️ Giới hạn đã khai, không giấu: mục chạy nhiều **sóng** (nhiều PR cho một
+ * mã, như chính `P-014`) — dòng log của sóng trước đủ để sóng sau qua, nên
+ * một sóng sau thiếu dòng log không bị bắt. Phép đo chỉ nói "có dòng", không
+ * nói `costUsd` trong dòng đó là thật. PR ghi dòng log dưới ref của **mục
+ * khác** (ca thật `#226`: tiêu đề `I-021`, dòng log là đính chính của
+ * `I-020`) bị báo dù I8 không thủng — báo thừa, chiều an toàn của nhóm Z.
+ * PR có `mergedAt` hỏng bị bỏ qua (khác `mergedByLane`, nơi nó hiện ra):
+ * `gh` luôn trả mốc cho PR đã merge nên ca này chưa từng gặp.
+ */
+export function laneLogBalance(
+  mergedPrs: readonly GhPr[],
+  logLines: readonly RunLogLine[],
+  since: string,
+  threshold: number = LANE_LOG_GAP_THRESHOLD,
+): LaneLogBalanceRow[] {
+  const sinceMs = Date.parse(since);
+
+  // KHÔNG loại dòng bước 0 ở đây: ref của nó (`integration/step0-<mốc>-…`)
+  // không bao giờ trùng `<lane>/<id>` của một mục nên nó tự không khớp, còn
+  // hình dạng cũ `platform/P-016` CHÍNH LÀ ref của mục `P-016` — loại nó đi
+  // là báo nhầm mục đó (đo được ở cửa sổ 7 ngày trên `main` 26738ff).
+  const refs = new Set(logLines.map((line) => line.ref));
+
+  const inWindow = mergedPrs
+    .map((pr) => ({ pr, t: typeof pr.mergedAt === 'string' ? Date.parse(pr.mergedAt) : Number.NaN }))
+    .filter(({ t }) => Number.isFinite(t) && t >= sinceMs)
+    .sort((a, b) => a.t - b.t);
+
+  const byLane = new Map<LaneName, { merged: number; withLog: number; missing: string[] }>();
+  for (const { pr } of inWindow) {
+    // Chỉ PR mang CHỮ KÝ MỤC (`claimKeyFromTitle`), không phải mọi tiêu đề mở
+    // bằng `[<lane>]`: PR gộp/revert/sync/bước 0 không phải một mục done.
+    const key = claimKeyFromTitle(stripAgentPrefix(pr.title));
+    if (key === null) continue;
+    const acc = byLane.get(key.lane) ?? { merged: 0, withLog: 0, missing: [] };
+    acc.merged++;
+    if (refs.has(`${key.lane}/${key.id}`)) acc.withLog++;
+    else acc.missing.push(`#${pr.number} ${key.id}`);
+    byLane.set(key.lane, acc);
+  }
+
+  const rows: LaneLogBalanceRow[] = [];
+  for (const lane of LANES) {
+    const acc = byLane.get(lane);
+    if (acc === undefined) continue; // làn không merge mục nào trong cửa sổ — không có gì để so.
+    const gap = acc.missing.length;
+    rows.push({ lane, mergedPrs: acc.merged, withLog: acc.withLog, missing: acc.missing, gap, flagged: gap > threshold });
+  }
+  return rows;
+}
+
 // --- Kết xuất ---
 
 export interface DigestMetrics {
@@ -610,6 +710,13 @@ export interface DigestMetrics {
   cost: CostSummary;
   /** Mục "Tiến độ" (mục `platform/P-019`). */
   progress: ProgressMetrics;
+  /**
+   * Z14 (mục `platform/P-014` sóng 3): mỗi PR merged của một mục có dòng log
+   * của chính mục đó không, gom theo làn. Mọi làn có merge trong cửa sổ, cả làn khớp lẫn làn lệch —
+   * `renderDigestMetrics` lọc lấy `flagged`, nhưng giữ cả để bên đọc máy
+   * thấy được số thật của từng làn.
+   */
+  laneLogBalance: LaneLogBalanceRow[];
 }
 
 function prLabel(row: OpenPrRow): string {
@@ -717,6 +824,22 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
     '',
     `Chi phí: 24 giờ ${cost24h} USD · tích luỹ ${total} USD · ${percent}% ngân sách học (${budget} USD, CHARTER mục 8)`,
   );
+
+  // Z14 (mục `platform/P-014` sóng 3). Đặt ngay dưới "Chi phí" vì nó là phép
+  // kiểm chéo của chính con số đó: một dòng `costUsd` thiếu làm chi phí thấy
+  // được thấp hơn chi phí thật. In cả khi 0 làn lệch — im lặng ở đây đúng là
+  // thứ nhóm Z cấm (bài học Z7/Z15).
+  const flaggedBalance = metrics.laneLogBalance.filter((row) => row.flagged);
+  out.push('', `Cân đối log/merge theo làn (Z14): ${flaggedBalance.length} làn lệch`);
+  if (flaggedBalance.length === 0) {
+    out.push('  Mọi PR merged của một mục đều có dòng log của chính mục đó.');
+  } else {
+    for (const row of flaggedBalance) {
+      out.push(
+        `- ${row.lane}: ${row.gap}/${row.mergedPrs} PR merged không có dòng log của mục (${row.missing.join(', ')}) — bất biến I8 có thể đã thủng`,
+      );
+    }
+  }
 
   // Mục "Tiến độ" (mục `platform/P-019`, chỉ dẫn 3 của chủ dự án ở issue #17).
   const p = metrics.progress;
@@ -894,6 +1017,7 @@ export function collectMetrics(
     ownerWaiting,
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
     progress,
+    laneLogBalance: laneLogBalance(snapshot.mergedPrs, logLines, since),
   };
 }
 
