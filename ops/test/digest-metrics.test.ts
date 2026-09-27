@@ -1038,6 +1038,22 @@ test('laneLogBalance: biên cửa sổ — `mergedAt` ĐÚNG bằng `since` đư
   ]);
 });
 
+test('laneLogBalance: nhiều làn ra theo thứ tự `LANES` cố định, và ref phải khớp CẢ làn lẫn mã', () => {
+  const merged = [
+    mergedLanePr(1, 'platform', 'P-001', '2026-09-21T08:00:00Z'),
+    mergedLanePr(2, 'topic', 'T-001', '2026-09-21T09:00:00Z'),
+  ];
+  // Dòng log mang đúng mã nhưng SAI làn không được tính cho mục đó.
+  const logs = [itemLog('verify', 'P-001', '2026-09-21T07:00:00Z'), itemLog('topic', 'T-001', '2026-09-21T07:00:00Z')];
+  assert.deepEqual(
+    laneLogBalance(merged, logs, Z14_SINCE).map((r) => [r.lane, r.missing]),
+    [
+      ['topic', []],
+      ['platform', ['#1 P-001']],
+    ],
+  );
+});
+
 test('laneLogBalance: làn không merge mục nào bị bỏ khỏi bảng (kể cả khi có log); đầu vào rỗng ra mảng rỗng', () => {
   assert.deepEqual(laneLogBalance([], [], Z14_SINCE), []);
   assert.deepEqual(laneLogBalance([], [itemLog('topic', 'T-001', '2026-09-21T07:00:00Z')], Z14_SINCE), []);
@@ -1061,6 +1077,10 @@ test('collectMetrics (CHẶN 2 của vòng soát #223): đường nối tới `l
           { number: 1, title: '[platform] P-001 — có log', headRefName: 'claude/a', mergedAt: '2026-09-21T10:00:00Z' },
           { number: 2, title: '[platform] P-002 — không log', headRefName: 'claude/b', mergedAt: '2026-09-21T11:00:00Z' },
           { number: 3, title: '[integration] bước 0 lượt crux-worker-1 — idle', headRefName: 'claude/c', mergedAt: '2026-09-21T12:00:00Z' },
+          // NOW − 25 giờ, không log: ghim cửa sổ 24 giờ mà `collectMetrics` truyền vào.
+          // `gh pr list --state merged` trả cả tuần PR, nên cửa sổ nối sai là bản
+          // tin báo lại PR cũ mỗi ngày.
+          { number: 4, title: '[platform] P-004 — ngoài cửa sổ', headRefName: 'claude/d', mergedAt: '2026-09-20T17:00:00Z' },
         ],
         openPrs: [],
         decisionIssues: [],
@@ -1083,6 +1103,10 @@ test('renderDigestMetrics: mục Z14 in cả khi 0 làn lệch (không im lặng
   assert.match(clean, /^Cân đối log\/merge theo làn \(Z14\): 0 làn lệch$/m);
   assert.match(clean, /^ {2}Mọi PR merged của một mục đều có dòng log của chính mục đó\.$/m);
   assert.doesNotMatch(clean, /^- topic:/m);
+  // Nhánh 0 làn lệch in đúng hai dòng: tiêu đề và câu "Mọi PR …", không thêm dòng liệt kê nào.
+  const z14 = clean.split('\n');
+  const head = z14.findIndex((l) => l.startsWith('Cân đối log/merge theo làn (Z14)'));
+  assert.equal(z14[head + 2], '');
 
   const flagged = renderDigestMetrics(
     baseMetrics({

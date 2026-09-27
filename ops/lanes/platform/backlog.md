@@ -667,7 +667,7 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
 - **Sóng 3 — xong thêm: Z14** (lượt `crux-worker-2`, 2026-09-24; viết lại sau vòng soát ở lượt `crux-worker-1`, 2026-09-27).
   - **Z14** (mỗi PR merged của một mục có dòng log của chính mục đó): `laneLogBalance` trong
     `ops/scripts/digest-metrics.ts`, đưa vào bản tin ngày qua `renderDigestMetrics` (mục "Cân đối log/merge theo
-    làn (Z14)") và trường `laneLogBalance` của `DigestMetrics`. **11** bài ở `ops/test/digest-metrics.test.ts`.
+    làn (Z14)") và trường `laneLogBalance` của `DigestMetrics`. **12** bài ở `ops/test/digest-metrics.test.ts`.
   - **Đúng công thức nhóm Z — một thứ ở ngoài đếm và so, không tự khai.** Với mỗi PR merged trong cửa sổ `since`
     mang chữ ký mục `[<lane>] <id> — …` (`claimKeyFromTitle`, cùng bộ đọc với `pnpm claims`), tìm một dòng log
     `ref = <lane>/<id>`. Không có thì PR vào `missing` (dạng `#<số> <id>`); làn có `missing` khác rỗng thì
@@ -684,13 +684,15 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
        `assert.deepEqual` trên `metrics.laneLogBalance`.
   - **Đo trên `main` `26738ff`** (PR từ `git log --first-parent`, log từ `readRunLogs`). Cửa sổ 24 giờ: **0 làn
     lệch**, trước đây là 2/2 báo nhầm. Cửa sổ 72 giờ: 1 PR thiếu (`#290 KF-046`, tiêu đề mang mã KF, không phải mã
-    mục, và không có dòng log nào). Cửa sổ 7 ngày thêm các PR thiếu thật: `#226 I-021`, `#166 P-030`, cùng vài
-    PR ngày đầu (`#2 P-001`, `#4 VF-001`…). Mọi PR được báo đều **không có file log** của mục mình.
+    mục, và không có dòng log nào). Cửa sổ 7 ngày thêm `#226 I-021`, `#166 P-030`, `#2 P-001`, `#4 VF-001`. Mọi
+    PR được báo đều **không có file log** của mục mình, nhưng `#226` là **báo thừa**: nó có ghi dòng `costUsd`, chỉ
+    là dưới ref `integration/I-020` (đính chính của `I-020`), nên I8 không thủng.
   - **Tám phép phá thử, cả tám đều bị bắt:** đường nối rỗng · bỏ phép lọc `flagged` của bản tin · `>=` thành `>` ở
     mép cửa sổ · bỏ sắp theo `mergedAt` · ngưỡng `>` thành `>=` · quay về `laneFromTitle` · loại lại dòng bước 0
     ở vế log · để mốc hỏng (`NaN`) lọt cửa sổ.
   - **Giới hạn đã khai, không giấu:** mục nhiều **sóng** (nhiều PR một mã, như chính `P-014`) thì dòng log của sóng
-    trước đủ cho sóng sau qua. Phép đo chỉ nói "có dòng", không nói `costUsd` trong dòng là thật.
+    trước đủ cho sóng sau qua. Phép đo chỉ nói "có dòng", không nói `costUsd` trong dòng là thật. PR ghi log dưới
+    ref của mục khác (`#226`) bị báo thừa.
   - **Z6 chưa làm.** Z6 (nhịp tim của `cron`) đòi `main-ci` ghi một file vào repo, tức một đường ghi vào `main`
     không qua PR, cộng bước đọc của `crux-integrator` mỗi thứ Hai — câu hỏi thiết kế riêng, chạm workflow, đáng
     một PR riêng.

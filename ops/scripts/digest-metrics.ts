@@ -606,7 +606,7 @@ export interface LaneLogBalanceRow {
  * `[<lane>] <id> — …`, tìm **một** dòng log có `ref = <lane>/<id>`. Không có
  * thì PR đó vào `missing`. **Không** đòi `at` ≤ `mergedAt`: `at` là mốc tự
  * khai, và các dòng ghi bù ngày đầu mang mốc làm tròn **sau** lúc merge
- * (`I-003`, `I-010`, `P-016`, `VF-G9`, `T-001` — đo trên `main` 26738ff);
+ * (`I-003`, `I-010`, `VF-G9`, `T-001` — đo trên `main` 26738ff);
  * đòi thứ tự mốc sẽ báo nhầm đúng những mục ĐÃ có dòng log.
  *
  * **Vì sao ghép từng PR, không đếm theo cửa sổ** (bản đầu của mục này đếm
@@ -623,8 +623,12 @@ export interface LaneLogBalanceRow {
  *
  * ⚠️ Giới hạn đã khai, không giấu: mục chạy nhiều **sóng** (nhiều PR cho một
  * mã, như chính `P-014`) — dòng log của sóng trước đủ để sóng sau qua, nên
- * một sóng sau thiếu dòng log không bị bắt. Và phép đo chỉ nói "có dòng", không
- * nói `costUsd` trong dòng đó là thật.
+ * một sóng sau thiếu dòng log không bị bắt. Phép đo chỉ nói "có dòng", không
+ * nói `costUsd` trong dòng đó là thật. PR ghi dòng log dưới ref của **mục
+ * khác** (ca thật `#226`: tiêu đề `I-021`, dòng log là đính chính của
+ * `I-020`) bị báo dù I8 không thủng — báo thừa, chiều an toàn của nhóm Z.
+ * PR có `mergedAt` hỏng bị bỏ qua (khác `mergedByLane`, nơi nó hiện ra):
+ * `gh` luôn trả mốc cho PR đã merge nên ca này chưa từng gặp.
  */
 export function laneLogBalance(
   mergedPrs: readonly GhPr[],
