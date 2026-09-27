@@ -681,7 +681,7 @@ dẫn mới hơn nằm ở `#251`. Nó chọn chỉ dẫn vì **tìm thấy**, k
 `ownerDirectivesNewestFirst` sắp chỉ dẫn (comment chủ dự án KHÔNG mở đầu 🤖, `CLAUDE.md` mục 5) theo `createdAt` trên
 **hợp** mọi nguồn đưa vào, có `matching` cho "mới nhất về một chuyện", và **ném** khi không sắp được (thiếu mốc,
 mốc hỏng, hai chỉ dẫn khác nhau cùng mốc). Bài tái hiện `ops/test/owner-directives.test.ts` dựng đúng ca trên bằng
-nguyên văn ba issue, và đòi kết quả `#251 00:31:15Z`; cùng fixture, đọc chỉ issue bản tin thì ra `#270` — hình dạng
+nguyên văn `#270`/`#251` cộng mốc mở `#292`, và đòi kết quả `#251 00:31:15Z`; cùng fixture, đọc chỉ issue bản tin thì ra `#270` — hình dạng
 của lỗi. CHARTER phụ lục P2 bước 1 nay gọi `pnpm owner:directives`.
 
 **Còn hở, khai trước:** tool chỉ bảo đảm lượt digest đọc đúng **bản**; hiểu câu chữ vẫn là của lượt chạy, và

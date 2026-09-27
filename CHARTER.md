@@ -611,6 +611,9 @@ Chủ dự án có thể phủ quyết bất kỳ mặc định nào, vào bất
 
 ## 14. Nhật ký thay đổi
 
+**C10 · 2026-09-27 · chỉ dẫn 1 của chủ dự án trên bản tin `#292`, mục `platform/P-064`.** Phụ lục P2 bước 1 thêm một câu: chỉ dẫn tự do của chủ dự án đọc bằng `pnpm owner:directives`, lấy bản **mới nhất theo `createdAt`** trên hợp `#251` và các issue bản tin, không phải bản tìm thấy trên bản tin hôm trước (`KF-035` lần 3). Mục 1 và mục 3 không đổi.
+- **Số hiệu C10:** dò `**C1x` trên `main` và trên đầu cả 4 PR đang mở lúc viết — cao nhất là `C9`.
+
 **C9 · 2026-09-23 · chỉ dẫn của chủ dự án kèm câu trả lời `#169`.** Cảnh báo khẩn (mục 2.4 nhóm 2) `@nhắc` **ngay ở comment đầu tiên** và nhắc lại **mỗi 4 giờ** khi chưa có phản hồi. Mục `platform/P-034`.
 - **Mục 2.4 · câu của `D-C06` bị THAY, và nói rõ là bị thay.** `D-C06` dặn `main-ci.yml` không @nhắc ở lần đỏ đầu và @nhắc **đúng một lần** sau 2 giờ. Số đo bác nó: cảnh báo `#131` mở `2026-09-22T10:14Z`, 13 giờ sau mới @nhắc. Ý đúng của `D-C06` — "máy đang tự chữa, chưa cần gọi người" — nay nằm trong **lời** của @nhắc đầu tiên, không nằm trong **độ trễ** của nó.
 - **Mốc `<!-- crux-escalate-* -->` đổi nghĩa:** từ "đã nhắc thì thôi" sang **"đã nhắc lúc nào"**. Đọc `createdAt` của mục mang mốc mới nhất, không đếm số comment — đếm comment là cách luật này hỏng ngay lần đầu ai sửa thân comment. Thân issue tính là một mục, vì lần @nhắc đầu tiên nằm ở đó.
@@ -815,7 +818,7 @@ Tạo bản tin sáng cho Crux Studio. Không sửa code, không mở PR.
    mục `platform/P-064`) trên HỢP comment của `#251` và các issue bản tin, lấy bản MỚI NHẤT theo `createdAt` —
    có `--matching` cho "chỉ dẫn mới nhất về một chuyện" (ví dụ điều tiết worker). Đừng dẫn một chỉ dẫn chỉ vì
    nó nằm trên bản tin hôm trước: `#292` in khối "Điều tiết hạn mức — CHƯA có hiệu lực" theo chỉ dẫn `#270`
-   trong khi `#251` đã nói "Hết điều tiết" 15 giờ sau đó (`KF-035` lần 3). Tool NÉM khi không sắp được,
+   trong khi `#251` đã nói "Hết điều tiết" ~10 giờ sau đó (`KF-035` lần 3). Tool NÉM khi không sắp được,
    và "ném" không bao giờ đọc thành "không có chỉ dẫn nào".
 
 2. Thu thập: PR merged trong 24 giờ qua theo làn; PR đang mở và trạng thái CI; PR đang **kẹt ở hàng đợi

@@ -126,11 +126,19 @@ export function ownerDirectivesNewestFirst(
     .filter((comment) => isOwnerDirective(comment, query.owner))
     .map((comment) => ({ comment, ms: parseInstant(comment, 'createdAt', comment.createdAt) }))
     .filter(({ ms }) => ms <= cutoff)
-    .filter(({ comment }) => query.matching === undefined || query.matching.test(ownText(comment.body)));
+    .filter(({ comment }) => {
+      if (query.matching === undefined) return true;
+      // Mẫu mang cờ `g`/`y` giữ `lastIndex` giữa hai lần `test` — đặt lại để
+      // không comment nào bị bỏ qua vì vị trí của comment trước.
+      query.matching.lastIndex = 0;
+      return query.matching.test(ownText(comment.body));
+    });
 
   // Cùng một comment đưa vào hai lần (hai lần liệt kê chồng nhau) không phải
   // mâu thuẫn — bỏ bản lặp. Hai comment KHÁC nhau cùng một mốc thì không ai
-  // biết cái nào thay cái nào: ném.
+  // biết cái nào thay cái nào: ném — ở BẤT CỨ vị trí nào của danh sách, không
+  // chỉ ở đầu, vì bên gọi dùng cả danh sách (`directives`) chứ không chỉ bản
+  // mới nhất. Cố ý nghiêm: tiêu chí của mục khai "ném khi hai comment cùng mốc".
   const unique = new Map<string, { comment: SourcedComment; ms: number }>();
   for (const entry of timed) {
     const key = `${entry.comment.issue}\u0000${entry.ms}\u0000${entry.comment.body}`;
