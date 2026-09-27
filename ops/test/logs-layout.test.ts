@@ -229,6 +229,24 @@ test('P-023 · file log bước 0: mốc trong tên file khớp `at` của từn
  */
 const LOG_SHAPE_STRICT_FROM = '2026-09-27T10:30:00.000Z';
 
+/**
+ * Dòng **sau** mốc chặt mà vẫn vi phạm, được miễn **đích danh** theo cặp
+ * `at|ref` — không lùi mốc. Mỗi dòng ở đây đã vào `main` trong lúc PR của
+ * `I-023` còn chờ cửa 12 giờ, tức là bên ghi chưa có luật để theo; log
+ * append-only (`D-C04`) nên không sửa được dòng đó.
+ *
+ * Vì sao không dời mốc: dời mốc tới sau `12:42Z` là bỏ kiểm **mọi** dòng
+ * trong khoảng `10:30Z`–`12:42Z`, kể cả những dòng đang sạch. Miễn đích danh
+ * chỉ bỏ đúng một dòng và giữ luật cho mọi dòng khác.
+ *
+ * Không thêm dòng mới vào đây để làm CI xanh: một dòng ghi **sau** khi luật
+ * này đã vào `main` mà vi phạm là lỗi của bên ghi, sửa bên ghi.
+ */
+const LOG_SHAPE_GRANDFATHERED: ReadonlySet<string> = new Set([
+  // Integrator ghi `durationMs: 0` lúc 12:42Z, sau mốc chặt; đo được ở CI của #313.
+  '2026-09-27T12:42:36.725Z|integration/step0-2026-09-27T124236Z-crux-integrator',
+]);
+
 const VALID_KINDS: readonly string[] = ['stage', 'lane'];
 const VALID_STATUSES: readonly string[] = ['ok', 'failed', 'skipped'];
 
@@ -238,7 +256,11 @@ const VALID_STATUSES: readonly string[] = ['ok', 'failed', 'skipped'];
  * y hệt trong **một** file — đúng ca `.gitattributes` cảnh báo *"Union không
  * khử trùng lặp"*.
  */
-function logShapeProblems(files: readonly string[], strictFrom: string): string[] {
+function logShapeProblems(
+  files: readonly string[],
+  strictFrom: string,
+  grandfathered: ReadonlySet<string> = new Set(),
+): string[] {
   const problems: string[] = [];
   const seen = new Map<string, string>();
   for (const path of files) {
@@ -258,7 +280,7 @@ function logShapeProblems(files: readonly string[], strictFrom: string): string[
       if (isStep0LogId(id) && (raw.kind !== 'lane' || raw.lane !== STEP0_LOG_LANE)) {
         problems.push(`${where}: dòng bước 0 phải là kind "lane", lane "${STEP0_LOG_LANE}" (kind ${JSON.stringify(raw.kind)})`);
       }
-      if (line.at < strictFrom) continue;
+      if (line.at < strictFrom || grandfathered.has(key)) continue;
       if (!VALID_KINDS.includes(raw.kind as string)) problems.push(`${where}: kind ${JSON.stringify(raw.kind)} ngoài tập hợp lệ`);
       if (!VALID_STATUSES.includes(raw.status as string)) problems.push(`${where}: status ${JSON.stringify(raw.status)} ngoài tập hợp lệ`);
       if (!(typeof raw.durationMs === 'number' && Number.isFinite(raw.durationMs) && raw.durationMs > 0)) {
@@ -280,7 +302,10 @@ test('KF-050 · trên ops/logs THẬT: không cặp (at, ref) trùng, và dòng 
     parseRunLogs(files.map((path) => readFileSync(path, 'utf8'))).some((line) => line.at >= LOG_SHAPE_STRICT_FROM),
     'không dòng nào từ mốc chặt trở đi — ba luật chặt đang không kiểm gì',
   );
-  assert.deepEqual(logShapeProblems(files, LOG_SHAPE_STRICT_FROM), []);
+  assert.deepEqual(logShapeProblems(files, LOG_SHAPE_STRICT_FROM, LOG_SHAPE_GRANDFATHERED), []);
+  // Miễn trừ phải trỏ vào dòng CÓ THẬT: một khoá không khớp dòng nào là miễn trừ chết.
+  const keys = new Set(parseRunLogs(files.map((path) => readFileSync(path, 'utf8'))).map((l) => `${l.at}|${l.ref}`));
+  assert.deepEqual([...LOG_SHAPE_GRANDFATHERED].filter((k) => !keys.has(k)), [], 'miễn trừ không khớp dòng log nào');
 });
 
 /**
@@ -337,6 +362,17 @@ test('KF-050 · ca âm — từng phép phá trong sáu phép PHẢI bị bắt,
     const old = { ...clean, at: '2026-09-27T10:28:33.495Z', durationMs: 0, kind: 'item', ref: 'platform/P-062', lane: 'platform' };
     assert.deepEqual(check([old]), []);
     assert.equal(check([old, old]).length, 1, 'trùng (at, ref) phải bị bắt cả trước mốc');
+    // Miễn trừ đích danh chỉ bỏ ĐÚNG dòng mang cặp (at, ref) đó, không bỏ dòng khác
+    // cùng file, và không bỏ luật trùng.
+    const file = join(dir, `${id}.jsonl`);
+    const bad = { ...clean, durationMs: 0 };
+    const other = { ...bad, at: '2026-09-27T12:00:01.000Z' };
+    writeFileSync(file, [bad, other].map((line) => `${JSON.stringify(line)}\n`).join(''), 'utf8');
+    const only = logShapeProblems([file], LOG_SHAPE_STRICT_FROM, new Set([`${bad.at}|${bad.ref}`]));
+    assert.equal(only.length, 1, only.join(' · '));
+    assert.match(only[0]!, /12:00:01\.000Z\): durationMs 0/);
+    writeFileSync(file, [bad, bad].map((line) => `${JSON.stringify(line)}\n`).join(''), 'utf8');
+    assert.match(logShapeProblems([file], LOG_SHAPE_STRICT_FROM, new Set([`${bad.at}|${bad.ref}`])).join(), /TRÙNG/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
