@@ -734,6 +734,61 @@ Ba cách phát hiện có tác dụng, xếp theo thứ tự nên chọn: **so h
     `continue-on-error: true` trên job bắt buộc. Dạng cuối cũng biến đỏ thành xanh nhưng không phải `if:`; luật Z9 chỉ
     đòi nó có chú thích, và `trailer-warn` dùng nó đúng thiết kế.
   - `status` giữ **`ready`**: Z6 và Z8 vẫn đang chờ.
+- **Sóng 5 — xong: Z6** (lượt `crux-worker-1`, 2026-09-27).
+  - **Z6** (workflow theo lịch ngừng chạy mà không gì đỏ): `cronHeartbeats` trong `ops/scripts/cron-heartbeat.ts`,
+    script `pnpm cron:heartbeat <ảnh chụp.json>`, **25** bài ở `ops/test/cron-heartbeat.test.ts`. Gọi từ phụ lục P3
+    bước 3 (routine `crux-integrator`, mỗi ngày).
+  - **Lệch có chủ đích so với ô Z6:** không ghi file nhịp tim nào vào repo. Ghi vào `main` không qua PR là cửa sau
+    của I2; đi qua PR thì mỗi giờ một PR log, đúng thứ tiền CI mà `#193` cấm. GitHub đã tự giữ bản ghi: mỗi lượt
+    `schedule` là một `workflow_run` đọc được qua API Actions. Bên canh (routine) và bên bị canh (bộ lập lịch Actions)
+    vẫn **khác họ**, đúng tính chất ô Z6 đòi. Không chạm workflow nào, nên Z6 không còn phải đi cửa `automerge-delayed`
+    vì workflow.
+  - **Danh sách phải canh đọc từ cây** (`ops/workflows/*.yml`, khối `schedule:`), không từ ảnh chụp: ảnh chụp thiếu một
+    workflow thì ra `missing` và đỏ. Bài đếm độc lập trên cây thật: 4 workflow theo lịch, bộ đọc khớp.
+  - **Đo trên dữ liệu thật trước khi đặt ngưỡng, và số đo đổi thiết kế.** 7 ngày `list_workflow_runs` lọc
+    `event: schedule`: `main-ci` 36 lượt (trung vị 287,6 phút, lớn nhất 405,9) · `watchdog` 32 (299,9 / **670,6**) ·
+    `automerge` 34 (280,2 / 408,2) · `decision-close` 2 (1397,3). Cron "mỗi giờ" thật ra chạy **khoảng 5 giờ một
+    lần**. Ngưỡng theo chu kỳ danh nghĩa (3 × 60 phút) sẽ đỏ gần như mỗi lượt; nay là chu kỳ + 12 giờ (mỗi giờ → 13 giờ,
+    mỗi ngày → 36 giờ, mỗi tuần → 7,5 ngày), và bài kiểm đòi mọi khoảng hở đã đo nằm dưới ngưỡng. Cơ sở cho cron mỗi
+    ngày **mỏng**: `decision-close` mới có 2 lượt (tạo `2026-09-25T18:47Z`), tức một khoảng hở — khai ở chú thích
+    `STALE_FLOOR_MINUTES`. Lượt đo `2026-09-27T21:45Z`: 4/4 `fresh`.
+  - Số đo đó **bác lời khai dự phòng của `G2`** ("`main` vẫn được kiểm trong vòng một giờ"); đã sửa ở
+    `docs/assumptions.md`. Nó cũng lộ ra một chỗ nhóm Z khác, ghi thành mục **`P-067`** thay vì sửa ở đây.
+  - **Vòng soát ngữ cảnh sạch (phụ lục P1 bước 6): 0 CHẶN, 4 NÊN SỬA, 4 nit — sửa cả bốn NÊN SỬA và ba nit.** Hai trong
+    bốn là đường đi tới "khoẻ" khi cron đã chết thật:
+    - **Lấy nhầm lượt không phải `schedule`** ⇒ `main-ci` `fresh` mãi, vì `automerge` gọi nó bằng `workflow_dispatch`
+      sau mỗi merge. Ảnh chụp nay mang `event` của lượt; khác `schedule` thì **ném**.
+    - **`now` tự khai** ⇒ ảnh chụp cũ, hay `now` đặt bằng giờ lượt cuối, ra `fresh`. CLI nay đối chiếu `now` với đồng hồ
+      thật (lệch quá 60 phút thì thoát 2), thiếu `now` thì lấy đồng hồ thật.
+    - Chú thích ngưỡng nói `× 3` "chỉ cắn với cron mỗi tuần" — sai, nó cắn cả cron mỗi ngày (72 giờ thay vì 36). Bỏ hẳn
+      `× 3`, ngưỡng thống nhất là chu kỳ + 12 giờ, có bài chốt `staleThresholdMinutes(1440)`.
+    - Bộ đọc mù với danh sách thụt ngang khoá cha và dạng `schedule: [{cron: …}]`, và bài đếm độc lập mù đúng chỗ đó.
+      Nay đọc được cả hai; file nhắc `cron:` mà không đọc được biểu thức nào thì **ném**; bài đếm độc lập đổi sang
+      `\bcron\s*:`.
+    - nit đã sửa: trùng tên workflow trong ảnh chụp thì ném · `createdAt` ở tương lai ra `future` · đếm sai số phán
+      quyết trong chú thích. nit **để lại**: thêm dòng `pnpm cron:heartbeat` vào `CLAUDE.md` mục 1 — ngoài phạm vi.
+  - **Mười sáu phép phá, cả mười sáu bị bắt:** bỏ luật `disabled` · `>` thành `>=` ở mép ngưỡng · bỏ `future` · sàn 8
+    giờ · `missing` thành `fresh` · ảnh chụp rỗng không ném · không nhận danh sách thụt ngang cột · `never` thành khoẻ ·
+    chu kỳ lấy `max` thay vì `min` · bỏ kiểm `event` · bỏ kiểm trùng tên · bỏ `future` của `createdAt` · bỏ kiểm lệch
+    đồng hồ · bỏ phép ném khi bộ đọc mù · bỏ dạng dòng · quay về `× 3`. Ở bản đầu có một phép (không dừng khối
+    `schedule`) **sống sót**; đã thêm bài dựng một dòng `- cron:` nằm trong thân `run:`.
+  - **Chưa che, khai ra:** `disabled_inactivity` mới là "tài liệu nói vậy". Phép đo chạy **một lần mỗi ngày**, nên
+    tệ nhất là phát hiện sau ngưỡng + 24 giờ. Bộ đọc cron chỉ nhận `M * * * *`, `M H * * *`, `M H * * D`; biểu thức
+    khác ra `unsupported-cron` và đỏ, và bài trên cây thật đòi mọi cron trong cây nằm trong tập đó.
+  - `status` giữ **`ready`**: còn Z8 (vùng `owner-merge`, PR riêng).
+
+### P-067 · `watchdog.yml` chạy "mỗi giờ" trên giấy, thật ra khoảng 5 giờ một lần — ngưỡng 3 giờ của dấu hiệu số 5 không còn nghĩa như đã viết
+
+Đo được ở sóng 5 của `P-014` (`2026-09-27`, `list_workflow_runs` lọc `event: schedule`): `watchdog.yml` (`cron: '0 * * * *'`) có **32** lượt trong 7 ngày, khoảng hở trung vị **299,9 phút**, lớn nhất **670,6 phút**. Chú thích đầu file nói *"Mỗi giờ, không phải mỗi 6 giờ — mục P-020 rút ngưỡng dấu hiệu số 5 xuống 3 giờ; workflow chỉ CHẤM lại tại thời điểm nó tự chạy, nên nhịp cũ (mỗi 6 giờ) làm ngưỡng 3 giờ vô nghĩa"*. Theo đúng lập luận đó, nhịp **thật** hiện nay đang làm ngưỡng 3 giờ vô nghĩa: dấu hiệu nổ muộn tới 11 giờ, và mọi lời khai "phát hiện trong 1 giờ" dựa trên nó đều sai. Không gì đỏ — nhóm **Z**.
+
+- deps: —
+- risk: low — mục này đo và khai, chưa đổi workflow nào.
+- status: ready
+- nguồn: `P-014` sóng 5 (`ops/scripts/cron-heartbeat.ts`, hằng `CRON_MEASURED_MAX_GAP_MINUTES`); `ops/workflows/watchdog.yml`; mục `P-020`; CHARTER 2.4
+- tiêu chí xong:
+  - Rà mọi chỗ trong CHARTER, `CLAUDE.md`, `docs/` và chú thích workflow khai thời gian phát hiện dựa trên "cron mỗi giờ"; sửa lời khai theo số đo, kèm nguồn số.
+  - Đề xuất đường tăng nhịp **thật** cho người canh mà không đòi chủ dự án sửa lịch routine (mặc định M8) — ví dụ kích `watchdog.yml` bằng `workflow_dispatch` từ bước 0 của worker, hoặc từ `workflow_run` của `ci` — và đo lại sau khi làm. Chạm `ops/workflows/**` thì đi cửa theo `ops/invariants.protected-area.ts`.
+  - Có bài kiểm giữ lời khai và số đo khớp nhau, để lần sau nhịp đổi thì có thứ đỏ.
 
 ### P-057 · Bộ dò `cross-lane` đếm cả `ops/logs/<làn>/`, tách luật khỏi YAML
 Tìm ra trong vòng soát ngữ cảnh sạch của `P-014` sóng 2, đo được chứ không suy.
