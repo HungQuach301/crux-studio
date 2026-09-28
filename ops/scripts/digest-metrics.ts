@@ -547,10 +547,15 @@ export function computeProgress(
   //    nó lộ ra ngay: `integration` luôn "bận nhất" trong khi mọi mục
   //    `integration` đang có PR mở. Cùng lỗ, cùng bản sửa với CHẶN 1 của vòng
   //    soát `#223` ở `laneLogBalance` bên dưới.
-  //  - Mục chạy nhiều sóng (`P-014` sóng 4 và sóng 5 merge cùng ngày) được
-  //    đếm là hai mục done.
-  // Cả hai làm thông lượng CAO hơn thật và ngày dự kiến xong SỚM hơn thật —
-  // bất biến I6, một con số không có nguồn đúng.
+  //  - Mục chạy nhiều sóng được đếm là nhiều mục done — ca thật `P-014` sóng 3
+  //    (`#223`, 2026-09-27T19:53Z) và sóng 4 (`#322`, 20:54Z) merge cách nhau
+  //    một giờ.
+  //  - PR mang dạng chữ ký mà mã **không phải mục backlog** (ca thật `#290`,
+  //    `[integration] KF-046 — …`): đối chiếu mã với cây. Chỉ đối chiếu khi
+  //    bên gọi có đưa backlog của làn đó vào — không có cây thì không bỏ.
+  // Cả ba làm thông lượng CAO hơn thật và ngày dự kiến xong SỚM hơn thật —
+  // bất biến I6. Đo trên lịch sử `main` lúc 2026-09-28T03:34Z (vòng soát bước
+  // 6 của `#327`): 24 giờ 18 → 9, 3 ngày 63 → 29. `KF-052`.
   const done24Keys = new Map<string, LaneName>();
   const done3dKeys = new Map<string, LaneName>();
   for (const pr of mergedPrs) {
@@ -559,6 +564,8 @@ export function computeProgress(
     if (!Number.isFinite(t)) continue;
     const key = claimKeyFromTitle(stripAgentPrefix(pr.title));
     if (key === null) continue; // PR không mang mã mục (gộp, revert, bước 0…) — không phải một mục done.
+    const tree = itemsByLane.get(key.lane);
+    if (tree !== undefined && !tree.some((it) => it.id === key.id)) continue; // mã không phải mục backlog (KF-…).
     const text = `${key.lane}/${key.id}`;
     if (t >= ms24) done24Keys.set(text, key.lane);
     if (t >= ms3d) done3dKeys.set(text, key.lane);
@@ -760,6 +767,9 @@ export const OWNER_ASKS_292_2: readonly OwnerAsk[] = [
  * - `mã không có trong cây` — `itemRef` trỏ tới một mã không tồn tại (mục đổi
  *   mã, hoặc gõ sai). Đọc nó thành "chưa làm" là giấu một đường nối đã đứt.
  * - `mã trùng trong cây` — cùng một mã ở hai chỗ, không biết lấy `status` nào.
+ * - `mục thiếu dòng status` — mục có thật mà không khai `- status:`.
+ * "N/4 xong" chỉ đếm `done`: mục `review` đã vào `main` hiện là `review` cho
+ * tới khi integrator chạy `backlog:status --fix` — dòng từng mục vẫn in nó.
  * Còn lại: đúng `status:` của mục (`ready`, `review`, `done`, `parked`…).
  */
 export interface OwnerAskRow {
@@ -779,7 +789,13 @@ export function ownerAskRows(
     const id = ask.itemRef.slice(slash + 1);
     const found = slash > 0 ? (itemsByLane.get(lane) ?? []).filter((it) => it.id === id) : [];
     const state =
-      found.length === 0 ? 'mã không có trong cây' : found.length > 1 ? 'mã trùng trong cây' : found[0]!.status;
+      found.length === 0
+        ? 'mã không có trong cây'
+        : found.length > 1
+          ? 'mã trùng trong cây'
+          : found[0]!.status === ''
+            ? 'mục thiếu dòng status'
+            : found[0]!.status;
     return { label: ask.label, itemRef: ask.itemRef, state };
   });
 }

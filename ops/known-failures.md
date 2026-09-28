@@ -6,6 +6,31 @@ Mỗi mục ghi: chữ ký lỗi, đã gặp mấy lần, nguyên nhân gốc, c
 
 ---
 
+## KF-052 · Bản tin đếm PR log bước 0 và sóng lặp là "mục done" — thông lượng gấp đôi thật
+
+> Số **KF-052**: dò `## KF-` trên `main` và trên mọi nhánh remote đã fetch (`KF-005`). Cao nhất là `KF-051`.
+
+**Nhóm Z** — `pnpm check` xanh, CI xanh, bản tin in đủ dòng. Cái sai nằm trong con số: mục **Tiến độ** (`platform/P-019`) báo thông lượng và ngày dự kiến xong theo một phép đếm tính thừa.
+
+**Chữ ký:** một bộ đếm "mục done" nhận **mọi** tiêu đề mở bằng `[<lane>]`, thay vì một chữ ký mục `[<lane>] <id> — …` có thật trong cây. PR log bước 0 (`[integration] bước 0 lượt …`) là loại PR merge nhiều nhất mỗi ngày, và nó khớp.
+
+**Đã gặp 2 lần:**
+
+| Lần | Chỗ | Ai bắt |
+|---|---|---|
+| 1 | `laneLogBalance` (Z14, `P-014` sóng 3) — vế merge đếm PR bước 0 | CHẶN 1 của vòng soát `#223` |
+| 2 | `computeProgress` (`laneFromTitle`) — `doneLast24h`, `done3d`, thông lượng, ngày dự kiến | `platform/P-065`: dòng mới *"done theo làn"* cho `integration` luôn "bận nhất" trong khi mọi mục `integration` đang có PR mở; vòng soát bước 6 của `#327` đo số |
+
+**Số đo** (lịch sử `main` lúc `2026-09-28T03:34Z`): 24 giờ **18 → 9**, 3 ngày **63 → 29**. Tức thông lượng thật bằng một nửa con số bản tin đã in, và ngày dự kiến xong muộn gấp đôi. Cộng thêm hai kiểu đếm thừa nhỏ hơn: một mục chạy nhiều sóng (`P-014` sóng 3 `#223` và sóng 4 `#322`) đếm hai lần, và một mã không phải mục backlog (`#290`, `[integration] KF-046 — …`) đếm thành mục.
+
+**Chỗ đã sửa (lần 2 → sửa luật, không vá từng chỗ):** "một mục done" nay có **một** định nghĩa trong `digest-metrics.ts` — chữ ký `claimKeyFromTitle`, mã có trong cây của làn đó, mỗi mã một lần trong mỗi cửa sổ. `laneLogBalance` và `computeProgress` cùng dựa trên `claimKeyFromTitle`; `laneFromTitle` giữ lại chỉ để lấy làn, và docblock của nó ghi rõ không dùng nó để đếm mục.
+
+**Máy chặn:** `ops/test/digest-metrics.test.ts`, bài *"P-065 · TÁI HIỆN LỖI"* (đỏ trên code cũ, đo được) và bài *"mã không phải mục backlog"*.
+
+**Chưa chặn, khai ra:** một bộ đếm **thứ ba** viết mới vẫn có thể dùng lại `laneFromTitle`. Không có lint nào cấm.
+
+---
+
 ## KF-051 · Luật tự đóng `[QĐ]` đóng một issue theo PR đã merge, che mất một chỉ dẫn chủ dự án đăng SAU khi issue mở
 
 > Số **KF-051**: dò `## KF-` trên `main` **và trên mọi nhánh remote đã fetch** trước khi viết (`KF-005`). Cao nhất là `KF-049` trên `main`, và `KF-050` sống trên nhánh của PR `#313` (`I-023`, chưa merge — nên `main` một mình nói `KF-049` và đó là con số thấp). Vậy `KF-051` không đụng ai.

@@ -70,13 +70,15 @@ Hai chỉ dẫn, **một** chỗ sửa (`ops/scripts/digest-metrics.ts`), nên m
 2. **Chỉ dẫn 4, vế báo cáo** — *"Bản tin báo số mục done theo làn trong 24h."* Mục `Tiến độ` hiện có số done **tổng** và theo **đợt** (`P-019`), không theo **làn** — mà chính chỉ dẫn 4 dùng con số theo làn để thấy mọi worker đang dồn vào `platform`.
 
 - deps: P-064 · chỉ vế "trạng thái từng mục" chờ bộ đọc chỉ dẫn mới nhất; vế "số mục done theo làn" không chờ ai. Lời giải thích ở đây cố ý **không** chứa dấu phẩy: `parseDeps` cắt dòng này ở dấu phẩy nên một mệnh đề phụ sẽ thành một phần phụ thuộc "không tra được" và giữ mục chờ vĩnh viễn
-- risk: low — thêm hai dòng đọc được vào một báo cáo; không cổng nào chặn, không chạm vùng bảo vệ
-- status: ready
+- risk: low — thêm hai dòng đọc được vào một báo cáo; không cổng nào chặn, không chạm vùng bảo vệ. ⚠️ Lúc làm lộ ra một lỗi đếm (`KF-052`) nên con số `doneLast24h`/`done3d`/thông lượng/ngày dự kiến của bản tin **đổi** — xem ô cuối
+- status: review
 - nguồn: `#292` comment `2026-09-26T16:20:21Z` chỉ dẫn 2 và 4; `ops/scripts/digest-metrics.ts`; mục `platform/P-019`, `platform/P-053`
 - tiêu chí xong:
-  - `renderDigestMetrics` in **trạng thái từng mục** cho bốn mục của chỉ dẫn 2, và in cả khi trạng thái là *"chưa làm"* — im lặng ở đây đúng là thứ `Z7` cấm.
-  - Số mục `done` **theo làn** trong 24 giờ, dựng trên cùng nguồn `readRunLogs` + backlog mà `collectMetrics` đã dùng; **không** tự `cat` log rồi tự sắp (`CLAUDE.md` mục 15).
-  - Bài kiểm cho mỗi dòng mới, mỗi ca dương một ca âm — gồm ca **0 mục done** ở một làn (phải in `0`, không được vắng mặt).
+  - ✅ `renderDigestMetrics` in **trạng thái từng mục** cho bốn mục của chỉ dẫn 2, và in cả khi trạng thái là *"chưa làm"* — im lặng ở đây đúng là thứ `Z7` cấm. Khối *"Việc anh đã hỏi (#292 chỉ dẫn 2): N/4 xong"*, bảng `OWNER_ASKS_292_2` nối mỗi việc với **một** mục backlog và trạng thái lấy từ `status:` của mục đó. Đo trên `main` `a508dc4`: **cả bốn chưa có mục backlog nào giữ** (hai comment nguồn nằm trong ô *"PHẦN INTAKE CHƯA XONG"* của `P-063`, ô còn mở), nên cả bốn in *"chưa làm — chưa có mục backlog nào giữ"*. Lượt nào mở mục cho một việc thì điền mã vào `OWNER_ASKS_292_2` trong cùng PR; mã sai hay trùng in thành câu riêng, không đọc thành "chưa làm".
+  - ✅ Số mục `done` **theo làn** trong 24 giờ, đủ mọi làn theo `LANES` kể cả làn `0`, tổng bằng `doneLast24h`. **Lệch câu chữ, khai ra:** tiêu chí ghi *"dựng trên `readRunLogs` + backlog"*, nhưng con số đếm từ **PR đã merge** (ảnh chụp GitHub) — cùng nguồn với `doneLast24h` có sẵn, để hai con số trên cùng một bản tin cộng khớp nhau. Backlog vẫn dùng (đối chiếu mã có thật); log không có mốc "mục chuyển done" nên không đếm được done từ đó.
+  - ✅ Bài kiểm cho mỗi dòng mới, mỗi ca dương một ca âm — gồm ca **0 mục done** ở một làn (phải in `0`, không được vắng mặt). Bảy bài `P-065 ·` trong `ops/test/digest-metrics.test.ts`; vòng soát bước 6 phá thử 12 chỗ, 11 bị bắt, chỗ sống sót (biên `>=` của cửa sổ) nay có bài khoá.
+  - ✅ (ngoài tiêu chí, lộ ra khi làm) **`KF-052`:** `computeProgress` đếm mọi tiêu đề `[<lane>] …` là mục done — gồm PR log bước 0, sóng lặp của một mục, và mã không phải mục (`#290` `KF-046`). Lần gặp thứ 2 của chữ ký này (lần 1: CHẶN 1 của `#223` ở `laneLogBalance`), nên sửa ở **định nghĩa**: một mục done = chữ ký `claimKeyFromTitle` có mã trong cây, mỗi mã một lần. Con số bản tin **đổi**: đo trên lịch sử `main` lúc `2026-09-28T03:34Z`, 24 giờ 18 → 9, 3 ngày 63 → 29 — thông lượng thật bằng nửa con số đã in. PR mang nhãn `fix`, có bài tái hiện (đỏ trên code cũ).
+  - ℹ️ Chưa làm, khai ra: bảng `OWNER_ASKS_292_2` là bảng tay, không đọc bằng bộ đọc chỉ dẫn của `P-064` — mở mục cho một việc mà quên điền mã thì bản tin in "chưa có mục" mãi (lệch về phía ồn, không im). *"N/4 xong"* chỉ đếm `done`, mục `review` đã vào `main` hiện `review` tới khi integrator chạy `--fix`.
 
 ### P-066 · fix · Luật tự đóng `[QĐ]` che mất chỉ dẫn chủ dự án đăng sau khi issue mở (chỉ dẫn 1–4 của #251)
 

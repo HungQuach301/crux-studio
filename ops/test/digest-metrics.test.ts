@@ -882,7 +882,7 @@ test('computeProgress: chiếu ngày xong theo thông lượng của đợt; nul
     { number: 3, title: '[audio] AU-1 — a', headRefName: 'x', mergedAt: '2026-09-21T00:00:00Z' },
   ];
   const itemsByLane = new Map<LaneName, BacklogItem[]>([
-    ['visual', [item('V-3', 'ready'), item('V-4', 'ready'), item('V-5', 'ready'), item('V-6', 'ready')]],
+    ['visual', [item('V-1', 'done'), item('V-2', 'done'), item('V-3', 'ready'), item('V-4', 'ready'), item('V-5', 'ready'), item('V-6', 'ready')]],
     ['platform', [item('P-1', 'ready')]],
   ]);
   const p = computeProgress(itemsByLane, merged, [], 0, 0, now);
@@ -1131,7 +1131,7 @@ test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí
     baseMetrics({
       progress: {
         doneLast24h: 3,
-        doneLast24hByLane: [],
+        doneLast24hByLane: LANES.map((lane) => ({ lane, done: lane === 'topic' ? 3 : 0 })),
         done3d: 6,
         throughputPerDay: 2,
         byBatch: [
@@ -1145,6 +1145,7 @@ test('renderDigestMetrics: mục Tiến độ hiện đủ dòng theo tiêu chí
   );
   assert.match(text, /^Tiến độ$/m);
   assert.match(text, /^- Mục done 24 giờ: 3 · thông lượng 3 ngày: 2 mục\/ngày$/m);
+  assert.match(text, /^- Mục done 24 giờ theo làn: topic 3 · editorial 0 · /m);
   assert.match(text, /^- Đợt 0: 5 mục còn lại \(1 parked\) · dự kiến xong: 2026-09-25$/m);
   assert.match(text, /^- Đợt 1: 8 mục còn lại · dự kiến xong: chưa đủ dữ liệu để chiếu$/m);
   assert.match(text, /^- Nút thắt hiện tại: người$/m);
@@ -1157,13 +1158,13 @@ test('P-065 · TÁI HIỆN LỖI: PR log bước 0 và sóng lặp của một m
   // Trước bản sửa, `computeProgress` đếm mọi tiêu đề `[<lane>] \S` — nên ba PR
   // dưới đây ra `doneLast24h = 4` (hai PR bước 0 + hai sóng P-014), trong khi
   // số mục done thật là 1. Ca thật 2026-09-27: `#321`, `#324` (bước 0),
-  // `#322` (P-014 sóng 4); sóng 5 là `#323`.
+  // `#223` (P-014 sóng 3) và `#322` (P-014 sóng 4).
   const now = new Date('2026-09-28T03:00:00.000Z');
   const merged: GhPr[] = [
     { number: 321, title: '[integration] bước 0 lượt crux-worker-1 16:30Z — 0 PR xung đột', headRefName: 'claude/a', mergedAt: '2026-09-27T16:43:14Z' },
     { number: 324, title: '🤖 [integration] bước 0 lượt crux-worker-1 23:37Z — idle', headRefName: 'claude/b', mergedAt: '2026-09-27T23:43:00Z' },
     { number: 322, title: '[platform] P-014 — sóng 4 nhóm Z: Z2', headRefName: 'claude/c', mergedAt: '2026-09-27T20:54:52Z' },
-    { number: 323, title: '[platform] P-014 — sóng 5 nhóm Z: Z6', headRefName: 'claude/d', mergedAt: '2026-09-27T22:00:00Z' },
+    { number: 223, title: '[platform] P-014 — sóng 3 nhóm Z', headRefName: 'claude/d', mergedAt: '2026-09-27T19:53:31Z' },
   ];
   const p = computeProgress(new Map(), merged, [], 0, 0, now);
   assert.equal(p.doneLast24h, 1);
@@ -1216,7 +1217,7 @@ test('P-065 · renderDigestMetrics in dòng done theo làn kể cả khi mọi l
 
 test('P-065 · ownerAskRows: bốn trạng thái, mỗi cái một câu riêng', () => {
   const itemsByLane = new Map<LaneName, BacklogItem[]>([
-    ['platform', [item('P-100', 'review'), item('P-101', 'done'), item('P-102', 'ready'), item('P-102', 'ready')]],
+    ['platform', [item('P-100', 'review'), item('P-101', 'done'), item('P-102', 'ready'), item('P-102', 'ready'), item('P-103', '')]],
   ]);
   const rows = ownerAskRows(
     [
@@ -1227,12 +1228,13 @@ test('P-065 · ownerAskRows: bốn trạng thái, mỗi cái một câu riêng',
       { label: 'e', itemRef: 'platform/P-102' },
       { label: 'f', itemRef: 'topic/P-100' }, // ÂM: đúng mã, SAI làn — không được lấy status của làn khác
       { label: 'g', itemRef: 'P-100' }, // ÂM: thiếu làn
+      { label: 'h', itemRef: 'platform/P-103' },
     ],
     itemsByLane,
   );
   assert.deepEqual(
     rows.map((r) => r.state),
-    ['chưa có mục', 'review', 'done', 'mã không có trong cây', 'mã trùng trong cây', 'mã không có trong cây', 'mã không có trong cây'],
+    ['chưa có mục', 'review', 'done', 'mã không có trong cây', 'mã trùng trong cây', 'mã không có trong cây', 'mã không có trong cây', 'mục thiếu dòng status'],
   );
 });
 
@@ -1262,4 +1264,22 @@ test('P-065 · OWNER_ASKS_292_2 giữ đúng bốn việc của chỉ dẫn, và
     assert.ok(!['mã không có trong cây', 'mã trùng trong cây'].includes(row.state), `${row.label}: ${row.state}`);
   }
   assert.match(renderDigestMetrics(metrics), /^Việc anh đã hỏi \(#292 chỉ dẫn 2\): \d\/4 xong$/m);
+});
+
+test('P-065 · mã không phải mục backlog (`KF-046`) KHÔNG đếm là mục done khi có cây của làn đó', () => {
+  const now = new Date('2026-09-26T14:00:00.000Z');
+  const merged: GhPr[] = [
+    { number: 290, title: '[integration] KF-046 — cuộc đua đọc-rồi-hành-động', headRefName: 'x', mergedAt: '2026-09-26T13:41:40Z' },
+    { number: 291, title: '[integration] I-021 — a', headRefName: 'x', mergedAt: '2026-09-26T13:00:00Z' },
+  ];
+  const tree = new Map<LaneName, BacklogItem[]>([['integration', [item('I-021', 'review')]]]);
+  assert.equal(computeProgress(tree, merged, [], 0, 0, now).doneLast24h, 1);
+  // Không có cây của làn: không bỏ gì (không đoán là mã rác).
+  assert.equal(computeProgress(new Map(), merged, [], 0, 0, now).doneLast24h, 2);
+});
+
+test('P-065 · biên cửa sổ 24 giờ: merge ĐÚNG mốc now − 24h vẫn tính', () => {
+  const now = new Date('2026-09-22T12:00:00.000Z');
+  const merged: GhPr[] = [{ number: 1, title: '[topic] T-001 — a', headRefName: 'x', mergedAt: '2026-09-21T12:00:00.000Z' }];
+  assert.equal(computeProgress(new Map(), merged, [], 0, 0, now).doneLast24h, 1);
 });
