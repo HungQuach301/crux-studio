@@ -452,6 +452,12 @@ function isStep0Line(line: Pick<RunLogLine, 'kind' | 'ref'>): boolean {
  * độ** của bản tin (`platform/P-019`) báo thông lượng THẤP hơn thật và ngày
  * dự kiến xong MUỘN hơn thật — bất biến I6 đòi con số có nguồn, và nguồn
  * này đang đếm thiếu mà không gì đỏ.
+ *
+ * ⚠️ Từ mục `platform/P-065`, `computeProgress` **không** dùng hàm này để
+ * đếm mục done nữa: mẫu `[<lane>] \S` khớp cả PR log của bước 0
+ * (`[integration] bước 0 lượt …`), nên nó đếm thừa. Phép đếm mục done đi qua
+ * `claimKeyFromTitle`, cùng luật với `laneLogBalance`. Hàm này giữ lại cho
+ * bên cần **làn** của một tiêu đề chứ không cần biết đó có phải một mục.
  */
 export function laneFromTitle(title: string): LaneName | null {
   const m = /^\[([a-z]+)\]\s+\S/.exec(stripAgentPrefix(title));
@@ -479,6 +485,16 @@ export interface BatchProgress {
 
 export interface ProgressMetrics {
   doneLast24h: number;
+  /**
+   * Số mục done 24 giờ **theo làn** (mục `platform/P-065`, chỉ dẫn 4 của
+   * `#292`: *"Bản tin báo số mục done theo làn trong 24h"*). Đủ **mọi** làn
+   * trong `LANES`, theo đúng thứ tự đó, kể cả làn `0` — một làn vắng mặt và
+   * một làn `0` là hai câu khác nhau, và chính chỉ dẫn này dùng con số `0`
+   * của các làn đường găng để thấy mọi worker đang dồn vào `platform`.
+   * Tổng các số ở đây **bằng** `doneLast24h`, vì hai con số đi từ cùng một
+   * vòng đếm.
+   */
+  doneLast24hByLane: { lane: LaneName; done: number }[];
   done3d: number;
   /** Thông lượng trung bình 3 ngày: `done3d / 3`, làm tròn hai chữ số. */
   throughputPerDay: number;
@@ -523,22 +539,47 @@ export function computeProgress(
   const ms24 = now.getTime() - 24 * 60 * 60 * 1000;
   const ms3d = now.getTime() - 3 * 24 * 60 * 60 * 1000;
 
-  let doneLast24h = 0;
-  let done3d = 0;
-  const done3dByBatch = new Map<Batch, number>();
+  // Mục `platform/P-065`: một **mục** done là một chữ ký `[<lane>] <id> — …`
+  // (`claimKeyFromTitle`), đếm **một lần** trong mỗi cửa sổ. Trước đây vòng
+  // này đếm mọi tiêu đề mở bằng `[<lane>]` (`laneFromTitle`), nên:
+  //  - PR log của bước 0 (`[integration] bước 0 lượt …`) được đếm là một mục
+  //    done — mà đó là loại PR merge nhiều nhất mỗi ngày. Con số theo làn làm
+  //    nó lộ ra ngay: `integration` luôn "bận nhất" trong khi mọi mục
+  //    `integration` đang có PR mở. Cùng lỗ, cùng bản sửa với CHẶN 1 của vòng
+  //    soát `#223` ở `laneLogBalance` bên dưới.
+  //  - Mục chạy nhiều sóng được đếm là nhiều mục done — ca thật `P-014` sóng 3
+  //    (`#223`, 2026-09-27T19:53Z) và sóng 4 (`#322`, 20:54Z) merge cách nhau
+  //    một giờ.
+  //  - PR mang dạng chữ ký mà mã **không phải mục backlog** (ca thật `#290`,
+  //    `[integration] KF-046 — …`): đối chiếu mã với cây. Chỉ đối chiếu khi
+  //    bên gọi có đưa backlog của làn đó vào — không có cây thì không bỏ.
+  // Cả ba làm thông lượng CAO hơn thật và ngày dự kiến xong SỚM hơn thật —
+  // bất biến I6. Đo trên lịch sử `main` lúc 2026-09-28T03:34Z (vòng soát bước
+  // 6 của `#327`): 24 giờ 18 → 9, 3 ngày 63 → 29. `KF-052`.
+  const done24Keys = new Map<string, LaneName>();
+  const done3dKeys = new Map<string, LaneName>();
   for (const pr of mergedPrs) {
     if (typeof pr.mergedAt !== 'string') continue;
     const t = Date.parse(pr.mergedAt);
     if (!Number.isFinite(t)) continue;
-    const lane = laneFromTitle(pr.title);
-    if (lane === null) continue; // PR không mang mã mục (gộp, revert…) — không phải một mục done.
-    if (t >= ms24) doneLast24h++;
-    if (t >= ms3d) {
-      done3d++;
-      const b = LANE_BATCH[lane];
-      done3dByBatch.set(b, (done3dByBatch.get(b) ?? 0) + 1);
-    }
+    const key = claimKeyFromTitle(stripAgentPrefix(pr.title));
+    if (key === null) continue; // PR không mang mã mục (gộp, revert, bước 0…) — không phải một mục done.
+    const tree = itemsByLane.get(key.lane);
+    if (tree !== undefined && !tree.some((it) => it.id === key.id)) continue; // mã không phải mục backlog (KF-…).
+    const text = `${key.lane}/${key.id}`;
+    if (t >= ms24) done24Keys.set(text, key.lane);
+    if (t >= ms3d) done3dKeys.set(text, key.lane);
   }
+  const doneLast24h = done24Keys.size;
+  const done3d = done3dKeys.size;
+  const done3dByBatch = new Map<Batch, number>();
+  for (const lane of done3dKeys.values()) {
+    const b = LANE_BATCH[lane];
+    done3dByBatch.set(b, (done3dByBatch.get(b) ?? 0) + 1);
+  }
+  const done24ByLane = new Map<LaneName, number>();
+  for (const lane of done24Keys.values()) done24ByLane.set(lane, (done24ByLane.get(lane) ?? 0) + 1);
+  const doneLast24hByLane = LANES.map((lane) => ({ lane, done: done24ByLane.get(lane) ?? 0 }));
 
   const remainingByBatch = new Map<Batch, number>();
   const parkedByBatch = new Map<Batch, number>();
@@ -570,7 +611,15 @@ export function computeProgress(
 
   const bottleneck = humanWaiting > 0 ? 'người' : machineWaiting > 0 ? 'máy' : 'không tắc';
 
-  return { doneLast24h, done3d, throughputPerDay: round2(done3d / 3), byBatch, bottleneck, routineRuns24h };
+  return {
+    doneLast24h,
+    doneLast24hByLane,
+    done3d,
+    throughputPerDay: round2(done3d / 3),
+    byBatch,
+    bottleneck,
+    routineRuns24h,
+  };
 }
 
 // --- Z14: mỗi PR merged của một mục có dòng log của CHÍNH mục đó (mục `platform/P-014` sóng 3) ---
@@ -672,6 +721,100 @@ export function laneLogBalance(
   return rows;
 }
 
+// --- Trạng thái từng việc chủ dự án đã hỏi (mục `platform/P-065`, chỉ dẫn 2 của `#292`) ---
+
+/**
+ * Một việc chủ dự án đã đòi bản tin phản ánh. `itemRef` là mục backlog đang
+ * giữ việc đó, dạng `<lane>/<id>`; `null` khi **chưa có mục nào giữ** — trạng
+ * thái đó phải in ra, không được vắng mặt.
+ */
+export interface OwnerAsk {
+  label: string;
+  itemRef: string | null;
+}
+
+/**
+ * Chỉ dẫn 2 của `#292` (`2026-09-26T16:20:21Z`), nguyên văn: *"Comment gần
+ * nhất của tôi trên `#251` chưa phản ánh trong bản tin: cấu hình model từng
+ * routine, chỉ số tách theo worker/integrator, số lần đặt lại đồng hồ 12h
+ * theo PR, điều kiện an toàn khi tắt worker. Nêu trạng thái từng mục."*
+ *
+ * Mô hình khai báo (bất biến I6): bảng này nối **một** việc chủ dự án hỏi với
+ * **một** mục backlog. Nguồn của trạng thái là chính backlog (`status:` của
+ * mục), không phải lời tự khai ở đây — nên khi mục chuyển `review`/`done`,
+ * bản tin tự đổi theo mà không ai sửa bảng này.
+ *
+ * Đo trên `main` `a508dc4` (2026-09-28): **không** việc nào trong bốn việc có
+ * mục backlog giữ — `platform/P-063` ô ⬜ *"PHẦN INTAKE CHƯA XONG"* ghi đúng
+ * hai comment nguồn (`#251` `2026-09-26T00:31:15Z` và `06:59:47Z`) là chưa
+ * thành mục. Nên cả bốn `itemRef` là `null`. Lượt nào mở mục cho một việc thì
+ * điền mã vào đây trong cùng PR đó.
+ *
+ * Việc thứ ba có một phần đã chạy: mục "Đang chờ merge" (`P-027`) in số giờ
+ * còn lại **theo đồng hồ đã bị đặt lại**, nhưng không in **số lần** đặt lại
+ * và nguyên nhân từng lần — phần anh hỏi. Nên nó vẫn là "chưa có mục".
+ */
+export const OWNER_ASKS_292_2: readonly OwnerAsk[] = [
+  { label: 'cấu hình model từng routine', itemRef: null },
+  { label: 'chỉ số tách theo worker/integrator', itemRef: null },
+  { label: 'số lần đặt lại đồng hồ 12 giờ theo PR', itemRef: null },
+  { label: 'điều kiện an toàn khi tắt worker', itemRef: null },
+];
+
+/**
+ * Ba trạng thái ngoài backlog, mỗi cái một câu riêng — không gộp:
+ * - `chưa có mục` — `itemRef` là `null`: chưa ai giữ việc này.
+ * - `mã không có trong cây` — `itemRef` trỏ tới một mã không tồn tại (mục đổi
+ *   mã, hoặc gõ sai). Đọc nó thành "chưa làm" là giấu một đường nối đã đứt.
+ * - `mã trùng trong cây` — cùng một mã ở hai chỗ, không biết lấy `status` nào.
+ * - `mục thiếu dòng status` — mục có thật mà không khai `- status:`.
+ * "N/4 xong" chỉ đếm `done`: mục `review` đã vào `main` hiện là `review` cho
+ * tới khi integrator chạy `backlog:status --fix` — dòng từng mục vẫn in nó.
+ * Còn lại: đúng `status:` của mục (`ready`, `review`, `done`, `parked`…).
+ */
+export interface OwnerAskRow {
+  label: string;
+  itemRef: string | null;
+  state: string;
+}
+
+export function ownerAskRows(
+  asks: readonly OwnerAsk[],
+  itemsByLane: ReadonlyMap<LaneName, readonly BacklogItem[]>,
+): OwnerAskRow[] {
+  return asks.map((ask) => {
+    if (ask.itemRef === null) return { label: ask.label, itemRef: null, state: 'chưa có mục' };
+    const slash = ask.itemRef.indexOf('/');
+    const lane = ask.itemRef.slice(0, slash) as LaneName;
+    const id = ask.itemRef.slice(slash + 1);
+    const found = slash > 0 ? (itemsByLane.get(lane) ?? []).filter((it) => it.id === id) : [];
+    const state =
+      found.length === 0
+        ? 'mã không có trong cây'
+        : found.length > 1
+          ? 'mã trùng trong cây'
+          : found[0]!.status === ''
+            ? 'mục thiếu dòng status'
+            : found[0]!.status;
+    return { label: ask.label, itemRef: ask.itemRef, state };
+  });
+}
+
+/**
+ * Dòng bản tin cho khối này. In **cả khi** mọi việc đều chưa có mục — im lặng
+ * ở đây là đúng thứ `Z7` cấm, và chính chỉ dẫn này sinh ra vì bản tin đã im
+ * về bốn việc đó một lần.
+ */
+export function renderOwnerAskLines(rows: readonly OwnerAskRow[]): string[] {
+  const done = rows.filter((row) => row.state === 'done').length;
+  const out = [`Việc anh đã hỏi (#292 chỉ dẫn 2): ${done}/${rows.length} xong`];
+  for (const row of rows) {
+    const where = row.itemRef === null ? 'chưa làm — chưa có mục backlog nào giữ' : `${row.itemRef} · ${row.state}`;
+    out.push(`- ${row.label} · ${where}`);
+  }
+  return out;
+}
+
 // --- Kết xuất ---
 
 export interface DigestMetrics {
@@ -717,6 +860,8 @@ export interface DigestMetrics {
    * thấy được số thật của từng làn.
    */
   laneLogBalance: LaneLogBalanceRow[];
+  /** Mục `platform/P-065`: trạng thái từng việc của chỉ dẫn 2 trên `#292`. */
+  ownerAsks: OwnerAskRow[];
 }
 
 function prLabel(row: OpenPrRow): string {
@@ -853,10 +998,15 @@ export function renderDigestMetrics(metrics: DigestMetrics): string {
     const eta = b.projectedDone === null ? 'chưa đủ dữ liệu để chiếu' : b.projectedDone;
     out.push(`- ${b.batch}: ${b.remaining} mục còn lại${parkedSuffix} · dự kiến xong: ${eta}`);
   }
+  // Mục `platform/P-065` (chỉ dẫn 4 của `#292`): mọi làn, kể cả làn 0.
+  out.push(`- Mục done 24 giờ theo làn: ${p.doneLast24hByLane.map((row) => `${row.lane} ${row.done}`).join(' · ')}`);
   out.push(
     `- Nút thắt hiện tại: ${p.bottleneck}`,
     `- Lượt chạy routine 24 giờ: ${p.routineRuns24h} (số để kiểm giả định G3)`,
   );
+
+  // Mục `platform/P-065` (chỉ dẫn 2 của `#292`).
+  out.push('', ...renderOwnerAskLines(metrics.ownerAsks));
 
   return `${out.join('\n')}\n`;
 }
@@ -1018,6 +1168,7 @@ export function collectMetrics(
     cost: { cost24h, total, budget: BUDGET_LOW_USD, percent: budgetPercent(total) },
     progress,
     laneLogBalance: laneLogBalance(snapshot.mergedPrs, logLines, since),
+    ownerAsks: ownerAskRows(OWNER_ASKS_292_2, itemsByLane),
   };
 }
 
