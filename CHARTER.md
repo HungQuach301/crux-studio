@@ -715,9 +715,13 @@ Bạn là worker <N> của Crux Studio, chạy không có người giám sát tr
    merge — điều kiện chủ dự án đặt ra trên 🤖 [QĐ] #213.
    Bước 0f (mục P-056) cũng chạy ở MỌI lượt, kể cả lượt không có PR nào xung đột: gộp lại các nhánh chờ
    của những lượt log-only trước. Chạy lệnh, đừng đọc bằng mắt (CLAUDE.md mục 1 có nguyên văn lệnh):
-       pnpm step0:pending
-   Nhánh nào còn trong `pending` thì `git cherry-pick` dòng log của nó vào PR của lượt này rồi xoá nhánh
-   đã gộp — đó là vế hai của luật P-038, và nó đã hỏng BỐN lần liên tiếp vì không chỗ nào nhắc nó
+       pnpm step0:pending --open-prs <file>
+   `<file>` là mảng JSON MỌI PR đang mở (liệt kê `state=open`, KHÔNG phải hàng đợi xung đột của bước 0a)
+   TRỪ PR của lượt này, `[{"number":311,"head":"<sha đầu nhánh>"}]` sau `git fetch origin pull/<N>/head`
+   cho từng PR; `[]` chỉ khi thật sự không có PR nào mở. Thiếu nó thì lệnh thoát 2 (mục I-023).
+   CHỈ `git cherry-pick` nhánh nằm trong `toCherryPick` vào PR của lượt này rồi xoá nhánh đã gộp.
+   Nhánh mang `inOtherPr` đã nằm trong PR đang mở của lượt khác; cherry-pick lần hai là ca KF-050.
+   Gộp-rồi-xoá là vế hai của luật P-038, và nó đã hỏng BỐN lần liên tiếp vì không chỗ nào nhắc nó
    (`ops/known-failures.md` KF-048). Lượt này KHÔNG mở PR thì không gộp được; để nguyên, lượt sau làm.
    Đây là đường DUY NHẤT gỡ dấu hiệu số 7 của watchdog.yml: nó báo cho tới khi dòng log tới nhánh chính.
 1. Đọc CHARTER.md, CLAUDE.md và ops/lanes/priority.md (thứ tự ưu tiên giữa các làn).
@@ -1039,9 +1043,14 @@ Làn integration của Crux Studio.
       *"không kết luận được"*, **không** cho *"0 thiếu"*.
 
    f. **Gộp lại các nhánh chờ của những lượt log-only trước** (mục `P-056`, `KF-048`). Chạy
-      `pnpm step0:pending` — nó liệt kê nhánh `claude/integration/step0-pending/*` nào còn giữ một dòng log
-      **chưa** tới nhánh chính, kèm tuổi từng nhánh. Nhánh nào còn trong `pending` thì `git cherry-pick`
-      dòng log của nó vào PR của lượt này rồi **xoá** nhánh đã gộp (vế hai của `P-038`).
+      `pnpm step0:pending --open-prs <file>` — nó liệt kê nhánh `claude/integration/step0-pending/*` nào còn giữ
+      một dòng log **chưa** tới nhánh chính, kèm tuổi từng nhánh. `<file>` là mảng JSON **mọi** PR đang mở
+      (liệt kê `state=open` — **không** phải hàng đợi xung đột của bước 0a, vì hàng đợi đó rỗng ở ca thường và
+      một `[]` sai ở đây là đúng ca `KF-050`) **trừ** PR của lượt này: `[{"number":N,"head":"<sha>"}]` sau
+      `git fetch origin pull/<N>/head`; `[]` chỉ khi thật sự không có PR nào mở —
+      thiếu nó thì lệnh thoát 2, file hỏng thì nó ném (mục `I-023`). **Chỉ** nhánh trong `toCherryPick` được
+      `git cherry-pick` vào PR của lượt này rồi **xoá** nhánh đã gộp (vế hai của `P-038`); nhánh mang `inOtherPr`
+      đã nằm trong PR đang mở của lượt khác, và gộp nó lần hai là đúng ca `#309`/`#310` của `KF-050`.
 
       Vì sao phải viết ra ở đây: vế một của `P-038` (đẩy dòng log lên nhánh chờ) nằm trong đúng lượt viết ra
       nó nên nó chạy; vế hai nằm ở một lượt **khác** và không gì nhắc — nên nó hỏng **bốn** lần liên tiếp,

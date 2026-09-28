@@ -29,7 +29,9 @@ import {
   STEP0_PENDING_FUTURE_TOLERANCE_MINUTES,
   STEP0_PENDING_MARGIN_HOURS,
   STEP0_PENDING_STALE_HOURS,
+  readOpenPrs,
   renderStep0PendingReport,
+  step0LogIdsInChanged,
   step0PendingBranches,
 } from '../scripts/step0-pending-branches.ts';
 
@@ -406,9 +408,16 @@ function withCherryPickedRepo(body: (dir: string, logId: string) => void): void 
 
 const SCRIPT = join(process.cwd(), 'ops/scripts/step0-pending-branches.ts');
 
+/** File `--open-prs` rỗng — một phép đo thật "0 PR đang mở" (mục I-023). */
+function noOpenPrs(dir: string): string {
+  const file = join(dir, 'open-prs-empty.json');
+  writeFileSync(file, '[]\n');
+  return file;
+}
+
 test('TÁI HIỆN P-062: `pnpm step0:pending` trên nhánh đã cherry-pick VẪN kể nhánh chờ là pending', () => {
   withCherryPickedRepo((dir, logId) => {
-    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--json', '--now', '2026-09-26T23:40:00Z'], {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', noOpenPrs(dir), '--json', '--now', '2026-09-26T23:40:00Z'], {
       cwd: dir,
       encoding: 'utf8',
     });
@@ -427,7 +436,10 @@ test('ca âm P-062: sau khi dòng log tới `origin/main` thì hết pending', (
   withCherryPickedRepo((dir) => {
     execFileSync('git', ['-C', dir, 'push', '-q', 'origin', 'HEAD:main']);
     execFileSync('git', ['-C', dir, 'fetch', '-q', 'origin']);
-    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--json'], { cwd: dir, encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', noOpenPrs(dir), '--json'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout).pending, []);
   });
@@ -435,7 +447,7 @@ test('ca âm P-062: sau khi dòng log tới `origin/main` thì hết pending', (
 
 test('P-062: `--logs-dir` (đo cây) vẫn chạy được, nhưng báo cáo NÓI RA nó đo cây làm việc', () => {
   withCherryPickedRepo((dir) => {
-    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--logs-dir', 'ops/logs/integration'], {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', noOpenPrs(dir), '--logs-dir', 'ops/logs/integration'], {
       cwd: dir,
       encoding: 'utf8',
     });
@@ -446,7 +458,7 @@ test('P-062: `--logs-dir` (đo cây) vẫn chạy được, nhưng báo cáo NÓ
 
 test('P-062: nhánh chính không xác định được thì NÉM, không rơi về cây làm việc', () => {
   withCherryPickedRepo((dir) => {
-    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--main-ref', 'origin/khong-co'], {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', noOpenPrs(dir), '--main-ref', 'origin/khong-co'], {
       cwd: dir,
       encoding: 'utf8',
     });
@@ -457,11 +469,16 @@ test('P-062: nhánh chính không xác định được thì NÉM, không rơi v
 });
 
 test('P-062: cờ thiếu giá trị là lỗi cách dùng, không lặng lẽ rơi về mặc định', () => {
-  for (const args of [['--from-remote', '--main-ref'], ['--from-remote', '--now'], ['--from-remote', '--logs-dir']]) {
+  for (const args of [
+    ['--from-remote', '--open-prs', 'x.json', '--main-ref'],
+    ['--from-remote', '--open-prs', 'x.json', '--now'],
+    ['--from-remote', '--open-prs', 'x.json', '--logs-dir'],
+    ['--from-remote', '--open-prs'],
+  ]) {
     const result = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
     assert.equal(result.status, 2, args.join(' '));
   }
-  const both = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--main-ref', 'x', '--logs-dir', 'y'], {
+  const both = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', 'x.json', '--main-ref', 'x', '--logs-dir', 'y'], {
     encoding: 'utf8',
   });
   assert.equal(both.status, 2, '`--main-ref` và `--logs-dir` loại trừ nhau');
@@ -500,11 +517,192 @@ test('P-062: ref có thật mà không có log bước 0 nào thì NÉM, không 
 
 test('P-062: đo từ thư mục con vẫn đúng (`--full-tree`)', () => {
   withCherryPickedRepo((dir, logId) => {
-    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--json'], {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', noOpenPrs(dir), '--json'], {
       cwd: join(dir, 'ops'),
       encoding: 'utf8',
     });
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout).pending.map((row: { logId: string }) => row.logId), [logId]);
+  });
+});
+
+// ── Mục `integration/I-023` — `KF-050`: nhánh chờ đã nằm trong PR đang mở khác ──
+
+/**
+ * Đúng ca đo được ở `KF-050`: `#309` tránh được nhánh `083849Z-crux-worker-1`
+ * vì nó đã nằm trong PR `#308` đang mở — bằng MẮT. Trước `I-023` hàm này
+ * không có đầu vào nào để biết điều đó, nên nhánh ấy ra "cherry-pick được".
+ */
+const KF050_NOW = '2026-09-27T11:38:00Z';
+const KF050_IN_308 = 'step0-2026-09-27T083849Z-crux-worker-1';
+const KF050_FREE = 'step0-2026-09-27T092014Z-crux-worker-2';
+const KF050_PR_308 = {
+  number: 308,
+  changed: ['ops/lanes/platform/backlog.md', `ops/logs/integration/${KF050_IN_308}.jsonl`, 'ops/logs/platform/P-063.jsonl'],
+};
+
+test('TÁI HIỆN KF-050 (ca dương): nhánh chờ nằm trong PR đang mở khác → `inOtherPr` mang số PR, KHÔNG cherry-pick', () => {
+  const report = step0PendingBranches({
+    branches: [step0PendingBranch(KF050_IN_308), step0PendingBranch(KF050_FREE)],
+    mergedLogIds: MERGED_AT_0926B38,
+    now: KF050_NOW,
+    openPrs: [KF050_PR_308],
+  });
+  const row = report.pending.find((r) => r.logId === KF050_IN_308)!;
+  assert.deepEqual(row.inOtherPr, [308]);
+  // Vẫn là `pending`: tới `main` mới là tới (KF-041) — chỉ không được cherry-pick lần hai.
+  assert.equal(report.pending.length, 2);
+  assert.deepEqual(report.toCherryPick!.map((r) => r.logId), [KF050_FREE]);
+  const text = renderStep0PendingReport(report);
+  assert.match(text, /đã nằm trong PR đang mở #308 — KHÔNG cherry-pick/);
+  assert.match(text, /Cherry-pick được: 1 nhánh/);
+});
+
+test('ca âm KF-050: nhánh KHÔNG nằm trong PR nào → cherry-pick được, `inOtherPr` rỗng', () => {
+  const report = step0PendingBranches({
+    branches: [step0PendingBranch(KF050_FREE)],
+    mergedLogIds: MERGED_AT_0926B38,
+    now: KF050_NOW,
+    openPrs: [KF050_PR_308],
+  });
+  assert.deepEqual(report.pending[0]!.inOtherPr, []);
+  assert.deepEqual(report.toCherryPick!.map((r) => r.logId), [KF050_FREE]);
+});
+
+test('I-023: nhánh đã có trong cây làm việc (`inTree`) không vào `toCherryPick` — lượt này đã gộp nó rồi', () => {
+  const report = step0PendingBranches({
+    branches: [step0PendingBranch(KF050_FREE)],
+    mergedLogIds: MERGED_AT_0926B38,
+    now: KF050_NOW,
+    treeLogIds: [KF050_FREE],
+    openPrs: [],
+  });
+  assert.equal(report.pending.length, 1);
+  assert.deepEqual(report.toCherryPick, []);
+  assert.match(renderStep0PendingReport(report), /Cherry-pick được: 0 nhánh/);
+});
+
+test('I-023 "chưa đo": không đưa PR đang mở → `toCherryPick` là null và báo cáo NÓI RA, không phải "cherry-pick hết"', () => {
+  const report = step0PendingBranches({
+    branches: [step0PendingBranch(KF050_IN_308)],
+    mergedLogIds: MERGED_AT_0926B38,
+    now: KF050_NOW,
+  });
+  assert.equal(report.toCherryPick, null);
+  assert.equal(report.pending[0]!.inOtherPr, null);
+  assert.match(renderStep0PendingReport(report), /CHƯA đối chiếu với PR đang mở/);
+});
+
+test('I-023: hai PR cùng mang một dòng → cả hai số được kể, sắp tăng dần', () => {
+  const report = step0PendingBranches({
+    branches: [step0PendingBranch(KF050_IN_308)],
+    mergedLogIds: MERGED_AT_0926B38,
+    now: KF050_NOW,
+    openPrs: [{ number: 310, changed: [`ops/logs/integration/${KF050_IN_308}.jsonl`] }, KF050_PR_308],
+  });
+  assert.deepEqual(report.pending[0]!.inOtherPr, [308, 310]);
+});
+
+test('step0LogIdsInChanged: chỉ nhận đúng file log bước 0 ở `ops/logs/integration/`', () => {
+  assert.deepEqual(
+    step0LogIdsInChanged([
+      `ops/logs/integration/${KF050_IN_308}.jsonl`,
+      'ops/logs/integration/I-023.jsonl',
+      `ops/logs/platform/${KF050_FREE}.jsonl`,
+      `ops/logs/integration/sub/${KF050_FREE}.jsonl`,
+      `x/ops/logs/integration/${KF050_FREE}.jsonl`,
+    ]),
+    [KF050_IN_308],
+  );
+});
+
+test('I-023 "không đo được": file PR đang mở hỏng thì NÉM, không coi là "0 PR đang mở"', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crux-open-prs-'));
+  try {
+    const bad = (name: string, body: string): string => {
+      const file = join(dir, name);
+      writeFileSync(file, body);
+      return file;
+    };
+    assert.throws(() => readOpenPrs(join(dir, 'khong-co.json'), 'origin/main'), /KHÔNG đo được/);
+    assert.throws(() => readOpenPrs(bad('hong.json', '{'), 'origin/main'), /KHÔNG đo được/);
+    assert.throws(() => readOpenPrs(bad('obj.json', '{}'), 'origin/main'), /phải là một mảng/);
+    assert.throws(() => readOpenPrs(bad('so.json', '[{"changed":[]}]'), 'origin/main'), /number/);
+    assert.throws(() => readOpenPrs(bad('ca-hai.json', '[{"number":1,"changed":[],"head":"abc1234"}]'), 'origin/main'), /ĐÚNG MỘT/);
+    assert.throws(() => readOpenPrs(bad('head.json', '[{"number":1,"head":"abc1234"}]'), undefined), /--main-ref/);
+    // Tên nhánh vẫn phân giải được và cho một diff sai mà không lỗi nào — nên chỉ nhận sha.
+    assert.throws(() => readOpenPrs(bad('ten.json', '[{"number":1,"head":"main"}]'), 'origin/main'), /phải là sha/);
+    // Ca âm: mảng rỗng là một phép đo thật, đọc được.
+    assert.deepEqual(readOpenPrs(bad('rong.json', '[]'), 'origin/main'), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('I-023 CLI: `--from-remote` thiếu `--open-prs` là lỗi cách dùng (thoát 2), không chạy mà chưa đối chiếu', () => {
+  const result = spawnSync(process.execPath, [SCRIPT, '--from-remote'], { encoding: 'utf8' });
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /cần `--open-prs <file>`/);
+});
+
+test('I-023 CLI: file `--open-prs` không đọc được → thoát khác 0, stdout rỗng', () => {
+  withCherryPickedRepo((dir) => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', join(dir, 'khong-co.json')], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /KHÔNG đo được nhánh chờ nào đã nằm trong PR khác/);
+  });
+});
+
+test('I-023 CLI (ca dương, dạng `head`): PR khác đã cherry-pick nhánh chờ → không vào `toCherryPick`', () => {
+  withCherryPickedRepo((dir, logId) => {
+    // Nhánh lượt chạy `claude/some-run` đã cherry-pick dòng log — coi nó là PR
+    // #310 của một worker khác; lượt ĐANG đo đứng ở `main` sạch.
+    const other = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    execFileSync('git', ['-C', dir, 'checkout', '-q', 'main']);
+    const file = join(dir, 'open-prs.json');
+    writeFileSync(file, JSON.stringify([{ number: 310, head: other }]));
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', file, '--json'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(report.pending.map((row: { logId: string }) => row.logId), [logId]);
+    assert.deepEqual(report.pending[0].inOtherPr, [310]);
+    assert.deepEqual(report.toCherryPick, []);
+  });
+});
+
+test('I-023 CLI (ca âm, dạng `head`): PR khác KHÔNG mang dòng đó → cherry-pick được', () => {
+  withCherryPickedRepo((dir, logId) => {
+    execFileSync('git', ['-C', dir, 'checkout', '-q', 'main']);
+    const mainSha = execFileSync('git', ['-C', dir, 'rev-parse', 'main'], { encoding: 'utf8' }).trim();
+    const file = join(dir, 'open-prs.json');
+    writeFileSync(file, JSON.stringify([{ number: 311, head: mainSha }]));
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', file, '--json'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(report.toCherryPick.map((row: { logId: string }) => row.logId), [logId]);
+  });
+});
+
+test('I-023 CLI: đầu nhánh PR chưa fetch → NÉM kèm lệnh fetch, không coi PR đó là rỗng', () => {
+  withCherryPickedRepo((dir) => {
+    const file = join(dir, 'open-prs.json');
+    writeFileSync(file, JSON.stringify([{ number: 999, head: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' }]));
+    const result = spawnSync(process.execPath, [SCRIPT, '--from-remote', '--open-prs', file], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /git fetch origin pull\/999\/head/);
   });
 });
