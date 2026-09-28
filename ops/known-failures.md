@@ -700,6 +700,31 @@ chữ ký của chính `KF-035` theo chiều ngược: khai một việc chưa l
 
 - **Cách đọc bản ghi này cho đúng:** đừng đọc thành "đừng dùng điều kiện trong `[QĐ]`". Đọc thành: *một điều kiện đã khai thì phải có máy đo lại nó, nếu không nó thành một lời khẳng định đóng băng ở thời điểm viết.*
 
+**Lần gặp thứ 3 — bản tin dẫn chỉ dẫn CŨ, bỏ chỉ dẫn mới hơn.** Chủ dự án báo trên `#292`
+(`2026-09-26T16:20:21Z`, chỉ dẫn 1) và tự gọi nó là *"lặp KF-035"*. Đo bằng API:
+
+| Mốc | Việc |
+|---|---|
+| `2026-09-25T14:21:07Z` | Chỉ dẫn trên bản tin `#270`: *"worker-2, worker-3 dừng; worker-1 dừng tới Thứ Bảy 08:00; ghi mục này ở đầu bản tin tới khi hết điều tiết"*. |
+| `2026-09-26T00:31:15Z` | Chỉ dẫn trên `#251`: *"Hết điều tiết hạn mức, cả ba worker bật."* |
+| `2026-09-26T13:58:20Z` | Bản tin `#292` mở bằng khối *"Điều tiết hạn mức — CHƯA có hiệu lực (chỉ dẫn của anh trên #270)"*, và báo cả ba worker chạy như một chỗ hỏng. |
+
+Cùng chữ ký — một trạng thái đã đổi, nằm ở chỗ đọc được bằng một lời gọi API — với một biến thể mới: lượt digest
+**có** đọc comment (khác lần 2), nhưng chỉ đọc trên **issue bản tin hôm trước** như phụ lục P2 bước 1 dặn, còn chỉ
+dẫn mới hơn nằm ở `#251`. Nó chọn chỉ dẫn vì **tìm thấy**, không vì **mới nhất**. Chỉ dẫn điều tiết của anh
+đi đúng cặp `#270`→`#251`→(hôm nay `2026-09-27T13:24:36Z`, lại trên `#251`) — nên đây là chỗ sẽ cắn tiếp.
+
+**Chỗ đã sửa (mục `platform/P-064`):** `ops/scripts/owner-directives.ts` — hàm thuần `latestOwnerDirective` /
+`ownerDirectivesNewestFirst` sắp chỉ dẫn (comment chủ dự án KHÔNG mở đầu 🤖, `CLAUDE.md` mục 5) theo `createdAt` trên
+**hợp** mọi nguồn đưa vào, có `matching` cho "mới nhất về một chuyện", và **ném** khi không sắp được (thiếu mốc,
+mốc hỏng, hai chỉ dẫn khác nhau cùng mốc). Bài tái hiện `ops/test/owner-directives.test.ts` dựng đúng ca trên bằng
+nguyên văn `#270`/`#251` cộng mốc mở `#292`, và đòi kết quả `#251 00:31:15Z`; cùng fixture, đọc chỉ issue bản tin thì ra `#270` — hình dạng
+của lỗi. CHARTER phụ lục P2 bước 1 nay gọi `pnpm owner:directives`.
+
+**Còn hở, khai trước:** tool chỉ bảo đảm lượt digest đọc đúng **bản**; hiểu câu chữ vẫn là của lượt chạy, và
+`matching` là mẫu lượt chạy tự chọn — chọn mẫu hẹp quá thì lại rơi về một chỉ dẫn cũ. Máy chưa canh được việc lượt
+digest **có gọi** tool hay không.
+
 ---
 
 ## KF-026 · Nhãn `automerge` sống sót qua một lần push đổi nội dung, nên nội dung CHƯA ĐƯỢC SOÁT vào `main`
