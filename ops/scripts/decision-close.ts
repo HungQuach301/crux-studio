@@ -167,6 +167,15 @@ export interface DecisionIssue {
   title: string;
   body: string;
   labels: readonly string[];
+  /**
+   * `created_at` của issue — mốc `[QĐ]` được mở. Dùng để biết một comment của
+   * chủ dự án đăng **trước hay sau** khi issue mở (mục `platform/P-066`).
+   *
+   * Tuỳ chọn, và khi **thiếu** thì hướng lệch an toàn là coi mọi comment của
+   * chủ dự án là "sau khi mở" — giữ issue thay vì đóng (xem `commentIsAfterOpen`
+   * và docblock đầu file: đóng thừa là chiều đắt).
+   */
+  createdAt?: string;
   /** Thân issue KHÔNG nằm trong đây; truyền riêng qua `body`. */
   comments: readonly DecisionComment[];
   /** Trạng thái các PR mà `linkedPrNumbers` tìm ra, đã đo bởi bên gọi. */
@@ -253,35 +262,47 @@ export function linkedPrNumbers(...sources: readonly string[]): number[] {
 }
 
 /**
- * Comment này có phải lời *"xong rồi"* của chủ dự án không?
+ * Thân comment của **chủ dự án** sau khi bóc trích dẫn và mốc ẩn — hoặc `null`
+ * khi comment KHÔNG phải của người (khác tác giả, mở đầu 🤖, hay rỗng).
  *
- * Cùng phép phân biệt người/máy với `isStopComment` của
- * `ops/invariants.merge-gate.ts`, và cùng lý do: agent dùng chính danh tính
- * GitHub của chủ dự án (CHARTER 3.1), nên tác giả một mình không phân biệt
- * được. Quy ước 🤖 (`CLAUDE.md` mục 5) là dấu vết duy nhất.
+ * Bỏ các dòng TRÍCH DẪN trước khi so. `isStopComment` của
+ * `ops/invariants.merge-gate.ts` không cần bước này, và đó không phải vì nó
+ * cẩn thận hơn — mà vì ở đó hướng lệch **ngược**: trích lại chữ `dừng` làm máy
+ * KHÔNG merge, tức an toàn. Ở đây trích lại một câu 🤖 làm máy ĐÓNG một câu hỏi
+ * đang chờ người. Cùng một phép so, hai hậu quả trái dấu, nên không chép nguyên
+ * phép so sang được.
+ *
+ * Bỏ cả mốc ẩn HTML trước khi tìm 🤖: comment của agent trong repo này mở đầu
+ * bằng một mốc rồi mới tới 🤖 (khuôn của `<!-- crux-escalate-main-do -->` ở
+ * `alert-escalation`, và của `AUTOCLOSE_MARKER`). Không bỏ nó thì
+ * `startsWith(AGENT_PREFIX)` sai, và một comment của MÁY bị đọc thành lệnh của
+ * người — đúng chiều đắt.
  */
-export function isOwnerDoneComment(comment: DecisionComment, owner: string): boolean {
-  if (comment.author.toLowerCase() !== owner.toLowerCase()) return false;
-
-  // Bỏ các dòng TRÍCH DẪN trước khi so. `isStopComment` của
-  // `ops/invariants.merge-gate.ts` không cần bước này, và đó không phải vì nó
-  // cẩn thận hơn — mà vì ở đó hướng lệch **ngược**: trích lại chữ `dừng` làm
-  // máy KHÔNG merge, tức an toàn. Ở đây trích lại một câu 🤖 làm máy ĐÓNG một
-  // câu hỏi đang chờ người. Cùng một phép so, hai hậu quả trái dấu, nên không
-  // chép nguyên phép so sang được.
-  // Bỏ cả mốc ẩn HTML trước khi tìm 🤖: comment của agent trong repo này mở
-  // đầu bằng một mốc rồi mới tới 🤖 (khuôn của `<!-- crux-escalate-main-do -->`
-  // ở `alert-escalation`, và của `AUTOCLOSE_MARKER` ngay dưới đây). Không bỏ
-  // nó thì `startsWith(AGENT_PREFIX)` sai, và một comment của MÁY bị đọc thành
-  // lệnh của người — đúng chiều đắt.
+function ownerCommentBody(comment: DecisionComment, owner: string): string | null {
+  if (comment.author.toLowerCase() !== owner.toLowerCase()) return null;
   const body = comment.body
     .replace(/<!--[\s\S]*?-->/g, '')
     .split('\n')
     .filter((line) => !/^\s*>/.test(line))
     .join('\n')
     .trim();
-  if (body.length === 0) return false;
-  if (body.startsWith(AGENT_PREFIX)) return false;
+  if (body.length === 0) return null;
+  if (body.startsWith(AGENT_PREFIX)) return null;
+  return body;
+}
+
+/**
+ * Comment này có phải lời *"xong rồi"* của chủ dự án không?
+ *
+ * Cùng phép phân biệt người/máy với `isStopComment` của
+ * `ops/invariants.merge-gate.ts`, và cùng lý do: agent dùng chính danh tính
+ * GitHub của chủ dự án (CHARTER 3.1), nên tác giả một mình không phân biệt
+ * được. Quy ước 🤖 (`CLAUDE.md` mục 5) là dấu vết duy nhất — đo qua
+ * `ownerCommentBody`.
+ */
+export function isOwnerDoneComment(comment: DecisionComment, owner: string): boolean {
+  const body = ownerCommentBody(comment, owner);
+  if (body === null) return false;
 
   // Ít nhất MỘT câu vừa mang cụm "xong", vừa không mang từ chặn nào.
   return body
@@ -291,6 +312,58 @@ export function isOwnerDoneComment(comment: DecisionComment, owner: string): boo
         OWNER_DONE_PHRASES.some((phrase) => phrase.test(sentence)) &&
         !OWNER_DONE_BLOCKERS.some((blocker) => blocker.test(sentence)),
     );
+}
+
+/**
+ * Comment `commentAt` đăng **sau khi** issue mở (`issueCreatedAt`)?
+ *
+ * Hướng lệch an toàn của mục `P-066` (đóng thừa là chiều đắt, xem docblock đầu
+ * file): khi **không đọc được** một trong hai mốc — issue thiếu `createdAt`,
+ * hoặc mốc không parse được — trả `true`, tức coi như "sau khi mở" và để chặn
+ * đóng phát huy. `null` không được đọc thành "trước khi mở, bỏ qua".
+ */
+export function commentIsAfterOpen(commentAt: string, issueCreatedAt: string | undefined): boolean {
+  if (issueCreatedAt === undefined) return true;
+  const issueMs = Date.parse(issueCreatedAt);
+  const commentMs = Date.parse(commentAt);
+  if (!Number.isFinite(issueMs) || !Number.isFinite(commentMs)) return true;
+  return commentMs >= issueMs;
+}
+
+/**
+ * Mục `platform/P-066` — chủ dự án đăng một **chỉ dẫn** trên issue `[QĐ]` SAU
+ * khi nó mở, mà chỉ dẫn đó **chưa có bằng chứng thực hiện**.
+ *
+ * ## Vì sao "chỉ dẫn" = "comment của người, đăng sau khi mở, KHÔNG phải câu xong"
+ *
+ * Ca thật `#92` (`P-050`/`D3`): PR `#89` đã merge (nguồn 2 đủ để đóng), nhưng
+ * chủ dự án đã comment sau đó *"dựng clip `V-002` ở 30fps và 60fps NGAY… đưa
+ * vào Việc đang chờ anh"* — clip **chưa từng được dựng**. `decision-close`
+ * đóng `#92` dựa vào PR `#89`, **che** đúng việc chủ dự án đang chờ. Cùng họ
+ * nhóm **Z** với `P-063`: một luật tiết kiệm thời gian chủ dự án lại **xoá**
+ * một việc chờ chính anh.
+ *
+ * Không cố đoán "đây có phải chỉ dẫn không" bằng từ khoá — hướng lệch an toàn
+ * (docblock đầu file) là: **bất kỳ** câu nào của chủ dự án, đăng sau khi issue
+ * mở, mà KHÔNG phải một câu "xong" (`isOwnerDoneComment`), đều được coi là một
+ * chỉ dẫn/câu hỏi còn sống, nên nguồn 2 và 3 (PR merged, `D-Cxx`) không đủ mạnh
+ * để đóng đè lên nó. Nguồn 1 (*chủ dự án nói xong*) vẫn thắng, vì nó đã chạy
+ * TRƯỚC chặn này: chủ dự án nói xong thì xong.
+ *
+ * Đóng thừa xoá một việc; giữ thừa tốn một dòng bản tin. Nên khi phân vân —
+ * mốc không đọc được (`commentIsAfterOpen`), hay câu không rõ là chỉ dẫn hay
+ * tán gẫu — luật này nghiêng về **giữ**.
+ */
+export function findOwnerInstructionAfterOpen(
+  issue: DecisionIssue,
+  owner: string,
+): DecisionComment | undefined {
+  return issue.comments.find(
+    (comment) =>
+      ownerCommentBody(comment, owner) !== null &&
+      !isOwnerDoneComment(comment, owner) &&
+      commentIsAfterOpen(comment.createdAt, issue.createdAt),
+  );
 }
 
 /**
@@ -359,6 +432,21 @@ export function decideDecisionClose(issue: DecisionIssue, owner: string): CloseD
     return close('Chủ dự án đã trả lời là xong (comment không mở đầu 🤖, `CLAUDE.md` mục 5).', [
       `câu trả lời của chủ dự án lúc \`${ownerSaysDone.createdAt}\`: ${JSON.stringify(ownerSaysDone.body.trim())}`,
     ]);
+  }
+
+  // ── Chặn nguồn 2 và 3 (mục `platform/P-066`): chủ dự án đăng một chỉ dẫn
+  //    SAU khi `[QĐ]` mở mà chưa có bằng chứng thực hiện. Tới đây tức nguồn 1
+  //    (nói xong) đã KHÔNG khớp, nên một câu của người sau khi mở là một chỉ
+  //    dẫn/câu hỏi còn sống — PR đã merge hay `D-Cxx` không đủ mạnh để đóng đè
+  //    lên nó. Ca thật `#92`: PR `#89` merge nhưng chủ dự án bảo "dựng clip
+  //    V-002 NGAY", clip chưa từng dựng. Đặt TRƯỚC nguồn 2/3, SAU nguồn 1.
+  const laterInstruction = findOwnerInstructionAfterOpen(issue, owner);
+  if (laterInstruction !== undefined) {
+    return keep(
+      `Chủ dự án đăng một chỉ dẫn lúc \`${laterInstruction.createdAt}\` — sau khi \`[QĐ]\` mở — ` +
+        'mà chưa có bằng chứng thực hiện; PR đã merge hay `docs/decisions/` không đóng đè lên nó ' +
+        '(mục `platform/P-066`, ca `#92`).',
+    );
   }
 
   // ── Chặn nguồn 2 và 3: máy KHÔNG ĐO ĐƯỢC một PR issue nêu tên. "Chưa biết"

@@ -117,6 +117,7 @@ jobs:
                  title: ($issue[0].title // ""),
                  body: ($issue[0].body // ""),
                  labels: [$issue[0].labels[]?.name],
+                 createdAt: ($issue[0].created_at // ""),
                  comments: [$comments[0][]? | {
                    author: (.user.login // ""),
                    body: (.body // ""),
